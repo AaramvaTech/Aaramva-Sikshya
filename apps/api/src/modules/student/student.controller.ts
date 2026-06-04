@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -48,35 +49,30 @@ export class StudentController {
 
   @Get(':id')
   @Roles(
-    Role.SCHOOL_OWNER,
-    Role.PRINCIPAL,
-    Role.ACADEMIC_COORDINATOR,
-    Role.TEACHER,
-    Role.ACCOUNTANT,
-    Role.LIBRARIAN,
-    Role.STUDENT,
-    Role.PARENT,
+    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
+    Role.TEACHER, Role.ACCOUNTANT, Role.LIBRARIAN,
+    // STUDENT and PARENT access re-added when user-student linking is implemented in Academic module
   )
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.findOne(id);
   }
 
   @Patch(':id')
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
-  update(@Param('id') id: string, @Body() dto: UpdateStudentDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStudentDto) {
     return this.studentService.updateStudent(id, dto);
   }
 
   @Patch(':id/status')
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL)
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStudentStatusDto) {
+  updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStudentStatusDto) {
     return this.studentService.updateStatus(id, dto);
   }
 
   @Delete(':id')
   @HttpCode(204)
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL)
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.removeStudent(id);
   }
 }

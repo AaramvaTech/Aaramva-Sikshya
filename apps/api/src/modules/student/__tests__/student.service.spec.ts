@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentService } from '../student.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
@@ -138,6 +138,13 @@ describe('StudentService', () => {
 
       expect(result.studentId).toMatch(/^2082-/);
     });
+
+    it('throws BadRequestException for admission date before BS 2000', async () => {
+      const dtoWithOldDate = { ...createDto, admissionDate: '1940-01-01' };
+
+      await expect(service.admitStudent(dtoWithOldDate as any, 'uid-1'))
+        .rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('findAll()', () => {
@@ -266,6 +273,13 @@ describe('StudentService', () => {
 
       expect(result.status).toBe('TRANSFERRED');
     });
+
+    it('throws NotFoundException when updating status of non-existent student', async () => {
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(0);
+
+      await expect(service.updateStatus('missing', { status: 'TRANSFERRED' } as any))
+        .rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('removeStudent()', () => {
@@ -277,6 +291,7 @@ describe('StudentService', () => {
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining('deleted_at'),
         'sid-1',
+        mockTenantCtx.tenantId,
       );
     });
 

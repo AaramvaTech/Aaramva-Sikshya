@@ -25,14 +25,13 @@ export class ResponseInterceptor<T>
   implements NestInterceptor<T, ApiResponse<T>>
 {
   intercept(
-    _ctx: ExecutionContext,
+    context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<ApiResponse<T>> {
     return next.handle().pipe(
       map((data) => {
-        if (data === undefined || data === null) {
-          return data as any;
-        }
+        const res = context.switchToHttp().getResponse<{ statusCode: number }>();
+        if (res.statusCode === 204) return data as any;
         return {
           success: true as const,
           data,

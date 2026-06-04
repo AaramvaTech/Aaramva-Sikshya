@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getBsYear } from 'bs-calendar';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
@@ -52,41 +52,57 @@ export class StudentService {
   async admitStudent(dto: CreateStudentDto, createdById: string): Promise<StudentResponseDto> {
     const { tenantId } = this.tenantContext.getOrThrow();
 
-    const row = await this.tenantPrisma.run(async (tx) => {
-      const admissionDate = new Date(dto.admissionDate);
-      const studentId = await this.generateStudentId(tx, admissionDate);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const row = await this.tenantPrisma.run(async (tx) => {
+          const admissionDate = new Date(dto.admissionDate);
+          if (isNaN(admissionDate.getTime())) {
+            throw new BadRequestException('Invalid admission date');
+          }
+          const minAdDate = new Date('1943-04-14');
+          const maxAdDate = new Date('2043-04-13');
+          if (admissionDate < minAdDate || admissionDate > maxAdDate) {
+            throw new BadRequestException('Admission date must be within BS calendar range (2000–2100 BS)');
+          }
 
-      const rows = await tx.$queryRawUnsafe<StudentRow[]>(
-        `INSERT INTO students (
-           tenant_id, student_id, first_name, last_name, date_of_birth, gender,
-           blood_group, religion, ethnicity, nationality, mother_tongue,
-           phone, email, permanent_address, temporary_address, guardians,
-           class_name, section_name, roll_number, admission_date, academic_year,
-           previous_school, created_by
-         ) VALUES (
-           $1::uuid, $2, $3, $4, $5::date, $6,
-           $7, $8, $9, $10, $11,
-           $12, $13, $14::jsonb, $15::jsonb, $16::jsonb,
-           $17, $18, $19, $20::date, $21,
-           $22, $23::uuid
-         ) RETURNING *`,
-        tenantId, studentId,
-        dto.firstName, dto.lastName, dto.dateOfBirth, dto.gender,
-        dto.bloodGroup ?? null, dto.religion ?? null, dto.ethnicity ?? null,
-        dto.nationality ?? 'Nepali', dto.motherTongue ?? null,
-        dto.phone ?? null, dto.email ?? null,
-        dto.permanentAddress ? JSON.stringify(dto.permanentAddress) : null,
-        dto.temporaryAddress ? JSON.stringify(dto.temporaryAddress) : null,
-        dto.guardians ? JSON.stringify(dto.guardians) : null,
-        dto.className ?? null, dto.sectionName ?? null, dto.rollNumber ?? null,
-        dto.admissionDate, dto.academicYear ?? null,
-        dto.previousSchool ?? null, createdById,
-      );
+          const studentId = await this.generateStudentId(tx, admissionDate);
 
-      return rows[0];
-    });
+          const rows = await tx.$queryRawUnsafe<StudentRow[]>(
+            `INSERT INTO students (
+               tenant_id, student_id, first_name, last_name, date_of_birth, gender,
+               blood_group, religion, ethnicity, nationality, mother_tongue,
+               phone, email, permanent_address, temporary_address, guardians,
+               class_name, section_name, roll_number, admission_date, academic_year,
+               previous_school, created_by
+             ) VALUES (
+               $1::uuid, $2, $3, $4, $5::date, $6,
+               $7, $8, $9, $10, $11,
+               $12, $13, $14::jsonb, $15::jsonb, $16::jsonb,
+               $17, $18, $19, $20::date, $21,
+               $22, $23::uuid
+             ) RETURNING *`,
+            tenantId, studentId,
+            dto.firstName, dto.lastName, dto.dateOfBirth, dto.gender,
+            dto.bloodGroup ?? null, dto.religion ?? null, dto.ethnicity ?? null,
+            dto.nationality ?? 'Nepali', dto.motherTongue ?? null,
+            dto.phone ?? null, dto.email ?? null,
+            dto.permanentAddress ? JSON.stringify(dto.permanentAddress) : null,
+            dto.temporaryAddress ? JSON.stringify(dto.temporaryAddress) : null,
+            dto.guardians ? JSON.stringify(dto.guardians) : null,
+            dto.className ?? null, dto.sectionName ?? null, dto.rollNumber ?? null,
+            dto.admissionDate, dto.academicYear ?? null,
+            dto.previousSchool ?? null, createdById,
+          );
 
-    return toStudentResponse(row);
+          return rows[0];
+        });
+        return toStudentResponse(row);
+      } catch (err: any) {
+        if (attempt < 2 && err?.code === 'P2002') continue;
+        throw err;
+      }
+    }
+    throw new Error('Failed to generate unique student ID after 3 attempts');
   }
 
   async findAll(query: ListStudentsQueryDto): Promise<{
@@ -131,15 +147,17 @@ export class StudentService {
   }
 
   async findOne(id: string): Promise<StudentResponseDto> {
+    const { tenantId } = this.tenantContext.getOrThrow();
     const rows = await this.tenantPrisma.query<StudentRow>(
-      `SELECT * FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
-      id,
+      `SELECT * FROM students WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL`,
+      id, tenantId,
     );
     if (!rows[0]) throw new NotFoundException(`Student ${id} not found`);
     return toStudentResponse(rows[0]);
   }
 
   async updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentResponseDto> {
+    const { tenantId } = this.tenantContext.getOrThrow();
     const setClauses: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -157,10 +175,11 @@ export class StudentService {
 
     setClauses.push('updated_at = NOW()');
     params.push(id);
+    params.push(tenantId);
 
     const rows = await this.tenantPrisma.query<StudentRow>(
       `UPDATE students SET ${setClauses.join(', ')}
-       WHERE id = $${idx}::uuid AND deleted_at IS NULL
+       WHERE id = $${idx}::uuid AND tenant_id = $${idx + 1}::uuid AND deleted_at IS NULL
        RETURNING *`,
       ...params,
     );
@@ -169,19 +188,22 @@ export class StudentService {
   }
 
   async updateStatus(id: string, dto: UpdateStudentStatusDto): Promise<StudentResponseDto> {
-    await this.tenantPrisma.execute(
+    const { tenantId } = this.tenantContext.getOrThrow();
+    const affected = await this.tenantPrisma.execute(
       `UPDATE students SET status = $1, updated_at = NOW()
-       WHERE id = $2::uuid AND deleted_at IS NULL`,
-      dto.status, id,
+       WHERE id = $2::uuid AND tenant_id = $3::uuid AND deleted_at IS NULL`,
+      dto.status, id, tenantId,
     );
+    if (affected === 0) throw new NotFoundException(`Student ${id} not found`);
     return this.findOne(id);
   }
 
   async removeStudent(id: string): Promise<void> {
+    const { tenantId } = this.tenantContext.getOrThrow();
     const affected = await this.tenantPrisma.execute(
       `UPDATE students SET deleted_at = NOW()
-       WHERE id = $1::uuid AND deleted_at IS NULL`,
-      id,
+       WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL`,
+      id, tenantId,
     );
     if (affected === 0) throw new NotFoundException(`Student ${id} not found`);
   }
