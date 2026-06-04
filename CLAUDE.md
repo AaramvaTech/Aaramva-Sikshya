@@ -101,7 +101,7 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 ## Module build order (follow this sequence)
 
 1. ✅ **Foundation** — Tenant resolution, Auth (JWT), RBAC, TenantPrismaService
-2. ⬜ **Student** — Admission, profiles, class assignment
+2. ✅ **Student** — Admission, profiles, class assignment
 3. ⬜ **Academic** — Classes, sections, subjects, timetable
 4. ⬜ **Attendance** — Student and staff daily attendance
 5. ⬜ **Finance** — Fee structure, invoices, payments
@@ -195,6 +195,7 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] RBAC — Role enum, @Roles() decorator, RolesGuard, @CurrentUser(), JwtAuthGuard
 - [x] ResponseInterceptor + HttpExceptionFilter + CORS + main.ts fully configured
 - [x] Unit tests — AuthService (8) + TenantMiddleware (6) = 14 passing
+- [x] Student module (`apps/api/src/modules/student/`) — admission, CRUD, status, soft-delete — 13 unit tests passing
 
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
