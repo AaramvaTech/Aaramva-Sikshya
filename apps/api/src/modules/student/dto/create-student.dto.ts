@@ -9,7 +9,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class GuardianDto {
   @IsOptional() @IsString() name?: string;
@@ -28,9 +30,20 @@ export class AddressDto {
 }
 
 export class GuardiansDto {
-  @IsOptional() @IsObject() father?: GuardianDto;
-  @IsOptional() @IsObject() mother?: GuardianDto;
-  @IsOptional() @IsObject() localGuardian?: GuardianDto;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GuardianDto)
+  father?: GuardianDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GuardianDto)
+  mother?: GuardianDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GuardianDto)
+  localGuardian?: GuardianDto;
 }
 
 export class CreateStudentDto {
@@ -67,13 +80,19 @@ export class CreateStudentDto {
   @IsOptional() @IsEmail()
   email?: string;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddressDto)
   permanentAddress?: AddressDto;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddressDto)
   temporaryAddress?: AddressDto;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GuardiansDto)
   guardians?: GuardiansDto;
 
   @IsOptional() @IsString() @MaxLength(50)

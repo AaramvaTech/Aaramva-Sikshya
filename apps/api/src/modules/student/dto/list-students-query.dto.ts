@@ -12,7 +12,7 @@ export class ListStudentsQueryDto {
   search?: string;
 
   @IsOptional() @IsString()
-  class?: string;
+  className?: string;
 
   @IsOptional() @IsString()
   section?: string;
