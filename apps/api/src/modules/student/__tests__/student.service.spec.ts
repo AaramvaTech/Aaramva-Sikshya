@@ -168,7 +168,7 @@ describe('StudentService', () => {
 
       expect(tenantPrisma.query).toHaveBeenCalledWith(
         expect.stringContaining('FROM students'),
-        expect.anything(),
+        null,
         'Class 10',
         null,
         'ACTIVE',
@@ -176,6 +176,52 @@ describe('StudentService', () => {
         expect.any(Number),
       );
       expect(result.data).toHaveLength(1);
+    });
+
+    it('applies search filter when provided', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, total_count: '1' },
+      ]);
+
+      const result = await service.findAll({
+        page: 1,
+        limit: 20,
+        search: 'Aarav',
+      } as any);
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('ILIKE'),
+        'Aarav',
+        null,
+        null,
+        null,
+        expect.any(Number),
+        expect.any(Number),
+      );
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('respects sorting order parameter', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, total_count: '1' },
+      ]);
+
+      await service.findAll({
+        page: 1,
+        limit: 20,
+        sortBy: 'first_name',
+        sortOrder: 'asc',
+      } as any);
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('first_name ASC'),
+        null,
+        null,
+        null,
+        null,
+        expect.any(Number),
+        expect.any(Number),
+      );
     });
   });
 

@@ -97,7 +97,7 @@ export class StudentService {
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const search      = query.search    ?? '';
+    const search      = query.search?.trim() || null;
     const className   = query.className ?? null;
     const sectionName = query.section   ?? null;
     const status      = query.status    ?? null;
