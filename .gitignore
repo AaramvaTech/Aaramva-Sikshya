@@ -1,0 +1,27 @@
+# Node
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment / secrets
+.env
+.env.*.local
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Prisma (generated client lives in node_modules)
+# already covered by node_modules/ above
+
+# TypeScript incremental build info
+*.tsbuildinfo
