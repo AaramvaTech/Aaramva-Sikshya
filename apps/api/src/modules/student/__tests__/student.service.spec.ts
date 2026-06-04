@@ -1,0 +1,243 @@
+import { NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { StudentService } from '../student.service';
+import { TenantContextService } from '../../tenant/tenant-context.service';
+import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+
+const mockTenantCtx = {
+  tenantId: 'tid-1',
+  slug: 'testschool',
+  schemaName: 'tenant_testschool',
+};
+
+const admissionDateAd = '2024-07-16'; // corresponds to BS 2081-04-01
+
+const mockStudentRow = {
+  id: 'sid-1',
+  tenant_id: 'tid-1',
+  student_id: '2081-0001',
+  first_name: 'Aarav',
+  last_name: 'Sharma',
+  date_of_birth: new Date('2010-05-15'),
+  gender: 'MALE',
+  blood_group: 'O+',
+  religion: null,
+  ethnicity: null,
+  nationality: 'Nepali',
+  mother_tongue: null,
+  phone: '9841000000',
+  email: null,
+  permanent_address: null,
+  temporary_address: null,
+  guardians: null,
+  class_name: 'Class 10',
+  section_name: 'A',
+  roll_number: 1,
+  admission_date: new Date(admissionDateAd),
+  academic_year: '2081-2082',
+  previous_school: null,
+  photo_url: null,
+  documents: [],
+  status: 'ACTIVE',
+  created_by: 'uid-1',
+  created_at: new Date('2024-07-16T10:00:00Z'),
+  updated_at: new Date('2024-07-16T10:00:00Z'),
+  deleted_at: null,
+  total_count: '1',
+};
+
+const createDto = {
+  firstName: 'Aarav',
+  lastName: 'Sharma',
+  dateOfBirth: '2010-05-15',
+  gender: 'MALE' as const,
+  bloodGroup: 'O+',
+  admissionDate: admissionDateAd,
+  academicYear: '2081-2082',
+  className: 'Class 10',
+  sectionName: 'A',
+  rollNumber: 1,
+};
+
+describe('StudentService', () => {
+  let service: StudentService;
+  let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let tenantContext: jest.Mocked<TenantContextService>;
+
+  const mockTx = {
+    $queryRawUnsafe: jest.fn(),
+    $executeRawUnsafe: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        StudentService,
+        {
+          provide: TenantPrismaService,
+          useValue: {
+            run: jest.fn().mockImplementation((fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
+            query: jest.fn(),
+            execute: jest.fn(),
+          },
+        },
+        {
+          provide: TenantContextService,
+          useValue: {
+            getOrThrow: jest.fn().mockReturnValue(mockTenantCtx),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get(StudentService);
+    tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    tenantContext = module.get(TenantContextService) as jest.Mocked<TenantContextService>;
+
+    jest.clearAllMocks();
+    mockTx.$queryRawUnsafe.mockReset();
+    mockTx.$executeRawUnsafe.mockReset();
+    (tenantPrisma.run as jest.Mock).mockImplementation(
+      (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
+    );
+    (tenantContext.getOrThrow as jest.Mock).mockReturnValue(mockTenantCtx);
+  });
+
+  describe('admitStudent()', () => {
+    it('generates student_id "2081-0001" when no students exist yet for that year', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ max_id: null }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { ...mockStudentRow, student_id: '2081-0001' },
+      ]);
+
+      const result = await service.admitStudent(createDto as any, 'uid-1');
+
+      expect(result.studentId).toBe('2081-0001');
+      expect(result.firstName).toBe('Aarav');
+    });
+
+    it('increments sequence for same BS year', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ max_id: '2081-0003' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { ...mockStudentRow, student_id: '2081-0004' },
+      ]);
+
+      const result = await service.admitStudent(createDto as any, 'uid-1');
+
+      expect(result.studentId).toBe('2081-0004');
+    });
+
+    it('resets sequence for a new BS year', async () => {
+      const dto2082 = { ...createDto, admissionDate: '2025-07-16' };
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ max_id: null }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { ...mockStudentRow, student_id: '2082-0001', admission_date: new Date('2025-07-16') },
+      ]);
+
+      const result = await service.admitStudent(dto2082 as any, 'uid-1');
+
+      expect(result.studentId).toMatch(/^2082-/);
+    });
+  });
+
+  describe('findAll()', () => {
+    it('returns paginated list', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, total_count: '5' },
+        { ...mockStudentRow, id: 'sid-2', student_id: '2081-0002', total_count: '5' },
+      ]);
+
+      const result = await service.findAll({ page: 1, limit: 20 } as any);
+
+      expect(result.data).toHaveLength(2);
+      expect(result.meta.total).toBe(5);
+      expect(result.meta.page).toBe(1);
+    });
+
+    it('filters by class and status', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, total_count: '1' },
+      ]);
+
+      const result = await service.findAll({
+        page: 1,
+        limit: 20,
+        className: 'Class 10',
+        status: 'ACTIVE',
+      } as any);
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('FROM students'),
+        expect.anything(),
+        'Class 10',
+        null,
+        'ACTIVE',
+        expect.any(Number),
+        expect.any(Number),
+      );
+      expect(result.data).toHaveLength(1);
+    });
+  });
+
+  describe('findOne()', () => {
+    it('returns student by UUID', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockStudentRow]);
+
+      const result = await service.findOne('sid-1');
+
+      expect(result.id).toBe('sid-1');
+      expect(result.fullName).toBe('Aarav Sharma');
+      expect(result.dateOfBirth.ad).toBe('2010-05-15');
+    });
+
+    it('throws NotFoundException for unknown id', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(service.findOne('unknown')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateStudent()', () => {
+    it('applies partial updates', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, first_name: 'Bikash' },
+      ]);
+
+      const result = await service.updateStudent('sid-1', { firstName: 'Bikash' } as any);
+
+      expect(result.firstName).toBe('Bikash');
+    });
+  });
+
+  describe('updateStatus()', () => {
+    it('updates status and returns updated student', async () => {
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(1);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, status: 'TRANSFERRED' },
+      ]);
+
+      const result = await service.updateStatus('sid-1', { status: 'TRANSFERRED' } as any);
+
+      expect(result.status).toBe('TRANSFERRED');
+    });
+  });
+
+  describe('removeStudent()', () => {
+    it('soft-deletes the student (sets deleted_at)', async () => {
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(1);
+
+      await service.removeStudent('sid-1');
+
+      expect(tenantPrisma.execute).toHaveBeenCalledWith(
+        expect.stringContaining('deleted_at'),
+        'sid-1',
+      );
+    });
+
+    it('throws NotFoundException if student does not exist', async () => {
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(0);
+
+      await expect(service.removeStudent('unknown')).rejects.toThrow(NotFoundException);
+    });
+  });
+});
