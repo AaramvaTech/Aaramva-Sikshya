@@ -29,11 +29,16 @@ export class ResponseInterceptor<T>
     next: CallHandler<T>,
   ): Observable<ApiResponse<T>> {
     return next.handle().pipe(
-      map((data) => ({
-        success: true as const,
-        data,
-        meta: null,
-      })),
+      map((data) => {
+        if (data === undefined || data === null) {
+          return data as any;
+        }
+        return {
+          success: true as const,
+          data,
+          meta: null,
+        };
+      }),
     );
   }
 }
