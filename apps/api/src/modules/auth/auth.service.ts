@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -7,7 +6,6 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'node:crypto';
-import { PrismaService } from '../../prisma/prisma.service';
 import {
   TenantContext,
   TenantContextService,
@@ -18,9 +16,8 @@ import { Role } from '../common/enums/role.enum';
 import { AuthUser, JwtPayload } from './auth.types';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { LoginDto } from './dto/login.dto';
+import { TenantProvisioningService } from '../super-admin/tenant-provisioning.service';
 
-const BCRYPT_ROUNDS = 12;
-const TRIAL_DAYS = 30;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 interface IssuedTokens {
@@ -38,8 +35,7 @@ interface DbUser {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService,
+    private readonly provisioning: TenantProvisioningService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly jwt: JwtService,
@@ -48,43 +44,15 @@ export class AuthService {
 
   // ─── Register a new school + first SCHOOL_OWNER ────────────────────────────
   async register(dto: CreateSchoolDto) {
-    if (!TenantService.isValidSlug(dto.slug)) {
-      throw new ConflictException('Invalid school slug');
-    }
-
-    const existing = await this.prisma.tenant.findUnique({
-      where: { slug: dto.slug },
-    });
-    if (existing) {
-      throw new ConflictException(`School slug "${dto.slug}" is already taken`);
-    }
-
-    const plan = await this.prisma.plan.findFirst({
-      where: { isActive: true },
-      orderBy: { monthlyPrice: 'asc' },
-    });
-    if (!plan) {
-      throw new ConflictException(
-        'No subscription plans are configured. Seed the plans table first.',
-      );
-    }
-
-    // 1) tenant + trial subscription (public schema)
-    const tenant = await this.prisma.tenant.create({
-      data: {
-        name: dto.schoolName,
-        slug: dto.slug,
-        email: dto.adminEmail,
-        phone: dto.phone,
-        address: dto.address,
-        subscription: {
-          create: {
-            planId: plan.id,
-            status: 'TRIAL',
-            trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
-          },
-        },
-      },
+    const { tenant, user } = await this.provisioning.provision({
+      schoolName: dto.schoolName,
+      slug: dto.slug,
+      adminEmail: dto.adminEmail,
+      adminFirstName: dto.adminFirstName,
+      adminLastName: dto.adminLastName,
+      adminPassword: dto.password,
+      phone: dto.phone,
+      address: dto.address,
     });
 
     const ctx: TenantContext = {
@@ -93,51 +61,15 @@ export class AuthService {
       schemaName: TenantService.schemaNameFor(tenant.slug),
     };
 
-    try {
-      // 2) provision the tenant's isolated schema
-      await this.tenantService.provisionSchema(dto.slug);
+    const tokens = await this.tenantContext.run(ctx, () =>
+      this.issueTokens({ id: user.id, email: user.email, role: user.role }, ctx),
+    );
 
-      // 3) create the first user + issue tokens, bound to the new tenant context
-      return await this.tenantContext.run(ctx, async () => {
-        const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-        const rows = await this.tenantPrisma.query<DbUser & { first_name: string; last_name: string }>(
-          `INSERT INTO users (email, password_hash, first_name, last_name, role)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, email, first_name, last_name, role`,
-          dto.adminEmail,
-          passwordHash,
-          dto.adminFirstName,
-          dto.adminLastName,
-          Role.SCHOOL_OWNER,
-        );
-        const user = rows[0];
-        const tokens = await this.issueTokens(user, ctx);
-
-        return {
-          ...tokens,
-          school: { id: tenant.id, name: tenant.name, slug: tenant.slug },
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            role: user.role,
-          },
-        };
-      });
-    } catch (err) {
-      // Compensate: don't leave a half-created school behind.
-      await this.prisma
-        .$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${ctx.schemaName}" CASCADE`)
-        .catch(() => undefined);
-      await this.prisma.subscription
-        .deleteMany({ where: { tenantId: tenant.id } })
-        .catch(() => undefined);
-      await this.prisma.tenant
-        .delete({ where: { id: tenant.id } })
-        .catch(() => undefined);
-      throw err;
-    }
+    return {
+      ...tokens,
+      school: tenant,
+      user,
+    };
   }
 
   // ─── Login (tenant resolved by middleware) ─────────────────────────────────
@@ -164,9 +96,19 @@ export class AuthService {
       user.id,
     );
 
+    const tenantRows = await this.tenantPrisma.query<{ name: string; logo_url: string | null }>(
+      `SELECT name, logo_url FROM public.tenants WHERE id = $1::uuid`,
+      ctx.tenantId,
+    );
+
     const tokens = await this.issueTokens(user, ctx);
     return {
       ...tokens,
+      tenant: {
+        name: tenantRows[0]?.name ?? ctx.slug,
+        slug: ctx.slug,
+        logoUrl: tenantRows[0]?.logo_url ?? null,
+      },
       user: { id: user.id, email: user.email, role: user.role },
     };
   }
@@ -222,16 +164,46 @@ export class AuthService {
 
   // ─── Current user profile ──────────────────────────────────────────────────
   async getMe(user: AuthUser) {
-    const rows = await this.tenantPrisma.query(
-      `SELECT id, email, first_name, last_name, role, phone, avatar_url,
-              last_login_at, created_at
+    const rows = await this.tenantPrisma.query<{
+      id: string; email: string; first_name: string; last_name: string;
+      role: string; phone: string | null; avatar_url: string | null;
+    }>(
+      `SELECT id, email, first_name, last_name, role, phone, avatar_url
        FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
       user.userId,
     );
     if (!rows[0]) {
       throw new UnauthorizedException('User no longer exists');
     }
-    return rows[0];
+
+    let tenant: { name: string; slug: string; logoUrl: string | null } | null = null;
+    if (user.tenantId) {
+      const tenantRows = await this.tenantPrisma.query<{ name: string; logo_url: string | null }>(
+        `SELECT name, logo_url FROM public.tenants WHERE id = $1::uuid`,
+        user.tenantId,
+      );
+      if (tenantRows[0]) {
+        tenant = {
+          name: tenantRows[0].name,
+          slug: user.tenantSlug ?? '',
+          logoUrl: tenantRows[0].logo_url,
+        };
+      }
+    }
+
+    const r = rows[0];
+    return {
+      id: r.id,
+      email: r.email,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      role: r.role,
+      phone: r.phone,
+      avatarUrl: r.avatar_url,
+      tenantId: user.tenantId,
+      tenantSlug: user.tenantSlug,
+      tenant,
+    };
   }
 
   // ─── helpers ───────────────────────────────────────────────────────────────

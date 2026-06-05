@@ -7,7 +7,7 @@ import { AuthService } from '../auth.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantService } from '../../tenant/tenant.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { TenantProvisioningService } from '../../super-admin/tenant-provisioning.service';
 
 const mockTenantCtx = {
   tenantId: 'tid-1',
@@ -27,8 +27,7 @@ const mockUser = {
 
 describe('AuthService', () => {
   let authService: AuthService;
-  let prisma: jest.Mocked<PrismaService>;
-  let tenantService: jest.Mocked<TenantService>;
+  let provisioning: jest.Mocked<TenantProvisioningService>;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let tenantContext: jest.Mocked<TenantContextService>;
   let jwt: jest.Mocked<JwtService>;
@@ -38,19 +37,8 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         {
-          provide: PrismaService,
-          useValue: {
-            tenant: { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn(), deleteMany: jest.fn() },
-            plan: { findFirst: jest.fn() },
-            subscription: { deleteMany: jest.fn() },
-            $executeRawUnsafe: jest.fn(),
-          },
-        },
-        {
-          provide: TenantService,
-          useValue: {
-            provisionSchema: jest.fn(),
-          },
+          provide: TenantProvisioningService,
+          useValue: { provision: jest.fn() },
         },
         {
           provide: TenantPrismaService,
@@ -78,8 +66,7 @@ describe('AuthService', () => {
     }).compile();
 
     authService = module.get(AuthService);
-    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    tenantService = module.get(TenantService) as jest.Mocked<TenantService>;
+    provisioning = module.get(TenantProvisioningService) as jest.Mocked<TenantProvisioningService>;
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     tenantContext = module.get(TenantContextService) as jest.Mocked<TenantContextService>;
     jwt = module.get(JwtService) as jest.Mocked<JwtService>;
@@ -98,40 +85,24 @@ describe('AuthService', () => {
     };
 
     beforeEach(() => {
-      (prisma.tenant.findUnique as jest.Mock).mockResolvedValue(null);
-      (prisma.plan.findFirst as jest.Mock).mockResolvedValue({
-        id: 'plan-1',
-        name: 'Basic',
-      });
-      (prisma.tenant.create as jest.Mock).mockResolvedValue({
-        id: 'tid-1',
-        name: dto.schoolName,
-        slug: dto.slug,
-      });
-      (tenantService.provisionSchema as jest.Mock).mockResolvedValue(undefined);
-      (tenantPrisma.query as jest.Mock).mockResolvedValue([
-        {
+      (provisioning.provision as jest.Mock).mockResolvedValue({
+        tenant: { id: 'tid-1', name: dto.schoolName, slug: dto.slug },
+        user: {
           id: 'uid-1',
           email: dto.adminEmail,
-          first_name: dto.adminFirstName,
-          last_name: dto.adminLastName,
+          firstName: dto.adminFirstName,
+          lastName: dto.adminLastName,
           role: 'SCHOOL_OWNER',
         },
-      ]);
+      });
       (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
     });
 
-    it('creates tenant schema and first user on success', async () => {
+    it('delegates to TenantProvisioningService and returns tokens', async () => {
       const result = await authService.register(dto);
 
-      expect(tenantService.provisionSchema).toHaveBeenCalledWith(dto.slug);
-      expect(tenantPrisma.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO users'),
-        dto.adminEmail,
-        expect.any(String), // hashed password
-        dto.adminFirstName,
-        dto.adminLastName,
-        'SCHOOL_OWNER',
+      expect(provisioning.provision).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: dto.slug, adminEmail: dto.adminEmail }),
       );
       expect(result.school.slug).toBe(dto.slug);
       expect(result.user.email).toBe(dto.adminEmail);
@@ -139,7 +110,9 @@ describe('AuthService', () => {
     });
 
     it('throws 409 ConflictException if slug is already taken', async () => {
-      (prisma.tenant.findUnique as jest.Mock).mockResolvedValue({ id: 'existing' });
+      (provisioning.provision as jest.Mock).mockRejectedValue(
+        new ConflictException('Slug already taken'),
+      );
 
       await expect(authService.register(dto)).rejects.toThrow(ConflictException);
     });
@@ -148,11 +121,13 @@ describe('AuthService', () => {
   // ─── login ─────────────────────────────────────────────────────────────────
 
   describe('login()', () => {
-    it('returns tokens for valid credentials', async () => {
+    const mockTenant = { name: 'Test School', logo_url: null };
+
+    it('returns tokens with tenant info for valid credentials', async () => {
       const hash = await bcrypt.hash('Secret123', 1);
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
-        { ...mockUser, password_hash: hash },
-      ]);
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockUser, password_hash: hash }])
+        .mockResolvedValueOnce([mockTenant]);
       (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
 
       const result = await authService.login({
@@ -162,6 +137,9 @@ describe('AuthService', () => {
 
       expect(result.accessToken).toBe('mock.jwt.token');
       expect(result.user.role).toBe('SCHOOL_OWNER');
+      expect(result.tenant.name).toBe('Test School');
+      expect(result.tenant.slug).toBe('testschool');
+      expect(result.tenant.logoUrl).toBeNull();
     });
 
     it('throws UnauthorizedException for wrong password', async () => {
@@ -224,6 +202,46 @@ describe('AuthService', () => {
       await expect(authService.refresh(undefined)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  // ─── getMe ─────────────────────────────────────────────────────────────────
+
+  describe('getMe()', () => {
+    it('returns camelCase user with tenant info', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{
+          id: 'uid-1', email: 'ram@test.edu.np',
+          first_name: 'Ram', last_name: 'Bahadur',
+          role: 'SCHOOL_OWNER', phone: null, avatar_url: null,
+        }])
+        .mockResolvedValueOnce([{ name: 'Test School', logo_url: null }]);
+
+      const result = await authService.getMe({
+        userId: 'uid-1',
+        email: 'ram@test.edu.np',
+        role: 'SCHOOL_OWNER' as any,
+        tenantId: 'tid-1',
+        tenantSlug: 'testschool',
+      });
+
+      expect(result.firstName).toBe('Ram');
+      expect(result.tenant?.name).toBe('Test School');
+      expect(result.tenant?.slug).toBe('testschool');
+    });
+
+    it('throws UnauthorizedException if user not found', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(
+        authService.getMe({
+          userId: 'uid-gone',
+          email: 'x@x.com',
+          role: 'TEACHER' as any,
+          tenantId: 'tid-1',
+          tenantSlug: 'testschool',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

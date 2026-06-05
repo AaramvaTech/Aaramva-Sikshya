@@ -49,7 +49,7 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto);
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
-    return { accessToken: result.accessToken, user: result.user };
+    return { accessToken: result.accessToken, user: result.user, tenant: result.tenant };
   }
 
   @Post('refresh')
