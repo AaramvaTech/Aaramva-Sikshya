@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "bs-calendar": ["../../packages/bs-calendar/src/index.ts"]
     }
   },
   "include": [
