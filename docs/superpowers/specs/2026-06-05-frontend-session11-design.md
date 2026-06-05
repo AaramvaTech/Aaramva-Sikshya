@@ -126,7 +126,40 @@ export const authApi = {
 
 ---
 
-## 5. Shell Layout
+## 5. Co-Branding & School Identity
+
+**Layout:** School's logo in sidebar header (prominent). "Powered by Aaramva Shikshya" with the small mark in sidebar footer.
+
+**School logo source:** `logoUrl` from `tenant.store.ts` — populated after login. Falls back to a shadcn `<Avatar>` showing the school's initials (e.g., "SXS") if no logo is uploaded yet.
+
+**School name source:** `tenantName` field in login response (see backend change below).
+
+**"Powered by" footer:**
+```
+[tiny Aaramva mark] Powered by Aaramva Shikshya
+```
+Rendered at the bottom of the sidebar in `text-xs text-gray-400`.
+
+### Backend change required (bundled into Session 11)
+
+The current `auth.service.ts` login response returns only `{ accessToken, user: { id, email, role } }`. The tenant name and logo are not included.
+
+**Change:** Enhance `AuthService.login()` and `AuthService.getMe()` to also query `public.tenants` for `name` and `logo_url`, returning them in the response. This allows the frontend to populate `tenant.store` on login and on `GET /auth/me` (page refresh recovery).
+
+Updated `LoginResponse` shape:
+```typescript
+{
+  accessToken: string;
+  user: { id, email, firstName, lastName, role, tenantId, tenantSlug };
+  tenant: { name: string; slug: string; logoUrl: string | null };
+}
+```
+
+The `tenant` object populates `tenant.store.ts` on login and on `GET /auth/me`.
+
+---
+
+## 6. Shell Layout
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -173,7 +206,7 @@ Sidebar collapses to shadcn `<Sheet>` (off-canvas). Hamburger icon in header. Br
 
 ---
 
-## 6. Login Page
+## 7. Login Page
 
 ```
 [Page canvas: #F8FAF9]
@@ -198,7 +231,7 @@ Sidebar collapses to shadcn `<Sheet>` (off-canvas). Hamburger icon in header. Br
 
 ---
 
-## 7. Dashboard Page
+## 8. Dashboard Page
 
 Four stat cards (TanStack Query, independent queries):
 
@@ -215,7 +248,7 @@ Each card loads independently with a `<Skeleton>` while fetching.
 
 ---
 
-## 8. Placeholder Module Pages
+## 9. Placeholder Module Pages
 
 All 8 module routes render:
 ```tsx
@@ -227,7 +260,7 @@ Routes: `/students`, `/attendance`, `/academic`, `/finance`, `/exams`, `/hr`, `/
 
 ---
 
-## 9. Shared Components
+## 10. Shared Components
 
 ### `<BsDate>` (`components/shared/bs-date.tsx`)
 - Props: `date: string | { ad: string; bs: string }`, `showAd?: boolean`, `lang?: 'en' | 'np'`
@@ -260,7 +293,7 @@ Routes: `/students`, `/attendance`, `/academic`, `/finance`, `/exams`, `/hr`, `/
 
 ---
 
-## 10. Types (`types/api.types.ts`)
+## 11. Types (`types/api.types.ts`)
 
 ```typescript
 export interface ApiResponse<T> {
@@ -269,9 +302,14 @@ export interface ApiResponse<T> {
   meta?: { page: number; limit: number; total: number };
 }
 
+export interface TenantInfo {
+  name: string; slug: string; logoUrl: string | null;
+}
+
 export interface LoginResponse {
   accessToken: string;
   user: UserResponse & { tenantId: string; tenantSlug: string };
+  tenant: TenantInfo;
 }
 
 export interface UserResponse {
