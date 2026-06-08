@@ -9,10 +9,20 @@ interface TenantState {
   clear: () => void;
 }
 
+const storedSlug = typeof window !== 'undefined' ? localStorage.getItem('tenant-slug') : null;
+
 export const useTenantStore = create<TenantState>((set) => ({
-  slug: null,
+  slug: storedSlug,
   name: null,
   logoUrl: null,
-  setTenant: (t) => set({ slug: t.slug ?? null, name: t.name ?? null, logoUrl: t.logoUrl ?? null }),
-  clear: () => set({ slug: null, name: null, logoUrl: null }),
+  setTenant: (t) => {
+    if (t.slug && typeof window !== 'undefined') {
+      localStorage.setItem('tenant-slug', t.slug);
+    }
+    set({ slug: t.slug ?? null, name: t.name ?? null, logoUrl: t.logoUrl ?? null });
+  },
+  clear: () => {
+    if (typeof window !== 'undefined') localStorage.removeItem('tenant-slug');
+    set({ slug: null, name: null, logoUrl: null });
+  },
 }));

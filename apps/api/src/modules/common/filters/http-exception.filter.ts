@@ -53,6 +53,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       this.logger.error(
         exception instanceof Error ? exception.stack : String(exception),
       );
+      // Expose message in dev so errors are debuggable without reading terminal
+      if (process.env.NODE_ENV !== 'production') {
+        message = exception instanceof Error ? exception.message : String(exception);
+      }
     }
 
     const body: ErrorBody = {

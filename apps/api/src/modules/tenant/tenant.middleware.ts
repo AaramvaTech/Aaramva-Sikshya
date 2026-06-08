@@ -10,7 +10,10 @@ export class TenantMiddleware implements NestMiddleware {
    * Public routes that must work WITHOUT an existing tenant. Matched as a
    * suffix of req.path so they hold regardless of the global API prefix.
    */
-  private static readonly PUBLIC_PATH_SUFFIXES = ['/auth/register-school'];
+  private static readonly PUBLIC_PATH_SUFFIXES = [
+    '/auth/register-school',
+    '/super-admin/',        // all platform-admin routes need no tenant context
+  ];
 
   constructor(
     private readonly tenantService: TenantService,

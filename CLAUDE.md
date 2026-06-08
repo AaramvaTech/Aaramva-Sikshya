@@ -102,17 +102,18 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 
 1. ✅ **Foundation** — Tenant resolution, Auth (JWT), RBAC, TenantPrismaService
 2. ✅ **Student** — Admission, profiles, class assignment
-3. ⬜ **Academic** — Classes, sections, subjects, timetable
-4. ⬜ **Attendance** — Student and staff daily attendance
-5. ⬜ **Finance** — Fee structure, invoices, payments
-6. ⬜ **HR & Staff** — Staff profiles, leave, payroll
-7. ⬜ **Examination** — Exams, marks, report cards
+3. ✅ **Academic** — Classes, sections, subjects, timetable
+4. ✅ **Attendance** — Student and staff daily attendance
+5. ✅ **Finance** — Fee structure, invoices, payments
+6. ✅ **HR & Staff** — Staff profiles, leave, payroll
+7. ✅ **Examination** — Exams, marks, report cards
 8. ⬜ **E-Learning** — Assignments, materials, online classes
-9. ⬜ **Communication** — Notices, SMS, push notifications
-10. ⬜ **Library** — Books, issue/return, fines
+9. ✅ **Communication** — Notices, SMS, push notifications
+10. ✅ **Library** — Books, issue/return, fines
 11. ⬜ **Inventory** — Assets, stock
 12. ⬜ **Reports** — Analytics dashboards, exports
-13. ⬜ **Super Admin** — Platform-level school management
+13. ✅ **Super Admin** — Platform-level school management
+14. ✅ **Super Admin UI** — Platform admin portal (Session 17)
 
 ---
 
@@ -196,11 +197,22 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] ResponseInterceptor + HttpExceptionFilter + CORS + main.ts fully configured
 - [x] Unit tests — AuthService (8) + TenantMiddleware (6) = 14 passing
 - [x] Student module (`apps/api/src/modules/student/`) — admission, CRUD, status, soft-delete — 13 unit tests passing
+- [x] Academic module (`apps/api/src/modules/academic/`) — academic years, classes, sections, subjects, class-subject assignments, timetable, migration service — 18 unit tests passing (48 total across all modules)
+- [x] Attendance module (`apps/api/src/modules/attendance/`) — student bulk attendance (UPSERT), staff attendance, leave applications, absent event emitter — 13 unit tests passing (61 total across all modules)
+- [x] Finance module (`apps/api/src/modules/finance/`) — fee categories, fee structures, invoices (with discount/waiver/custom-amount logic), payments (atomic), reports (collection, defaulters, student ledger) — 16 unit tests passing (77 total across all modules)
+- [x] JobsModule (`apps/api/src/jobs/`) — BullMQ daily fine recalculation job, cron '20 18 * * *' (00:05 Nepal time)
+- [x] HR & Staff module (`apps/api/src/modules/hr/`) — departments, designations, staff profiles (user+profile transaction, EMP-{BS_YEAR}-{4-digit} ID), staff documents, HR leave management (overlap check, review, cancel, balance), payroll months + salary slips (idempotent generation, adjust, finalize) — 19 unit tests passing
+- [x] Examination module (`apps/api/src/modules/examination/`) — grading scales with thresholds (NEB/GPA/percentage), exam types (weight validation), exam schedules (bulk create, duplicate guard), marks entry (UPSERT with full validation), result computation (idempotent pipeline: marks→grade→rank), report cards (weighted annual result), rank lists — 12 unit tests passing (108 total passing)
+- [x] Communication module (`apps/api/src/modules/communication/`) — notice board (audience-based visibility, publish/draft), SMS via Sparrow SMS (normalise Nepal phone, PENDING→MOCK/SENT/FAILED log, bulk send with deduplication, retry), in-app notifications (create, paginated list, unread count, mark read), event listeners (AttendanceListener → absent SMS, FinanceListener → payment/overdue notifications + SMS) — 22 unit tests passing (130 total passing)
+- [x] Library module (`apps/api/src/modules/library/`) — book categories (CRUD), books (add/update/soft-delete, full-text search, copy management), library members (LIB-YEAR-NNNN generation via sequences, student/staff, duplicate guard), issue & return (4 pre-checks, atomic transactions, fine calculation, mark-lost, pay-fine, overdue detection) — 18 unit tests passing (148 total passing)
+- [x] Super Admin module (`apps/api/src/modules/super-admin/`) — PublicPrismaService (public schema isolation), TenantProvisioningService (extracted from AuthService, shared with super-admin onboarding), PlatformAuthService (platform_admins login → JWT with tenantId:null), PlanService (CRUD + deactivate), AuditService (platform_audit_logs), TenantAdminService (onboard/suspend/activate/detail/list + subscription management), ImpersonationService (1h SCHOOL_OWNER JWT + audit log), AnalyticsService (overview + revenue) — 16 unit tests passing (164 total passing)
+- [x] Super Admin UI (`apps/web/app/(super-admin)/`) — Login page, Dashboard (overview + plan breakdown + recent schools), Schools list (DataTable + Onboard dialog + Suspend/Activate + Impersonation), School detail (info + subscription + usage stats), Plans management (cards + Create/Edit/Deactivate), Audit log (read-only + impersonation rows highlighted orange)
 
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
 - DB: PostgreSQL 17 local (password: <REDACTED>). Redis not running yet (needed for queues)
+- Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
 - Run migrations: `cd apps/api && npx prisma migrate dev`
 - Run tests: `cd apps/api && npm test`
 
@@ -215,3 +227,38 @@ When starting a new session, Claude Code should:
 2. Read the relevant module spec from `docs/api-contracts/`
 3. Check existing code in the target directory before writing anything new
 4. Ask for clarification if the task conflicts with anything in this file
+
+## Frontend (apps/web/) — added Session 11
+
+Framework: Next.js 14 App Router + TypeScript
+Styling: Tailwind CSS + shadcn/ui components
+State: Zustand (global) + TanStack Query (server state)
+Forms: React Hook Form + Zod
+HTTP: Axios with interceptors (lib/api.ts)
+
+### Frontend rules
+- NEVER use localStorage for tokens — access token in Zustand memory only
+- ALWAYS use the <BsDate> component for date display — never raw date strings
+- ALWAYS use TanStack Query for API calls — never useEffect + fetch
+- Forms use React Hook Form — never uncontrolled inputs
+- ALL API response types must be in types/api.types.ts
+- Tailwind only — no inline styles, no CSS modules
+- shadcn/ui for all UI primitives (Button, Input, Table, Dialog, etc.)
+  Install with: npx shadcn@latest add [component-name]
+
+### Shared components to build in Session 11 (reused everywhere)
+- <DataTable> — TanStack Table with sorting, filtering, pagination
+- <BsDate> — date in BS format with AD tooltip
+- <StatusBadge> — colored badge (PRESENT=green, ABSENT=red, etc.)
+- <ConfirmDialog> — "Are you sure?" with confirm/cancel
+- <PageHeader> — title + breadcrumb + action button slot
+- <EmptyState> — illustration + message when list is empty
+
+
+- Radix/base-ui Select with async data: never use <SelectValue> for async-loaded items.
+  Use a computed <span> inside <SelectTrigger> that looks up name from data array directly.
+- Response extraction rules:
+    Paginated list → .data.data.data (ResponseInterceptor wraps, then {data:[], meta:{}})
+    Simple list    → .data.data
+- Academic year creation is always two steps: POST /academic-years → PATCH /:id/set-current
+- Marks entry: load students from student API (names/rolls), marks from marks API (values), merge at display time

@@ -1,121 +1,267 @@
 'use client';
 
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
-  MessageSquare, BookMarked,
+  MessageSquare, ChevronDown,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth.store';
+import { useSidebar } from '@/context/sidebar-context';
 import { useTenantStore } from '@/store/tenant.store';
 
-const NAV_SECTIONS = [
+type SubItem = { name: string; path: string };
+type NavItem = {
+  name: string;
+  icon: React.ReactNode;
+  path?: string;
+  subItems?: SubItem[];
+};
+
+const navItems: NavItem[] = [
   {
-    label: null,
-    items: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['all'] },
+    icon: <LayoutDashboard className="w-5 h-5" />,
+    name: 'Dashboard',
+    path: '/dashboard',
+  },
+  {
+    icon: <Users className="w-5 h-5" />,
+    name: 'Students',
+    subItems: [
+      { name: 'All Students', path: '/students' },
+      { name: 'Admit Student', path: '/students/new' },
     ],
   },
   {
-    label: 'SCHOOL',
-    items: [
-      { href: '/students',      icon: Users,         label: 'Students',      roles: ['PRINCIPAL','ACADEMIC_COORDINATOR','TEACHER'] },
-      { href: '/attendance',    icon: CheckSquare,   label: 'Attendance',    roles: ['TEACHER','PRINCIPAL','ACADEMIC_COORDINATOR'] },
-      { href: '/academic',      icon: BookOpen,      label: 'Academic',      roles: ['PRINCIPAL','ACADEMIC_COORDINATOR'] },
-      { href: '/exams',         icon: FileText,      label: 'Examinations',  roles: ['PRINCIPAL','ACADEMIC_COORDINATOR','TEACHER'] },
+    icon: <CheckSquare className="w-5 h-5" />,
+    name: 'Attendance',
+    subItems: [
+      { name: 'Mark Attendance', path: '/attendance/mark' },
+      { name: 'Reports', path: '/attendance/reports' },
     ],
   },
   {
-    label: 'ADMINISTRATION',
-    items: [
-      { href: '/finance',       icon: CreditCard,    label: 'Finance',       roles: ['ACCOUNTANT','PRINCIPAL','SCHOOL_OWNER'] },
-      { href: '/hr',            icon: UserCog,       label: 'HR & Staff',    roles: ['PRINCIPAL','SCHOOL_OWNER'] },
-      { href: '/library',       icon: Library,       label: 'Library',       roles: ['LIBRARIAN','PRINCIPAL'] },
-      { href: '/communication', icon: MessageSquare, label: 'Communication', roles: ['PRINCIPAL','TEACHER'] },
+    icon: <BookOpen className="w-5 h-5" />,
+    name: 'Academic',
+    subItems: [
+      { name: 'Classes', path: '/academic/classes' },
+      { name: 'Subjects', path: '/academic/subjects' },
+      { name: 'Timetable', path: '/academic/timetable' },
+    ],
+  },
+  {
+    icon: <CreditCard className="w-5 h-5" />,
+    name: 'Finance',
+    subItems: [
+      { name: 'Overview', path: '/finance' },
+      { name: 'Invoices', path: '/finance/invoices' },
+      { name: 'Fee Structures', path: '/finance/fee-structures' },
+      { name: 'Reports', path: '/finance/reports' },
+    ],
+  },
+  {
+    icon: <FileText className="w-5 h-5" />,
+    name: 'Examinations',
+    subItems: [
+      { name: 'Exam Types', path: '/exams' },
+      { name: 'Schedule', path: '/exams/schedule' },
+      { name: 'Enter Marks', path: '/exams/marks' },
+      { name: 'Results', path: '/exams/results' },
+    ],
+  },
+  {
+    icon: <UserCog className="w-5 h-5" />,
+    name: 'HR & Staff',
+    subItems: [
+      { name: 'Staff', path: '/hr/staff' },
+      { name: 'Leave', path: '/hr/leave' },
+      { name: 'Payroll', path: '/hr/payroll' },
+    ],
+  },
+  {
+    icon: <Library className="w-5 h-5" />,
+    name: 'Library',
+    subItems: [
+      { name: 'Books', path: '/library/books' },
+      { name: 'Issues', path: '/library/issues' },
+    ],
+  },
+  {
+    icon: <MessageSquare className="w-5 h-5" />,
+    name: 'Communication',
+    subItems: [
+      { name: 'Notices', path: '/communication/notices' },
+      { name: 'SMS Center', path: '/communication/sms' },
     ],
   },
 ];
 
 export function Sidebar() {
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-  const user = useAuthStore((s) => s.user);
   const tenant = useTenantStore((s) => s);
 
-  function canSee(roles: string[]) {
-    if (roles.includes('all')) return true;
-    return user?.role ? roles.includes(user.role) : false;
-  }
+  const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
+  const [subMenuHeight, setSubMenuHeight] = useState<Record<number, number>>({});
+  const subMenuRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  const isActive = useCallback(
+    (path: string, exact = false) => {
+      if (pathname === path) return true;
+      if (!exact && pathname.startsWith(path + '/')) return true;
+      return false;
+    },
+    [pathname],
+  );
+
+  const isGroupActive = useCallback(
+    (item: NavItem) => {
+      if (item.path) return isActive(item.path);
+      return item.subItems?.some((s) => isActive(s.path)) ?? false;
+    },
+    [isActive],
+  );
+
+  // Auto-open submenu for active route
+  useEffect(() => {
+    let matched = false;
+    navItems.forEach((nav, idx) => {
+      if (nav.subItems?.some((s) => isActive(s.path))) {
+        setOpenSubmenu(idx);
+        matched = true;
+      }
+    });
+    if (!matched) setOpenSubmenu(null);
+  }, [pathname, isActive]);
+
+  // Measure submenu heights for animation
+  useEffect(() => {
+    if (openSubmenu !== null && subMenuRefs.current[openSubmenu]) {
+      setSubMenuHeight((prev) => ({
+        ...prev,
+        [openSubmenu]: subMenuRefs.current[openSubmenu]?.scrollHeight ?? 0,
+      }));
+    }
+  }, [openSubmenu]);
+
+  const handleSubmenuToggle = (idx: number) => {
+    setOpenSubmenu((prev) => (prev === idx ? null : idx));
+  };
+
+  const showLabels = isExpanded || isHovered || isMobileOpen;
 
   return (
-    <aside className="flex flex-col w-60 min-h-screen bg-white border-r border-gray-100">
-      {/* School logo / name */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100">
-        {tenant.logoUrl ? (
-          <Image
-            src={tenant.logoUrl}
-            alt={tenant.name ?? 'School'}
-            width={36}
-            height={36}
-            className="rounded object-contain"
-          />
-        ) : (
-          <div className="h-9 w-9 rounded bg-[#1A5C38]/10 flex items-center justify-center text-[#1A5C38] font-bold text-sm flex-shrink-0">
-            {(tenant.name ?? tenant.slug ?? 'S').slice(0, 2).toUpperCase()}
-          </div>
-        )}
-        <span className="font-semibold text-sm text-gray-900 truncate">
-          {tenant.name ?? tenant.slug ?? 'School'}
-        </span>
+    <aside
+      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
+        ${showLabels ? 'w-[290px]' : 'w-[90px]'}
+        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0`}
+      onMouseEnter={() => !isExpanded && setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Logo / School name */}
+      <div className={`py-8 flex ${!showLabels ? 'lg:justify-center' : 'justify-start'}`}>
+        <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
+          {tenant.logoUrl ? (
+            <Image
+              src={tenant.logoUrl}
+              alt={tenant.name ?? 'School'}
+              width={32}
+              height={32}
+              className="rounded object-contain flex-shrink-0"
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+              {(tenant.name ?? tenant.slug ?? 'AS').slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          {showLabels && (
+            <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+              {tenant.name ?? 'Aaramva Shikshya'}
+            </span>
+          )}
+        </Link>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.label ?? 'main'}>
-            {section.label && (
-              <p className="px-2 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
-                {section.label}
-              </p>
-            )}
-            <ul className="space-y-0.5">
-              {section.items.filter((i) => canSee(i.roles)).map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + '/');
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                        active
-                          ? 'bg-[#1A5C38] text-white'
-                          : 'text-gray-600 hover:bg-gray-50',
-                      )}
-                    >
-                      <item.icon
-                        className={cn(
-                          'h-4 w-4 flex-shrink-0',
-                          active ? 'text-white' : 'text-gray-400',
-                        )}
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+        <nav className="mb-6">
+          <h2
+            className={`mb-4 text-xs uppercase leading-5 text-gray-400 flex ${
+              !showLabels ? 'lg:justify-center' : 'justify-start'
+            }`}
+          >
+            {showLabels ? 'Menu' : '···'}
+          </h2>
+          <ul className="flex flex-col gap-1">
+            {navItems.map((nav, idx) => (
+              <li key={nav.name}>
+                {nav.subItems ? (
+                  <button
+                    onClick={() => handleSubmenuToggle(idx)}
+                    className={`menu-item group w-full cursor-pointer ${
+                      isGroupActive(nav) ? 'menu-item-active' : 'menu-item-inactive'
+                    } ${!showLabels ? 'lg:justify-center' : 'lg:justify-start'}`}
+                  >
+                    <span className={isGroupActive(nav) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'}>
+                      {nav.icon}
+                    </span>
+                    {showLabels && <span className="flex-1 text-left">{nav.name}</span>}
+                    {showLabels && (
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          openSubmenu === idx ? 'rotate-180 text-brand-500 dark:text-brand-400' : 'text-gray-500'
+                        }`}
                       />
-                      {item.label}
+                    )}
+                  </button>
+                ) : (
+                  nav.path && (
+                    <Link
+                      href={nav.path}
+                      className={`menu-item group ${
+                        isActive(nav.path) ? 'menu-item-active' : 'menu-item-inactive'
+                      }`}
+                    >
+                      <span className={isActive(nav.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'}>
+                        {nav.icon}
+                      </span>
+                      {showLabels && <span>{nav.name}</span>}
                     </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
+                  )
+                )}
 
-      {/* Powered by footer */}
-      <div className="px-4 py-3 border-t border-gray-100">
-        <div className="flex items-center gap-2">
-          <BookMarked className="h-3 w-3 text-gray-300 flex-shrink-0" />
-          <span className="text-[10px] text-gray-400">Powered by Aaramva Shikshya</span>
-        </div>
+                {/* Submenu */}
+                {nav.subItems && showLabels && (
+                  <div
+                    ref={(el) => { subMenuRefs.current[idx] = el; }}
+                    className="overflow-hidden transition-all duration-300"
+                    style={{ height: openSubmenu === idx ? `${subMenuHeight[idx] ?? 0}px` : '0px' }}
+                  >
+                    <ul className="mt-1 space-y-0.5 ml-9">
+                      {nav.subItems.map((sub) => (
+                        <li key={sub.path}>
+                          <Link
+                            href={sub.path}
+                            className={`menu-dropdown-item ${
+                              isActive(sub.path, true)
+                                ? 'menu-dropdown-item-active'
+                                : 'menu-dropdown-item-inactive'
+                            }`}
+                          >
+                            {sub.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
     </aside>
   );

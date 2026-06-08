@@ -1,0 +1,65 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { attendanceApi } from '@/lib/api/attendance.api';
+import { useTenantStore } from '@/store/tenant.store';
+import type { BulkAttendanceData } from '@/types/api.types';
+
+export function useSectionAttendance(
+  sectionId: string,
+  date: string,
+  academicYearId?: string,
+) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'section', sectionId, date, academicYearId],
+    queryFn: () =>
+      attendanceApi
+        .getSectionAttendance({ sectionId, date, academicYearId })
+        .then((r) => r.data.data),
+    enabled: !!slug && !!sectionId && !!date,
+  });
+}
+
+export function useBulkMarkAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: BulkAttendanceData) => attendanceApi.bulkMark(data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['attendance', 'section', variables.sectionId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'school-summary'] });
+    },
+  });
+}
+
+export function useSchoolAttendanceSummary() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'school-summary'],
+    queryFn: () => attendanceApi.getSchoolSummary().then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useStudentAttendanceSummary(studentId: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'student', studentId],
+    queryFn: () =>
+      attendanceApi.getStudentSummary(studentId).then((r) => r.data.data),
+    enabled: !!slug && !!studentId,
+  });
+}
+
+export function useSectionAttendanceReport(
+  sectionId: string | null,
+  params: { fromDate: string; toDate: string; academicYearId?: string } | null,
+) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'report', sectionId, params],
+    queryFn: () =>
+      attendanceApi.getSectionReport(sectionId!, params!).then((r) => r.data.data),
+    enabled: !!slug && !!sectionId && !!params,
+  });
+}

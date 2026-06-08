@@ -96,8 +96,8 @@ export class AuthService {
       user.id,
     );
 
-    const tenantRows = await this.tenantPrisma.query<{ name: string; logo_url: string | null }>(
-      `SELECT name, logo_url FROM public.tenants WHERE id = $1::uuid`,
+    const tenantRows = await this.tenantPrisma.query<{ name: string; logoUrl: string | null }>(
+      `SELECT name, "logoUrl" FROM public.tenants WHERE id = $1`,
       ctx.tenantId,
     );
 
@@ -107,7 +107,7 @@ export class AuthService {
       tenant: {
         name: tenantRows[0]?.name ?? ctx.slug,
         slug: ctx.slug,
-        logoUrl: tenantRows[0]?.logo_url ?? null,
+        logoUrl: tenantRows[0]?.logoUrl ?? null,
       },
       user: { id: user.id, email: user.email, role: user.role },
     };
@@ -178,15 +178,15 @@ export class AuthService {
 
     let tenant: { name: string; slug: string; logoUrl: string | null } | null = null;
     if (user.tenantId) {
-      const tenantRows = await this.tenantPrisma.query<{ name: string; logo_url: string | null }>(
-        `SELECT name, logo_url FROM public.tenants WHERE id = $1::uuid`,
+      const tenantRows = await this.tenantPrisma.query<{ name: string; logoUrl: string | null }>(
+        `SELECT name, "logoUrl" FROM public.tenants WHERE id = $1`,
         user.tenantId,
       );
       if (tenantRows[0]) {
         tenant = {
           name: tenantRows[0].name,
           slug: user.tenantSlug ?? '',
-          logoUrl: tenantRows[0].logo_url,
+          logoUrl: tenantRows[0].logoUrl,
         };
       }
     }

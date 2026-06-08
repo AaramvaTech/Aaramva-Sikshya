@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { adToBs } from 'bs-calendar';
 
 export interface StudentRow {
@@ -39,6 +40,16 @@ export interface BsAdDate {
   bs: string;
 }
 
+export interface GuardianDto {
+  id: string;
+  relation: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string | null;
+  isPrimary: boolean;
+}
+
 export interface StudentResponseDto {
   id: string;
   studentId: string;
@@ -57,7 +68,7 @@ export interface StudentResponseDto {
   email: string | null;
   permanentAddress: Record<string, string> | null;
   temporaryAddress: Record<string, string> | null;
-  guardians: Record<string, unknown> | null;
+  guardians: GuardianDto[];
   className: string | null;
   sectionName: string | null;
   rollNumber: number | null;
@@ -100,7 +111,19 @@ export function toStudentResponse(row: StudentRow): StudentResponseDto {
     email: row.email,
     permanentAddress: row.permanent_address,
     temporaryAddress: row.temporary_address,
-    guardians: row.guardians,
+    guardians: Array.isArray(row.guardians)
+      ? (row.guardians as Record<string, unknown>[])
+          .filter((g) => !!g.firstName || !!g.relation)
+          .map((g) => ({
+            id: (g.id as string) ?? randomUUID(),
+            relation: (g.relation as string) ?? '',
+            firstName: (g.firstName as string) ?? '',
+            lastName: (g.lastName as string) ?? '',
+            phone: (g.phone as string) ?? '',
+            email: (g.email as string | null) ?? null,
+            isPrimary: (g.isPrimary as boolean) ?? false,
+          }))
+      : [],
     className: row.class_name,
     sectionName: row.section_name,
     rollNumber: row.roll_number,

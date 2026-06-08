@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { StudentService } from './student.service';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
@@ -55,6 +56,12 @@ export class StudentController {
   )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.findOne(id);
+  }
+
+  @Post(':id/enroll')
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  enroll(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EnrollStudentDto) {
+    return this.studentService.enroll(id, dto);
   }
 
   @Patch(':id')

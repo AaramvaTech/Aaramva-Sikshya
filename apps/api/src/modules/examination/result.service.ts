@@ -308,7 +308,7 @@ export class ResultService {
 
     return rows.map((r) => ({
       ...toStudentResultResponse(r),
-      studentName: r.student_name,
+      fullName: r.student_name,
       admissionNumber: r.admission_number,
       sectionName: r.section_name,
     }));
@@ -329,7 +329,44 @@ export class ResultService {
     }));
   }
 
-  async getReportCard(studentId: string) {
+  async getReportCard(studentId: string): Promise<{
+    student: {
+      id: string;
+      admissionNumber: string;
+      fullName: string;
+      rollNumber: number | null;
+      className: string;
+      sectionName: string;
+      academicYear: string;
+    };
+    examResults: {
+      examType: { id: string; name: string; weightPercent: number; orderIndex: number; [key: string]: unknown };
+      percentage: number;
+      grade: string | null;
+      gpa: number | null;
+      rankInSection: number | null;
+      rankInClass: number | null;
+      isPassed: boolean;
+      status: string;
+      subjects: {
+        subjectId: string;
+        subjectName: string;
+        fullMarks: number;
+        marksObtained: number | null;
+        percentage: number | null;
+        grade: string | null;
+        isPassed: boolean;
+        isAbsent: boolean;
+      }[];
+    }[];
+    annualResult: {
+      weightedPercentage: number;
+      finalGrade: string | null;
+      finalGpa: number | null;
+      division: string;
+      isPassed: boolean;
+    };
+  }> {
     // Student info
     const students = await this.tenantPrisma.query<{
       id: string;
@@ -407,8 +444,13 @@ export class ResultService {
     // Build exam results with type info
     const examResults = examResultsWithSubjects.map((er) => {
       const examType = examTypes.find((et) => et.id === er.examTypeId);
+      const base = { id: er.examTypeId, name: '', weightPercent: 0, orderIndex: 0 };
+      if (examType) {
+        const dto = toExamTypeResponse(examType);
+        base.id = dto.id; base.name = dto.name; base.weightPercent = dto.weightPercent; base.orderIndex = dto.orderIndex;
+      }
       return {
-        examType: examType ? toExamTypeResponse(examType) : { id: er.examTypeId },
+        examType: base,
         percentage: er.percentage,
         grade: er.grade,
         gpa: er.gpa,
@@ -457,8 +499,8 @@ export class ResultService {
       examResults,
       annualResult: {
         weightedPercentage,
-        finalGrade: null,
-        finalGpa: null,
+        finalGrade: null as string | null,
+        finalGpa: null as number | null,
         division,
         isPassed: allPassed && examResults.length > 0,
       },

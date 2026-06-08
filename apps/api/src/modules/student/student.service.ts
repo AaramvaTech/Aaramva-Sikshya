@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { getBsYear } from 'bs-calendar';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { StudentRow, StudentResponseDto, toStudentResponse } from './entities/student.entity';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
@@ -88,7 +90,9 @@ export class StudentService {
             dto.phone ?? null, dto.email ?? null,
             dto.permanentAddress ? JSON.stringify(dto.permanentAddress) : null,
             dto.temporaryAddress ? JSON.stringify(dto.temporaryAddress) : null,
-            dto.guardians ? JSON.stringify(dto.guardians) : null,
+            dto.guardians?.length
+              ? JSON.stringify(dto.guardians.map((g) => ({ id: randomUUID(), ...g })))
+              : null,
             dto.className ?? null, dto.sectionName ?? null, dto.rollNumber ?? null,
             dto.admissionDate, dto.academicYear ?? null,
             dto.previousSchool ?? null, createdById,
@@ -195,6 +199,45 @@ export class StudentService {
       dto.status, id, tenantId,
     );
     if (affected === 0) throw new NotFoundException(`Student ${id} not found`);
+    return this.findOne(id);
+  }
+
+  async enroll(id: string, dto: EnrollStudentDto): Promise<StudentResponseDto> {
+    const { tenantId } = this.tenantContext.getOrThrow();
+
+    const studentRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM students WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL`,
+      id, tenantId,
+    );
+    if (!studentRows[0]) throw new NotFoundException(`Student ${id} not found`);
+
+    const classRows = await this.tenantPrisma.query<{ name: string }>(
+      `SELECT name FROM classes WHERE id = $1::uuid AND deleted_at IS NULL`,
+      dto.classId,
+    );
+    if (!classRows[0]) throw new NotFoundException(`Class not found`);
+
+    const sectionRows = await this.tenantPrisma.query<{ name: string }>(
+      `SELECT name FROM sections WHERE id = $1::uuid AND class_id = $2::uuid AND deleted_at IS NULL`,
+      dto.sectionId, dto.classId,
+    );
+    if (!sectionRows[0]) throw new NotFoundException(`Section not found`);
+
+    const yearRows = await this.tenantPrisma.query<{ name: string }>(
+      `SELECT name FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
+      dto.academicYearId,
+    );
+    if (!yearRows[0]) throw new NotFoundException(`Academic year not found`);
+
+    await this.tenantPrisma.execute(
+      `UPDATE students SET
+         class_name = $1, section_name = $2, roll_number = $3,
+         academic_year = $4, updated_at = NOW()
+       WHERE id = $5::uuid AND tenant_id = $6::uuid AND deleted_at IS NULL`,
+      classRows[0].name, sectionRows[0].name, dto.rollNumber ?? null,
+      yearRows[0].name, id, tenantId,
+    );
+
     return this.findOne(id);
   }
 

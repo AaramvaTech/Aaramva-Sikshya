@@ -1,23 +1,23 @@
 import { cn } from '@/lib/utils';
 
 const statusStyles: Record<string, string> = {
-  PRESENT: 'bg-green-100 text-green-800',
-  PAID: 'bg-green-100 text-green-800',
-  ACTIVE: 'bg-green-100 text-green-800',
-  APPROVED: 'bg-green-100 text-green-800',
-  ISSUED: 'bg-green-100 text-green-800',
-  ABSENT: 'bg-red-100 text-red-800',
-  UNPAID: 'bg-red-100 text-red-800',
-  OVERDUE: 'bg-red-100 text-red-800',
-  REJECTED: 'bg-red-100 text-red-800',
-  LOST: 'bg-red-100 text-red-800',
-  LATE: 'bg-yellow-100 text-yellow-800',
-  PARTIAL: 'bg-yellow-100 text-yellow-800',
-  PENDING: 'bg-yellow-100 text-yellow-800',
-  LEAVE: 'bg-blue-100 text-blue-800',
-  RETURNED: 'bg-gray-100 text-gray-600',
-  INACTIVE: 'bg-gray-100 text-gray-600',
-  CANCELLED: 'bg-gray-100 text-gray-600',
+  PRESENT:   'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  PAID:      'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  ACTIVE:    'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  APPROVED:  'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  ISSUED:    'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  ABSENT:    'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  UNPAID:    'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  OVERDUE:   'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  REJECTED:  'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  LOST:      'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  LATE:      'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
+  PARTIAL:   'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
+  PENDING:   'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
+  LEAVE:     'bg-brand-50 text-brand-700 dark:bg-brand-500/[0.12] dark:text-brand-400',
+  RETURNED:  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  INACTIVE:  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  CANCELLED: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
 
 interface StatusBadgeProps {
@@ -26,11 +26,11 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const style = statusStyles[status] ?? 'bg-gray-100 text-gray-600';
+  const style = statusStyles[status] ?? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium',
         style,
         className,
       )}

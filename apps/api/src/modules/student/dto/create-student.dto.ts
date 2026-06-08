@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsIn,
@@ -10,15 +11,28 @@ import {
   Min,
   MinLength,
   ValidateNested,
+  IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class GuardianDto {
-  @IsOptional() @IsString() name?: string;
-  @IsOptional() @IsString() phone?: string;
-  @IsOptional() @IsString() occupation?: string;
-  @IsOptional() @IsEmail()  email?: string;
-  @IsOptional() @IsString() relation?: string;
+export class GuardianInputDto {
+  @IsString() @MaxLength(50)
+  relation!: string;
+
+  @IsString() @MaxLength(100)
+  firstName!: string;
+
+  @IsString() @MaxLength(100)
+  lastName!: string;
+
+  @IsString() @MaxLength(20)
+  phone!: string;
+
+  @IsOptional() @IsEmail()
+  email?: string;
+
+  @IsBoolean()
+  isPrimary!: boolean;
 }
 
 export class AddressDto {
@@ -27,23 +41,6 @@ export class AddressDto {
   @IsOptional() @IsString() municipality?: string;
   @IsOptional() @IsString() ward?: string;
   @IsOptional() @IsString() street?: string;
-}
-
-export class GuardiansDto {
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => GuardianDto)
-  father?: GuardianDto;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => GuardianDto)
-  mother?: GuardianDto;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => GuardianDto)
-  localGuardian?: GuardianDto;
 }
 
 export class CreateStudentDto {
@@ -91,9 +88,10 @@ export class CreateStudentDto {
   temporaryAddress?: AddressDto;
 
   @IsOptional()
-  @ValidateNested()
-  @Type(() => GuardiansDto)
-  guardians?: GuardiansDto;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GuardianInputDto)
+  guardians?: GuardianInputDto[];
 
   @IsOptional() @IsString() @MaxLength(50)
   className?: string;

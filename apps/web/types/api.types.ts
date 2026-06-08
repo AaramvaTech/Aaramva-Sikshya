@@ -13,8 +13,8 @@ export interface TenantInfo {
 export interface AuthUser {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;  // not in login response; populated after getMe
+  lastName?: string;
   role: string;
   tenantId: string | null;
   tenantSlug: string | null;
@@ -33,3 +33,941 @@ export interface MeResponse extends AuthUser {
 }
 
 export type LoginDto = { email: string; password: string };
+
+// Paginated response shape — controller returns { data, meta } which gets wrapped by
+// ResponseInterceptor, so r.data.data = { data: T[], meta: {...} }
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: { page: number; limit: number; total: number };
+}
+
+// ── Student Module ──────────────────────────────────────────────────────────
+
+export interface StudentSummary {
+  id: string;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  gender: string;
+  dateOfBirth: { ad: string; bs: string };
+  status: string;
+  className: string | null;
+  sectionName: string | null;
+  rollNumber: number | null;
+  photoUrl: string | null;
+}
+
+export interface Guardian {
+  id: string;
+  relation: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string | null;
+  isPrimary: boolean;
+}
+
+export interface Enrollment {
+  id: string;
+  classId: string;
+  className: string;
+  sectionId: string;
+  sectionName: string;
+  academicYearId: string;
+  academicYearName: string;
+  rollNumber: number | null;
+  enrolledAt: string;
+}
+
+export interface StudentDetail {
+  id: string;
+  studentId: string;
+  tenantId: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  dateOfBirth: { ad: string; bs: string };
+  gender: string;
+  bloodGroup: string | null;
+  religion: string | null;
+  ethnicity: string | null;
+  nationality: string;
+  motherTongue: string | null;
+  phone: string | null;
+  email: string | null;
+  permanentAddress: Record<string, string> | null;
+  temporaryAddress: Record<string, string> | null;
+  guardians: Guardian[];
+  className: string | null;
+  sectionName: string | null;
+  rollNumber: number | null;
+  admissionDate: { ad: string; bs: string };
+  academicYear: string | null;
+  previousSchool: string | null;
+  photoUrl: string | null;
+  documents: StudentDocument[];
+  status: string;
+  createdAt: string;
+}
+
+export interface StudentDocument {
+  id: string;
+  documentType: string;
+  fileUrl: string;
+  fileName: string;
+  uploadedAt: string;
+}
+
+export interface ClassWithSections {
+  id: string;
+  name: string;
+  alias: string | null;
+  orderIndex: number;
+  sections: { id: string; name: string; capacity: number }[];
+}
+
+export interface AcademicYear {
+  id: string;
+  name: string;
+  yearBs: number;
+  startDate: { ad: string; bs: string };
+  endDate: { ad: string; bs: string };
+  isCurrent: boolean;
+}
+
+export interface CreateStudentData {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  dateOfBirth: string; // AD date string "YYYY-MM-DD"
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
+  phone?: string;
+  email?: string;
+  address?: string;
+  bloodGroup?: string;
+  religion?: string;
+  guardians: {
+    relation: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email?: string;
+    isPrimary: boolean;
+  }[];
+}
+
+export interface EnrollStudentData {
+  classId: string;
+  sectionId: string;
+  academicYearId: string;
+  rollNumber?: number;
+}
+
+// ── Attendance Module ───────────────────────────────────────────────────────
+
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE';
+
+export interface AttendanceRecord {
+  id: string;
+  studentId: string;
+  sectionId: string;
+  academicYearId: string;
+  date: { ad: string; bs: string };
+  status: AttendanceStatus;
+  remarks: string | null;
+  markedBy: string;
+  markedAt: string;
+}
+
+export interface BulkAttendanceData {
+  sectionId: string;
+  academicYearId: string;
+  date: string;
+  records: {
+    studentId: string;
+    status: AttendanceStatus;
+    remarks?: string;
+  }[];
+}
+
+export interface StudentAttendanceSummary {
+  studentId: string;
+  studentName: string;
+  academicYearId: string;
+  totalWorkingDays: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  attendancePercent: number;
+  recentHistory: { ad: string; bs: string; status: string }[];
+}
+
+export interface SectionAttendanceReport {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  fromDate: { ad: string; bs: string };
+  toDate: { ad: string; bs: string };
+  dates: string[];
+  students: {
+    studentId: string;
+    admissionNumber: string;
+    fullName: string;
+    rollNumber: number | null;
+    attendance: Record<string, 'P' | 'A' | 'L' | 'LV' | '-'>;
+    summary: {
+      present: number;
+      absent: number;
+      late: number;
+      leave: number;
+      total: number;
+      percent: number;
+    };
+  }[];
+}
+
+export interface SchoolAttendanceSummary {
+  date: { ad: string; bs: string };
+  totalStudents: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  notMarked: number;
+  attendanceRate: number;
+  byClass: {
+    classId: string;
+    className: string;
+    present: number;
+    absent: number;
+    total: number;
+    rate: number;
+  }[];
+}
+
+// ── Finance Module ──────────────────────────────────────────────────────────
+
+export interface FeeCategory {
+  id: string;
+  name: string;
+  type: 'ONE_TIME' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY' | 'EXAM';
+  description: string | null;
+  isActive: boolean;
+}
+
+export interface FeeStructureItem {
+  id: string;
+  feeCategoryId: string;
+  feeCategoryName: string;
+  amount: number;
+  dueDate: { ad: string; bs: string } | null;
+  dueDayOfMonth: number | null;
+  finePerDay: number;
+  gracePeriodDays: number;
+}
+
+export interface FeeStructureSummary {
+  id: string;
+  classId: string;
+  className: string;
+  academicYearId: string;
+  academicYearName: string;
+  itemCount: number;
+  totalAmount: number;
+  createdBy?: string;
+  createdAt?: string;
+}
+
+export interface FeeStructureDetail extends FeeStructureSummary {
+  items: FeeStructureItem[];
+}
+
+export interface FeeAssignment {
+  id: string;
+  feeStructureItemId: string;
+  feeCategoryName: string;
+  originalAmount: number;
+  customAmount: number | null;
+  discountPercent: number;
+  discountReason: string | null;
+  isWaived: boolean;
+  effectiveAmount: number;
+}
+
+export interface InvoiceSummary {
+  id: string;
+  invoiceNumber: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  className: string;
+  dueDate: { ad: string; bs: string };
+  status: 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'WAIVED';
+  totalAmount: number;
+  paidAmount: number;
+  balance: number;
+  academicYearId?: string;
+  subtotal?: number;
+  discountAmount?: number;
+  fineAmount?: number;
+  createdBy?: string;
+  createdAt?: string;
+}
+
+export interface InvoiceItem {
+  id: string;
+  feeCategoryName: string;
+  originalAmount: number;
+  discountPercent: number;
+  discountedAmount: number;
+}
+
+export interface Payment {
+  id: string;
+  paymentNumber: string;
+  amount: number;
+  method: string;
+  reference: string | null;
+  notes: string | null;
+  receivedBy: string;
+  createdAt: string;
+}
+
+export interface InvoiceDetail extends InvoiceSummary {
+  subtotal: number;
+  discountAmount: number;
+  fineAmount: number;
+  items: InvoiceItem[];
+  payments: Payment[];
+}
+
+export interface CollectionReport {
+  fiscalYear: string;
+  academicYearId: string;
+  asOf: { ad: string; bs: string };
+  totalInvoiced: number;
+  totalCollected: number;
+  totalPending: number;
+  collectionRate: number;
+  byClass: {
+    classId: string;
+    className: string;
+    invoiced: number;
+    collected: number;
+    pending: number;
+    rate: number;
+  }[];
+  byCategory: {
+    categoryId: string;
+    categoryName: string;
+    invoiced: number;
+    collected: number;
+    pending: number;
+  }[];
+}
+
+export interface DefaulterStudent {
+  studentId: string;
+  admissionNumber: string;
+  fullName: string;
+  className: string;
+  sectionName: string;
+  overdueInvoices: number;
+  totalDue: number;
+  oldestDueDate: { ad: string; bs: string };
+  guardianPhone: string;
+}
+
+export interface StudentLedger {
+  student: { id: string; admissionNumber: string; fullName: string; className: string };
+  academicYear: { id: string; name: string };
+  invoices: InvoiceDetail[];
+  summary: { totalInvoiced: number; totalPaid: number; totalBalance: number };
+}
+
+export interface DefaulterReport {
+  asOf: { ad: string; bs: string };
+  totalDefaulters: number;
+  totalOutstanding: number;
+  students: DefaulterStudent[];
+}
+
+// Finance DTOs
+export interface CreateFeeCategoryData {
+  name: string;
+  type: FeeCategory['type'];
+  description?: string;
+}
+
+export interface CreateFeeStructureData {
+  classId: string;
+  academicYearId: string;
+  items: {
+    feeCategoryId: string;
+    amount: number;
+    dueDate?: string;
+    dueDayOfMonth?: number;
+    finePerDay?: number;
+    gracePeriodDays?: number;
+  }[];
+}
+
+export interface GenerateInvoiceData {
+  studentId: string;
+  academicYearId: string;
+  feeStructureItemIds?: string[];
+  dueDate?: string;
+}
+
+export interface GenerateBulkInvoiceData {
+  classId: string;
+  academicYearId: string;
+  feeStructureItemIds?: string[];
+  dueDate: string;
+}
+
+export interface RecordPaymentData {
+  invoiceId: string;
+  amount: number;
+  method: 'CASH' | 'ESEWA' | 'KHALTI' | 'BANK_TRANSFER' | 'CHEQUE';
+  reference?: string;
+  notes?: string;
+}
+
+export interface InvoiceListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  classId?: string;
+  academicYearId?: string;
+}
+
+export interface SetAssignmentData {
+  feeStructureItemId: string;
+  academicYearId: string;
+  customAmount?: number;
+  discountPercent?: number;
+  discountReason?: string;
+  isWaived?: boolean;
+}
+
+// ── Academic Module ─────────────────────────────────────────────────────────
+
+export interface Section {
+  id: string;
+  classId: string;
+  name: string;
+  capacity: number;
+  classTeacherId: string | null;
+  classTeacherName: string | null;
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  code: string | null;
+  type: 'THEORY' | 'PRACTICAL' | 'BOTH';
+}
+
+export interface ClassSubject {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  fullMarks: number;
+  passMarks: number;
+  academicYearId: string;
+}
+
+export interface TimetableSlot {
+  slotId: string;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  subject: { id: string; name: string; code: string | null };
+  teacher: { id: string; fullName: string };
+  room: string | null;
+}
+
+export interface SectionTimetable {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  schedule: Record<string, TimetableSlot[]>;
+}
+
+export interface TeacherSlotItem {
+  slotId: string;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  subject: { id: string; name: string; code: string | null };
+  section: string;
+  className: string;
+  room: string | null;
+}
+
+export interface TeacherTimetable {
+  teacherId: string;
+  teacherName: string;
+  schedule: Record<string, TeacherSlotItem[]>;
+}
+
+export interface TimetableSlotData {
+  sectionId: string;
+  subjectId: string;
+  teacherId: string;
+  academicYearId: string;
+  dayOfWeek: number;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  room?: string;
+}
+
+// ── Examination Module ──────────────────────────────────────────────────────
+
+export interface ExamType {
+  id: string;
+  name: string;
+  weightPercent: number;
+  academicYearId: string;
+  orderIndex: number;
+  totalWeight: number;
+  isComplete: boolean;
+}
+
+export interface ExamSchedule {
+  id: string;
+  examTypeId: string;
+  classId: string;
+  className?: string;   // not joined by backend — resolve from classSubjects on frontend
+  subjectId: string;
+  subjectName?: string; // not joined by backend — resolve from classSubjects on frontend
+  examDate: { ad: string; bs: string };
+  startTime: string;
+  endTime: string;
+  fullMarks: number;
+  passMarks: number;
+  room: string | null;
+}
+
+export interface MarkRecord {
+  id?: string;
+  studentId: string;
+  studentName?: string;    // not in marks API response; present when built from student list
+  admissionNumber?: string;
+  rollNumber?: number | null;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  remarks: string | null;
+}
+
+export interface ClassResultRow {
+  studentId: string;
+  admissionNumber: string;
+  fullName: string;
+  rankInSection: number;
+  rankInClass: number;
+  totalMarks: number;
+  obtainedMarks: number;
+  percentage: number;
+  grade: string;
+  isPassed: boolean;
+  status: string;
+  sectionName?: string;
+}
+
+export interface ReportCard {
+  student: {
+    id: string;
+    admissionNumber: string;
+    fullName: string;
+    rollNumber: number | null;
+    className: string;
+    sectionName: string;
+    academicYear: string;
+  };
+  examResults: {
+    examType: { id: string; name: string; weightPercent: number; orderIndex: number };
+    percentage: number;
+    grade: string;
+    gpa: number | null;
+    rankInSection: number;
+    rankInClass: number;
+    isPassed: boolean;
+    status: string;
+    subjects: {
+      subjectId: string;
+      subjectName: string;
+      fullMarks: number;
+      marksObtained: number | null;
+      percentage: number | null;
+      grade: string | null;
+      isPassed: boolean;
+      isAbsent: boolean;
+    }[];
+  }[];
+  annualResult: {
+    weightedPercentage: number;
+    finalGrade: string | null;
+    finalGpa: number | null;
+    division: string;
+    isPassed: boolean;
+  };
+}
+
+export interface GradingScale {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  thresholds: {
+    grade: string;
+    minPercent: number;
+    maxPercent: number;
+    gpaPoint: number | null;
+    remarks: string | null;
+  }[];
+}
+
+export interface ComputeResultSummary {
+  computed: number;
+  passed: number;
+  failed: number;
+  absent: number;
+}
+
+// Examination DTOs
+export interface CreateExamTypeData {
+  name: string;
+  weightPercent: number;
+  academicYearId: string;
+  orderIndex: number;
+}
+
+export interface BulkCreateScheduleData {
+  examTypeId: string;
+  classId: string;
+  subjects: {
+    subjectId: string;
+    examDate: string;
+    startTime: string;
+    endTime: string;
+    fullMarks: number;
+    passMarks: number;
+    room?: string;
+  }[];
+}
+
+export interface BulkMarksData {
+  examScheduleId: string;
+  marks: {
+    studentId: string;
+    marksObtained?: number;
+    isAbsent?: boolean;
+    remarks?: string;
+  }[];
+}
+
+// ── HR Module ───────────────────────────────────────────────────────────────
+
+export interface StaffSummary {
+  id: string;
+  userId: string;
+  employeeId: string;
+  fullName: string;
+  email: string;
+  role: string;
+  departmentName: string | null;
+  designationTitle: string | null;
+  employmentType: string;
+  joinDate: { ad: string; bs: string };
+  isActive: boolean;
+  photoUrl: string | null;
+}
+
+export interface StaffDetail extends StaffSummary {
+  phone: string | null;
+  dateOfBirth: { ad: string; bs: string } | null;
+  gender: string | null;
+  permanentAddress: string | null;
+  baseSalary: number;
+  panNumber: string | null;
+  bankName: string | null;
+  bankAccount: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+}
+
+// Extra fields returned by backend on StaffResponseDto but not in StaffSummary/StaffDetail
+export type StaffResponseDepartmentId = string | null;
+export type StaffResponseDesignationId = string | null;
+export type StaffResponseEndDate = { ad: string; bs: string } | null;
+
+export interface Department { id: string; name: string; }
+export interface Designation { id: string; title: string; departmentId: string | null; }
+export interface LeaveType { id: string; name: string; daysPerYear: number; isPaid: boolean; }
+
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  staffName: string;
+  leaveTypeName: string;
+  fromDate: { ad: string; bs: string };
+  toDate: { ad: string; bs: string };
+  totalDays: number;
+  reason: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  appliedAt: string;
+  reviewerNote: string | null;
+  leaveTypeId?: string;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+}
+
+export interface LeaveBalance {
+  leaveTypeId: string;
+  leaveTypeName: string;
+  entitlement: number;
+  used: number;
+  balance: number;
+}
+
+export interface PayrollMonth {
+  id: string;
+  monthBs: number;
+  yearBs: number;
+  status: 'DRAFT' | 'FINALIZED' | 'PAID';
+  academicYearId: string;
+  createdAt: string;
+}
+
+export interface SalarySlip {
+  id: string;
+  userId: string;
+  staffName: string;
+  employeeId: string;
+  baseSalary: number;
+  allowanceTotal: number;
+  deductionTotal: number;
+  leaveDeduction: number;
+  grossSalary: number;
+  netSalary: number;
+  paymentDate: { ad: string; bs: string } | null;
+  paymentMethod: string | null;
+}
+
+export interface CreateStaffData {
+  email: string; password: string;
+  firstName: string; lastName: string; role: string;
+  departmentId?: string; designationId?: string;
+  dateOfBirth?: string; gender?: string; phone?: string;
+  joinDate: string; employmentType?: string;
+  baseSalary: number; panNumber?: string;
+  bankName?: string; bankAccount?: string;
+  permanentAddress?: string;
+  emergencyContactName?: string; emergencyContactPhone?: string;
+}
+
+export interface ApplyLeaveData {
+  leaveTypeId: string; fromDate: string; toDate: string; reason?: string;
+}
+
+export interface PayrollOverride {
+  userId: string; customBaseSalary?: number;
+  additionalAllowances?: { name: string; amount: number }[];
+  additionalDeductions?: { name: string; amount: number }[];
+}
+
+// ── Library Module ──────────────────────────────────────────────────────────
+
+export interface BookCategory { id: string; name: string; }
+
+export interface BookSummary {
+  id: string; title: string; author: string | null;
+  isbn: string | null; language: string;
+  categoryName: string | null;
+  totalCopies: number; availableCopies: number;
+}
+
+export interface BookCopy {
+  id: string; bookId: string; copyNumber: string;
+  accessionNumber: string | null; shelfLocation: string | null;
+  condition: string; isAvailable: boolean;
+  currentIssue?: { memberId: string; memberNumber: string; dueDate: { ad: string; bs: string } | null; isOverdue: boolean };
+}
+
+export interface BookDetail extends BookSummary {
+  publisher: string | null; edition: string | null; description: string | null;
+  copies: BookCopy[];
+}
+
+export interface LibraryMember {
+  id: string; memberNumber: string;
+  memberName: string; memberType: 'STUDENT' | 'STAFF';
+  maxBooks: number; isActive: boolean;
+  currentIssueCount: number;
+}
+
+export interface BookIssue {
+  id: string; bookCopyId: string;
+  bookTitle: string; copyNumber: string;
+  memberId: string; memberNumber: string; memberName: string;
+  issuedAt: { ad: string; bs: string };
+  dueDate: { ad: string; bs: string };
+  returnedAt: { ad: string; bs: string } | null;
+  status: 'ISSUED' | 'RETURNED' | 'OVERDUE' | 'LOST';
+  fineAmount: number; finePaid: boolean;
+  overdueDays?: number;
+}
+
+export interface AddBookData {
+  title: string; author?: string; publisher?: string;
+  isbn?: string; categoryId?: string; edition?: string;
+  language?: string; description?: string;
+}
+
+export interface AddCopyData {
+  copyNumber: string; accessionNumber?: string;
+  shelfLocation?: string; condition?: string;
+}
+
+export interface IssueBookData {
+  bookCopyId: string; memberId: string;
+  dueDate: string; finePerDay?: number; notes?: string;
+}
+
+// ── Communication Module ────────────────────────────────────────────────────
+
+export interface Notice {
+  id: string; title: string; body: string;
+  type: string; audience: string; classId: string | null;
+  isPublished: boolean; publishedAt: string | null;
+  expiresAt: string | null; createdBy: string;
+  createdAt: string;
+}
+
+export interface SmsLog {
+  id: string; toNumber: string; message: string;
+  trigger: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'MOCK';
+  sentAt: string | null; errorMessage: string | null;
+  studentName: string | null;
+}
+
+export interface AppNotification {
+  id: string; title: string; body: string;
+  type: string; isRead: boolean; readAt: string | null;
+  data: Record<string, unknown> | null; createdAt: string;
+}
+
+export interface CreateNoticeData {
+  title: string; body: string;
+  type?: string; audience?: string;
+  classId?: string; expiresAt?: string;
+}
+
+// ── Super Admin Module ──────────────────────────────────────────────────────
+
+export interface PlatformAdmin {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface PlatformOverview {
+  asOf: { ad: string; bs: string };
+  totals: {
+    schools: number;
+    activeSchools: number;
+    trialSchools: number;
+    suspendedSchools: number;
+  };
+  subscriptions: {
+    trial: number;
+    basic: number;
+    pro: number;
+    enterprise: number;
+  };
+  recentOnboarding: {
+    id: string; name: string; slug: string;
+    createdAt: string; planName: string;
+  }[];
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  maxStudents: number;
+  maxStaff: number;
+  features: Record<string, boolean>;
+  isActive: boolean;
+}
+
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  createdAt: string;
+  planName: string;
+  subscriptionStatus: string;
+  studentCount: number;
+  staffCount: number;
+}
+
+export interface TenantDetail extends TenantSummary {
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  panNumber: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  trialEndsAt: string | null;
+  subscriptionEndsAt: string | null;
+  planId: string;
+}
+
+export interface ImpersonationToken {
+  accessToken: string;
+  tenantSlug: string;
+  schoolName: string;
+  warning: string;
+}
+
+export interface AuditLog {
+  id: string;
+  adminEmail: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface OnboardTenantData {
+  schoolName: string;
+  slug: string;
+  adminEmail: string;
+  adminFirstName: string;
+  adminLastName: string;
+  adminPassword: string;
+  planId: string;
+  phone?: string;
+  address?: string;
+  panNumber?: string;
+  trialDays?: number;
+}
+
+export interface CreatePlanData {
+  name: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  maxStudents: number;
+  maxStaff: number;
+  features: Record<string, boolean>;
+}

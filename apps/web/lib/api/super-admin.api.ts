@@ -1,0 +1,74 @@
+import api from '@/lib/api';
+import type {
+  ApiResponse,
+  PaginatedResponse,
+  PlatformAdmin,
+  PlatformOverview,
+  SubscriptionPlan,
+  TenantSummary,
+  TenantDetail,
+  ImpersonationToken,
+  AuditLog,
+  OnboardTenantData,
+  CreatePlanData,
+} from '@/types/api.types';
+
+export const superAdminApi = {
+  // Auth
+  login: (data: { email: string; password: string }) =>
+    api.post<ApiResponse<{ accessToken: string; admin: PlatformAdmin }>>(
+      '/super-admin/auth/login',
+      data,
+    ),
+  logout: () => api.post('/super-admin/auth/logout'),
+
+  // Analytics
+  getOverview: () =>
+    api.get<ApiResponse<PlatformOverview>>('/super-admin/analytics/overview'),
+
+  // Plans
+  listPlans: () =>
+    api.get<ApiResponse<SubscriptionPlan[]>>('/super-admin/plans'),
+  createPlan: (data: CreatePlanData) =>
+    api.post<ApiResponse<SubscriptionPlan>>('/super-admin/plans', data),
+  updatePlan: (id: string, data: Partial<CreatePlanData>) =>
+    api.patch<ApiResponse<SubscriptionPlan>>(`/super-admin/plans/${id}`, data),
+  deactivatePlan: (id: string) => api.delete(`/super-admin/plans/${id}`),
+
+  // Tenants
+  listTenants: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: 'active' | 'suspended';
+    planId?: string;
+  }) =>
+    api.get<ApiResponse<PaginatedResponse<TenantSummary>>>('/super-admin/tenants', { params }),
+  getTenant: (id: string) =>
+    api.get<ApiResponse<TenantDetail>>(`/super-admin/tenants/${id}`),
+  onboardTenant: (data: OnboardTenantData) =>
+    api.post<ApiResponse<TenantDetail>>('/super-admin/tenants', data),
+  updateTenant: (id: string, data: Partial<OnboardTenantData>) =>
+    api.patch<ApiResponse<TenantDetail>>(`/super-admin/tenants/${id}`, data),
+  suspendTenant: (id: string) =>
+    api.patch(`/super-admin/tenants/${id}/suspend`, {}),
+  activateTenant: (id: string) =>
+    api.patch(`/super-admin/tenants/${id}/activate`, {}),
+
+  // Subscription
+  updateSubscription: (
+    tenantId: string,
+    data: { planId?: string; status?: string; endsAt?: string },
+  ) => api.patch(`/super-admin/tenants/${tenantId}/subscription`, data),
+
+  // Impersonation
+  impersonate: (tenantId: string) =>
+    api.post<ApiResponse<ImpersonationToken>>(
+      `/super-admin/tenants/${tenantId}/impersonate`,
+      {},
+    ),
+
+  // Audit logs
+  getAuditLogs: (params?: { page?: number; limit?: number }) =>
+    api.get<ApiResponse<PaginatedResponse<AuditLog>>>('/super-admin/audit-logs', { params }),
+};

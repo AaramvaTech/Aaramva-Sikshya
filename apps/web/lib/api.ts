@@ -9,14 +9,23 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
-  const slug = useTenantStore.getState().slug;
+  const slug =
+    useTenantStore.getState().slug ??
+    (typeof window !== 'undefined' ? localStorage.getItem('tenant-slug') : null);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   if (slug) config.headers['X-Tenant-Slug'] = slug;
   return config;
 });
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    if (res.data?.success === false) {
+      const code = res.data?.error?.code ?? 'ERROR';
+      const msg = res.data?.error?.message ?? 'Request failed';
+      return Promise.reject(new Error(`${code}: ${msg}`));
+    }
+    return res;
+  },
   async (error) => {
     if (error.response?.status === 401 && !(error.config as any)._retry) {
       (error.config as any)._retry = true;

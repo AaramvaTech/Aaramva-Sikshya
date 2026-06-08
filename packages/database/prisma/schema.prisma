@@ -1,0 +1,80 @@
+// Aaramva Shikshya — PUBLIC (platform) schema only.
+// Per-tenant tables (users, refresh_tokens, students, ...) live inside each
+// tenant's own Postgres schema (tenant_<slug>) and are created at runtime from
+// apps/api/src/modules/tenant/tenant-schema.sql — they are intentionally NOT
+// modelled here.
+
+generator client {
+  provider = "prisma-client-js"
+  // Default output (node_modules/.prisma/client) — import as '@prisma/client'.
+  // A custom src/ output causes the compiled dist/ to lose the generated JS;
+  // the default location is always on the Node resolution path.
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── PUBLIC SCHEMA (platform-level tables) ───────────────────────────────────
+
+model Tenant {
+  id           String    @id @default(uuid())
+  name         String // "St. Xavier's School"
+  slug         String    @unique // "sxs" → sxs.yourdomain.com
+  logoUrl      String?
+  primaryColor String    @default("#2563EB")
+  address      String?
+  phone        String?
+  email        String?
+  panNumber    String? // Nepal PAN for IRD billing
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  subscription Subscription?
+
+  @@map("tenants")
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  name         String // "Basic", "Pro", "Enterprise"
+  monthlyPrice Decimal
+  annualPrice  Decimal
+  maxStudents  Int
+  maxStaff     Int
+  features     Json // { "elearning": true, "sms": false, ... }
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id          String             @id @default(uuid())
+  tenantId    String             @unique
+  planId      String
+  status      SubscriptionStatus @default(TRIAL)
+  trialEndsAt DateTime?
+  startsAt    DateTime           @default(now())
+  endsAt      DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}

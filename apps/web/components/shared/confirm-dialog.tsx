@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -53,25 +52,32 @@ export function ConfirmDialog({
       >
         {trigger}
       </span>
-      <Dialog open={open} onOpenChange={(val) => setOpen(val)}>
-        <DialogContent>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            <button
+              onClick={() => setOpen(false)}
+              disabled={loading}
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/5"
+            >
               Cancel
-            </Button>
-            <Button
-              variant={variant === 'destructive' ? 'destructive' : 'default'}
-              className={variant === 'default' ? 'bg-[#1A5C38] hover:bg-[#155030]' : ''}
+            </button>
+            <button
               onClick={handleConfirm}
               disabled={loading}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-theme-sm font-medium text-white disabled:opacity-50 transition-colors ${
+                variant === 'destructive'
+                  ? 'bg-error-500 hover:bg-error-600'
+                  : 'bg-brand-500 hover:bg-brand-600'
+              }`}
             >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {confirmLabel}
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

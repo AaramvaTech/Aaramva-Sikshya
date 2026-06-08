@@ -13,6 +13,8 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -22,7 +24,7 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "bs-calendar": ["../../packages/bs-calendar/src/index.ts"]
+      "bs-calendar": ["../../packages/bs-calendar/dist/index"]
     }
   }
 }
