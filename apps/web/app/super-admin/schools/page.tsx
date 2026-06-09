@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Plus, Search, ExternalLink } from 'lucide-react';
@@ -35,6 +37,7 @@ import {
 } from '@/lib/hooks/use-super-admin';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { onboardTenantSchema, type OnboardTenantValues } from '@/lib/schemas/super-admin.schema';
 import type { TenantSummary } from '@/types/api.types';
 
 const suggestSlug = (name: string) =>
@@ -45,28 +48,12 @@ const suggestSlug = (name: string) =>
     .replace(/^-|-$/g, '')
     .slice(0, 30);
 
-const BLANK_FORM = {
-  schoolName: '',
-  slug: '',
-  planId: '',
-  adminEmail: '',
-  adminFirstName: '',
-  adminLastName: '',
-  adminPassword: '',
-  phone: '',
-  address: '',
-  panNumber: '',
-  trialDays: '30',
-};
-
 export default function SchoolsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState(BLANK_FORM);
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: plans } = usePlans();
@@ -87,6 +74,34 @@ export default function SchoolsPage() {
   const tenants = tenantsData?.data ?? [];
   const meta = tenantsData?.meta;
 
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<OnboardTenantValues>({
+    resolver: zodResolver(onboardTenantSchema),
+    defaultValues: {
+      schoolName: '',
+      slug: '',
+      planId: '',
+      adminEmail: '',
+      adminFirstName: '',
+      adminLastName: '',
+      adminPassword: '',
+      phone: '',
+      address: '',
+      panNumber: '',
+      trialDays: 30,
+    },
+  });
+
+  const watchedPlanId = watch('planId');
+  const watchedSchoolName = watch('schoolName');
+  const watchedSlug = watch('slug');
+
   function handleSearchChange(value: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -95,47 +110,25 @@ export default function SchoolsPage() {
     }, 400);
   }
 
-  function setField(key: string, value: string) {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key === 'schoolName' && !slugManuallyEdited) {
-        next.slug = suggestSlug(value);
-      }
-      return next;
-    });
+  function handleSchoolNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const name = e.target.value;
+    setValue('schoolName', name);
+    // Auto-suggest slug only if user hasn't manually edited it
+    if (!watchedSlug || watchedSlug === suggestSlug(watchedSchoolName)) {
+      setValue('slug', suggestSlug(name));
+    }
   }
 
-  async function handleOnboard() {
-    if (
-      !form.schoolName ||
-      !form.slug ||
-      !form.planId ||
-      !form.adminEmail ||
-      !form.adminFirstName ||
-      !form.adminLastName ||
-      !form.adminPassword
-    ) {
-      toast.error('Please fill all required fields');
-      return;
-    }
+  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setValue('slug', e.target.value);
+  }
+
+  async function handleOnboard(data: OnboardTenantValues) {
     try {
-      await onboardTenant.mutateAsync({
-        schoolName: form.schoolName,
-        slug: form.slug,
-        planId: form.planId,
-        adminEmail: form.adminEmail,
-        adminFirstName: form.adminFirstName,
-        adminLastName: form.adminLastName,
-        adminPassword: form.adminPassword,
-        phone: form.phone || undefined,
-        address: form.address || undefined,
-        panNumber: form.panNumber || undefined,
-        trialDays: form.trialDays ? parseInt(form.trialDays) : undefined,
-      });
+      await onboardTenant.mutateAsync(data);
       toast.success('School onboarded successfully');
       setAddOpen(false);
-      setForm(BLANK_FORM);
-      setSlugManuallyEdited(false);
+      reset();
     } catch {
       toast.error('Failed to onboard school');
     }
@@ -143,8 +136,8 @@ export default function SchoolsPage() {
 
   async function handleImpersonate(tenant: TenantSummary) {
     try {
-      const { data } = await impersonate.mutateAsync(tenant.id);
-      const token = data.data;
+      const res = await impersonate.mutateAsync(tenant.id);
+      const token = res.data.data;
       setAuth(token.accessToken, {
         id: '',
         email: '',
@@ -292,7 +285,7 @@ export default function SchoolsPage() {
     },
   ];
 
-  const selectedPlan = plans?.find((p) => p.id === form.planId);
+  const selectedPlan = plans?.find((p) => p.id === watchedPlanId);
   const isTrial = selectedPlan?.name?.toLowerCase() === 'trial';
 
   return (
@@ -380,8 +373,7 @@ export default function SchoolsPage() {
         onOpenChange={(open) => {
           if (!open) {
             setAddOpen(false);
-            setForm(BLANK_FORM);
-            setSlugManuallyEdited(false);
+            reset();
           }
         }}
       >
@@ -389,150 +381,175 @@ export default function SchoolsPage() {
           <DialogHeader>
             <DialogTitle>Onboard New School</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="o-name">School Name *</Label>
-              <Input
-                id="o-name"
-                value={form.schoolName}
-                onChange={(e) => setField('schoolName', e.target.value)}
-                placeholder="St. Xavier's School"
-              />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="o-slug">School Code / Slug *</Label>
-              <Input
-                id="o-slug"
-                value={form.slug}
-                onChange={(e) => {
-                  setSlugManuallyEdited(true);
-                  setField('slug', e.target.value);
-                }}
-                placeholder="sxs"
-                className="font-mono"
-              />
-              <p className="text-theme-xs text-gray-400">Only lowercase letters, numbers, hyphens</p>
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>Plan *</Label>
-              <Select
-                value={form.planId || 'NONE'}
-                onValueChange={(v) => setField('planId', (v ?? '') === 'NONE' ? '' : (v ?? ''))}
-              >
-                <SelectTrigger>
-                  <span className="truncate">
-                    {plans?.find((p) => p.id === form.planId)?.name ?? 'Select a plan'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NONE">Select a plan</SelectItem>
-                  {plans?.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-first">Admin First Name *</Label>
-              <Input
-                id="o-first"
-                value={form.adminFirstName}
-                onChange={(e) => setField('adminFirstName', e.target.value)}
-                placeholder="Ramesh"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-last">Admin Last Name *</Label>
-              <Input
-                id="o-last"
-                value={form.adminLastName}
-                onChange={(e) => setField('adminLastName', e.target.value)}
-                placeholder="Sharma"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-email">Admin Email *</Label>
-              <Input
-                id="o-email"
-                type="email"
-                value={form.adminEmail}
-                onChange={(e) => setField('adminEmail', e.target.value)}
-                placeholder="admin@school.edu.np"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-pass">Admin Password *</Label>
-              <Input
-                id="o-pass"
-                type="password"
-                value={form.adminPassword}
-                onChange={(e) => setField('adminPassword', e.target.value)}
-                placeholder="Min 8 characters"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-phone">Phone</Label>
-              <Input
-                id="o-phone"
-                value={form.phone}
-                onChange={(e) => setField('phone', e.target.value)}
-                placeholder="01-XXXXXXX"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-pan">PAN Number</Label>
-              <Input
-                id="o-pan"
-                value={form.panNumber}
-                onChange={(e) => setField('panNumber', e.target.value)}
-                placeholder="XXXXXXXXX"
-              />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="o-address">Address</Label>
-              <Input
-                id="o-address"
-                value={form.address}
-                onChange={(e) => setField('address', e.target.value)}
-                placeholder="Kathmandu, Nepal"
-              />
-            </div>
-            {isTrial && (
+          <form onSubmit={handleSubmit(handleOnboard)}>
+            <div className="grid grid-cols-2 gap-4 py-2">
               <div className="col-span-2 space-y-1.5">
-                <Label htmlFor="o-trial">Trial Days</Label>
+                <Label htmlFor="o-name">School Name *</Label>
                 <Input
-                  id="o-trial"
-                  type="number"
-                  value={form.trialDays}
-                  onChange={(e) => setField('trialDays', e.target.value)}
-                  placeholder="30"
-                  min={1}
-                  max={90}
+                  id="o-name"
+                  placeholder="St. Xavier's School"
+                  {...register('schoolName')}
+                  onChange={(e) => {
+                    register('schoolName').onChange(e);
+                    handleSchoolNameChange(e);
+                  }}
+                />
+                {errors.schoolName && (
+                  <p className="text-theme-xs text-error-600">{errors.schoolName.message}</p>
+                )}
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label htmlFor="o-slug">School Code / Slug *</Label>
+                <Input
+                  id="o-slug"
+                  placeholder="sxs"
+                  className="font-mono"
+                  {...register('slug')}
+                  onChange={(e) => {
+                    register('slug').onChange(e);
+                    handleSlugChange(e);
+                  }}
+                />
+                <p className="text-theme-xs text-gray-400">Only lowercase letters, numbers, hyphens</p>
+                {errors.slug && (
+                  <p className="text-theme-xs text-error-600">{errors.slug.message}</p>
+                )}
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Plan *</Label>
+                <Select
+                  value={watchedPlanId || 'NONE'}
+                  onValueChange={(v) =>
+                    setValue('planId', (v ?? '') === 'NONE' ? '' : (v ?? ''), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <span className="truncate">
+                      {plans?.find((p) => p.id === watchedPlanId)?.name ?? 'Select a plan'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Select a plan</SelectItem>
+                    {plans?.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.planId && (
+                  <p className="text-theme-xs text-error-600">{errors.planId.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-first">Admin First Name *</Label>
+                <Input
+                  id="o-first"
+                  placeholder="Ramesh"
+                  {...register('adminFirstName')}
+                />
+                {errors.adminFirstName && (
+                  <p className="text-theme-xs text-error-600">{errors.adminFirstName.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-last">Admin Last Name *</Label>
+                <Input
+                  id="o-last"
+                  placeholder="Sharma"
+                  {...register('adminLastName')}
+                />
+                {errors.adminLastName && (
+                  <p className="text-theme-xs text-error-600">{errors.adminLastName.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-email">Admin Email *</Label>
+                <Input
+                  id="o-email"
+                  type="email"
+                  placeholder="admin@school.edu.np"
+                  {...register('adminEmail')}
+                />
+                {errors.adminEmail && (
+                  <p className="text-theme-xs text-error-600">{errors.adminEmail.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-pass">Admin Password *</Label>
+                <Input
+                  id="o-pass"
+                  type="password"
+                  placeholder="Min 8 characters"
+                  {...register('adminPassword')}
+                />
+                {errors.adminPassword && (
+                  <p className="text-theme-xs text-error-600">{errors.adminPassword.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-phone">Phone</Label>
+                <Input
+                  id="o-phone"
+                  placeholder="01-XXXXXXX"
+                  {...register('phone')}
                 />
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAddOpen(false);
-                setForm(BLANK_FORM);
-                setSlugManuallyEdited(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-brand-500 hover:bg-brand-600 text-white"
-              onClick={handleOnboard}
-              disabled={onboardTenant.isPending}
-            >
-              {onboardTenant.isPending ? 'Onboarding…' : 'Onboard School'}
-            </Button>
-          </DialogFooter>
+              <div className="space-y-1.5">
+                <Label htmlFor="o-pan">PAN Number</Label>
+                <Input
+                  id="o-pan"
+                  placeholder="XXXXXXXXX"
+                  {...register('panNumber')}
+                />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label htmlFor="o-address">Address</Label>
+                <Input
+                  id="o-address"
+                  placeholder="Kathmandu, Nepal"
+                  {...register('address')}
+                />
+              </div>
+              {isTrial && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="o-trial">Trial Days</Label>
+                  <Input
+                    id="o-trial"
+                    type="number"
+                    placeholder="30"
+                    min={1}
+                    max={90}
+                    {...register('trialDays', { valueAsNumber: true })}
+                  />
+                  {errors.trialDays && (
+                    <p className="text-theme-xs text-error-600">{errors.trialDays.message}</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setAddOpen(false);
+                  reset();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-brand-500 hover:bg-brand-600 text-white"
+                disabled={onboardTenant.isPending}
+              >
+                {onboardTenant.isPending ? 'Onboarding…' : 'Onboard School'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
