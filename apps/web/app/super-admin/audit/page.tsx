@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { useAuditLogs } from '@/lib/hooks/use-super-admin';
 import type { AuditLog } from '@/types/api.types';
 import { cn } from '@/lib/utils';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
 
 const ACTION_BADGE: Record<string, { label: string; className: string }> = {
   TENANT_CREATED: {
@@ -48,10 +49,12 @@ function ActionBadge({ action }: { action: string }) {
 
 export default function AuditLogPage() {
   const [page, setPage] = useState(1);
+  const [actionFilter, setActionFilter] = useState('');
   const { data, isLoading } = useAuditLogs({ page, limit: 20 });
 
   const logs = data?.data ?? [];
   const meta = data?.meta;
+  const filteredLogs = actionFilter ? logs.filter(l => l.action === actionFilter) : logs;
 
   return (
     <div>
@@ -59,6 +62,22 @@ export default function AuditLogPage() {
         title="Audit Log"
         description="All platform admin actions, ordered by most recent"
       />
+
+      <div className="flex gap-3 mb-4 flex-wrap">
+        <Select value={actionFilter} onValueChange={(v) => setActionFilter(v ?? '')}>
+          <SelectTrigger className="w-40">
+            <span className="truncate">{actionFilter || 'All Actions'}</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Actions</SelectItem>
+            <SelectItem value="TENANT_CREATED">Created</SelectItem>
+            <SelectItem value="TENANT_SUSPENDED">Suspended</SelectItem>
+            <SelectItem value="TENANT_ACTIVATED">Activated</SelectItem>
+            <SelectItem value="PLAN_CHANGED">Plan Changed</SelectItem>
+            <SelectItem value="IMPERSONATION">Impersonation</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
         <div className="overflow-x-auto">
@@ -93,7 +112,7 @@ export default function AuditLogPage() {
                       ))}
                     </tr>
                   ))
-                : logs.map((log: AuditLog) => {
+                : filteredLogs.map((log: AuditLog) => {
                     const isImpersonation = log.action === 'IMPERSONATION';
                     return (
                       <tr
@@ -145,7 +164,7 @@ export default function AuditLogPage() {
                       </tr>
                     );
                   })}
-              {!isLoading && logs.length === 0 && (
+              {!isLoading && filteredLogs.length === 0 && (
                 <tr>
                   <td
                     colSpan={5}
@@ -163,8 +182,9 @@ export default function AuditLogPage() {
       {meta && meta.total > 0 && (
         <div className="flex items-center justify-between text-theme-sm text-gray-500 dark:text-gray-400 mt-4">
           <span>
-            {Math.min((page - 1) * 20 + 1, meta.total)}–{Math.min(page * 20, meta.total)} of{' '}
-            {meta.total}
+            {actionFilter
+              ? `${filteredLogs.length} of ${meta.total}`
+              : `${Math.min((page - 1) * 20 + 1, meta.total)}–${Math.min(page * 20, meta.total)} of ${meta.total}`}
           </span>
           <div className="flex items-center gap-2">
             <button
