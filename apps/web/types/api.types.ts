@@ -971,3 +971,10 @@ export interface CreatePlanData {
   maxStaff: number;
   features: Record<string, boolean>;
 }
+
+export interface RevenueData {
+  month: string;
+  planName: string;
+  activeSchools: number;
+  revenue: number;
+}

@@ -11,6 +11,7 @@ import type {
   AuditLog,
   OnboardTenantData,
   CreatePlanData,
+  RevenueData,
 } from '@/types/api.types';
 
 export const superAdminApi = {
@@ -25,6 +26,8 @@ export const superAdminApi = {
   // Analytics
   getOverview: () =>
     api.get<ApiResponse<PlatformOverview>>('/super-admin/analytics/overview'),
+  getRevenue: () =>
+    api.get<ApiResponse<RevenueData[]>>('/super-admin/analytics/revenue'),
 
   // Plans
   listPlans: () =>
