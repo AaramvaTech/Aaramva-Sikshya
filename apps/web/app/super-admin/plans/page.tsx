@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, X, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, X, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -62,6 +62,10 @@ function PlanFormDialog({
   title: string;
 }) {
   const [form, setForm] = useState(initial);
+
+  useEffect(() => {
+    setForm(initial);
+  }, [initial]);
 
   function setField(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -157,7 +161,14 @@ function PlanFormDialog({
             onClick={() => onSave(form)}
             disabled={isLoading}
           >
-            {isLoading ? 'Saving…' : 'Save Plan'}
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              'Save Plan'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -329,8 +340,9 @@ export default function PlansPage() {
                         variant="outline"
                         size="sm"
                         className="flex-1 text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:hover:bg-error-500/10"
+                        disabled={deactivatePlan.isPending}
                       >
-                        Deactivate
+                        {deactivatePlan.isPending ? 'Deactivating…' : 'Deactivate'}
                       </Button>
                     }
                     onConfirm={async () => {
