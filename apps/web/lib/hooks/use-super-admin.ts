@@ -109,6 +109,18 @@ export function useAuditLogs(params?: { page?: number; limit?: number }) {
   });
 }
 
+export function useUpdateTenant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<OnboardTenantData> }) =>
+      superAdminApi.updateTenant(id, data),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['platform', 'tenant', id] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'tenants'] });
+    },
+  });
+}
+
 export function useUpdateSubscription() {
   const queryClient = useQueryClient();
   return useMutation({

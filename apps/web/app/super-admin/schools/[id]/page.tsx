@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ExternalLink, ArrowLeft } from 'lucide-react';
+import { ExternalLink, ArrowLeft, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
@@ -17,12 +17,22 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
   useTenant,
   usePlans,
   useSuspendTenant,
   useActivateTenant,
   useImpersonate,
   useUpdateSubscription,
+  useUpdateTenant,
 } from '@/lib/hooks/use-super-admin';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
@@ -47,15 +57,56 @@ export default function SchoolDetailPage() {
   const activateTenant = useActivateTenant();
   const impersonate = useImpersonate();
   const updateSubscription = useUpdateSubscription();
+  const updateTenant = useUpdateTenant();
   const { setAuth } = useAuthStore();
   const { setTenant } = useTenantStore();
   const [changingPlan, setChangingPlan] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    schoolName: '',
+    email: '',
+    phone: '',
+    address: '',
+    panNumber: '',
+  });
+
+  function openEditDialog() {
+    if (!school) return;
+    setEditForm({
+      schoolName: school.name,
+      email: school.email ?? '',
+      phone: school.phone ?? '',
+      address: school.address ?? '',
+      panNumber: school.panNumber ?? '',
+    });
+    setEditOpen(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!school) return;
+    try {
+      await updateTenant.mutateAsync({
+        id: school.id,
+        data: {
+          schoolName: editForm.schoolName,
+          phone: editForm.phone || undefined,
+          address: editForm.address || undefined,
+          panNumber: editForm.panNumber || undefined,
+        },
+      });
+      toast.success('School updated');
+      setEditOpen(false);
+      router.refresh();
+    } catch {
+      toast.error('Failed to update school');
+    }
+  }
 
   async function handleImpersonate() {
     if (!school) return;
     try {
-      const { data } = await impersonate.mutateAsync(school.id);
-      const token = data.data;
+      const res = await impersonate.mutateAsync(school.id);
+      const token = res.data.data;
       setAuth(token.accessToken, {
         id: '',
         email: '',
@@ -119,18 +170,24 @@ export default function SchoolDetailPage() {
         title={school.name}
         description={`${school.slug}.aaramvashikshya.com`}
         action={
-          <ConfirmDialog
-            title="Impersonate School Owner"
-            description={`You are about to access ${school.name} as SCHOOL_OWNER. All actions will be audited. Continue?`}
-            confirmLabel="Impersonate"
-            trigger={
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4 mr-1.5" />
-                Impersonate
-              </Button>
-            }
-            onConfirm={handleImpersonate}
-          />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={openEditDialog}>
+              <Pencil className="h-4 w-4 mr-1.5" />
+              Edit
+            </Button>
+            <ConfirmDialog
+              title="Impersonate School Owner"
+              description={`You are about to access ${school.name} as SCHOOL_OWNER. All actions will be audited. Continue?`}
+              confirmLabel="Impersonate"
+              trigger={
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                  Impersonate
+                </Button>
+              }
+              onConfirm={handleImpersonate}
+            />
+          </div>
         }
       />
 
@@ -297,6 +354,66 @@ export default function SchoolDetailPage() {
           </p>
         </InfoCard>
       </div>
+
+      {/* Edit School Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit School</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-name">School Name</Label>
+              <Input
+                id="edit-name"
+                value={editForm.schoolName}
+                onChange={(e) => setEditForm((f) => ({ ...f, schoolName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                value={editForm.phone}
+                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-address">Address</Label>
+              <Input
+                id="edit-address"
+                value={editForm.address}
+                onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-pan">PAN Number</Label>
+              <Input
+                id="edit-pan"
+                value={editForm.panNumber}
+                onChange={(e) => setEditForm((f) => ({ ...f, panNumber: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateTenant.isPending}>
+              {updateTenant.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
