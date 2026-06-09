@@ -72,23 +72,31 @@ export default function LoginPage() {
   return (
     <div className="flex w-full h-screen">
       {/* Left panel — form */}
-      <div className="flex flex-col flex-1 items-center justify-center p-6 lg:w-1/2">
+      <div className="flex flex-col flex-1 items-center justify-center p-6 lg:w-1/2 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="mb-8 flex justify-center lg:justify-start">
             <Image
               src="/logo.jpeg"
               alt="Aaramva Shikshya"
-              width={140}
-              height={42}
-              className="object-contain"
+              width={154}
+              height={32}
+              className="object-contain dark:hidden"
+              priority
+            />
+            <Image
+              src="/logo.jpeg"
+              alt="Aaramva Shikshya"
+              width={154}
+              height={32}
+              className="object-contain hidden dark:block"
               priority
             />
           </div>
 
           <div className="mb-6">
-            <h1 className="text-title-sm font-semibold text-gray-800 dark:text-white">
-              Sign In
+            <h1 className="text-title-sm2 font-semibold text-gray-800 dark:text-white">
+              Sign in to Aaramva Shikshya
             </h1>
             <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
               Enter your school code, email and password to sign in.
@@ -98,58 +106,58 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* School Code */}
             <div>
-              <label className="mb-1.5 block text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="mb-2.5 block font-medium text-black dark:text-white">
                 School Code <span className="text-error-500">*</span>
               </label>
               <div className="relative">
                 <input
                   {...register('schoolSlug')}
                   type="text"
-                  placeholder="demo"
+                  placeholder="Enter your school code"
                   autoComplete="organization"
-                  className="w-full rounded-lg border border-gray-200 bg-transparent py-3.5 pl-4 pr-10 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-brand-800"
+                  className="w-full rounded-lg border border-stroke bg-transparent py-4 pl-6 pr-10 text-black outline-none focus:border-primary focus-visible:shadow-none dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
                 />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <span className="absolute right-4 top-4">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M9 22V12H15V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
               </div>
               {errors.schoolSlug && (
-                <p className="mt-1 text-theme-xs text-error-500">{errors.schoolSlug.message}</p>
+                <p className="mt-1.5 text-theme-xs text-error-500">{errors.schoolSlug.message}</p>
               )}
             </div>
 
             {/* Email */}
             <div>
-              <label className="mb-1.5 block text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="mb-2.5 block font-medium text-black dark:text-white">
                 Email <span className="text-error-500">*</span>
               </label>
               <div className="relative">
                 <input
                   {...register('email')}
                   type="email"
-                  placeholder="principal@school.edu.np"
+                  placeholder="Enter your email"
                   autoComplete="email"
-                  className="w-full rounded-lg border border-gray-200 bg-transparent py-3.5 pl-4 pr-10 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-brand-800"
+                  className="w-full rounded-lg border border-stroke bg-transparent py-4 pl-6 pr-10 text-black outline-none focus:border-primary focus-visible:shadow-none dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
                 />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <span className="absolute right-4 top-4">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
               </div>
               {errors.email && (
-                <p className="mt-1 text-theme-xs text-error-500">{errors.email.message}</p>
+                <p className="mt-1.5 text-theme-xs text-error-500">{errors.email.message}</p>
               )}
             </div>
 
             {/* Password */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="flex items-center justify-between mb-2.5">
+                <label className="block font-medium text-black dark:text-white">
                   Password <span className="text-error-500">*</span>
                 </label>
                 <Link
@@ -163,20 +171,20 @@ export default function LoginPage() {
                 <input
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="w-full rounded-lg border border-gray-200 bg-transparent py-3.5 pl-4 pr-10 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-brand-800"
+                  className="w-full rounded-lg border border-stroke bg-transparent py-4 pl-6 pr-10 text-black outline-none focus:border-primary focus-visible:shadow-none dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1 text-theme-xs text-error-500">{errors.password.message}</p>
+                <p className="mt-1.5 text-theme-xs text-error-500">{errors.password.message}</p>
               )}
             </div>
 
@@ -184,7 +192,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3.5 text-theme-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-4 text-white text-theme-sm font-medium transition-colors hover:bg-brand-600 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               Sign In
@@ -193,7 +201,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — decorative */}
+      {/* Right panel — decorative branding */}
       <div className="hidden lg:flex lg:w-1/2 h-full bg-brand-950 dark:bg-white/5 items-center justify-center relative overflow-hidden">
         {/* Decorative grid dots */}
         <div className="absolute inset-0 opacity-20"

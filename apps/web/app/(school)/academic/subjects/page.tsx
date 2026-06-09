@@ -195,18 +195,18 @@ export default function SubjectsPage() {
           ) : !subjects?.length ? (
             <EmptyState message="No subjects yet" icon={BookOpen} />
           ) : (
-            <div className="border rounded-lg divide-y bg-white">
+            <div className="rounded-sm border border-stroke divide-y divide-stroke bg-white dark:border-strokedark dark:divide-strokedark dark:bg-boxdark">
               {subjects.map((subject) => (
                 <div key={subject.id} className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-800">{subject.name}</span>
+                      <span className="text-sm font-medium text-black dark:text-white">{subject.name}</span>
                       <Badge variant="outline" className="text-xs h-5">
                         {subject.type}
                       </Badge>
                     </div>
                     {subject.code && (
-                      <span className="text-xs text-gray-400 font-mono">{subject.code}</span>
+                      <span className="text-xs text-gray-500 font-mono">{subject.code}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
@@ -281,12 +281,12 @@ export default function SubjectsPage() {
           ) : !classSubjects?.length ? (
             <p className="text-sm text-gray-400 text-center py-8">No subjects assigned to this class</p>
           ) : (
-            <div className="border rounded-lg divide-y bg-white">
+            <div className="rounded-sm border border-stroke divide-y divide-stroke bg-white dark:border-strokedark dark:divide-strokedark dark:bg-boxdark">
               {classSubjects.map((cs) => (
                 <div key={cs.id} className="flex items-center justify-between px-4 py-3">
                   <div>
-                    <span className="text-sm font-medium text-gray-800">{cs.subjectName}</span>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <span className="text-sm font-medium text-black dark:text-white">{cs.subjectName}</span>
+                    <div className="text-xs text-gray-500 mt-0.5">
                       Full: {cs.fullMarks} · Pass: {cs.passMarks}
                     </div>
                   </div>

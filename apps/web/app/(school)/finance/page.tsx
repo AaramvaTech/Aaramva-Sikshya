@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BsDate } from '@/components/shared/bs-date';
@@ -84,36 +83,40 @@ export default function FinancePage() {
         }
       />
 
-      {/* Summary cards */}
+      {/* Summary cards — TailAdmin stat card style */}
       {reportLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 2xl:gap-7.5">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className="h-28 rounded-sm" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 2xl:gap-7.5">
           {summaryCards.map((card) => (
-            <Card key={card.label}>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500">{card.label}</span>
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
+            <div key={card.label} className="rounded-sm border border-stroke bg-white px-7.5 py-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="flex h-11.5 w-11.5 items-center justify-center rounded-full bg-meta-2 dark:bg-meta-4">
+                <card.icon className={`h-6 w-6 ${card.color}`} />
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div>
+                  <h4 className="text-title-md font-bold text-black dark:text-white">
+                    {card.value}
+                  </h4>
+                  <span className="text-sm font-medium">{card.label}</span>
                 </div>
-                <div className={`text-lg font-bold ${card.color}`}>{card.value}</div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 2xl:gap-7.5">
         {/* Recent paid invoices */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-gray-700">Recent Payments</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
+        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+          <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+            <h4 className="text-xl font-semibold text-black dark:text-white">Recent Payments</h4>
+          </div>
+          <div className="p-4 sm:p-6 xl:p-7.5">
             {invoicesLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -121,16 +124,16 @@ export default function FinancePage() {
                 ))}
               </div>
             ) : recentInvoices?.data && recentInvoices.data.length > 0 ? (
-              <div className="divide-y">
+              <div className="divide-y divide-stroke dark:divide-strokedark">
                 {recentInvoices.data.map((inv) => (
-                  <div key={inv.id} className="py-2.5 flex justify-between items-center text-sm">
+                  <div key={inv.id} className="py-3 flex justify-between items-center text-sm">
                     <div>
-                      <p className="font-medium text-gray-800">{inv.studentName}</p>
-                      <p className="text-xs text-gray-400 font-mono">{inv.invoiceNumber} · {inv.className}</p>
+                      <p className="font-medium text-black dark:text-white">{inv.studentName}</p>
+                      <p className="text-xs text-gray-500 font-mono">{inv.invoiceNumber} · {inv.className}</p>
                     </div>
                     <div className="text-right">
                       <AmountDisplay amount={inv.paidAmount} className="text-success-600 text-sm" />
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         <BsDate date={inv.dueDate} showAd={false} />
                       </p>
                     </div>
@@ -138,25 +141,25 @@ export default function FinancePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No recent payments</p>
+              <p className="text-sm text-gray-500 text-center py-4">No recent payments</p>
             )}
             <Button
               variant="ghost"
               size="sm"
-              className="w-full mt-2 text-brand-500 hover:text-brand-600"
+              className="w-full mt-3 text-brand-500 hover:text-brand-600"
               onClick={() => router.push('/finance/invoices?status=PAID')}
             >
               View all →
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Top defaulters */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-gray-700">Top Defaulters</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
+        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+          <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+            <h4 className="text-xl font-semibold text-black dark:text-white">Top Defaulters</h4>
+          </div>
+          <div className="p-4 sm:p-6 xl:p-7.5">
             {defaultersLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -164,30 +167,30 @@ export default function FinancePage() {
                 ))}
               </div>
             ) : defaulters && defaulters.length > 0 ? (
-              <div className="divide-y">
+              <div className="divide-y divide-stroke dark:divide-strokedark">
                 {defaulters.slice(0, 5).map((d) => (
-                  <div key={d.studentId} className="py-2.5 flex justify-between items-center text-sm">
+                  <div key={d.studentId} className="py-3 flex justify-between items-center text-sm">
                     <div>
-                      <p className="font-medium text-gray-800">{d.fullName}</p>
-                      <p className="text-xs text-gray-400">{d.className} · {d.overdueInvoices} overdue</p>
+                      <p className="font-medium text-black dark:text-white">{d.fullName}</p>
+                      <p className="text-xs text-gray-500">{d.className} · {d.overdueInvoices} overdue</p>
                     </div>
                     <AmountDisplay amount={d.totalDue} className="text-error-600 text-sm" />
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No defaulters</p>
+              <p className="text-sm text-gray-500 text-center py-4">No defaulters</p>
             )}
             <Button
               variant="ghost"
               size="sm"
-              className="w-full mt-2 text-brand-500 hover:text-brand-600"
+              className="w-full mt-3 text-brand-500 hover:text-brand-600"
               onClick={() => router.push('/finance/reports')}
             >
               Full report →
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

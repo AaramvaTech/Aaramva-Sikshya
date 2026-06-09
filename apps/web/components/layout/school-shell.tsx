@@ -47,14 +47,16 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
     : 'lg:ml-[90px]';
 
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <Backdrop />
-      <div className={`flex-1 transition-all duration-300 ease-in-out ${mainMargin}`}>
+      <div className={`relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out ${mainMargin}`}>
         <Header />
-        <div className="p-4 mx-auto max-w-screen-2xl md:p-6">
-          {children}
-        </div>
+        <main>
+          <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -151,53 +151,58 @@ export default function StudentsPage() {
         }
       />
 
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search name or admission no."
-            className="pl-9 w-64"
-            value={searchInput}
-            onChange={(e) => handleSearch(e.target.value)}
-          />
+      {/* TailAdmin card wrapper for filters + table */}
+      <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
+        <div className="max-w-full overflow-x-auto">
+          <div className="flex gap-3 mb-5 flex-wrap items-center">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Search name or admission no."
+                className="pl-9 w-64 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black outline-none focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                value={searchInput}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+            </div>
+
+            <Select
+              value={classId}
+              onValueChange={(v) =>
+                updateParams({ classId: v ?? '', page: '1' })
+              }
+            >
+              <SelectTrigger className="w-40 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black dark:border-form-strokedark dark:bg-form-input dark:text-white">
+                <SelectValue placeholder="All Classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Classes</SelectItem>
+                {classes?.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={status}
+              onValueChange={(v) =>
+                updateParams({ status: v ?? '', page: '1' })
+              }
+            >
+              <SelectTrigger className="w-36 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black dark:border-form-strokedark dark:bg-form-input dark:text-white">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
+                <SelectItem value="TRANSFERRED">Transferred</SelectItem>
+                <SelectItem value="GRADUATED">Graduated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-
-        <Select
-          value={classId}
-          onValueChange={(v) =>
-            updateParams({ classId: v ?? '', page: '1' })
-          }
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="All Classes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Classes</SelectItem>
-            {classes?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={status}
-          onValueChange={(v) =>
-            updateParams({ status: v ?? '', page: '1' })
-          }
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
-            <SelectItem value="ACTIVE">Active</SelectItem>
-            <SelectItem value="INACTIVE">Inactive</SelectItem>
-            <SelectItem value="TRANSFERRED">Transferred</SelectItem>
-            <SelectItem value="GRADUATED">Graduated</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       <DataTable

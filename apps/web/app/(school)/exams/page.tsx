@@ -6,7 +6,6 @@ import { Plus, CalendarCheck, ClipboardList, BarChart2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -75,25 +74,25 @@ export default function ExamsPage() {
       />
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-sm" />)}
         </div>
       ) : !examTypes?.length ? (
         <EmptyState message="No exam types yet. Create your first exam type." icon={FileText} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {examTypes.map((et) => (
-            <Card key={et.id} className="flex flex-col">
-              <CardContent className="pt-5 pb-4 flex flex-col gap-3 flex-1">
+            <div key={et.id} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark flex flex-col">
+              <div className="p-4 sm:p-6 xl:p-7.5 flex flex-col gap-3 flex-1">
                 <div className="flex items-start justify-between">
-                  <h3 className="font-semibold text-gray-900 text-base">{et.name}</h3>
+                  <h3 className="font-semibold text-black dark:text-white text-base">{et.name}</h3>
                   {et.isComplete && (
                     <Badge className="bg-success-100 text-success-700 border-0 text-xs">Complete</Badge>
                   )}
                 </div>
                 <div className="text-sm text-gray-500 space-y-0.5">
-                  <p>Weight: <span className="font-semibold text-gray-700">{et.weightPercent}%</span></p>
-                  <p>Order: <span className="font-semibold text-gray-700">#{et.orderIndex}</span></p>
+                  <p>Weight: <span className="font-semibold text-black dark:text-white">{et.weightPercent}%</span></p>
+                  <p>Order: <span className="font-semibold text-black dark:text-white">#{et.orderIndex}</span></p>
                 </div>
                 <div className="mt-auto pt-2 flex flex-col gap-2">
                   <Button
@@ -124,8 +123,8 @@ export default function ExamsPage() {
                     View Results
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

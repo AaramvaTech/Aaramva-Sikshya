@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -130,7 +130,7 @@ export default function StaffListPage() {
       accessorKey: 'employeeId',
       header: 'Employee ID',
       cell: ({ getValue }) => (
-        <span className="font-mono text-sm text-gray-600">{getValue<string>()}</span>
+        <span className="font-mono text-sm text-gray-500">{getValue<string>()}</span>
       ),
     },
     {

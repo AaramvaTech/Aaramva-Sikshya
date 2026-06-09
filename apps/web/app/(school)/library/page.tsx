@@ -1,10 +1,9 @@
-﻿'use client';
+'use client';
 
 import { useRouter } from 'next/navigation';
 import { BookOpen, AlertTriangle, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -70,46 +69,46 @@ export default function LibraryPage() {
       {statsLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className="h-24 rounded-sm" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {statCards.map((card) => (
-            <Card key={card.label}>
-              <CardContent className="pt-4 pb-3">
+            <div key={card.label} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="p-4 sm:p-6 xl:p-7.5">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-500">{card.label}</span>
                   <card.icon className={`h-4 w-4 ${card.color}`} />
                 </div>
                 <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+        <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+          <h4 className="text-xl font-semibold text-black dark:text-white flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-error-500" />
             Overdue Issues
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
+          </h4>
+        </div>
+        <div className="p-4 sm:p-6 xl:p-7.5">
           {overdueLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+                <Skeleton key={i} className="h-10 w-full rounded-sm" />
               ))}
             </div>
           ) : !overdueIssues || overdueIssues.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">No overdue issues</p>
+            <p className="text-sm text-gray-500 text-center py-4">No overdue issues</p>
           ) : (
-            <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-gray-50 border-b border-stroke dark:border-strokedark">
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Member</th>
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Book</th>
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Copy</th>
@@ -120,16 +119,16 @@ export default function LibraryPage() {
                     <th className="px-3 py-2.5"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-stroke dark:divide-strokedark">
                   {overdueIssues.map((issue) => (
                     <tr key={issue.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2.5">
-                        <p className="font-medium text-gray-800">{issue.memberName}</p>
-                        <p className="text-xs text-gray-400 font-mono">{issue.memberNumber}</p>
+                        <p className="font-medium text-black dark:text-white">{issue.memberName}</p>
+                        <p className="text-xs text-gray-500 font-mono">{issue.memberNumber}</p>
                       </td>
-                      <td className="px-3 py-2.5 text-gray-700">{issue.bookTitle}</td>
-                      <td className="px-3 py-2.5 font-mono text-gray-600 text-xs">{issue.copyNumber}</td>
-                      <td className="px-3 py-2.5 text-gray-600">
+                      <td className="px-3 py-2.5 text-gray-500">{issue.bookTitle}</td>
+                      <td className="px-3 py-2.5 font-mono text-gray-500 text-xs">{issue.copyNumber}</td>
+                      <td className="px-3 py-2.5 text-gray-500">
                         <BsDate date={issue.issuedAt} showAd={false} />
                       </td>
                       <td className="px-3 py-2.5 text-error-600">
@@ -169,8 +168,8 @@ export default function LibraryPage() {
           >
             View all issues →
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

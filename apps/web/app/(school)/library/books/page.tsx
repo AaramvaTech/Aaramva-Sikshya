@@ -153,7 +153,7 @@ export default function BookCataloguePage() {
       accessorKey: 'title',
       header: 'Title',
       cell: ({ getValue }) => (
-        <span className="font-medium text-gray-800">{getValue<string>()}</span>
+        <span className="font-medium text-black dark:text-white">{getValue<string>()}</span>
       ),
     },
     {
@@ -389,28 +389,28 @@ export default function BookCataloguePage() {
             <div className="p-4 space-y-6">
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">Author</span>
-                  <p className="text-gray-800 font-medium">{bookDetail.author ?? '—'}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Author</span>
+                  <p className="text-black dark:text-white font-medium">{bookDetail.author ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">Publisher</span>
-                  <p className="text-gray-800">{bookDetail.publisher ?? '—'}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Publisher</span>
+                  <p className="text-black dark:text-white">{bookDetail.publisher ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">Edition</span>
-                  <p className="text-gray-800">{bookDetail.edition ?? '—'}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Edition</span>
+                  <p className="text-black dark:text-white">{bookDetail.edition ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">ISBN</span>
-                  <p className="text-gray-800 font-mono">{bookDetail.isbn ?? '—'}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">ISBN</span>
+                  <p className="text-black dark:text-white font-mono">{bookDetail.isbn ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">Language</span>
-                  <p className="text-gray-800">{bookDetail.language}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Language</span>
+                  <p className="text-black dark:text-white">{bookDetail.language}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 uppercase tracking-wide">Category</span>
-                  <p className="text-gray-800">{bookDetail.categoryName ?? '—'}</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Category</span>
+                  <p className="text-black dark:text-white">{bookDetail.categoryName ?? '—'}</p>
                 </div>
                 {bookDetail.description && (
                   <div className="col-span-2">

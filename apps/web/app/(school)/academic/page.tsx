@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { BookOpen, Users, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -90,17 +89,17 @@ export default function AcademicPage() {
 
       {/* Setup banner — shown when no active academic year */}
       {noYear && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 rounded-sm border border-warning-200 bg-warning-50 px-4 py-3">
+          <AlertCircle className="h-5 w-5 text-warning-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-amber-800">No active academic year</p>
-            <p className="text-xs text-amber-700 mt-0.5">
+            <p className="text-sm font-medium text-warning-800">No active academic year</p>
+            <p className="text-xs text-warning-700 mt-0.5">
               Subject assignments, exam types, and most features require an active academic year.
             </p>
           </div>
           <Button
             size="sm"
-            className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+            className="flex-shrink-0 bg-warning-600 hover:bg-warning-700 text-white"
             onClick={() => setYearDialog(true)}
           >
             Create Academic Year
@@ -110,7 +109,7 @@ export default function AcademicPage() {
 
       {/* Current year banner — shown when year exists */}
       {currentYear && (
-        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-success-50 px-4 py-2.5">
+        <div className="flex items-center gap-3 rounded-sm border border-success-200 bg-success-50 px-4 py-2.5">
           <Calendar className="h-4 w-4 text-success-600 flex-shrink-0" />
           <p className="text-sm text-success-700">
             Active year: <span className="font-semibold">{currentYear.name}</span>
@@ -118,21 +117,21 @@ export default function AcademicPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 2xl:gap-7.5">
         {modules.map((mod) => (
-          <Card
+          <div
             key={mod.href}
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer rounded-sm border border-stroke bg-white shadow-default transition-shadow hover:shadow-md dark:border-strokedark dark:bg-boxdark"
             onClick={() => router.push(mod.href)}
           >
-            <CardContent className="pt-6 pb-5">
-              <div className={`inline-flex p-3 rounded-xl ${mod.bg} mb-4`}>
+            <div className="p-4 sm:p-6 xl:p-7.5">
+              <div className={`inline-flex p-3 rounded-full ${mod.bg} mb-4`}>
                 <mod.icon className={`h-6 w-6 ${mod.color}`} />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{mod.title}</h3>
+              <h3 className="font-semibold text-black dark:text-white mb-1">{mod.title}</h3>
               <p className="text-sm text-gray-500">{mod.description}</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 

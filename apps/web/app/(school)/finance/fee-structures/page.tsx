@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -80,9 +79,9 @@ export default function FeeStructuresPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-36 rounded-xl" />
+            <Skeleton key={i} className="h-36 rounded-sm" />
           ))}
         </div>
       ) : !structures || structures.length === 0 ? (
@@ -91,21 +90,21 @@ export default function FeeStructuresPage() {
           icon={FileText}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {structures.map((s) => (
-            <Card key={s.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-4 pb-4">
+            <div key={s.id} className="rounded-sm border border-stroke bg-white shadow-default transition-shadow hover:shadow-md dark:border-strokedark dark:bg-boxdark">
+              <div className="p-4 sm:p-6 xl:p-7.5">
                 <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-semibold text-gray-900">{s.className}</h3>
-                  <span className="text-xs text-gray-400">{s.academicYearName}</span>
+                  <h3 className="font-semibold text-black dark:text-white">{s.className}</h3>
+                  <span className="text-xs text-gray-500">{s.academicYearName}</span>
                 </div>
                 <p className="text-sm text-gray-500 mb-3">
                   {s.itemCount} fee item{s.itemCount !== 1 ? 's' : ''}
                 </p>
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs text-gray-400">Total / year</p>
-                    <AmountDisplay amount={s.totalAmount} className="font-semibold" />
+                    <p className="text-xs text-gray-500">Total / year</p>
+                    <AmountDisplay amount={s.totalAmount} className="font-semibold text-black dark:text-white" />
                   </div>
                   <Button
                     variant="outline"
@@ -116,8 +115,8 @@ export default function FeeStructuresPage() {
                   </Button>
                 </div>
                 {expandedId === s.id && <FeeStructureDetail id={s.id} />}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

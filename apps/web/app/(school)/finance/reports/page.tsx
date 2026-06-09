@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,10 +35,10 @@ function CollectionTab({ academicYearId }: { academicYearId: string }) {
   if (isLoading)
     return (
       <div className="space-y-4 mt-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 2xl:gap-7.5">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-sm" />)}
         </div>
-        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-48 w-full rounded-sm" />
       </div>
     );
 
@@ -47,49 +46,49 @@ function CollectionTab({ academicYearId }: { academicYearId: string }) {
 
   return (
     <div className="space-y-6 mt-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 2xl:gap-7.5">
         {[
           { label: 'Total Invoiced', value: report.totalInvoiced, color: 'text-gray-700' },
           { label: 'Collected', value: report.totalCollected, color: 'text-success-600' },
           { label: 'Pending', value: report.totalPending, color: 'text-error-600' },
         ].map((card) => (
-          <Card key={card.label}>
-            <CardContent className="pt-3 pb-3">
+          <div key={card.label} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+            <div className="p-4 sm:p-6 xl:p-7.5">
               <p className="text-xs text-gray-500 mb-1">{card.label}</p>
               <AmountDisplay amount={card.value} className={`text-base font-bold ${card.color}`} />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
-        <Card>
-          <CardContent className="pt-3 pb-3">
+        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+          <div className="p-4 sm:p-6 xl:p-7.5">
             <p className="text-xs text-gray-500 mb-1">Collection Rate</p>
             <p className="font-mono text-base font-bold text-brand-500">
               {report.collectionRate.toFixed(1)}%
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-500">
         Fiscal year: {report.fiscalYear} · As of: <BsDate date={report.asOf} showAd={false} />
       </p>
 
       {/* By class */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">By Class</h3>
-        <div className="rounded-lg border overflow-hidden">
+        <h3 className="text-sm font-semibold text-black dark:text-white mb-2">By Class</h3>
+        <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-2 text-left dark:bg-meta-4">
               <tr>
                 {['Class', 'Invoiced', 'Collected', 'Pending', 'Rate'].map((h) => (
-                  <th key={h} className={`px-4 py-2.5 font-medium text-gray-500 text-left ${h !== 'Class' ? 'text-right' : ''}`}>{h}</th>
+                  <th key={h} className={`px-4 py-2.5 font-medium text-black dark:text-white text-left ${h !== 'Class' ? 'text-right' : ''}`}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
               {report.byClass.map((row) => (
-                <tr key={row.classId} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium">{row.className}</td>
+                <tr key={row.classId} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                  <td className="px-4 py-2.5 font-medium text-black dark:text-white">{row.className}</td>
                   <td className="px-4 py-2.5 text-right"><AmountDisplay amount={row.invoiced} /></td>
                   <td className="px-4 py-2.5 text-right text-success-600"><AmountDisplay amount={row.collected} /></td>
                   <td className="px-4 py-2.5 text-right text-error-600"><AmountDisplay amount={row.pending} /></td>
@@ -104,19 +103,19 @@ function CollectionTab({ academicYearId }: { academicYearId: string }) {
       {/* By category */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-2">By Category</h3>
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-2 text-left dark:bg-meta-4">
               <tr>
                 {['Category', 'Invoiced', 'Collected', 'Pending'].map((h) => (
-                  <th key={h} className={`px-4 py-2.5 font-medium text-gray-500 text-left ${h !== 'Category' ? 'text-right' : ''}`}>{h}</th>
+                  <th key={h} className={`px-4 py-2.5 font-medium text-black dark:text-white text-left ${h !== 'Category' ? 'text-right' : ''}`}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
               {report.byCategory.map((row) => (
-                <tr key={row.categoryId} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium">{row.categoryName}</td>
+                <tr key={row.categoryId} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                  <td className="px-4 py-2.5 font-medium text-black dark:text-white">{row.categoryName}</td>
                   <td className="px-4 py-2.5 text-right"><AmountDisplay amount={row.invoiced} /></td>
                   <td className="px-4 py-2.5 text-right text-success-600"><AmountDisplay amount={row.collected} /></td>
                   <td className="px-4 py-2.5 text-right text-error-600"><AmountDisplay amount={row.pending} /></td>
@@ -158,19 +157,19 @@ function DefaultersTab({ academicYearId }: { academicYearId: string }) {
       {!defaulters || defaulters.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-8">No defaulters found.</p>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-2 text-left dark:bg-meta-4">
               <tr>
                 {['Name', 'Admission', 'Class', 'Overdue', 'Total Due', 'Oldest Due', 'Guardian'].map((h) => (
-                  <th key={h} className="px-3 py-2.5 font-medium text-gray-500 text-left">{h}</th>
+                  <th key={h} className="px-3 py-2.5 font-medium text-black dark:text-white text-left">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
               {defaulters.map((d) => (
-                <tr key={d.studentId} className="hover:bg-gray-50">
-                  <td className="px-3 py-2.5 font-medium">{d.fullName}</td>
+                <tr key={d.studentId} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                  <td className="px-3 py-2.5 font-medium text-black dark:text-white">{d.fullName}</td>
                   <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{d.admissionNumber}</td>
                   <td className="px-3 py-2.5">{d.className}</td>
                   <td className="px-3 py-2.5 text-error-600 font-medium">{d.overdueInvoices}</td>
@@ -224,11 +223,11 @@ function LedgerTab({ academicYearId }: { academicYearId: string }) {
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && students.length > 0 && !selectedStudentId && (
-            <div className="absolute top-full left-0 mt-1 z-10 w-full bg-white border rounded-lg shadow-lg">
+            <div className="absolute top-full left-0 mt-1 z-10 w-full bg-white border border-stroke rounded-sm shadow-default dark:border-strokedark dark:bg-boxdark">
               {students.map((s) => (
                 <button
                   key={s.id}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-2 dark:hover:bg-meta-4 first:rounded-t-sm last:rounded-b-sm border-b border-stroke last:border-b-0 dark:border-strokedark"
                   onClick={() => {
                     setSelectedStudentId(s.id);
                     setSearch(s.fullName);
@@ -267,9 +266,9 @@ function LedgerTab({ academicYearId }: { academicYearId: string }) {
       {ledger && (
         <div className="space-y-4">
           {/* Student + summary */}
-          <div className="flex flex-wrap gap-6 items-center p-4 bg-gray-50 rounded-lg">
+          <div className="flex flex-wrap gap-6 items-center p-4 rounded-sm border border-stroke bg-gray-2 dark:border-strokedark dark:bg-meta-4">
             <div>
-              <p className="font-semibold text-gray-900">{ledger.student.fullName}</p>
+              <p className="font-semibold text-black dark:text-white">{ledger.student.fullName}</p>
               <p className="text-sm text-gray-500">{ledger.student.className} · {ledger.student.admissionNumber}</p>
             </div>
             <div className="flex gap-6">
@@ -289,9 +288,9 @@ function LedgerTab({ academicYearId }: { academicYearId: string }) {
           {/* Invoice list */}
           <div className="space-y-2">
             {ledger.invoices.map((inv) => (
-              <div key={inv.id} className="border rounded-lg overflow-hidden">
+              <div key={inv.id} className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
                 <button
-                  className="w-full flex justify-between items-center px-4 py-3 hover:bg-gray-50 text-left"
+                  className="w-full flex justify-between items-center px-4 py-3 hover:bg-gray-2 dark:hover:bg-meta-4 text-left"
                   onClick={() => toggleExpand(inv.id)}
                 >
                   <div className="flex items-center gap-3">
@@ -368,14 +367,14 @@ export default function ReportsPage() {
       <PageHeader title="Finance Reports" description="Collection summary, defaulters, and student ledgers" />
 
       <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex gap-1 border rounded-lg p-1 bg-gray-50">
+        <div className="flex gap-1 border border-stroke rounded-sm p-1 bg-gray-2 dark:border-strokedark dark:bg-meta-4">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-4 py-1.5 text-sm rounded-sm transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-white shadow-sm font-medium text-gray-900'
+                  ? 'bg-white shadow-sm font-medium text-black dark:bg-boxdark dark:text-white'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >

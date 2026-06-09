@@ -176,22 +176,22 @@ function SmsLogsTab() {
         <EmptyState message="No SMS logs found." icon={MessageSquare} />
       ) : (
         <>
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-2 text-left dark:bg-meta-4">
                 <tr>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600">To Number</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden md:table-cell">Message</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden lg:table-cell">Trigger</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600">Status</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden md:table-cell">Sent At</th>
+                  <th className="px-4 py-2.5 font-medium text-black dark:text-white">To Number</th>
+                  <th className="px-4 py-2.5 font-medium text-black dark:text-white hidden md:table-cell">Message</th>
+                  <th className="px-4 py-2.5 font-medium text-black dark:text-white hidden lg:table-cell">Trigger</th>
+                  <th className="px-4 py-2.5 font-medium text-black dark:text-white">Status</th>
+                  <th className="px-4 py-2.5 font-medium text-black dark:text-white hidden md:table-cell">Sent At</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-stroke dark:divide-strokedark">
                 {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-gray-900 font-mono text-xs">{log.toNumber}</td>
-                    <td className="px-4 py-2.5 text-gray-600 hidden md:table-cell">
+                  <tr key={log.id} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                    <td className="px-4 py-2.5 text-black dark:text-white font-mono text-xs">{log.toNumber}</td>
+                    <td className="px-4 py-2.5 text-gray-500 hidden md:table-cell">
                       {log.message.length > 40 ? `${log.message.slice(0, 40)}…` : log.message}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500 hidden lg:table-cell text-xs">{log.trigger}</td>

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
@@ -113,31 +113,31 @@ export default function PayrollPage() {
         }
       />
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden">
         {monthsLoading ? (
           <div className="p-4 space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-12 w-full rounded-sm" />
             ))}
           </div>
         ) : payrollMonths && payrollMonths.length > 0 ? (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-stroke dark:border-strokedark">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Year</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
               {payrollMonths.map((pm) => {
                 const monthName = BS_MONTHS[(pm.monthBs - 1) % 12];
                 const label = `${monthName} ${pm.yearBs}`;
                 return (
                   <tr key={pm.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-gray-700">{pm.yearBs}</td>
-                    <td className="px-4 py-3 text-gray-800">{monthName}</td>
+                    <td className="px-4 py-3 font-mono text-black dark:text-white">{pm.yearBs}</td>
+                    <td className="px-4 py-3 text-gray-500">{monthName}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={pm.status} />
                     </td>
@@ -181,7 +181,7 @@ export default function PayrollPage() {
             </tbody>
           </table>
         ) : (
-          <p className="text-sm text-gray-400 text-center py-10">No payroll months yet. Open a new month to get started.</p>
+          <p className="text-sm text-gray-500 text-center py-10">No payroll months yet. Open a new month to get started.</p>
         )}
       </div>
 
@@ -245,17 +245,17 @@ export default function PayrollPage() {
           <SheetHeader>
             <SheetTitle>Salary Slips — {selectedMonthLabel}</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 rounded-lg border border-gray-200 overflow-hidden">
+          <div className="mt-4 rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
             {slipsLoading ? (
               <div className="p-4 space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
+                  <Skeleton key={i} className="h-10 w-full rounded-sm" />
                 ))}
               </div>
             ) : slips && slips.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-gray-50 border-b border-stroke dark:border-strokedark">
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Emp ID</th>
                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Base</th>
@@ -265,10 +265,10 @@ export default function PayrollPage() {
                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Net Salary</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-stroke dark:divide-strokedark">
                   {slips.map((slip) => (
                     <tr key={slip.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2.5 font-medium text-gray-800">{slip.staffName}</td>
+                      <td className="px-3 py-2.5 font-medium text-black dark:text-white">{slip.staffName}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-500 text-xs">{slip.employeeId}</td>
                       <td className="px-3 py-2.5 text-right"><AmountDisplay amount={slip.baseSalary} /></td>
                       <td className="px-3 py-2.5 text-right text-success-600"><AmountDisplay amount={slip.allowanceTotal} /></td>
@@ -280,7 +280,7 @@ export default function PayrollPage() {
                 </tbody>
               </table>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-8">No salary slips for this month. Generate payroll first.</p>
+              <p className="text-sm text-gray-500 text-center py-8">No salary slips for this month. Generate payroll first.</p>
             )}
           </div>
         </SheetContent>

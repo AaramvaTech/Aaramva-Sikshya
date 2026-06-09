@@ -55,32 +55,32 @@ export function DataTable<TData>({
         </div>
       )}
 
-      {/* Table card */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      {/* Table card — TailAdmin style */}
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+        <div className="max-w-full overflow-x-auto">
+          <table className="w-full table-auto">
             <thead>
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                  {hg.headers.map((header) => (
+              <tr className="bg-gray-2 text-left dark:bg-meta-4">
+                {table.getHeaderGroups().map((hg) => (
+                  hg.headers.map((header) => (
                     <th
                       key={header.id}
-                      className="px-4 py-3 text-left text-theme-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                      className="min-w-[120px] px-4 py-4 font-medium text-black dark:text-white"
                     >
                       {header.isPlaceholder
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
                     </th>
-                  ))}
-                </tr>
-              ))}
+                  ))
+                ))}
+              </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+                  <tr key={i} className="border-b border-stroke dark:border-strokedark">
                     {columns.map((_, j) => (
-                      <td key={j} className="px-4 py-3">
+                      <td key={j} className="px-4 py-4">
                         <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
                       </td>
                     ))}
@@ -90,10 +90,10 @@ export function DataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                    className="border-b border-stroke dark:border-strokedark hover:bg-gray-2 dark:hover:bg-meta-4 transition-colors"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 text-theme-sm text-gray-700 dark:text-gray-300">
+                      <td key={cell.id} className="px-4 py-4 text-black dark:text-white">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -84,7 +84,7 @@ export default function LeavePage() {
     {
       id: 'staffName',
       header: 'Staff Name',
-      cell: ({ row }) => <span className="font-medium text-gray-800">{row.original.staffName}</span>,
+      cell: ({ row }) => <span className="font-medium text-black dark:text-white">{row.original.staffName}</span>,
     },
     {
       id: 'leaveType',
@@ -182,8 +182,8 @@ export default function LeavePage() {
         </TabsContent>
 
         <TabsContent value="apply" className="mt-4">
-          <div className="max-w-lg rounded-xl border border-gray-200 bg-white p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700">New Leave Application</h3>
+          <div className="max-w-lg rounded-sm border border-stroke bg-white dark:border-strokedark dark:bg-boxdark p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-black dark:text-white">New Leave Application</h3>
 
             <div className="space-y-1.5">
               <Label>Leave Type *</Label>

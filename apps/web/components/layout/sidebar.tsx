@@ -161,8 +161,12 @@ export function Sidebar() {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Logo / School name */}
-      <div className={`py-8 flex ${!showLabels ? 'lg:justify-center' : 'justify-start'}`}>
+      {/* Logo */}
+      <div
+        className={`py-8 flex  ${
+          !showLabels ? 'lg:justify-center' : 'justify-start'
+        }`}
+      >
         <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
           {tenant.logoUrl ? (
             <Image
@@ -185,82 +189,111 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Nav */}
+      {/* Navigation */}
       <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
-          <h2
-            className={`mb-4 text-xs uppercase leading-5 text-gray-400 flex ${
-              !showLabels ? 'lg:justify-center' : 'justify-start'
-            }`}
-          >
-            {showLabels ? 'Menu' : '···'}
-          </h2>
-          <ul className="flex flex-col gap-1">
-            {navItems.map((nav, idx) => (
-              <li key={nav.name}>
-                {nav.subItems ? (
-                  <button
-                    onClick={() => handleSubmenuToggle(idx)}
-                    className={`menu-item group w-full cursor-pointer ${
-                      isGroupActive(nav) ? 'menu-item-active' : 'menu-item-inactive'
-                    } ${!showLabels ? 'lg:justify-center' : 'lg:justify-start'}`}
-                  >
-                    <span className={isGroupActive(nav) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'}>
-                      {nav.icon}
-                    </span>
-                    {showLabels && <span className="flex-1 text-left">{nav.name}</span>}
-                    {showLabels && (
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          openSubmenu === idx ? 'rotate-180 text-brand-500 dark:text-brand-400' : 'text-gray-500'
-                        }`}
-                      />
-                    )}
-                  </button>
-                ) : (
-                  nav.path && (
-                    <Link
-                      href={nav.path}
-                      className={`menu-item group ${
-                        isActive(nav.path) ? 'menu-item-active' : 'menu-item-inactive'
-                      }`}
-                    >
-                      <span className={isActive(nav.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'}>
-                        {nav.icon}
-                      </span>
-                      {showLabels && <span>{nav.name}</span>}
-                    </Link>
-                  )
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2
+                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
+                  !showLabels ? 'lg:justify-center' : 'justify-start'
+                }`}
+              >
+                {showLabels ? 'Menu' : (
+                  <span className="w-5 h-[3px] rounded-full bg-gray-400 block" />
                 )}
-
-                {/* Submenu */}
-                {nav.subItems && showLabels && (
-                  <div
-                    ref={(el) => { subMenuRefs.current[idx] = el; }}
-                    className="overflow-hidden transition-all duration-300"
-                    style={{ height: openSubmenu === idx ? `${subMenuHeight[idx] ?? 0}px` : '0px' }}
-                  >
-                    <ul className="mt-1 space-y-0.5 ml-9">
-                      {nav.subItems.map((sub) => (
-                        <li key={sub.path}>
-                          <Link
-                            href={sub.path}
-                            className={`menu-dropdown-item ${
-                              isActive(sub.path, true)
-                                ? 'menu-dropdown-item-active'
-                                : 'menu-dropdown-item-inactive'
+              </h2>
+              <ul className="flex flex-col gap-4">
+                {navItems.map((nav, idx) => (
+                  <li key={nav.name}>
+                    {nav.subItems ? (
+                      <button
+                        onClick={() => handleSubmenuToggle(idx)}
+                        className={`menu-item group w-full cursor-pointer ${
+                          isGroupActive(nav) ? 'menu-item-active' : 'menu-item-inactive'
+                        } ${!showLabels ? 'lg:justify-center' : 'lg:justify-start'}`}
+                      >
+                        <span
+                          className={`${
+                            isGroupActive(nav)
+                              ? 'menu-item-icon-active'
+                              : 'menu-item-icon-inactive'
+                          }`}
+                        >
+                          {nav.icon}
+                        </span>
+                        {showLabels && (
+                          <span className="menu-item-text flex-1 text-left">{nav.name}</span>
+                        )}
+                        {showLabels && (
+                          <ChevronDown
+                            className={`ml-auto w-5 h-5 transition-transform duration-200 ${
+                              openSubmenu === idx
+                                ? 'rotate-180 text-brand-500'
+                                : ''
+                            }`}
+                          />
+                        )}
+                      </button>
+                    ) : (
+                      nav.path && (
+                        <Link
+                          href={nav.path}
+                          className={`menu-item group ${
+                            isActive(nav.path) ? 'menu-item-active' : 'menu-item-inactive'
+                          }`}
+                        >
+                          <span
+                            className={`${
+                              isActive(nav.path)
+                                ? 'menu-item-icon-active'
+                                : 'menu-item-icon-inactive'
                             }`}
                           >
-                            {sub.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+                            {nav.icon}
+                          </span>
+                          {showLabels && (
+                            <span className="menu-item-text">{nav.name}</span>
+                          )}
+                        </Link>
+                      )
+                    )}
+                    {nav.subItems && showLabels && (
+                      <div
+                        ref={(el) => {
+                          subMenuRefs.current[idx] = el;
+                        }}
+                        className="overflow-hidden transition-all duration-300"
+                        style={{
+                          height:
+                            openSubmenu === idx
+                              ? `${subMenuHeight[idx]}px`
+                              : '0px',
+                        }}
+                      >
+                        <ul className="mt-2 space-y-1 ml-9">
+                          {nav.subItems.map((sub) => (
+                            <li key={sub.name}>
+                              <Link
+                                href={sub.path}
+                                className={`menu-dropdown-item ${
+                                  isActive(sub.path, true)
+                                    ? 'menu-dropdown-item-active'
+                                    : 'menu-dropdown-item-inactive'
+                                }`}
+                              >
+                                {sub.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </nav>
       </div>
     </aside>

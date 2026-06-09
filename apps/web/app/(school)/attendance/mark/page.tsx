@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -93,7 +93,7 @@ export default function AttendanceMarkPage() {
         <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="text-sm font-semibold text-gray-800 min-w-[180px] text-center">
+        <div className="text-sm font-semibold text-black dark:text-white min-w-[180px] text-center">
           <BsDate date={date} showAd />
         </div>
         <Button
@@ -109,7 +109,7 @@ export default function AttendanceMarkPage() {
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-md" />
+            <Skeleton key={i} className="h-16 rounded-sm" />
           ))}
         </div>
       ) : !sectionId ? (

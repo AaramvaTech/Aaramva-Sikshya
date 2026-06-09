@@ -1,9 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -51,11 +50,11 @@ export default function AttendancePage() {
       />
 
       {/* Class + Section selector */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Mark Today&apos;s Attendance</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+        <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+          <h4 className="text-xl font-semibold text-black dark:text-white">Mark Today&apos;s Attendance</h4>
+        </div>
+        <div className="p-4 sm:p-6 xl:p-7.5">
           <div className="flex gap-3 items-end flex-wrap">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Class</label>
@@ -104,19 +103,19 @@ export default function AttendancePage() {
               Mark Attendance
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* School-wide summary */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">
+        <h2 className="text-sm font-semibold text-black dark:text-white mb-3">
           Today&apos;s School Summary
         </h2>
 
         {summaryLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 rounded-lg" />
+              <Skeleton key={i} className="h-20 rounded-sm" />
             ))}
           </div>
         ) : summary ? (
@@ -129,39 +128,39 @@ export default function AttendancePage() {
                 { label: 'Leave', value: summary.leave, color: 'text-blue-600' },
                 { label: 'Not Marked', value: summary.notMarked, color: 'text-gray-500' },
               ].map((item) => (
-                <Card key={item.label}>
-                  <CardContent className="pt-4 pb-3">
+                <div key={item.label} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                  <div className="p-4 sm:p-6 xl:p-7.5">
                     <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
                     <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
 
             {summary.byClass.length > 0 && (
-              <div className="rounded-md border overflow-hidden">
+              <div className="rounded-sm border border-stroke dark:border-strokedark overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-2 text-left dark:bg-meta-4">
                     <tr>
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600">Class</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-gray-600">Present</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-gray-600">Absent</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-gray-600">Total</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-gray-600">Rate</th>
+                      <th className="px-4 py-2.5 font-medium text-black dark:text-white">Class</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-black dark:text-white">Present</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-black dark:text-white">Absent</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-black dark:text-white">Total</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-black dark:text-white">Rate</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-stroke dark:divide-strokedark">
                     {summary.byClass.map((row) => (
-                      <tr key={row.classId} className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 font-medium">{row.className}</td>
+                      <tr key={row.classId} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                        <td className="px-4 py-2.5 font-medium text-black dark:text-white">{row.className}</td>
                         <td className="px-4 py-2.5 text-right text-success-600 font-medium">
                           {row.present}
                         </td>
                         <td className="px-4 py-2.5 text-right text-error-600 font-medium">
                           {row.absent}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-gray-700">{row.total}</td>
-                        <td className="px-4 py-2.5 text-right font-semibold">
+                        <td className="px-4 py-2.5 text-right text-gray-500">{row.total}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-black dark:text-white">
                           {row.rate.toFixed(1)}%
                         </td>
                       </tr>

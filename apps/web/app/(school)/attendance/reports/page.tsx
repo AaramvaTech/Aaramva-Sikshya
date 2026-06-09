@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -99,7 +99,7 @@ export default function AttendanceReportsPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-stroke dark:border-strokedark">
         {([
           { key: 'section', label: 'Section Report' },
           { key: 'student', label: 'Student Summary' },
@@ -123,7 +123,7 @@ export default function AttendanceReportsPage() {
       {/* ── Section Report tab ─────────────────────────────────────────────── */}
       {activeTab === 'section' && (
         <div className="space-y-4">
-          <div className="flex gap-3 items-end flex-wrap p-4 bg-gray-50 rounded-lg border">
+          <div className="flex gap-3 items-end flex-wrap p-4 rounded-sm border border-stroke bg-gray-2 dark:border-strokedark dark:bg-meta-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Class</label>
               <Select
@@ -206,7 +206,7 @@ export default function AttendanceReportsPage() {
           {reportLoading && (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 rounded" />
+                <Skeleton key={i} className="h-10 rounded-sm" />
               ))}
             </div>
           )}
@@ -230,20 +230,20 @@ export default function AttendanceReportsPage() {
             </div>
 
             {searchTerm && matchedStudents.length > 0 && !selectedStudentId && (
-              <div className="border rounded-md overflow-hidden max-w-sm">
+              <div className="border border-stroke dark:border-strokedark rounded-sm overflow-hidden max-w-sm bg-white dark:bg-boxdark">
                 {matchedStudents.map((s) => (
                   <button
                     key={s.id}
                     type="button"
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 border-b last:border-b-0"
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-2 dark:hover:bg-meta-4 border-b border-stroke dark:border-strokedark last:border-b-0"
                     onClick={() => {
                       setSelectedStudentId(s.id);
                       setStudentSearch(s.fullName);
                       setSearchTerm('');
                     }}
                   >
-                    <span className="font-medium">{s.fullName}</span>
-                    <span className="text-gray-400 ml-2 text-xs">{s.studentId}</span>
+                    <span className="font-medium text-black dark:text-white">{s.fullName}</span>
+                    <span className="text-gray-500 ml-2 text-xs">{s.studentId}</span>
                   </button>
                 ))}
               </div>
@@ -266,10 +266,10 @@ export default function AttendanceReportsPage() {
 
           {summaryLoading && (
             <div className="space-y-3">
-              <Skeleton className="h-8 w-48 rounded" />
+              <Skeleton className="h-8 w-48 rounded-sm" />
               <div className="grid grid-cols-5 gap-3">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-20 rounded-lg" />
+                  <Skeleton key={i} className="h-20 rounded-sm" />
                 ))}
               </div>
             </div>

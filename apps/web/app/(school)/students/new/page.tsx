@@ -19,7 +19,6 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
@@ -172,11 +171,11 @@ export default function NewStudentPage() {
         <form onSubmit={form.handleSubmit(onSubmit)}>
           {/* ── Step 1: Personal Info ──────────────────────────────── */}
           {step === 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                <h4 className="text-xl font-semibold text-black dark:text-white">Personal Information</h4>
+              </div>
+              <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
@@ -369,20 +368,20 @@ export default function NewStudentPage() {
                     </FormItem>
                   )}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* ── Step 2: Guardian Info ──────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-4">
               {fields.map((fieldItem, index) => (
-                <Card key={fieldItem.id}>
-                  <CardHeader>
+                <div key={fieldItem.id} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                  <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">
+                      <h4 className="text-base font-semibold text-black dark:text-white">
                         Guardian {index + 1}
-                      </CardTitle>
+                      </h4>
                       {fields.length > 1 && (
                         <Button
                           type="button"
@@ -395,8 +394,8 @@ export default function NewStudentPage() {
                         </Button>
                       )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                  </div>
+                  <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
                     <div className="grid grid-cols-3 gap-4">
                       <FormField
                         control={form.control}
@@ -483,8 +482,8 @@ export default function NewStudentPage() {
                         </FormItem>
                       )}
                     />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
 
               {fields.length < 3 && (
@@ -512,11 +511,11 @@ export default function NewStudentPage() {
           {/* ── Step 3: Review & Submit ────────────────────────────── */}
           {step === 2 && (
             <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Personal Information</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                  <h4 className="text-xl font-semibold text-black dark:text-white">Personal Information</h4>
+                </div>
+                <div className="p-4 sm:p-6 xl:p-7.5">
                   <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                     <ReviewRow
                       label="Full Name"
@@ -567,24 +566,24 @@ export default function NewStudentPage() {
                       </div>
                     )}
                   </dl>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Guardians</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+              <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                  <h4 className="text-xl font-semibold text-black dark:text-white">Guardians</h4>
+                </div>
+                <div className="p-4 sm:p-6 xl:p-7.5">
+                  <div className="space-y-3 divide-y divide-stroke dark:divide-strokedark">
                     {values.guardians.map((g, i) => (
                       <div
                         key={i}
-                        className="text-sm border-b last:border-0 pb-3 last:pb-0"
+                        className="text-sm pb-3 last:pb-0"
                       >
-                        <p className="font-medium">
+                        <p className="font-medium text-black dark:text-white">
                           {g.firstName} {g.lastName}
                           {g.isPrimary && (
-                            <span className="ml-2 text-xs bg-brand-50 text-brand-500 px-1.5 py-0.5 rounded">
+                            <span className="ml-2 text-xs bg-brand-50 text-brand-500 px-1.5 py-0.5 rounded-sm">
                               Primary
                             </span>
                           )}
@@ -596,8 +595,8 @@ export default function NewStudentPage() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           )}
 

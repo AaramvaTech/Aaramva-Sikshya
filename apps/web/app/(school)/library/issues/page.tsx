@@ -172,8 +172,8 @@ export default function IssuesPage() {
       header: 'Member',
       cell: ({ row }) => (
         <div>
-          <p className="font-medium text-gray-800 text-sm">{row.original.memberName}</p>
-          <p className="text-xs text-gray-400 font-mono">{row.original.memberNumber}</p>
+          <p className="font-medium text-black dark:text-white text-sm">{row.original.memberName}</p>
+          <p className="text-xs text-gray-500 font-mono">{row.original.memberNumber}</p>
         </div>
       ),
     },
@@ -181,7 +181,7 @@ export default function IssuesPage() {
       id: 'book',
       header: 'Book',
       cell: ({ row }) => (
-        <span className="text-sm text-gray-700">{row.original.bookTitle}</span>
+        <span className="text-sm text-black dark:text-white">{row.original.bookTitle}</span>
       ),
     },
     {
@@ -357,16 +357,16 @@ export default function IssuesPage() {
                     />
                   </div>
                   {memberResults && memberResults.data && memberResults.data.length > 0 && issueMemberSearch && (
-                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+                    <div className="rounded-sm border border-stroke divide-y divide-stroke bg-white dark:border-strokedark dark:divide-strokedark dark:bg-boxdark overflow-hidden">
                       {memberResults.data.map((m) => (
                         <button
                           key={m.id}
                           type="button"
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-2 dark:hover:bg-meta-4 transition-colors"
                           onClick={() => selectMember(m)}
                         >
-                          <p className="font-medium text-gray-800">{m.memberName}</p>
-                          <p className="text-xs text-gray-400 font-mono">
+                          <p className="font-medium text-black dark:text-white">{m.memberName}</p>
+                          <p className="text-xs text-gray-500 font-mono">
                             {m.memberNumber} · {m.memberType}
                             {!m.isActive && <span className="ml-1 text-error-500">Inactive</span>}
                           </p>

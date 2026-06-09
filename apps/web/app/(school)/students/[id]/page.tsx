@@ -12,7 +12,6 @@ import { EnrollmentForm } from '@/components/students/enrollment-form';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { StudentDocument } from '@/types/api.types';
@@ -97,7 +96,7 @@ export default function StudentProfilePage() {
       />
 
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 mb-6">
+      <div className="flex border-b border-stroke dark:border-strokedark mb-6">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -119,8 +118,8 @@ export default function StudentProfilePage() {
         <div className="grid grid-cols-3 gap-6">
           {/* Left column: photo + key facts */}
           <div className="space-y-4">
-            <Card>
-              <CardContent className="pt-6 flex flex-col items-center text-center gap-2">
+            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="p-4 sm:p-6 xl:p-7.5 flex flex-col items-center text-center gap-2">
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={student.photoUrl ?? undefined} />
                   <AvatarFallback className="text-2xl bg-brand-50 text-brand-500">
@@ -128,15 +127,15 @@ export default function StudentProfilePage() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-semibold text-gray-900">{student.fullName}</p>
-                  <p className="text-xs text-gray-400">{student.studentId}</p>
+                  <p className="font-semibold text-black dark:text-white">{student.fullName}</p>
+                  <p className="text-xs text-gray-500">{student.studentId}</p>
                 </div>
                 <StatusBadge status={student.status} />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card>
-              <CardContent className="pt-4 space-y-2.5">
+            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="p-4 sm:p-6 xl:p-7.5 space-y-2.5">
                 <InfoRow
                   label="Gender"
                   value={
@@ -165,17 +164,17 @@ export default function StudentProfilePage() {
                     value={Object.values(student.permanentAddress).filter(Boolean).join(', ')}
                   />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Right column: guardians + enrollment */}
           <div className="col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Guardians</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                <h4 className="text-xl font-semibold text-black dark:text-white">Guardians</h4>
+              </div>
+              <div className="p-4 sm:p-6 xl:p-7.5">
                 {validGuardians.length === 0 ? (
                   <p className="text-sm text-gray-400">No guardians on record.</p>
                 ) : (
@@ -206,15 +205,15 @@ export default function StudentProfilePage() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {student.className && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Enrollment</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                  <h4 className="text-xl font-semibold text-black dark:text-white">Current Enrollment</h4>
+                </div>
+                <div className="p-4 sm:p-6 xl:p-7.5">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <InfoRow label="Class" value={student.className} />
                     {student.sectionName && (
@@ -224,8 +223,8 @@ export default function StudentProfilePage() {
                       <InfoRow label="Roll Number" value={String(student.rollNumber)} />
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -235,14 +234,14 @@ export default function StudentProfilePage() {
       {activeTab === 'enrollment' && (
         <div className="space-y-6">
           {!hasCurrentEnrollment ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Enroll in a Class</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                <h4 className="text-xl font-semibold text-black dark:text-white">Enroll in a Class</h4>
+              </div>
+              <div className="p-4 sm:p-6 xl:p-7.5">
                 <EnrollmentForm studentId={id} />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <p className="text-sm text-gray-400">
               Student is currently enrolled in {student.className}
@@ -254,16 +253,16 @@ export default function StudentProfilePage() {
 
       {/* ── Documents ─────────────────────────────────────────────── */}
       {activeTab === 'documents' && (
-        <Card>
-          <CardHeader>
+        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+          <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
             <div className="flex items-center justify-between">
-              <CardTitle>Documents</CardTitle>
+              <h4 className="text-xl font-semibold text-black dark:text-white">Documents</h4>
               <Button size="sm" variant="outline">
                 Upload Document
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="p-4 sm:p-6 xl:p-7.5">
             {docsLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
@@ -273,19 +272,19 @@ export default function StudentProfilePage() {
             ) : documents && documents.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-gray-500 text-xs uppercase tracking-wide">
+                  <tr className="border-b border-stroke dark:border-strokedark text-xs uppercase tracking-wide text-gray-500">
                     <th className="pb-2 text-left font-semibold">Type</th>
                     <th className="pb-2 text-left font-semibold">File Name</th>
                     <th className="pb-2 text-left font-semibold">Uploaded On</th>
                     <th className="pb-2" />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-stroke dark:divide-strokedark">
                   {documents.map((doc: StudentDocument) => (
-                    <tr key={doc.id} className="border-b last:border-0">
-                      <td className="py-2">{doc.documentType}</td>
-                      <td className="py-2">{doc.fileName}</td>
-                      <td className="py-2">
+                    <tr key={doc.id} className="hover:bg-gray-2 dark:hover:bg-meta-4">
+                      <td className="py-2 text-black dark:text-white">{doc.documentType}</td>
+                      <td className="py-2 text-gray-500">{doc.fileName}</td>
+                      <td className="py-2 text-gray-500">
                         <BsDate date={doc.uploadedAt} />
                       </td>
                       <td className="py-2 text-right">
@@ -307,8 +306,8 @@ export default function StudentProfilePage() {
                 No documents uploaded yet.
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

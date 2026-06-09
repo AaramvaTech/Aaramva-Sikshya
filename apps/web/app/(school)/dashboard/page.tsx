@@ -21,20 +21,20 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon: Icon, iconBg, iconColor, isLoading }: StatCardProps) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center justify-between">
+    <div className="rounded-sm border border-stroke bg-white px-7.5 py-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+      <div className="flex h-11.5 w-11.5 items-center justify-center rounded-full bg-meta-2 dark:bg-meta-4">
+        <Icon className={`h-6 w-6 ${iconColor}`} />
+      </div>
+      <div className="mt-4 flex items-end justify-between">
         <div>
           {isLoading ? (
             <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-1" />
           ) : (
-            <h4 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h4 className="text-title-md font-bold text-black dark:text-white">
               {value ?? '—'}
             </h4>
           )}
-          <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">{title}</p>
-        </div>
-        <div className={`flex h-12 w-12 items-center justify-center rounded-full ${iconBg}`}>
-          <Icon className={`h-6 w-6 ${iconColor}`} />
+          <span className="text-sm font-medium">{title}</span>
         </div>
       </div>
     </div>
@@ -94,7 +94,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-7.5">
         <StatCard
           title="Total Students"
           value={students.data}
@@ -130,13 +130,15 @@ export default function DashboardPage() {
       </div>
 
       {/* Weekly attendance chart */}
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-white mb-1">
-          Weekly Attendance
-        </h3>
-        <p className="text-theme-xs text-gray-500 dark:text-gray-400 mb-5">
-          Attendance percentage this week
-        </p>
+      <div className="mt-4 rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark 2xl:mt-7.5">
+        <div className="px-4 py-6 md:px-6 xl:px-7.5">
+          <h4 className="text-xl font-semibold text-black dark:text-white">
+            Weekly Attendance
+          </h4>
+          <p className="text-theme-xs text-gray-500 dark:text-gray-400 mt-1">
+            Attendance percentage this week
+          </p>
+        </div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={weeklyData} barSize={32}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-gray-200)" vertical={false} />

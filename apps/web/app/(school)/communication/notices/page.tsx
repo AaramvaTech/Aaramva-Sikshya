@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -44,8 +43,8 @@ const AUDIENCE_OPTIONS = ['ALL_STUDENTS', 'ALL_TEACHERS', 'ALL_PARENTS', 'ALL_ST
 
 function NoticeCardSkeleton() {
   return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
+    <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+      <div className="p-4 space-y-3">
         <div className="flex gap-2">
           <Skeleton className="h-5 w-16 rounded-full" />
           <Skeleton className="h-5 w-16 rounded-full" />
@@ -60,8 +59,8 @@ function NoticeCardSkeleton() {
             <Skeleton className="h-7 w-16" />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -182,15 +181,17 @@ export default function NoticesPage() {
       ) : notices.length === 0 ? (
         <EmptyState message="No notices found." icon={Bell} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {notices.map((notice) => (
-            <Card
+            <div
               key={notice.id}
-              className={notice.isPublished
-                ? 'bg-white border border-gray-200'
-                : 'bg-gray-50 border border-dashed border-gray-300 opacity-70'}
+              className={`rounded-sm border shadow-default dark:border-strokedark dark:bg-boxdark ${
+                notice.isPublished
+                  ? 'border-stroke bg-white'
+                  : 'border-dashed border-stroke bg-gray-50 opacity-70'
+              }`}
             >
-              <CardContent className="p-4">
+              <div className="p-4">
                 <div className="flex flex-wrap gap-2 mb-2">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[notice.type] ?? 'bg-gray-100 text-gray-700'}`}>
                     {notice.type}
@@ -199,8 +200,8 @@ export default function NoticesPage() {
                     {AUDIENCE_LABELS[notice.audience] ?? notice.audience}
                   </Badge>
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-1 leading-snug">{notice.title}</h3>
-                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{notice.body}</p>
+                <h3 className="font-semibold text-black dark:text-white mb-1 leading-snug">{notice.title}</h3>
+                <p className="text-sm text-gray-500 line-clamp-2 mb-3">{notice.body}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">
                     {notice.isPublished && notice.publishedAt
@@ -230,8 +231,8 @@ export default function NoticesPage() {
                     </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

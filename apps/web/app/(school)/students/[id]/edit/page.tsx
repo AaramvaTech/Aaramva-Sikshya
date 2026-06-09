@@ -13,7 +13,6 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Form,
@@ -103,13 +102,13 @@ export default function EditStudentPage() {
           <Skeleton className="h-8 w-56" />
           <Skeleton className="h-4 w-40" />
         </div>
-        <Card>
-          <CardContent className="pt-6 space-y-4">
+        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+          <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 rounded-md" />
+              <Skeleton key={i} className="h-10 rounded-sm" />
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -134,11 +133,11 @@ export default function EditStudentPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Personal Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+            <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+              <h4 className="text-base font-semibold text-black dark:text-white">Personal Information</h4>
+            </div>
+            <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
@@ -258,15 +257,15 @@ export default function EditStudentPage() {
                   )}
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Contact Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Contact Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+            <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+              <h4 className="text-base font-semibold text-black dark:text-white">Contact Information</h4>
+            </div>
+            <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -309,8 +308,8 @@ export default function EditStudentPage() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <div className="flex justify-end gap-3">
             <Button
