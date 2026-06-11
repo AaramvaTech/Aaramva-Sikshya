@@ -28,8 +28,8 @@ export class ImpersonationService {
   ) {}
 
   async impersonate(tenantId: string, adminId: string, adminEmail: string) {
-    const tenantRows = await this.publicPrisma.query<{ id: string; slug: string; name: string; is_active: boolean }>(
-      `SELECT id, slug, name, is_active FROM tenants WHERE id = $1::uuid AND deleted_at IS NULL`,
+    const tenantRows = await this.publicPrisma.query<{ id: string; slug: string; name: string; isActive: boolean }>(
+      `SELECT id, slug, name, "isActive" FROM tenants WHERE id = $1 AND "deletedAt" IS NULL`,
       tenantId,
     );
     const tenant = tenantRows[0];

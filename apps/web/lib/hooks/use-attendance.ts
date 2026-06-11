@@ -14,7 +14,8 @@ export function useSectionAttendance(
     queryFn: () =>
       attendanceApi
         .getSectionAttendance({ sectionId, date, academicYearId })
-        .then((r) => r.data.data),
+        // /attendance/students is paginated → array lives at .data.data.data
+        .then((r) => r.data.data.data),
     enabled: !!slug && !!sectionId && !!date,
   });
 }
@@ -41,13 +42,19 @@ export function useSchoolAttendanceSummary() {
   });
 }
 
-export function useStudentAttendanceSummary(studentId: string) {
+export function useStudentAttendanceSummary(
+  studentId: string,
+  academicYearId?: string,
+) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
-    queryKey: ['attendance', 'student', studentId],
+    queryKey: ['attendance', 'student', studentId, academicYearId],
     queryFn: () =>
-      attendanceApi.getStudentSummary(studentId).then((r) => r.data.data),
-    enabled: !!slug && !!studentId,
+      attendanceApi
+        .getStudentSummary(studentId, academicYearId)
+        .then((r) => r.data.data),
+    // academicYearId is required by the API — don't fire until we have it
+    enabled: !!slug && !!studentId && !!academicYearId,
   });
 }
 

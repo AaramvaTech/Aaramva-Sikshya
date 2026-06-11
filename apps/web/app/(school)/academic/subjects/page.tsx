@@ -369,7 +369,13 @@ export default function SubjectsPage() {
             <div className="space-y-1.5">
               <Label>Subject *</Label>
               <Select value={assignSubjectId} onValueChange={(v) => setAssignSubjectId(v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                <SelectTrigger>
+                  <span className={assignSubjectId ? '' : 'text-muted-foreground'}>
+                    {assignSubjectId
+                      ? (unassignedSubjects.find((s) => s.id === assignSubjectId)?.name ?? 'Loading…')
+                      : 'Select subject'}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   {unassignedSubjects.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>

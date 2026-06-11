@@ -44,6 +44,7 @@ export class AuditService {
     const rows = await this.publicPrisma.query<{
       id: string;
       admin_id: string;
+      admin_email: string;
       action: string;
       target_type: string | null;
       target_id: string | null;
@@ -63,6 +64,7 @@ export class AuditService {
       data: rows.map((r) => ({
         id: r.id,
         adminId: r.admin_id,
+        adminEmail: r.admin_email,
         action: r.action,
         targetType: r.target_type,
         targetId: r.target_id,

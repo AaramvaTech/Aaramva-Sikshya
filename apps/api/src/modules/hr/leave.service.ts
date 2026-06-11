@@ -16,7 +16,7 @@ import {
   LeaveRequestResponseDto,
   LeaveBalanceDto,
 } from './entities/hr.entity';
-import { CreateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
+import { CreateLeaveTypeDto, UpdateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
 
 @Injectable()
 export class LeaveService {
@@ -44,6 +44,32 @@ export class LeaveService {
       `SELECT * FROM leave_types WHERE deleted_at IS NULL ORDER BY name ASC`,
     );
     return rows.map(toLeaveTypeResponse);
+  }
+
+  async updateLeaveType(id: string, dto: UpdateLeaveTypeDto): Promise<LeaveTypeResponseDto> {
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+    if (dto.name !== undefined) { updates.push(`name = $${idx++}`); values.push(dto.name); }
+    if (dto.daysPerYear !== undefined) { updates.push(`days_per_year = $${idx++}`); values.push(dto.daysPerYear); }
+    if (dto.isPaid !== undefined) { updates.push(`is_paid = $${idx++}`); values.push(dto.isPaid); }
+    if (updates.length === 0) {
+      const rows = await this.tenantPrisma.query<LeaveTypeRow>(`SELECT * FROM leave_types WHERE id = $1 AND deleted_at IS NULL`, id);
+      return toLeaveTypeResponse(rows[0]);
+    }
+    values.push(id);
+    const rows = await this.tenantPrisma.query<LeaveTypeRow>(
+      `UPDATE leave_types SET ${updates.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL RETURNING *`,
+      ...values,
+    );
+    return toLeaveTypeResponse(rows[0]);
+  }
+
+  async deleteLeaveType(id: string): Promise<void> {
+    await this.tenantPrisma.execute(
+      `UPDATE leave_types SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+      id,
+    );
   }
 
   // ─── Leave Requests ─────────────────────────────────────────────────────────

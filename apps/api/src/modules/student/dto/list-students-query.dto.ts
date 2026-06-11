@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class ListStudentsQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
@@ -16,6 +16,12 @@ export class ListStudentsQueryDto {
 
   @IsOptional() @IsString()
   section?: string;
+
+  @IsOptional() @IsUUID()
+  classId?: string;
+
+  @IsOptional() @IsUUID()
+  sectionId?: string;
 
   @IsOptional() @IsIn(['ACTIVE', 'PASSED_OUT', 'EXPELLED', 'TRANSFERRED', 'DROPPED'])
   status?: string;

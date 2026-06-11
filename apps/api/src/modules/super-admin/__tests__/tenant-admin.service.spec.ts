@@ -125,6 +125,107 @@ describe('TenantAdminService', () => {
     });
   });
 
+  describe('listTenants()', () => {
+    it('returns real per-tenant student/staff counts from the tenant schema', async () => {
+      const tenantPrisma = (service as any).tenantPrisma as jest.Mocked<TenantPrismaService>;
+
+      (publicPrisma.query as jest.Mock)
+        // count query
+        .mockResolvedValueOnce([{ count: '1' }])
+        // rows query
+        .mockResolvedValueOnce([
+          {
+            id: 'tenant-uuid-1',
+            name: 'Test School',
+            slug: 'testschool',
+            is_active: true,
+            created_at: new Date(),
+            sub_status: 'ACTIVE',
+            plan_name: 'Basic',
+            plan_id: 'plan-uuid-1',
+          },
+        ]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValue([
+        { students: '42', staff: '7' },
+      ]);
+
+      const result = await service.listTenants({ page: 1, limit: 20 });
+
+      expect(result.data[0].studentCount).toBe(42);
+      expect(result.data[0].staffCount).toBe(7);
+    });
+
+    it('defaults counts to 0 when the tenant schema query fails', async () => {
+      const tenantPrisma = (service as any).tenantPrisma as jest.Mocked<TenantPrismaService>;
+      (publicPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ count: '1' }])
+        .mockResolvedValueOnce([
+          {
+            id: 'tenant-uuid-1',
+            name: 'Test School',
+            slug: 'testschool',
+            is_active: true,
+            created_at: new Date(),
+            sub_status: 'ACTIVE',
+            plan_name: 'Basic',
+            plan_id: 'plan-uuid-1',
+          },
+        ]);
+      (tenantPrisma.query as jest.Mock).mockRejectedValue(new Error('schema missing'));
+
+      const result = await service.listTenants({ page: 1, limit: 20 });
+
+      expect(result.data[0].studentCount).toBe(0);
+      expect(result.data[0].staffCount).toBe(0);
+    });
+  });
+
+  describe('updateTenant()', () => {
+    it('updates allowed fields and never touches the slug', async () => {
+      // UPDATE returns the id; getTenantDetail then re-reads the row
+      (publicPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'tenant-uuid-1' }]) // UPDATE ... RETURNING id
+        .mockResolvedValueOnce([
+          {
+            ...mockTenant,
+            primary_color: '#2563EB',
+            description: 'A great school',
+            established_year: 1995,
+            website: 'https://test.np',
+          },
+        ]); // getTenantDetail SELECT
+      const tenantPrisma = (service as any).tenantPrisma as jest.Mocked<TenantPrismaService>;
+      (tenantPrisma.query as jest.Mock).mockResolvedValue([{ students: '0', staff: '0' }]);
+
+      const result = await service.updateTenant(
+        'tenant-uuid-1',
+        { schoolName: 'New Name', description: 'A great school', establishedYear: 1995 },
+        'admin-uuid-1',
+      );
+
+      const updateSql = (publicPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(updateSql).toContain('UPDATE tenants SET');
+      expect(updateSql).toContain('name = $1');
+      expect(updateSql).not.toMatch(/\bslug\b/);
+      expect(result.establishedYear).toBe(1995);
+      expect(audit.log).toHaveBeenCalledWith(
+        'admin-uuid-1',
+        'TENANT_UPDATED',
+        'TENANT',
+        'tenant-uuid-1',
+        expect.any(Object),
+      );
+    });
+
+    it('throws NotFoundException when the tenant does not exist', async () => {
+      (publicPrisma.query as jest.Mock).mockResolvedValue([]);
+
+      await expect(
+        service.updateTenant('no-such-id', { schoolName: 'X' }, 'admin-uuid-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('suspendTenant()', () => {
     it('sets is_active=false on the tenant', async () => {
       (publicPrisma.query as jest.Mock).mockResolvedValue([
@@ -135,7 +236,7 @@ describe('TenantAdminService', () => {
 
       expect(result.isActive).toBe(false);
       expect(publicPrisma.query).toHaveBeenCalledWith(
-        expect.stringContaining('is_active = false'),
+        expect.stringContaining('"isActive" = false'),
         'tenant-uuid-1',
       );
       expect(audit.log).toHaveBeenCalledWith(

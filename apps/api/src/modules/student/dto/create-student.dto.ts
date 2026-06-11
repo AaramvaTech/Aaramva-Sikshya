@@ -7,6 +7,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -101,6 +102,15 @@ export class CreateStudentDto {
 
   @IsOptional() @IsInt() @Min(1)
   rollNumber?: number;
+
+  @IsOptional() @IsUUID()
+  classId?: string;
+
+  @IsOptional() @IsUUID()
+  sectionId?: string;
+
+  @IsOptional() @IsUUID()
+  academicYearId?: string;
 
   @IsDateString()
   admissionDate!: string;

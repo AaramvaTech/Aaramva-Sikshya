@@ -16,6 +16,7 @@ export const studentsApi = {
     limit?: number;
     search?: string;
     classId?: string;
+    className?: string;
     sectionId?: string;
     status?: string;
   }) =>

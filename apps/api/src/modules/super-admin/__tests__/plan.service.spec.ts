@@ -6,14 +6,14 @@ import { PublicPrismaService } from '../public-prisma.service';
 const mockPlan = {
   id: 'plan-uuid-1',
   name: 'Pro',
-  monthly_price: '2499.00',
-  annual_price: '24990.00',
-  max_students: 2000,
-  max_staff: 200,
+  monthlyPrice: '2499.00',
+  annualPrice: '24990.00',
+  maxStudents: 2000,
+  maxStaff: 200,
   features: { sms: true, elearning: true, reports: true },
-  is_active: true,
-  created_at: new Date(),
-  updated_at: new Date(),
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 describe('PlanService', () => {
@@ -86,14 +86,14 @@ describe('PlanService', () => {
   describe('deactivate()', () => {
     it('sets is_active=false without deleting the record', async () => {
       (publicPrisma.query as jest.Mock).mockResolvedValue([
-        { ...mockPlan, is_active: false },
+        { ...mockPlan, isActive: false },
       ]);
 
       const result = await service.deactivate('plan-uuid-1');
 
       expect(result.isActive).toBe(false);
       expect(publicPrisma.query).toHaveBeenCalledWith(
-        expect.stringContaining('is_active = false'),
+        expect.stringContaining('"isActive" = false'),
         expect.any(String),
       );
     });

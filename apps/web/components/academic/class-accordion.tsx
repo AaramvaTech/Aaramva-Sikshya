@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Pencil, Trash2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
   const [sectionDialog, setSectionDialog] = useState<SectionDialogState>(null);
   const [classDialog, setClassDialog] = useState<ClassDialogState>(null);
   const [deleteState, setDeleteState] = useState<DeleteState>(null);
+  const submittingRef = useRef(false);
 
   const [sectionName, setSectionName] = useState('');
   const [sectionCapacity, setSectionCapacity] = useState('');
@@ -88,7 +89,8 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
   }
 
   async function handleSectionSave() {
-    if (!sectionDialog || !sectionName.trim()) return;
+    if (!sectionDialog || !sectionName.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       if (sectionDialog.mode === 'add') {
         await createSection.mutateAsync({
@@ -107,11 +109,14 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
       setSectionDialog(null);
     } catch {
       toast.error('Failed to save section');
+    } finally {
+      submittingRef.current = false;
     }
   }
 
   async function handleClassSave() {
-    if (!classDialog || !className.trim()) return;
+    if (!classDialog || !className.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       await updateClass.mutateAsync({
         id: classDialog.id,
@@ -121,11 +126,14 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
       setClassDialog(null);
     } catch {
       toast.error('Failed to update class');
+    } finally {
+      submittingRef.current = false;
     }
   }
 
   async function handleDelete() {
-    if (!deleteState) return;
+    if (!deleteState || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       if (deleteState.type === 'class') {
         await deleteClass.mutateAsync(deleteState.id);
@@ -137,15 +145,27 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
       setDeleteState(null);
     } catch {
       toast.error('Failed to delete');
+    } finally {
+      submittingRef.current = false;
     }
   }
 
   const sectionPending = createSection.isPending || updateSection.isPending;
   const deletePending = deleteClass.isPending || deleteSection.isPending;
 
+  // Deduplicate classes and sections by ID (defensive against stale cache data)
+  const dedupedClasses = classes.filter((cls, idx, arr) => arr.findIndex((c) => c.id === cls.id) === idx);
+
   return (
     <div className="space-y-2">
-      {classes.map((cls) => {
+      {dedupedClasses.map((cls) => {
+        // Deduplicate sections within each class
+        const seenSecIds = new Set<string>();
+        const dedupedSections = cls.sections.filter((sec) => {
+          if (seenSecIds.has(sec.id)) return false;
+          seenSecIds.add(sec.id);
+          return true;
+        });
         const isOpen = expanded.has(cls.id);
         return (
           <div key={cls.id} className="border rounded-lg bg-white overflow-hidden">
@@ -158,7 +178,7 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
                 <span className="font-semibold text-gray-800">{cls.name}</span>
                 {cls.alias && <span className="text-xs text-gray-400">({cls.alias})</span>}
                 <span className="text-xs text-gray-400 ml-1">
-                  · {cls.sections.length} {cls.sections.length === 1 ? 'section' : 'sections'}
+                  · {dedupedSections.length} {dedupedSections.length === 1 ? 'section' : 'sections'}
                 </span>
               </div>
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -178,11 +198,11 @@ export function ClassAccordion({ classes }: ClassAccordionProps) {
 
             {isOpen && (
               <div className="border-t bg-gray-50/50">
-                {cls.sections.length === 0 ? (
+                {dedupedSections.length === 0 ? (
                   <p className="text-sm text-gray-400 px-6 py-3">No sections yet</p>
                 ) : (
                   <div className="divide-y">
-                    {cls.sections.map((sec) => (
+                    {dedupedSections.map((sec) => (
                       <div key={sec.id} className="flex items-center justify-between px-6 py-2.5">
                         <div className="text-sm">
                           <span className="font-medium text-gray-700">Section {sec.name}</span>

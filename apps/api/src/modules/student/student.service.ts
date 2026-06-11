@@ -35,6 +35,7 @@ const UPDATE_FIELD_MAP: UpdateFieldSpec[] = [
   ['permanentAddress', 'permanent_address', 'jsonb'],
   ['temporaryAddress', 'temporary_address', 'jsonb'],
   ['guardians',        'guardians',         'jsonb'],
+  // className / sectionName / academicYear text fields are skipped when UUID IDs are provided
   ['className',        'class_name',        'text'],
   ['sectionName',      'section_name',      'text'],
   ['rollNumber',       'roll_number',       'int'],
@@ -69,19 +70,53 @@ export class StudentService {
 
           const studentId = await this.generateStudentId(tx, admissionDate);
 
+          // Resolve class/section UUIDs → names when IDs are provided
+          let classIdToInsert: string | null = null;
+          let sectionIdToInsert: string | null = null;
+          let classNameToInsert: string | null = dto.className ?? null;
+          let sectionNameToInsert: string | null = dto.sectionName ?? null;
+          let academicYearToInsert: string | null = dto.academicYear ?? null;
+
+          if (dto.classId && dto.sectionId) {
+            const classRows = await tx.$queryRawUnsafe<{ name: string }[]>(
+              `SELECT name FROM classes WHERE id = $1::uuid AND deleted_at IS NULL`,
+              dto.classId,
+            );
+            if (!classRows[0]) throw new NotFoundException('Class not found');
+
+            const sectionRows = await tx.$queryRawUnsafe<{ name: string }[]>(
+              `SELECT name FROM sections WHERE id = $1::uuid AND class_id = $2::uuid AND deleted_at IS NULL`,
+              dto.sectionId, dto.classId,
+            );
+            if (!sectionRows[0]) throw new NotFoundException('Section not found');
+
+            classIdToInsert = dto.classId;
+            sectionIdToInsert = dto.sectionId;
+            classNameToInsert = classRows[0].name;
+            sectionNameToInsert = sectionRows[0].name;
+          }
+
+          if (dto.academicYearId) {
+            const yearRows = await tx.$queryRawUnsafe<{ name: string }[]>(
+              `SELECT name FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
+              dto.academicYearId,
+            );
+            if (yearRows[0]) academicYearToInsert = yearRows[0].name;
+          }
+
           const rows = await tx.$queryRawUnsafe<StudentRow[]>(
             `INSERT INTO students (
                tenant_id, student_id, first_name, last_name, date_of_birth, gender,
                blood_group, religion, ethnicity, nationality, mother_tongue,
                phone, email, permanent_address, temporary_address, guardians,
-               class_name, section_name, roll_number, admission_date, academic_year,
-               previous_school, created_by
+               class_id, section_id, class_name, section_name, roll_number,
+               admission_date, academic_year, previous_school, created_by
              ) VALUES (
                $1::uuid, $2, $3, $4, $5::date, $6,
                $7, $8, $9, $10, $11,
                $12, $13, $14::jsonb, $15::jsonb, $16::jsonb,
-               $17, $18, $19, $20::date, $21,
-               $22, $23::uuid
+               $17::uuid, $18::uuid, $19, $20, $21,
+               $22::date, $23, $24, $25::uuid
              ) RETURNING *`,
             tenantId, studentId,
             dto.firstName, dto.lastName, dto.dateOfBirth, dto.gender,
@@ -93,8 +128,9 @@ export class StudentService {
             dto.guardians?.length
               ? JSON.stringify(dto.guardians.map((g) => ({ id: randomUUID(), ...g })))
               : null,
-            dto.className ?? null, dto.sectionName ?? null, dto.rollNumber ?? null,
-            dto.admissionDate, dto.academicYear ?? null,
+            classIdToInsert, sectionIdToInsert,
+            classNameToInsert, sectionNameToInsert, dto.rollNumber ?? null,
+            dto.admissionDate, academicYearToInsert,
             dto.previousSchool ?? null, createdById,
           );
 
@@ -121,6 +157,8 @@ export class StudentService {
     const className   = query.className ?? null;
     const sectionName = query.section   ?? null;
     const status      = query.status    ?? null;
+    const classId     = query.classId   ?? null;
+    const sectionId   = query.sectionId ?? null;
 
     const sortCol = SORT_WHITELIST[query.sortBy ?? 'created_at'] ?? 'created_at';
     const sortDir = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
@@ -137,9 +175,15 @@ export class StudentService {
          AND ($2::text IS NULL OR class_name   = $2)
          AND ($3::text IS NULL OR section_name = $3)
          AND ($4::text IS NULL OR status       = $4)
+         AND ($5::uuid IS NULL OR class_id   = $5::uuid)
+         AND (
+           $6::uuid IS NULL OR
+           section_id = $6::uuid OR
+           (section_id IS NULL AND section_name = (SELECT name FROM sections WHERE id = $6::uuid))
+         )
        ORDER BY ${sortCol} ${sortDir}
-       LIMIT $5 OFFSET $6`,
-      search, className, sectionName, status, limit, offset,
+       LIMIT $7 OFFSET $8`,
+      search, className, sectionName, status, classId, sectionId, limit, offset,
     );
 
     const total = rows[0]?.total_count ? parseInt(rows[0].total_count, 10) : 0;
@@ -166,12 +210,49 @@ export class StudentService {
     const params: unknown[] = [];
     let idx = 1;
 
+    // When UUID IDs are provided, skip text fields so they get derived from the IDs
+    const skipTextEnrollment = !!(dto.classId && dto.sectionId);
+    const skipTextAcademicYear = !!dto.academicYearId;
+
     for (const [dtoKey, col, type] of UPDATE_FIELD_MAP) {
+      if (skipTextEnrollment && (dtoKey === 'className' || dtoKey === 'sectionName')) continue;
+      if (skipTextAcademicYear && dtoKey === 'academicYear') continue;
       const val = dto[dtoKey];
       if (val !== undefined) {
         const cast = type === 'text' ? '' : `::${type}`;
         setClauses.push(`${col} = $${idx++}${cast}`);
         params.push(type === 'jsonb' ? JSON.stringify(val) : val);
+      }
+    }
+
+    // Resolve class/section UUIDs → names and set all four enrollment columns
+    if (dto.classId && dto.sectionId) {
+      const classRows = await this.tenantPrisma.query<{ name: string }>(
+        `SELECT name FROM classes WHERE id = $1::uuid AND deleted_at IS NULL`,
+        dto.classId,
+      );
+      if (!classRows[0]) throw new NotFoundException('Class not found');
+
+      const sectionRows = await this.tenantPrisma.query<{ name: string }>(
+        `SELECT name FROM sections WHERE id = $1::uuid AND class_id = $2::uuid AND deleted_at IS NULL`,
+        dto.sectionId, dto.classId,
+      );
+      if (!sectionRows[0]) throw new NotFoundException('Section not found');
+
+      setClauses.push(`class_id = $${idx++}::uuid`);   params.push(dto.classId);
+      setClauses.push(`section_id = $${idx++}::uuid`); params.push(dto.sectionId);
+      setClauses.push(`class_name = $${idx++}`);       params.push(classRows[0].name);
+      setClauses.push(`section_name = $${idx++}`);     params.push(sectionRows[0].name);
+    }
+
+    if (dto.academicYearId) {
+      const yearRows = await this.tenantPrisma.query<{ name: string }>(
+        `SELECT name FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
+        dto.academicYearId,
+      );
+      if (yearRows[0]) {
+        setClauses.push(`academic_year = $${idx++}`);
+        params.push(yearRows[0].name);
       }
     }
 
@@ -231,9 +312,11 @@ export class StudentService {
 
     await this.tenantPrisma.execute(
       `UPDATE students SET
-         class_name = $1, section_name = $2, roll_number = $3,
-         academic_year = $4, updated_at = NOW()
-       WHERE id = $5::uuid AND tenant_id = $6::uuid AND deleted_at IS NULL`,
+         class_id = $1::uuid, section_id = $2::uuid,
+         class_name = $3, section_name = $4, roll_number = $5,
+         academic_year = $6, updated_at = NOW()
+       WHERE id = $7::uuid AND tenant_id = $8::uuid AND deleted_at IS NULL`,
+      dto.classId, dto.sectionId,
       classRows[0].name, sectionRows[0].name, dto.rollNumber ?? null,
       yearRows[0].name, id, tenantId,
     );

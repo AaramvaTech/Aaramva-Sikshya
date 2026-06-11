@@ -9,7 +9,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FeeStructureForm } from '@/components/finance/fee-structure-form';
@@ -66,7 +65,14 @@ export default function FeeStructuresPage() {
           onValueChange={(v) => setSelectedYearId(v ?? '')}
         >
           <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select academic year" />
+            <span className={academicYearId ? '' : 'text-muted-foreground'}>
+              {academicYearId
+                ? (() => {
+                    const y = allYears?.find((y) => y.id === academicYearId);
+                    return y ? `${y.name}${y.isCurrent ? ' (Current)' : ''}` : 'Loading…';
+                  })()
+                : 'Select academic year'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {allYears?.map((y) => (

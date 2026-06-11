@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Eye, EyeOff, ShieldCheck, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { superAdminApi } from '@/lib/api/super-admin.api';
 import { useAuthStore } from '@/store/auth.store';
 import { superAdminLoginSchema, type SuperAdminLoginValues } from '@/lib/schemas/super-admin.schema';
@@ -55,10 +56,8 @@ export default function SuperAdminLoginPage() {
       {/* Left — Form */}
       <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 bg-white dark:bg-gray-900">
         <div className="w-full max-w-[400px]">
-          <div className="mb-8">
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-900 dark:bg-gray-800">
-              <ShieldCheck className="h-6 w-6 text-white" />
-            </div>
+          <div className="mb-8 flex flex-col items-center text-center">
+            <Image src="/icon.png" alt="Aaramva Shikshya" width={56} height={56} className="object-contain mb-5" priority />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Platform Admin</h1>
             <p className="mt-1.5 text-theme-sm text-gray-500 dark:text-gray-400">
               Sign in to the administration console
@@ -128,13 +127,20 @@ export default function SuperAdminLoginPage() {
             backgroundSize: '24px 24px',
           }}
         />
-        <div className="relative z-10 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
-            <ShieldCheck className="h-8 w-8 text-white" />
+        <div className="relative z-10 text-center flex flex-col items-center">
+          <Image
+            src="/logo.png"
+            alt="Aaramva Shikshya"
+            width={220}
+            height={56}
+            className="object-contain mb-6 brightness-0 invert"
+            priority
+          />
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-bold text-white">Platform Admin</h2>
           </div>
-          <h2 className="text-2xl font-bold text-white">Aaramva Shikshya</h2>
-          <p className="mt-3 text-sm leading-relaxed text-gray-400 max-w-xs">
-            Platform administration console. Manage schools, subscriptions, and platform-wide settings from one place.
+          <p className="text-sm leading-relaxed text-gray-400 max-w-xs">
+            Administration console. Manage schools, subscriptions, and platform-wide settings from one place.
           </p>
         </div>
       </div>

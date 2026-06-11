@@ -212,7 +212,11 @@ export default function InvoicesPage() {
           onValueChange={(v) => updateParams({ classId: v ?? '', page: '1' })}
         >
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="All Classes" />
+            <span className={classId ? '' : 'text-muted-foreground'}>
+              {classId
+                ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…')
+                : 'All Classes'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All Classes</SelectItem>

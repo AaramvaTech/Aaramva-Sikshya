@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -103,16 +104,32 @@ export function SuperAdminSidebar() {
           !showLabels && 'lg:justify-center lg:px-0',
         )}
       >
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500">
-          <span className="text-sm font-bold text-white">AS</span>
-        </div>
-        {showLabels && (
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
-              Aaramva Shikshya
-            </p>
-            <p className="text-sm font-bold text-white truncate">Platform Admin</p>
+        {showLabels ? (
+          <div className="flex items-center gap-3 min-w-0">
+            <Image
+              src="/icon.png"
+              alt="Aaramva Shikshya"
+              width={36}
+              height={36}
+              className="object-contain flex-shrink-0 brightness-0 invert"
+              priority
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-white truncate">Aaramva Shikshya</p>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                Platform Admin
+              </p>
+            </div>
           </div>
+        ) : (
+          <Image
+            src="/icon.png"
+            alt="AS"
+            width={32}
+            height={32}
+            className="object-contain brightness-0 invert flex-shrink-0"
+            priority
+          />
         )}
       </div>
 

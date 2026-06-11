@@ -139,6 +139,18 @@ export interface SchoolSummaryDto {
     total: number;
     rate: number;
   }[];
+  bySection: {
+    classId: string;
+    className: string;
+    sectionId: string;
+    sectionName: string;
+    present: number;
+    absent: number;
+    late: number;
+    leave: number;
+    total: number;
+    rate: number;
+  }[];
 }
 
 export interface StaffSummaryDto {

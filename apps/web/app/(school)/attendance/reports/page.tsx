@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Search, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { todayBs } from '@/lib/bs-calendar';
 import { BsDateInput } from '@/components/shared/bs-date-input';
@@ -15,11 +15,10 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { SectionReportGrid } from '@/components/attendance/section-report-grid';
 import { StudentSummaryCard } from '@/components/attendance/student-summary-card';
-import { useClasses } from '@/lib/hooks/use-students';
+import { useClasses, useCurrentAcademicYear } from '@/lib/hooks/use-students';
 import { useStudents } from '@/lib/hooks/use-students';
 import {
   useSectionAttendanceReport,
@@ -47,13 +46,18 @@ export default function AttendanceReportsPage() {
   const [generateParams, setGenerateParams] = useState<SectionParams | null>(null);
 
   const { data: classes } = useClasses();
+  const { data: academicYear } = useCurrentAcademicYear();
   const selectedClass = classes?.find((c) => c.id === classId);
   const sections = selectedClass?.sections ?? [];
 
   const { data: report, isLoading: reportLoading } = useSectionAttendanceReport(
     generateParams?.sectionId ?? null,
-    generateParams
-      ? { fromDate: generateParams.fromDate, toDate: generateParams.toDate }
+    generateParams && academicYear
+      ? {
+          fromDate: generateParams.fromDate,
+          toDate: generateParams.toDate,
+          academicYearId: academicYear.id,
+        }
       : null,
   );
 
@@ -76,7 +80,7 @@ export default function AttendanceReportsPage() {
   const matchedStudents = studentSearchRes?.data?.data ?? [];
 
   const { data: studentSummary, isLoading: summaryLoading } =
-    useStudentAttendanceSummary(selectedStudentId);
+    useStudentAttendanceSummary(selectedStudentId, academicYear?.id);
 
   function handleStudentSearch(value: string) {
     setStudentSearch(value);
@@ -122,85 +126,104 @@ export default function AttendanceReportsPage() {
 
       {/* ── Section Report tab ─────────────────────────────────────────────── */}
       {activeTab === 'section' && (
-        <div className="space-y-4">
-          <div className="flex gap-3 items-end flex-wrap p-4 rounded-sm border border-stroke bg-gray-2 dark:border-strokedark dark:bg-meta-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Class</label>
-              <Select
-                value={classId}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setClassId(v);
-                  setSectionId('');
-                  setGenerateParams(null);
-                }}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="space-y-5">
+          <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+            <div className="space-y-5 p-4 sm:p-6">
+              {/* Who: class + section */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
+                  <Select
+                    value={classId}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      setClassId(v);
+                      setSectionId('');
+                      setGenerateParams(null);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className={classId ? '' : 'text-muted-foreground'}>
+                        {classId
+                          ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…')
+                          : 'Select class'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes?.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Section</label>
+                  <Select
+                    value={sectionId}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      setSectionId(v);
+                      setGenerateParams(null);
+                    }}
+                    disabled={!classId}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className={sectionId ? '' : 'text-muted-foreground'}>
+                        {sectionId
+                          ? (sections.find((s) => s.id === sectionId)?.name ?? 'Loading…')
+                          : 'Select section'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* When: date range */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <BsDateInput
+                  label="From Date"
+                  value={fromDate}
+                  onChange={(v) => {
+                    setFromDate(v);
+                    setGenerateParams(null);
+                  }}
+                  minYear={yearMin}
+                  maxYear={yearMax}
+                />
+
+                <BsDateInput
+                  label="To Date"
+                  value={toDate}
+                  onChange={(v) => {
+                    setToDate(v);
+                    setGenerateParams(null);
+                  }}
+                  minYear={yearMin}
+                  maxYear={yearMax}
+                />
+              </div>
+
+              <div className="flex justify-end border-t border-stroke pt-4 dark:border-strokedark">
+                <Button
+                  className="bg-brand-500 hover:bg-brand-600 text-white min-w-[160px]"
+                  onClick={handleGenerate}
+                  disabled={!sectionId || !fromDate || !toDate}
+                >
+                  <Search className="mr-1.5 h-4 w-4" />
+                  Generate Report
+                </Button>
+              </div>
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Section</label>
-              <Select
-                value={sectionId}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setSectionId(v);
-                  setGenerateParams(null);
-                }}
-                disabled={!classId}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Section" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sections.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <BsDateInput
-              label="From Date"
-              value={fromDate}
-              onChange={(v) => {
-                setFromDate(v);
-                setGenerateParams(null);
-              }}
-              minYear={yearMin}
-              maxYear={yearMax}
-            />
-
-            <BsDateInput
-              label="To Date"
-              value={toDate}
-              onChange={(v) => {
-                setToDate(v);
-                setGenerateParams(null);
-              }}
-              minYear={yearMin}
-              maxYear={yearMax}
-            />
-
-            <Button
-              className="bg-brand-500 hover:bg-brand-600 text-white"
-              onClick={handleGenerate}
-              disabled={!sectionId || !fromDate || !toDate}
-            >
-              Generate Report
-            </Button>
           </div>
 
           {reportLoading && (
@@ -208,6 +231,15 @@ export default function AttendanceReportsPage() {
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-10 rounded-sm" />
               ))}
+            </div>
+          )}
+
+          {!reportLoading && !generateParams && (
+            <div className="rounded-sm border border-dashed border-stroke px-4 py-12 text-center dark:border-strokedark">
+              <CalendarRange className="mx-auto mb-3 h-8 w-8 text-gray-300" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Choose a class, section and date range, then generate the report.
+              </p>
             </div>
           )}
 

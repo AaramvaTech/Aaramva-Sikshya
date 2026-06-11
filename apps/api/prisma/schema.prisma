@@ -21,13 +21,26 @@ datasource db {
 model Tenant {
   id           String    @id @default(uuid())
   name         String // "St. Xavier's School"
-  slug         String    @unique // "sxs" → sxs.yourdomain.com
+  slug         String    @unique // "sxs" → sxs.yourdomain.com (immutable: subdomain + schema key)
   logoUrl      String?
   primaryColor String    @default("#2563EB")
+  description     String? // Short about/mission text — filled by school admin later
+  motto           String? // School motto / tagline (shown on documents)
+  establishedYear Int? // Year founded (AD)
+  website         String?
   address      String?
+  province     String? // Nepal province
+  district     String? // Nepal district
   phone        String?
+  alternatePhone String?
   email        String?
   panNumber    String? // Nepal PAN for IRD billing
+  registrationNumber String? // Govt. school registration number
+  affiliationBoard   String? // e.g. NEB, CBSE, Cambridge
+  affiliationNumber  String? // Affiliation / approval number
+  principalName         String? // Printed on official documents
+  principalSignatureUrl String? // Signature image — report cards, certificates
+  schoolStampUrl        String? // Official seal / stamp image
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

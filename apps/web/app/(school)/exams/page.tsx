@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, CalendarCheck, ClipboardList, BarChart2 } from 'lucide-react';
+import { Plus, CalendarCheck, ClipboardList, BarChart2, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -17,21 +17,63 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FileText } from 'lucide-react';
-import { useExamTypes, useCreateExamType } from '@/lib/hooks/use-examination';
+import {
+  useExamTypes,
+  useCreateExamType,
+  useUpdateExamType,
+  useDeleteExamType,
+} from '@/lib/hooks/use-examination';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import type { ExamType } from '@/types/api.types';
 
 export default function ExamsPage() {
   const router = useRouter();
   const { data: currentYear } = useCurrentAcademicYear();
   const { data: examTypes, isLoading } = useExamTypes(currentYear?.id ?? '');
   const createExamType = useCreateExamType();
+  const updateExamType = useUpdateExamType();
+  const deleteExamType = useDeleteExamType();
 
+  // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [weight, setWeight] = useState('');
   const [order, setOrder] = useState('');
+
+  // Edit dialog
+  const [editTarget, setEditTarget] = useState<ExamType | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editWeight, setEditWeight] = useState('');
+  const [editOrder, setEditOrder] = useState('');
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<ExamType | null>(null);
+
+  function openEdit(et: ExamType) {
+    setEditTarget(et);
+    setEditName(et.name);
+    setEditWeight(String(et.weightPercent));
+    setEditOrder(String(et.orderIndex));
+  }
+
+  function closeEdit() {
+    setEditTarget(null);
+    setEditName('');
+    setEditWeight('');
+    setEditOrder('');
+  }
 
   async function handleCreate() {
     if (!name.trim() || !weight) return;
@@ -56,6 +98,35 @@ export default function ExamsPage() {
     }
   }
 
+  async function handleUpdate() {
+    if (!editTarget || !editName.trim() || !editWeight) return;
+    try {
+      await updateExamType.mutateAsync({
+        id: editTarget.id,
+        data: {
+          name: editName.trim(),
+          weightPercent: Number(editWeight),
+          orderIndex: editOrder ? Number(editOrder) : undefined,
+        },
+      });
+      toast.success('Exam type updated');
+      closeEdit();
+    } catch {
+      toast.error('Failed to update exam type');
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    try {
+      await deleteExamType.mutateAsync(deleteTarget.id);
+      toast.success('Exam type deleted');
+      setDeleteTarget(null);
+    } catch {
+      toast.error('Failed to delete exam type');
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -75,24 +146,59 @@ export default function ExamsPage() {
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-sm" />)}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-sm" />
+          ))}
         </div>
       ) : !examTypes?.length ? (
         <EmptyState message="No exam types yet. Create your first exam type." icon={FileText} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {examTypes.map((et) => (
-            <div key={et.id} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark flex flex-col">
+            <div
+              key={et.id}
+              className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark flex flex-col"
+            >
               <div className="p-4 sm:p-6 xl:p-7.5 flex flex-col gap-3 flex-1">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-semibold text-black dark:text-white text-base">{et.name}</h3>
-                  {et.isComplete && (
-                    <Badge className="bg-success-100 text-success-700 border-0 text-xs">Complete</Badge>
-                  )}
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-black dark:text-white text-base leading-snug">
+                    {et.name}
+                  </h3>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {et.isComplete && (
+                      <Badge className="bg-success-100 text-success-700 border-0 text-xs">
+                        Complete
+                      </Badge>
+                    )}
+                    <button
+                      onClick={() => openEdit(et)}
+                      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(et)}
+                      className="p-1 rounded hover:bg-error-50 text-gray-400 hover:text-error-500 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-500 space-y-0.5">
-                  <p>Weight: <span className="font-semibold text-black dark:text-white">{et.weightPercent}%</span></p>
-                  <p>Order: <span className="font-semibold text-black dark:text-white">#{et.orderIndex}</span></p>
+                  <p>
+                    Weight:{' '}
+                    <span className="font-semibold text-black dark:text-white">
+                      {et.weightPercent}%
+                    </span>
+                  </p>
+                  <p>
+                    Order:{' '}
+                    <span className="font-semibold text-black dark:text-white">
+                      #{et.orderIndex}
+                    </span>
+                  </p>
                 </div>
                 <div className="mt-auto pt-2 flex flex-col gap-2">
                   <Button
@@ -129,7 +235,7 @@ export default function ExamsPage() {
         </div>
       )}
 
-      {/* Create exam type dialog */}
+      {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={(open) => { if (!open) setCreateOpen(false); }}>
         <DialogContent className="sm:max-w-[360px]">
           <DialogHeader>
@@ -138,19 +244,40 @@ export default function ExamsPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label htmlFor="et-name">Name *</Label>
-              <Input id="et-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. First Terminal" />
+              <Input
+                id="et-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. First Terminal"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="et-weight">Weight (%) *</Label>
-              <Input id="et-weight" type="number" min={1} max={100} value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g. 20" />
+              <Input
+                id="et-weight"
+                type="number"
+                min={1}
+                max={100}
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder="e.g. 20"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="et-order">Order Index</Label>
-              <Input id="et-order" type="number" value={order} onChange={(e) => setOrder(e.target.value)} placeholder="Auto" />
+              <Input
+                id="et-order"
+                type="number"
+                value={order}
+                onChange={(e) => setOrder(e.target.value)}
+                placeholder="Auto"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
             <Button
               className="bg-brand-500 hover:bg-brand-600 text-white"
               onClick={handleCreate}
@@ -161,6 +288,81 @@ export default function ExamsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) closeEdit(); }}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Edit Exam Type</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="e.g. First Terminal"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-weight">Weight (%) *</Label>
+              <Input
+                id="edit-weight"
+                type="number"
+                min={1}
+                max={100}
+                value={editWeight}
+                onChange={(e) => setEditWeight(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-order">Order Index</Label>
+              <Input
+                id="edit-order"
+                type="number"
+                value={editOrder}
+                onChange={(e) => setEditOrder(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEdit}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-brand-500 hover:bg-brand-600 text-white"
+              onClick={handleUpdate}
+              disabled={updateExamType.isPending || !editName.trim() || !editWeight}
+            >
+              {updateExamType.isPending ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will soft-delete the exam type. All schedules, marks, and results associated with
+              it will be hidden. This cannot be undone from the UI.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-error-500 hover:bg-error-600 text-white"
+              onClick={handleDelete}
+              disabled={deleteExamType.isPending}
+            >
+              {deleteExamType.isPending ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

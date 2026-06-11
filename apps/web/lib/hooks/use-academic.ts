@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { academicApi } from '@/lib/api/academic.api';
+import { hrApi } from '@/lib/api/hr.api';
 import { useTenantStore } from '@/store/tenant.store';
-import type { TimetableSlotData } from '@/types/api.types';
+import type { TimetableSlotData, StaffSummary } from '@/types/api.types';
 
 export function useClasses() {
   const slug = useTenantStore((s) => s.slug);
@@ -182,6 +183,17 @@ export function useRemoveSubject() {
         queryKey: ['class-subjects', variables.classId],
       });
     },
+  });
+}
+
+export function useTeachers() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['teachers'],
+    queryFn: () =>
+      hrApi.listStaff({ role: 'TEACHER', limit: 200 }).then((r) => r.data.data.data),
+    enabled: !!slug,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

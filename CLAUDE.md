@@ -111,7 +111,8 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 9. ✅ **Communication** — Notices, SMS, push notifications
 10. ✅ **Library** — Books, issue/return, fines
 11. ⬜ **Inventory** — Assets, stock
-12. ⬜ **Reports** — Analytics dashboards, exports
+12. ✅ **Dashboard** — School dashboard (overview, weekly attendance, activity feed, upcoming exams, class-wise breakdown, quick actions)
+13. ⬜ **Reports** — Analytics dashboards, exports
 13. ✅ **Super Admin** — Platform-level school management
 14. ✅ **Super Admin UI** — Platform admin portal (Session 17)
 
@@ -207,6 +208,9 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] Library module (`apps/api/src/modules/library/`) — book categories (CRUD), books (add/update/soft-delete, full-text search, copy management), library members (LIB-YEAR-NNNN generation via sequences, student/staff, duplicate guard), issue & return (4 pre-checks, atomic transactions, fine calculation, mark-lost, pay-fine, overdue detection) — 18 unit tests passing (148 total passing)
 - [x] Super Admin module (`apps/api/src/modules/super-admin/`) — PublicPrismaService (public schema isolation), TenantProvisioningService (extracted from AuthService, shared with super-admin onboarding), PlatformAuthService (platform_admins login → JWT with tenantId:null), PlanService (CRUD + deactivate), AuditService (platform_audit_logs), TenantAdminService (onboard/suspend/activate/detail/list + subscription management), ImpersonationService (1h SCHOOL_OWNER JWT + audit log), AnalyticsService (overview + revenue) — 16 unit tests passing (164 total passing)
 - [x] Super Admin UI (`apps/web/app/(super-admin)/`) — Login page, Dashboard (overview + plan breakdown + recent schools), Schools list (DataTable + Onboard dialog + Suspend/Activate + Impersonation), School detail (info + subscription + usage stats), Plans management (cards + Create/Edit/Deactivate), Audit log (read-only + impersonation rows highlighted orange)
+- [x] Staff Profile Page (`apps/web/app/(school)/hr/staff/[id]/`) — Hero card with avatar + photo upload (base64), custom tab bar (Overview/Documents/Leave), Personal Details card, Employment Details card, Emergency Contact card, Documents tab with upload dialog & table, Leave Balance tab. Edit page (`/hr/staff/[id]/edit/`) with React Hook Form + Zod for all editable fields. Backend: photoUrl added to UpdateStaffDto + staff service SQL. Web: staff schema (staff.schema.ts), useUpdateStaff/useStaffDocuments/useAddStaffDocument hooks, StaffDocument type in api.types.ts.
+- [x] Dashboard module (`apps/api/src/modules/dashboard/`) — DashboardService (overview aggregation: student count + today's attendance with byClass breakdown + fee collection using current academic year + unread notifications, weekly attendance last 7 days, recent activity feed: students/payments/notices, upcoming exam schedules), DashboardController (4 endpoints: /overview, /weekly-attendance, /activity, /upcoming with RBAC guards), DashboardModule registered in AppModule — 8 unit tests passing (180 total passing)
+- [x] School Dashboard UI (`apps/web/app/(school)/dashboard/`) — Fixed all 6 bugs (pending fees missing academicYearId, attendance .percent→.attendanceRate, hardcoded chart data, missing PageHeader, no dashboard hook, no dashboard types). New: StatCard shared component, use-dashboard.ts hooks (useDashboardOverview, useWeeklyAttendance, useRecentActivity, useUpcomingEvents), dashboard.api.ts client, class-wise attendance breakdown, recent activity feed, upcoming exams section, quick action buttons (Mark Attendance, Add Student, Send Notice, Record Payment), dashboard types in api.types.ts
 
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix

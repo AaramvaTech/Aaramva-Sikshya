@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ExternalLink, ArrowLeft, Pencil } from 'lucide-react';
+import { ExternalLink, ArrowLeft, Pencil, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
@@ -62,12 +62,17 @@ export default function SchoolDetailPage() {
   const { setTenant } = useTenantStore();
   const [changingPlan, setChangingPlan] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState({
     schoolName: '',
     email: '',
     phone: '',
     address: '',
     panNumber: '',
+    description: '',
+    establishedYear: '',
+    website: '',
+    logoUrl: '',
   });
 
   function openEditDialog() {
@@ -78,20 +83,46 @@ export default function SchoolDetailPage() {
       phone: school.phone ?? '',
       address: school.address ?? '',
       panNumber: school.panNumber ?? '',
+      description: school.description ?? '',
+      establishedYear: school.establishedYear ? String(school.establishedYear) : '',
+      website: school.website ?? '',
+      logoUrl: school.logoUrl ?? '',
     });
     setEditOpen(true);
   }
 
+  function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be less than 2 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => setEditForm((f) => ({ ...f, logoUrl: reader.result as string }));
+    reader.readAsDataURL(file);
+  }
+
   async function handleSaveEdit() {
     if (!school) return;
+    const year = editForm.establishedYear ? Number(editForm.establishedYear) : undefined;
+    if (year !== undefined && (Number.isNaN(year) || year < 1800 || year > 2100)) {
+      toast.error('Established year must be between 1800 and 2100');
+      return;
+    }
     try {
       await updateTenant.mutateAsync({
         id: school.id,
         data: {
           schoolName: editForm.schoolName,
+          email: editForm.email || undefined,
           phone: editForm.phone || undefined,
           address: editForm.address || undefined,
           panNumber: editForm.panNumber || undefined,
+          description: editForm.description || undefined,
+          establishedYear: year,
+          website: editForm.website || undefined,
+          logoUrl: editForm.logoUrl || undefined,
         },
       });
       toast.success('School updated');
@@ -193,14 +224,40 @@ export default function SchoolDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <InfoCard title="School Information">
+          {school.logoUrl && (
+            <div className="mb-4 flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={school.logoUrl}
+                alt={`${school.name} logo`}
+                className="h-14 w-14 rounded-lg border border-gray-200 object-contain dark:border-gray-700"
+              />
+            </div>
+          )}
           <dl className="space-y-3 text-sm">
             {[
               { label: 'Name', value: school.name },
-              { label: 'Slug', value: school.slug, mono: true },
+              { label: 'School Code', value: school.slug, mono: true },
               { label: 'Email', value: school.email ?? '—' },
               { label: 'Phone', value: school.phone ?? '—' },
               { label: 'Address', value: school.address ?? '—' },
               { label: 'PAN', value: school.panNumber ?? '—' },
+              { label: 'Established', value: school.establishedYear ? String(school.establishedYear) : '—' },
+              {
+                label: 'Website',
+                value: school.website ?? '—',
+                render: school.website ? (
+                  <a
+                    href={school.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-500 hover:underline"
+                  >
+                    {school.website}
+                  </a>
+                ) : undefined,
+              },
+              { label: 'Description', value: school.description ?? '—' },
               {
                 label: 'Primary Color',
                 value: school.primaryColor,
@@ -357,11 +414,66 @@ export default function SchoolDetailPage() {
 
       {/* Edit School Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit School</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Read-only School Code — permanent subdomain + data key */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-code">School Code</Label>
+              <Input
+                id="edit-code"
+                value={school.slug}
+                readOnly
+                disabled
+                className="font-mono bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed"
+              />
+              <p className="text-theme-xs text-gray-400">
+                The school code is permanent — it identifies the subdomain and data and cannot be changed.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-3">
+                {editForm.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={editForm.logoUrl}
+                    alt="Logo preview"
+                    className="h-14 w-14 rounded-lg border border-gray-200 object-contain dark:border-gray-700"
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center text-gray-300">
+                    <Upload className="h-5 w-5" />
+                  </div>
+                )}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoFileChange}
+                />
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Upload
+                  </Button>
+                  {editForm.logoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-error-600"
+                      onClick={() => setEditForm((f) => ({ ...f, logoUrl: '' }))}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-name">School Name</Label>
               <Input
@@ -370,22 +482,24 @@ export default function SchoolDetailPage() {
                 onChange={(e) => setEditForm((f) => ({ ...f, schoolName: e.target.value }))}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-email">Email</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input
-                id="edit-phone"
-                value={editForm.phone}
-                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-phone">Phone</Label>
+                <Input
+                  id="edit-phone"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-address">Address</Label>
@@ -395,12 +509,46 @@ export default function SchoolDetailPage() {
                 onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
               />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pan">PAN Number</Label>
+                <Input
+                  id="edit-pan"
+                  value={editForm.panNumber}
+                  onChange={(e) => setEditForm((f) => ({ ...f, panNumber: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-year">Established Year</Label>
+                <Input
+                  id="edit-year"
+                  type="number"
+                  min={1800}
+                  max={2100}
+                  placeholder="e.g. 1995"
+                  value={editForm.establishedYear}
+                  onChange={(e) => setEditForm((f) => ({ ...f, establishedYear: e.target.value }))}
+                />
+              </div>
+            </div>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-pan">PAN Number</Label>
+              <Label htmlFor="edit-website">Website</Label>
               <Input
-                id="edit-pan"
-                value={editForm.panNumber}
-                onChange={(e) => setEditForm((f) => ({ ...f, panNumber: e.target.value }))}
+                id="edit-website"
+                placeholder="https://school.edu.np"
+                value={editForm.website}
+                onChange={(e) => setEditForm((f) => ({ ...f, website: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-description">Description</Label>
+              <textarea
+                id="edit-description"
+                rows={3}
+                placeholder="Short description about the school"
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-300 focus:outline-none dark:border-gray-700 dark:text-white"
               />
             </div>
           </div>

@@ -40,7 +40,7 @@ function initials(name: string) {
 }
 
 const ROLES = ['TEACHER', 'ACCOUNTANT', 'LIBRARIAN', 'PRINCIPAL', 'ACADEMIC_COORDINATOR'];
-const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT'];
+const EMPLOYMENT_TYPES = ['PERMANENT', 'TEMPORARY', 'PART_TIME', 'CONTRACT'];
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
 
 export default function StaffListPage() {

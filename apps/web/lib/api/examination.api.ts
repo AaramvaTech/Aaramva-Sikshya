@@ -19,12 +19,27 @@ export const examinationApi = {
     api.get<ApiResponse<ExamType[]>>('/exams/types', { params }),
   createExamType: (data: CreateExamTypeData) =>
     api.post<ApiResponse<ExamType>>('/exams/types', data),
+  updateExamType: (id: string, data: { name?: string; weightPercent?: number; orderIndex?: number }) =>
+    api.patch<ApiResponse<ExamType>>(`/exams/types/${id}`, data),
+  deleteExamType: (id: string) =>
+    api.delete(`/exams/types/${id}`),
 
   // Schedules
   listSchedules: (params: { examTypeId?: string; classId?: string }) =>
     api.get<ApiResponse<ExamSchedule[]>>('/exams/schedules', { params }),
   bulkCreateSchedules: (data: BulkCreateScheduleData) =>
     api.post<ApiResponse<ExamSchedule[]>>('/exams/schedules/bulk', data),
+  updateSchedule: (
+    id: string,
+    data: Partial<{
+      examDate: string;
+      startTime: string;
+      endTime: string;
+      fullMarks: number;
+      passMarks: number;
+      room: string;
+    }>,
+  ) => api.patch<ApiResponse<ExamSchedule>>(`/exams/schedules/${id}`, data),
 
   // Marks — backend wraps in { data: [], meta: { total } } before ResponseInterceptor
   getMarksForSchedule: (scheduleId: string) =>

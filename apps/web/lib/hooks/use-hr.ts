@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hrApi } from '@/lib/api/hr.api';
 import { useTenantStore } from '@/store/tenant.store';
-import type { CreateStaffData, ApplyLeaveData, PayrollOverride } from '@/types/api.types';
+import type { CreateStaffData, ApplyLeaveData, PayrollOverride, StaffDocument } from '@/types/api.types';
 
 export function useStaffList(params?: { page?: number; limit?: number; search?: string; departmentId?: string }) {
   const slug = useTenantStore((s) => s.slug);
@@ -31,12 +31,68 @@ export function useCreateStaff() {
   });
 }
 
+export function useUpdateStaff(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<CreateStaffData>) => hrApi.updateStaff(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'staff', id] });
+      queryClient.invalidateQueries({ queryKey: ['hr', 'staff'] });
+    },
+  });
+}
+
+export function useStaffDocuments(id: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'staff-documents', id],
+    queryFn: () => hrApi.getStaffDocuments(id).then((r) => r.data.data),
+    enabled: !!slug && !!id,
+  });
+}
+
+export function useAddStaffDocument(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { documentType: string; fileUrl: string; fileName?: string }) =>
+      hrApi.addStaffDocument(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'staff-documents', id] });
+    },
+  });
+}
+
 export function useDepartments() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['hr', 'departments'],
-    queryFn: () => hrApi.listDepartments().then((r) => r.data.data),
+    queryFn: () => hrApi.listDepartments().then((r) => r.data.data.data),
     enabled: !!slug,
+  });
+}
+
+export function useCreateDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) => hrApi.createDepartment(data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'departments'] }); },
+  });
+}
+
+export function useUpdateDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string } }) =>
+      hrApi.updateDepartment(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'departments'] }); },
+  });
+}
+
+export function useDeleteDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.deleteDepartment(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'departments'] }); },
   });
 }
 
@@ -44,8 +100,34 @@ export function useDesignations() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['hr', 'designations'],
-    queryFn: () => hrApi.listDesignations().then((r) => r.data.data),
+    queryFn: () => hrApi.listDesignations().then((r) => r.data.data.data),
     enabled: !!slug,
+  });
+}
+
+export function useCreateDesignation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { title: string; departmentId?: string }) =>
+      hrApi.createDesignation(data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'designations'] }); },
+  });
+}
+
+export function useUpdateDesignation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { title: string; departmentId?: string } }) =>
+      hrApi.updateDesignation(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'designations'] }); },
+  });
+}
+
+export function useDeleteDesignation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.deleteDesignation(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'designations'] }); },
   });
 }
 
@@ -55,6 +137,32 @@ export function useLeaveTypes() {
     queryKey: ['hr', 'leave-types'],
     queryFn: () => hrApi.listLeaveTypes().then((r) => r.data.data),
     enabled: !!slug,
+  });
+}
+
+export function useCreateLeaveType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>
+      hrApi.createLeaveType(data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'leave-types'] }); },
+  });
+}
+
+export function useUpdateLeaveType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; daysPerYear?: number; isPaid?: boolean } }) =>
+      hrApi.updateLeaveType(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'leave-types'] }); },
+  });
+}
+
+export function useDeleteLeaveType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.deleteLeaveType(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'leave-types'] }); },
   });
 }
 

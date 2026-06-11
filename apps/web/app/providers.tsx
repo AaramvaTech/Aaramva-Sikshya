@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
 import { SidebarProvider } from '@/context/sidebar-context';
 
@@ -40,6 +41,36 @@ function SessionRestorer() {
       return;
     }
 
+    // Consume impersonation token passed from the super-admin tab via localStorage.
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('impersonation_handoff');
+      if (raw) {
+        try {
+          const handoff = JSON.parse(raw) as {
+            accessToken: string;
+            tenantSlug: string;
+            schoolName: string;
+            expires: number;
+          };
+          localStorage.removeItem('impersonation_handoff');
+          if (Date.now() < handoff.expires) {
+            setTenant({ slug: handoff.tenantSlug, name: handoff.schoolName });
+            setAuth(handoff.accessToken, {
+              id: '',
+              email: '',
+              role: 'SCHOOL_OWNER',
+              tenantId: null,
+              tenantSlug: handoff.tenantSlug,
+            });
+            setInitialized();
+            return;
+          }
+        } catch {
+          localStorage.removeItem('impersonation_handoff');
+        }
+      }
+    }
+
     // Restore tenant slug: subdomain (prod) → ?tenant= param (local dev) → localStorage fallback.
     // The Axios interceptor reads slug from Zustand when attaching X-Tenant-Slug.
     if (!slug && typeof window !== 'undefined') {
@@ -52,10 +83,11 @@ function SessionRestorer() {
       if (resolved) setTenant({ slug: resolved });
     }
 
-    authApi
-      .refresh()
-      .then(async ({ data }) => {
-        const token = data.data.accessToken;
+    rawApi
+      .post('/auth/refresh')
+      .then(async (res) => {
+        const token: string = res.data?.data?.accessToken;
+        if (!token) return;
         setAccessToken(token);
         // Fetch full user profile (firstName, lastName, etc.) — not in token payload
         try {

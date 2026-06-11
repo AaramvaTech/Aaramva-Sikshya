@@ -19,10 +19,9 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
-import type { SectionTimetable, Subject } from '@/types/api.types';
-import { useCreateSlot, useDeleteSlot } from '@/lib/hooks/use-academic';
+import type { SectionTimetable, StaffSummary, Subject } from '@/types/api.types';
+import { useCreateSlot, useDeleteSlot, useTeachers } from '@/lib/hooks/use-academic';
 
 const DAYS = [
   { key: '0', label: 'SUN' },
@@ -70,6 +69,7 @@ export function TimetableGrid({ timetable, subjects, academicYearId }: Timetable
 
   const createSlot = useCreateSlot();
   const deleteSlot = useDeleteSlot();
+  const { data: teachers } = useTeachers();
 
   // Build a lookup: [period][day] → slot
   const allPeriods = new Set<number>();
@@ -210,20 +210,36 @@ export function TimetableGrid({ timetable, subjects, academicYearId }: Timetable
             <div className="space-y-1.5">
               <Label>Subject *</Label>
               <Select value={subjectId} onValueChange={(v) => setSubjectId(v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                <SelectTrigger>
+                  <span className={subjectId ? '' : 'text-muted-foreground'}>
+                    {subjectId
+                      ? (subjects.find((s) => s.id === subjectId)?.name ?? 'Loading…')
+                      : 'Select subject'}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="teacher-id">Teacher ID</Label>
-              <Input
-                id="teacher-id"
-                value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
-                placeholder="Teacher user ID"
-              />
+              <Label>Teacher *</Label>
+              <Select value={teacherId} onValueChange={(v) => setTeacherId(v ?? '')}>
+                <SelectTrigger>
+                  <span className={teacherId ? '' : 'text-muted-foreground'}>
+                    {teacherId
+                      ? (teachers?.find((t: StaffSummary) => t.userId === teacherId)?.fullName ?? 'Loading…')
+                      : 'Select teacher'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {teachers?.map((t: StaffSummary) => (
+                    <SelectItem key={t.id} value={t.userId}>
+                      {t.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

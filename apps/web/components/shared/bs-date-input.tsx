@@ -7,7 +7,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -112,8 +111,10 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
       {label && <Label>{label}</Label>}
       <div className="flex gap-2">
         <Select value={year} onValueChange={handleYear}>
-          <SelectTrigger className="w-[110px]">
-            <SelectValue placeholder="Year (BS)" />
+          <SelectTrigger className="w-[96px]">
+            <span className={year ? '' : 'text-muted-foreground'}>
+              {year || 'Year'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {years.map((y) => (
@@ -125,8 +126,10 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
         </Select>
 
         <Select value={month} onValueChange={handleMonth}>
-          <SelectTrigger className="flex-1">
-            <SelectValue placeholder="Month" />
+          <SelectTrigger className="flex-1 min-w-[120px]">
+            <span className={month ? '' : 'text-muted-foreground'}>
+              {month ? BS_MONTH_NAMES_EN[Number(month) - 1] : 'Month'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {BS_MONTH_NAMES_EN.map((name, i) => (
@@ -139,7 +142,9 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
 
         <Select value={day} onValueChange={handleDay}>
           <SelectTrigger className="w-[72px]">
-            <SelectValue placeholder="Day" />
+            <span className={day ? '' : 'text-muted-foreground'}>
+              {day || 'Day'}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => (

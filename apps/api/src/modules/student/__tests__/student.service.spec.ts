@@ -179,10 +179,37 @@ describe('StudentService', () => {
         'Class 10',
         null,
         'ACTIVE',
+        null,
+        null,
         expect.any(Number),
         expect.any(Number),
       );
       expect(result.data).toHaveLength(1);
+    });
+
+    it('filters by sectionId (FK) so attendance can load a section roster', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, total_count: '1' },
+      ]);
+
+      await service.findAll({
+        page: 1,
+        limit: 20,
+        sectionId: 'sec-uuid-1',
+        status: 'ACTIVE',
+      } as any);
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('section_id'),
+        null,
+        null,
+        null,
+        'ACTIVE',
+        null,
+        'sec-uuid-1',
+        expect.any(Number),
+        expect.any(Number),
+      );
     });
 
     it('applies search filter when provided', async () => {
@@ -199,6 +226,8 @@ describe('StudentService', () => {
       expect(tenantPrisma.query).toHaveBeenCalledWith(
         expect.stringContaining('ILIKE'),
         'Aarav',
+        null,
+        null,
         null,
         null,
         null,
@@ -226,9 +255,40 @@ describe('StudentService', () => {
         null,
         null,
         null,
+        null,
+        null,
         expect.any(Number),
         expect.any(Number),
       );
+    });
+  });
+
+  describe('enroll()', () => {
+    it('persists class_id and section_id FKs (not just the name strings)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'sid-1' }]) // student exists
+        .mockResolvedValueOnce([{ name: 'Class 10' }]) // class lookup
+        .mockResolvedValueOnce([{ name: 'A' }]) // section lookup
+        .mockResolvedValueOnce([{ name: '2081-2082' }]) // academic year lookup
+        .mockResolvedValueOnce([mockStudentRow]); // findOne after update
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(1);
+
+      await service.enroll('sid-1', {
+        classId: 'cid-1',
+        sectionId: 'secid-1',
+        academicYearId: 'ayid-1',
+        rollNumber: 5,
+      } as any);
+
+      const updateCall = (tenantPrisma.execute as jest.Mock).mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' && /UPDATE students/.test(c[0] as string),
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall[0]).toMatch(/class_id/);
+      expect(updateCall[0]).toMatch(/section_id/);
+      expect(updateCall).toContain('cid-1');
+      expect(updateCall).toContain('secid-1');
     });
   });
 

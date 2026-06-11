@@ -313,15 +313,15 @@ export class InvoiceService {
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions = ['deleted_at IS NULL'];
+    const conditions = ['i.deleted_at IS NULL'];
     const params: unknown[] = [];
     let idx = 1;
 
-    if (query.studentId) { conditions.push(`student_id = $${idx++}::uuid`); params.push(query.studentId); }
-    if (query.academicYearId) { conditions.push(`academic_year_id = $${idx++}::uuid`); params.push(query.academicYearId); }
-    if (query.status) { conditions.push(`status = $${idx++}`); params.push(query.status); }
-    if (query.fromDate) { conditions.push(`due_date >= $${idx++}::date`); params.push(query.fromDate); }
-    if (query.toDate) { conditions.push(`due_date <= $${idx++}::date`); params.push(query.toDate); }
+    if (query.studentId) { conditions.push(`i.student_id = $${idx++}::uuid`); params.push(query.studentId); }
+    if (query.academicYearId) { conditions.push(`i.academic_year_id = $${idx++}::uuid`); params.push(query.academicYearId); }
+    if (query.status) { conditions.push(`i.status = $${idx++}`); params.push(query.status); }
+    if (query.fromDate) { conditions.push(`i.due_date >= $${idx++}::date`); params.push(query.fromDate); }
+    if (query.toDate) { conditions.push(`i.due_date <= $${idx++}::date`); params.push(query.toDate); }
 
     const where = `WHERE ${conditions.join(' AND ')}`;
     params.push(limit, offset);

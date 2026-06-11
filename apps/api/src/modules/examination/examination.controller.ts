@@ -183,7 +183,7 @@ export class ExaminationController {
 
   @Get('results/report-card/:studentId')
   @Roles(...TEACHER_AND_ABOVE)
-  getReportCard(@Param('studentId', ParseUUIDPipe) studentId: string) {
+  getReportCard(@Param('studentId') studentId: string) {
     return this.resultService.getReportCard(studentId);
   }
 }

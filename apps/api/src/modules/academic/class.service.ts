@@ -22,6 +22,13 @@ function toClassListItem(row: ClassRow): ClassListItemDto {
       ? JSON.parse(row.sections)
       : (row.sections as SectionBriefDto[]);
   }
+  // Deduplicate sections by ID (defensive against SQL join duplicates)
+  const seen = new Set<string>();
+  sections = sections.filter((s) => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
   return {
     id: row.id,
     name: row.name,
@@ -56,10 +63,15 @@ export class ClassService {
     const rows = await this.tenantPrisma.query<ClassRow & { total_count: string }>(
       `SELECT
          c.*,
-         COUNT(DISTINCT s.id) AS section_count,
-         COUNT(DISTINCT st.id) AS student_count,
+         COALESCE(sec_agg.section_count, 0) AS section_count,
+         COALESCE(stu_agg.student_count, 0) AS student_count,
          COUNT(*) OVER() AS total_count,
-         COALESCE(
+         COALESCE(sec_agg.sections, '[]'::json) AS sections
+       FROM classes c
+       LEFT JOIN (
+         SELECT
+           s.class_id,
+           COUNT(*) AS section_count,
            json_agg(
              json_build_object(
                'id', s.id,
@@ -70,15 +82,19 @@ export class ClassService {
                     THEN u.first_name || ' ' || u.last_name
                END
              ) ORDER BY s.name
-           ) FILTER (WHERE s.id IS NOT NULL),
-           '[]'::json
-         ) AS sections
-       FROM classes c
-       LEFT JOIN sections s   ON s.class_id = c.id AND s.deleted_at IS NULL
-       LEFT JOIN users u      ON s.class_teacher_id = u.id
-       LEFT JOIN students st  ON st.class_id = c.id AND st.deleted_at IS NULL
+           ) AS sections
+         FROM sections s
+         LEFT JOIN users u ON u.id = s.class_teacher_id
+         WHERE s.deleted_at IS NULL
+         GROUP BY s.class_id
+       ) sec_agg ON sec_agg.class_id = c.id
+       LEFT JOIN (
+         SELECT st.class_id, COUNT(*) AS student_count
+         FROM students st
+         WHERE st.deleted_at IS NULL
+         GROUP BY st.class_id
+       ) stu_agg ON stu_agg.class_id = c.id
        WHERE c.deleted_at IS NULL
-       GROUP BY c.id
        ORDER BY c.order_index ASC
        LIMIT $1 OFFSET $2`,
       limit, offset,
@@ -95,9 +111,14 @@ export class ClassService {
     const rows = await this.tenantPrisma.query<ClassRow>(
       `SELECT
          c.*,
-         COUNT(DISTINCT s.id) AS section_count,
-         COUNT(DISTINCT st.id) AS student_count,
-         COALESCE(
+         COALESCE(sec_agg.section_count, 0) AS section_count,
+         COALESCE(stu_agg.student_count, 0) AS student_count,
+         COALESCE(sec_agg.sections, '[]'::json) AS sections
+       FROM classes c
+       LEFT JOIN (
+         SELECT
+           s.class_id,
+           COUNT(*) AS section_count,
            json_agg(
              json_build_object(
                'id', s.id,
@@ -108,15 +129,19 @@ export class ClassService {
                     THEN u.first_name || ' ' || u.last_name
                END
              ) ORDER BY s.name
-           ) FILTER (WHERE s.id IS NOT NULL),
-           '[]'::json
-         ) AS sections
-       FROM classes c
-       LEFT JOIN sections s   ON s.class_id = c.id AND s.deleted_at IS NULL
-       LEFT JOIN users u      ON s.class_teacher_id = u.id
-       LEFT JOIN students st  ON st.class_id = c.id AND st.deleted_at IS NULL
-       WHERE c.id = $1::uuid AND c.deleted_at IS NULL
-       GROUP BY c.id`,
+           ) AS sections
+         FROM sections s
+         LEFT JOIN users u ON u.id = s.class_teacher_id
+         WHERE s.deleted_at IS NULL
+         GROUP BY s.class_id
+       ) sec_agg ON sec_agg.class_id = c.id
+       LEFT JOIN (
+         SELECT st.class_id, COUNT(*) AS student_count
+         FROM students st
+         WHERE st.deleted_at IS NULL
+         GROUP BY st.class_id
+       ) stu_agg ON stu_agg.class_id = c.id
+       WHERE c.id = $1::uuid AND c.deleted_at IS NULL`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Class ${id} not found`);

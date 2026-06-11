@@ -41,7 +41,7 @@ export class TimetableService {
         `INSERT INTO timetable_slots
            (section_id, subject_id, teacher_id, academic_year_id,
             day_of_week, period_number, start_time, end_time, room)
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::time, $8::time, $9)
          RETURNING *`,
         dto.sectionId, dto.subjectId, dto.teacherId, dto.academicYearId,
         dto.dayOfWeek, dto.periodNumber, dto.startTime, dto.endTime, dto.room ?? null,
@@ -185,7 +185,7 @@ export class TimetableService {
           `INSERT INTO timetable_slots
              (section_id, subject_id, teacher_id, academic_year_id,
               day_of_week, period_number, start_time, end_time, room)
-           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::time, $8::time, $9)
            RETURNING *`,
           sectionId, slot.subjectId, slot.teacherId, dto.academicYearId,
           slot.dayOfWeek, slot.periodNumber, slot.startTime, slot.endTime, slot.room ?? null,

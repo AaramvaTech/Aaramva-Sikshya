@@ -15,7 +15,7 @@ import { PayrollService } from './payroll.service';
 import { CreateDepartmentDto, UpdateDepartmentDto, DepartmentQueryDto } from './dto/department.dto';
 import { CreateDesignationDto, UpdateDesignationDto, DesignationQueryDto } from './dto/designation.dto';
 import { CreateStaffDto, UpdateStaffDto, StaffQueryDto, AddStaffDocumentDto } from './dto/staff.dto';
-import { CreateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
+import { CreateLeaveTypeDto, UpdateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
 import { OpenPayrollMonthDto, GeneratePayrollDto, AdjustSlipDto, PayrollMonthQueryDto } from './dto/payroll.dto';
 import type { AuthUser } from '../auth/auth.types';
 
@@ -165,6 +165,22 @@ export class HrController {
   @Roles(...TEACHER_AND_ABOVE)
   listLeaveTypes() {
     return this.leaveService.listLeaveTypes();
+  }
+
+  @Patch('leave-types/:id')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  updateLeaveType(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLeaveTypeDto,
+  ) {
+    return this.leaveService.updateLeaveType(id, dto);
+  }
+
+  @Delete('leave-types/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  deleteLeaveType(@Param('id', ParseUUIDPipe) id: string) {
+    return this.leaveService.deleteLeaveType(id);
   }
 
   // ─── Leave Requests ────────────────────────────────────────────────────────

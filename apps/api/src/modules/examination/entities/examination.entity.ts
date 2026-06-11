@@ -115,6 +115,15 @@ export function toNum(v: string | number | null | undefined): number {
   return typeof v === 'number' ? v : parseFloat(v);
 }
 
+// Postgres TIME via Prisma raw query may arrive as "HH:MM:SS" or a JS Date
+// serialised to "1970-01-01THH:MM:SS.000Z". Always return "HH:MM".
+function toTimeField(t: unknown): string {
+  if (!t) return '';
+  const s = t instanceof Date ? t.toISOString() : String(t);
+  if (s.includes('T')) return s.split('T')[1].substring(0, 5);
+  return s.substring(0, 5);
+}
+
 function toDateField(d: Date | string | null | undefined): { ad: string; bs: string } | null {
   if (!d) return null;
   const dateStr = d instanceof Date ? d.toISOString().split('T')[0] : String(d).split('T')[0];
@@ -220,8 +229,8 @@ export function toExamScheduleResponse(row: ExamScheduleRow): ExamScheduleRespon
     classId: row.class_id,
     subjectId: row.subject_id,
     examDate: toDateField(row.exam_date),
-    startTime: row.start_time,
-    endTime: row.end_time,
+    startTime: toTimeField(row.start_time),
+    endTime: toTimeField(row.end_time),
     fullMarks: toNum(row.full_marks),
     passMarks: toNum(row.pass_marks),
     theoryMarks: row.theory_marks ? toNum(row.theory_marks) : null,

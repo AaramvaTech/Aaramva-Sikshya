@@ -143,6 +143,10 @@ export class UpdateStaffDto {
   @IsOptional()
   @IsString()
   emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
 }
 
 export class StaffQueryDto {

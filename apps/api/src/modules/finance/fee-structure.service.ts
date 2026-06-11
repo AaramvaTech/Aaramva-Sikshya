@@ -70,12 +70,12 @@ export class FeeStructureService {
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions = ['deleted_at IS NULL'];
+    const conditions = ['fs.deleted_at IS NULL'];
     const params: unknown[] = [];
     let idx = 1;
 
-    if (query.classId) { conditions.push(`class_id = $${idx++}::uuid`); params.push(query.classId); }
-    if (query.academicYearId) { conditions.push(`academic_year_id = $${idx++}::uuid`); params.push(query.academicYearId); }
+    if (query.classId) { conditions.push(`fs.class_id = $${idx++}::uuid`); params.push(query.classId); }
+    if (query.academicYearId) { conditions.push(`fs.academic_year_id = $${idx++}::uuid`); params.push(query.academicYearId); }
 
     const where = `WHERE ${conditions.join(' AND ')}`;
     params.push(limit, offset);

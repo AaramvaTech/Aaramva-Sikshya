@@ -41,11 +41,20 @@ api.interceptors.response.use(
         return api(error.config);
       } catch {
         useAuthStore.getState().logout();
-        if (typeof window !== 'undefined') window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
+          window.location.href = isSuperAdmin ? '/super-admin/login' : '/login';
+        }
       }
     }
     return Promise.reject(error);
   },
 );
+
+/** Raw axios instance without interceptors — for session restore & refresh calls. */
+export const rawApi = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1',
+  withCredentials: true,
+});
 
 export default api;

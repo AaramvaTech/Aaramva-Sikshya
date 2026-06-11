@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { useAuthStore } from '@/store/auth.store';
 import { useSidebar } from '@/context/sidebar-context';
 import { SuperAdminSidebar } from './super-admin-sidebar';
@@ -29,8 +30,11 @@ export function SuperAdminShell({ children }: { children: React.ReactNode }) {
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <Loader2 className="h-6 w-6 text-brand-500 animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-950">
+        <div className="bg-white rounded-2xl px-5 py-3 inline-flex">
+          <Image src="/logo.png" alt="Aaramva Shikshya" width={180} height={46} className="object-contain" priority />
+        </div>
+        <Loader2 className="h-5 w-5 text-brand-500 animate-spin" />
       </div>
     );
   }

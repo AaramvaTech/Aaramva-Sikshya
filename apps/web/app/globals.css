@@ -722,3 +722,32 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   opacity: 0;
   -webkit-appearance: none;
 }
+
+/* ──────────────────────────────────────────────────────────
+   Print — isolate a `.print-area` region for clean reports
+   ────────────────────────────────────────────────────────── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 1cm;
+  }
+}

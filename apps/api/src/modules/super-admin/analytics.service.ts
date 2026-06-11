@@ -22,16 +22,16 @@ export class AnalyticsService {
     }>(
       `SELECT
          COUNT(*) AS total,
-         COUNT(*) FILTER (WHERE is_active = true) AS active,
-         COUNT(*) FILTER (WHERE is_active = false) AS suspended
-       FROM tenants WHERE deleted_at IS NULL`,
+         COUNT(*) FILTER (WHERE "isActive" = true) AS active,
+         COUNT(*) FILTER (WHERE "isActive" = false) AS suspended
+       FROM tenants WHERE "deletedAt" IS NULL`,
     );
 
     const subRows = await this.publicPrisma.query<{ status: string; count: string }>(
       `SELECT s.status, COUNT(*) AS count
        FROM subscriptions s
-       JOIN tenants t ON t.id = s.tenant_id
-       WHERE t.deleted_at IS NULL AND t.is_active = true
+       JOIN tenants t ON t.id = s."tenantId"
+       WHERE t."deletedAt" IS NULL AND t."isActive" = true
        GROUP BY s.status`,
     );
     const subByStatus: Record<string, number> = {};
@@ -42,9 +42,9 @@ export class AnalyticsService {
     const planRows = await this.publicPrisma.query<{ plan_name: string; count: string }>(
       `SELECT p.name AS plan_name, COUNT(*) AS count
        FROM subscriptions s
-       JOIN plans p ON p.id = s.plan_id
-       JOIN tenants t ON t.id = s.tenant_id
-       WHERE t.deleted_at IS NULL AND t.is_active = true
+       JOIN plans p ON p.id = s."planId"
+       JOIN tenants t ON t.id = s."tenantId"
+       WHERE t."deletedAt" IS NULL AND t."isActive" = true
        GROUP BY p.name`,
     );
     const subByPlan: Record<string, number> = {};
@@ -59,12 +59,12 @@ export class AnalyticsService {
       created_at: Date;
       plan_name: string;
     }>(
-      `SELECT t.id, t.name, t.slug, t.created_at, p.name AS plan_name
+      `SELECT t.id, t.name, t.slug, t."createdAt" AS created_at, p.name AS plan_name
        FROM tenants t
-       LEFT JOIN subscriptions s ON s.tenant_id = t.id
-       LEFT JOIN plans p ON p.id = s.plan_id
-       WHERE t.deleted_at IS NULL
-       ORDER BY t.created_at DESC
+       LEFT JOIN subscriptions s ON s."tenantId" = t.id
+       LEFT JOIN plans p ON p.id = s."planId"
+       WHERE t."deletedAt" IS NULL
+       ORDER BY t."createdAt" DESC
        LIMIT 5`,
     );
 
@@ -102,14 +102,14 @@ export class AnalyticsService {
       monthly_revenue: string;
     }>(
       `SELECT
-         TO_CHAR(s.starts_at, 'YYYY-MM') AS month,
+         TO_CHAR(s."startsAt", 'YYYY-MM') AS month,
          p.name AS plan_name,
          COUNT(*) AS active_count,
-         SUM(p.monthly_price) AS monthly_revenue
+         SUM(p."monthlyPrice") AS monthly_revenue
        FROM subscriptions s
-       JOIN plans p ON p.id = s.plan_id
+       JOIN plans p ON p.id = s."planId"
        WHERE s.status IN ('ACTIVE', 'TRIAL')
-       GROUP BY TO_CHAR(s.starts_at, 'YYYY-MM'), p.name
+       GROUP BY TO_CHAR(s."startsAt", 'YYYY-MM'), p.name
        ORDER BY month DESC
        LIMIT 60`,
     );

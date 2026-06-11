@@ -35,6 +35,10 @@ export const createStudentSchema = z.object({
   address: z.string().optional(),
   bloodGroup: z.string().optional(),
   religion: z.string().optional(),
+  academicYearId: z.string().optional(),
+  classId: z.string().optional(),
+  sectionId: z.string().optional(),
+  rollNumber: z.number().int().positive().optional(),
   guardians: z.array(guardianSchema).min(1, 'At least one guardian is required'),
 });
 
@@ -43,6 +47,21 @@ export const enrollStudentSchema = z.object({
   classId: z.string().min(1, 'Class is required'),
   sectionId: z.string().min(1, 'Section is required'),
   rollNumber: z.number().int().positive().optional(),
+});
+
+const editGuardianSchema = z.object({
+  relation: z.string().min(1, 'Relation is required'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  phone: z.string().min(10, 'Valid phone number required'),
+  email: z
+    .string()
+    .refine(
+      (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      { message: 'Invalid email' },
+    )
+    .optional(),
+  isPrimary: z.boolean(),
 });
 
 export const editStudentSchema = z.object({
@@ -62,8 +81,14 @@ export const editStudentSchema = z.object({
   address: z.string().optional(),
   bloodGroup: z.string().optional(),
   religion: z.string().optional(),
+  academicYearId: z.string().optional(),
+  classId: z.string().optional(),
+  sectionId: z.string().optional(),
+  rollNumber: z.number().int().positive().optional(),
+  guardians: z.array(editGuardianSchema).optional(),
 });
 
 export type CreateStudentFormValues = z.infer<typeof createStudentSchema>;
 export type EditStudentFormValues = z.infer<typeof editStudentSchema>;
+export type EditGuardianFormValues = z.infer<typeof editGuardianSchema>;
 export type EnrollStudentFormValues = z.infer<typeof enrollStudentSchema>;

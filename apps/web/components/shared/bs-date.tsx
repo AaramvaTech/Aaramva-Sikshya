@@ -11,8 +11,12 @@ export function BsDate({ date, showAd = false, lang = 'en' }: BsDateProps) {
 
   if (typeof date === 'object' && 'bs' in date) {
     return (
-      <span title={showAd ? `AD: ${date.ad}` : undefined}>
-        {date.bs}
+      <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+        <span>{date.bs}</span>
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">BS</span>
+        {showAd && (
+          <span className="text-xs text-gray-400">({date.ad} AD)</span>
+        )}
       </span>
     );
   }
@@ -21,7 +25,15 @@ export function BsDate({ date, showAd = false, lang = 'en' }: BsDateProps) {
     try {
       const bs = adToBs(new Date(date));
       const formatted = formatBs(bs, lang);
-      return <span title={showAd ? `AD: ${date}` : undefined}>{formatted}</span>;
+      return (
+        <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+          <span>{formatted}</span>
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">BS</span>
+          {showAd && (
+            <span className="text-xs text-gray-400">({date} AD)</span>
+          )}
+        </span>
+      );
     } catch {
       return <span>{date}</span>;
     }

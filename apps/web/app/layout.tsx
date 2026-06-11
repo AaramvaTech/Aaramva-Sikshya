@@ -13,6 +13,11 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: 'Aaramva Shikshya',
   description: 'Simple school management for every school in Nepal.',
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({

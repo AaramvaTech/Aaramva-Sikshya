@@ -5,14 +5,13 @@ import { CreatePlanDto, UpdatePlanDto } from './dto/plan.dto';
 interface DbPlan {
   id: string;
   name: string;
-  monthly_price: string;
-  annual_price: string;
-  max_students: number;
-  max_staff: number;
+  monthlyPrice: string;
+  annualPrice: string;
+  maxStudents: number;
+  maxStaff: number;
   features: unknown;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
+  isActive: boolean;
+  createdAt: Date;
 }
 
 @Injectable()
@@ -21,7 +20,7 @@ export class PlanService {
 
   async create(dto: CreatePlanDto) {
     const rows = await this.publicPrisma.query<DbPlan>(
-      `INSERT INTO plans (name, monthly_price, annual_price, max_students, max_staff, features)
+      `INSERT INTO plans (name, "monthlyPrice", "annualPrice", "maxStudents", "maxStaff", features)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
        RETURNING *`,
       dto.name,
@@ -36,7 +35,7 @@ export class PlanService {
 
   async list() {
     const rows = await this.publicPrisma.query<DbPlan>(
-      `SELECT * FROM plans ORDER BY monthly_price ASC`,
+      `SELECT * FROM plans ORDER BY "monthlyPrice" ASC`,
     );
     return rows.map((r) => this.format(r));
   }
@@ -47,19 +46,19 @@ export class PlanService {
 
     if (dto.monthlyPrice !== undefined) {
       params.push(dto.monthlyPrice);
-      sets.push(`monthly_price = $${params.length}`);
+      sets.push(`"monthlyPrice" = $${params.length}`);
     }
     if (dto.annualPrice !== undefined) {
       params.push(dto.annualPrice);
-      sets.push(`annual_price = $${params.length}`);
+      sets.push(`"annualPrice" = $${params.length}`);
     }
     if (dto.maxStudents !== undefined) {
       params.push(dto.maxStudents);
-      sets.push(`max_students = $${params.length}`);
+      sets.push(`"maxStudents" = $${params.length}`);
     }
     if (dto.maxStaff !== undefined) {
       params.push(dto.maxStaff);
-      sets.push(`max_staff = $${params.length}`);
+      sets.push(`"maxStaff" = $${params.length}`);
     }
     if (dto.features !== undefined) {
       params.push(JSON.stringify(dto.features));
@@ -67,16 +66,15 @@ export class PlanService {
     }
     if (dto.isActive !== undefined) {
       params.push(dto.isActive);
-      sets.push(`is_active = $${params.length}`);
+      sets.push(`"isActive" = $${params.length}`);
     }
 
     if (sets.length === 0) {
       return this.findById(id);
     }
 
-    sets.push(`updated_at = NOW()`);
     const rows = await this.publicPrisma.query<DbPlan>(
-      `UPDATE plans SET ${sets.join(', ')} WHERE id = $1::uuid RETURNING *`,
+      `UPDATE plans SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
       ...params,
     );
     if (!rows[0]) throw new NotFoundException(`Plan ${id} not found`);
@@ -85,8 +83,7 @@ export class PlanService {
 
   async deactivate(id: string) {
     const rows = await this.publicPrisma.query<DbPlan>(
-      `UPDATE plans SET is_active = false, updated_at = NOW()
-       WHERE id = $1::uuid RETURNING *`,
+      `UPDATE plans SET "isActive" = false WHERE id = $1 RETURNING *`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Plan ${id} not found`);
@@ -95,7 +92,7 @@ export class PlanService {
 
   private async findById(id: string) {
     const rows = await this.publicPrisma.query<DbPlan>(
-      `SELECT * FROM plans WHERE id = $1::uuid`,
+      `SELECT * FROM plans WHERE id = $1`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Plan ${id} not found`);
@@ -106,14 +103,13 @@ export class PlanService {
     return {
       id: r.id,
       name: r.name,
-      monthlyPrice: parseFloat(r.monthly_price),
-      annualPrice: parseFloat(r.annual_price),
-      maxStudents: r.max_students,
-      maxStaff: r.max_staff,
+      monthlyPrice: parseFloat(r.monthlyPrice),
+      annualPrice: parseFloat(r.annualPrice),
+      maxStudents: r.maxStudents,
+      maxStaff: r.maxStaff,
       features: r.features,
-      isActive: r.is_active,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      isActive: r.isActive,
+      createdAt: r.createdAt,
     };
   }
 }

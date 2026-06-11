@@ -1,6 +1,7 @@
 import api from '@/lib/api';
 import type {
   ApiResponse,
+  PaginatedResponse,
   AttendanceRecord,
   BulkAttendanceData,
   StudentAttendanceSummary,
@@ -16,7 +17,10 @@ export const attendanceApi = {
     sectionId: string;
     date: string;
     academicYearId?: string;
-  }) => api.get<ApiResponse<AttendanceRecord[]>>('/attendance/students', { params }),
+  }) =>
+    api.get<ApiResponse<PaginatedResponse<AttendanceRecord>>>('/attendance/students', {
+      params,
+    }),
 
   getStudentSummary: (studentId: string, academicYearId?: string) =>
     api.get<ApiResponse<StudentAttendanceSummary>>(

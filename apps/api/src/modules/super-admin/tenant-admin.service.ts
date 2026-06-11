@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { adToBs } from 'bs-calendar';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -13,6 +12,7 @@ import { AuditService } from './audit.service';
 import {
   ManualOnboardTenantDto,
   UpdateSubscriptionDto,
+  UpdateTenantDto,
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
 
@@ -21,18 +21,17 @@ interface DbTenant {
   name: string;
   slug: string;
   logo_url: string | null;
+  primary_color: string;
   address: string | null;
   phone: string | null;
   email: string | null;
   pan_number: string | null;
   is_active: boolean;
   created_at: Date;
-  updated_at: Date;
 }
 
 interface DbSubscription {
   id: string;
-  tenant_id: string;
   plan_id: string;
   plan_name: string;
   status: string;
@@ -41,15 +40,6 @@ interface DbSubscription {
   ends_at: Date | null;
 }
 
-function toDateField(d: Date | null | undefined) {
-  if (!d) return null;
-  const dt = new Date(d);
-  const bs = adToBs(dt);
-  return {
-    ad: dt.toISOString(),
-    bs: `${bs.year}-${String(bs.month).padStart(2, '0')}-${String(bs.day).padStart(2, '0')}`,
-  };
-}
 
 @Injectable()
 export class TenantAdminService {
@@ -91,7 +81,7 @@ export class TenantAdminService {
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ['t.deleted_at IS NULL'];
+    const conditions: string[] = ['t."deletedAt" IS NULL'];
     const params: unknown[] = [];
 
     if (query.search) {
@@ -104,7 +94,7 @@ export class TenantAdminService {
     }
     if (query.planId) {
       params.push(query.planId);
-      conditions.push(`s.plan_id = $${params.length}::uuid`);
+      conditions.push(`s."planId" = $${params.length}`);
     }
 
     const where = conditions.join(' AND ');
@@ -112,7 +102,7 @@ export class TenantAdminService {
     const countRows = await this.publicPrisma.query<{ count: string }>(
       `SELECT COUNT(*) AS count
        FROM tenants t
-       LEFT JOIN subscriptions s ON s.tenant_id = t.id
+       LEFT JOIN subscriptions s ON s."tenantId" = t.id
        WHERE ${where}`,
       ...params,
     );
@@ -122,54 +112,55 @@ export class TenantAdminService {
     const rows = await this.publicPrisma.query<
       DbTenant & { sub_status: string; plan_name: string; plan_id: string }
     >(
-      `SELECT t.*, s.status AS sub_status, p.name AS plan_name, p.id AS plan_id
+      `SELECT t.id, t.name, t.slug, t."logoUrl" AS logo_url,
+              t."isActive" AS is_active, t."createdAt" AS created_at,
+              s.status AS sub_status, p.name AS plan_name, p.id AS plan_id
        FROM tenants t
-       LEFT JOIN subscriptions s ON s.tenant_id = t.id
-       LEFT JOIN plans p ON p.id = s.plan_id
+       LEFT JOIN subscriptions s ON s."tenantId" = t.id
+       LEFT JOIN plans p ON p.id = s."planId"
        WHERE ${where}
-       ORDER BY t.created_at DESC
+       ORDER BY t."createdAt" DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       ...params,
     );
 
+    const data = await Promise.all(
+      rows.map(async (r) => {
+        const usage = await this.getUsageStats(r.id, r.slug);
+        return {
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          logoUrl: r.logo_url,
+          isActive: r.is_active,
+          planName: r.plan_name ?? '',
+          subscriptionStatus: r.sub_status ?? '',
+          studentCount: usage.studentCount,
+          staffCount: usage.staffCount,
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+        };
+      }),
+    );
+
     return {
-      data: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        slug: r.slug,
-        isActive: r.is_active,
-        subscription: { status: r.sub_status, planName: r.plan_name, planId: r.plan_id },
-        createdAt: toDateField(r.created_at),
-      })),
+      data,
       meta: { page, limit, total },
     };
   }
 
-  async getTenantDetail(id: string) {
-    const rows = await this.publicPrisma.query<
-      DbTenant & DbSubscription & { plan_name: string }
-    >(
-      `SELECT t.*,
-              s.id AS sub_id, s.plan_id, s.status, s.trial_ends_at,
-              s.starts_at, s.ends_at,
-              p.name AS plan_name
-       FROM tenants t
-       LEFT JOIN subscriptions s ON s.tenant_id = t.id
-       LEFT JOIN plans p ON p.id = s.plan_id
-       WHERE t.id = $1::uuid AND t.deleted_at IS NULL`,
-      id,
-    );
-    const row = rows[0];
-    if (!row) throw new NotFoundException(`Tenant ${id} not found`);
-
-    // Fetch usage stats from tenant schema
-    let studentCount = 0;
-    let staffCount = 0;
+  /**
+   * Counts active students and staff inside a tenant's own Postgres schema.
+   * Returns zeros if the schema is not provisioned yet or the query fails.
+   */
+  private async getUsageStats(
+    tenantId: string,
+    slug: string,
+  ): Promise<{ studentCount: number; staffCount: number }> {
     try {
       const ctx = {
-        tenantId: row.id,
-        slug: row.slug,
-        schemaName: TenantService.schemaNameFor(row.slug),
+        tenantId,
+        slug,
+        schemaName: TenantService.schemaNameFor(slug),
       };
       const statsRows = await this.tenantContext.run(ctx, () =>
         this.tenantPrisma.query<{ students: string; staff: string }>(
@@ -178,40 +169,116 @@ export class TenantAdminService {
              (SELECT COUNT(*) FROM staff_profiles WHERE deleted_at IS NULL) AS staff`,
         ),
       );
-      studentCount = parseInt(statsRows[0]?.students ?? '0', 10);
-      staffCount = parseInt(statsRows[0]?.staff ?? '0', 10);
+      return {
+        studentCount: parseInt(statsRows[0]?.students ?? '0', 10),
+        staffCount: parseInt(statsRows[0]?.staff ?? '0', 10),
+      };
     } catch {
       // Schema may not be provisioned yet — stats default to 0
+      return { studentCount: 0, staffCount: 0 };
     }
+  }
+
+  async getTenantDetail(id: string) {
+    const rows = await this.publicPrisma.query<
+      DbTenant & DbSubscription & { plan_name: string }
+    >(
+      `SELECT t.id, t.name, t.slug,
+              t."logoUrl" AS logo_url, t."primaryColor" AS primary_color,
+              t.description, t."establishedYear" AS established_year, t.website,
+              t.address, t.phone, t.email,
+              t."panNumber" AS pan_number, t."isActive" AS is_active, t."createdAt" AS created_at,
+              s.id AS sub_id, s."planId" AS plan_id, s.status, s."trialEndsAt" AS trial_ends_at,
+              s."startsAt" AS starts_at, s."endsAt" AS ends_at,
+              p.name AS plan_name
+       FROM tenants t
+       LEFT JOIN subscriptions s ON s."tenantId" = t.id
+       LEFT JOIN plans p ON p.id = s."planId"
+       WHERE t.id = $1 AND t."deletedAt" IS NULL`,
+      id,
+    );
+    const row = rows[0];
+    if (!row) throw new NotFoundException(`Tenant ${id} not found`);
+
+    const { studentCount, staffCount } = await this.getUsageStats(row.id, row.slug);
 
     return {
       id: row.id,
       name: row.name,
       slug: row.slug,
       logoUrl: row.logo_url,
+      primaryColor: row.primary_color ?? '#2563EB',
+      description: (row as any).description ?? null,
+      establishedYear: (row as any).established_year ?? null,
+      website: (row as any).website ?? null,
       address: row.address,
       phone: row.phone,
       email: row.email,
       panNumber: row.pan_number,
       isActive: row.is_active,
-      createdAt: toDateField(new Date(row.created_at)),
-      subscription: {
-        id: (row as any).sub_id,
-        planId: row.plan_id,
-        planName: row.plan_name,
-        status: row.status,
-        trialEndsAt: toDateField(row.trial_ends_at),
-        startsAt: toDateField(new Date(row.starts_at)),
-        endsAt: toDateField(row.ends_at),
-      },
-      usage: { studentCount, staffCount },
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+      planId: row.plan_id ?? '',
+      planName: row.plan_name ?? '',
+      subscriptionStatus: (row as any).status ?? '',
+      trialEndsAt: (row as any).trial_ends_at ? new Date((row as any).trial_ends_at).toISOString() : null,
+      subscriptionEndsAt: (row as any).ends_at ? new Date((row as any).ends_at).toISOString() : null,
+      studentCount,
+      staffCount,
     };
+  }
+
+  async updateTenant(id: string, dto: UpdateTenantDto, adminId: string) {
+    // slug is intentionally NOT updatable — it is the permanent subdomain + schema key.
+    const columnFor: Record<string, string> = {
+      schoolName: 'name',
+      logoUrl: '"logoUrl"',
+      primaryColor: '"primaryColor"',
+      description: 'description',
+      establishedYear: '"establishedYear"',
+      website: 'website',
+      address: 'address',
+      phone: 'phone',
+      email: 'email',
+      panNumber: '"panNumber"',
+    };
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    for (const [key, column] of Object.entries(columnFor)) {
+      const value = (dto as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        params.push(value);
+        sets.push(`${column} = $${params.length}`);
+      }
+    }
+
+    if (sets.length === 0) {
+      return this.getTenantDetail(id);
+    }
+
+    params.push(id);
+    const rows = await this.publicPrisma.query<{ id: string }>(
+      `UPDATE tenants SET ${sets.join(', ')}, "updatedAt" = NOW()
+       WHERE id = $${params.length} AND "deletedAt" IS NULL
+       RETURNING id`,
+      ...params,
+    );
+    if (!rows[0]) throw new NotFoundException(`Tenant ${id} not found`);
+
+    await this.audit.log(adminId, 'TENANT_UPDATED', 'TENANT', id, {
+      fields: Object.keys(columnFor).filter(
+        (k) => (dto as Record<string, unknown>)[k] !== undefined,
+      ),
+    });
+
+    return this.getTenantDetail(id);
   }
 
   async suspendTenant(id: string, adminId: string) {
     const rows = await this.publicPrisma.query<{ id: string; slug: string }>(
-      `UPDATE tenants SET is_active = false, updated_at = NOW()
-       WHERE id = $1::uuid AND deleted_at IS NULL RETURNING id, slug`,
+      `UPDATE tenants SET "isActive" = false, "updatedAt" = NOW()
+       WHERE id = $1 AND "deletedAt" IS NULL RETURNING id, slug`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Tenant ${id} not found`);
@@ -221,8 +288,8 @@ export class TenantAdminService {
 
   async activateTenant(id: string, adminId: string) {
     const rows = await this.publicPrisma.query<{ id: string; slug: string }>(
-      `UPDATE tenants SET is_active = true, updated_at = NOW()
-       WHERE id = $1::uuid AND deleted_at IS NULL RETURNING id, slug`,
+      `UPDATE tenants SET "isActive" = true, "updatedAt" = NOW()
+       WHERE id = $1 AND "deletedAt" IS NULL RETURNING id, slug`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Tenant ${id} not found`);
@@ -236,7 +303,7 @@ export class TenantAdminService {
 
     if (dto.planId) {
       params.push(dto.planId);
-      sets.push(`plan_id = $${params.length}::uuid`);
+      sets.push(`"planId" = $${params.length}`);
     }
     if (dto.status) {
       params.push(dto.status);
@@ -244,20 +311,20 @@ export class TenantAdminService {
     }
     if (dto.endsAt) {
       params.push(new Date(dto.endsAt));
-      sets.push(`ends_at = $${params.length}`);
+      sets.push(`"endsAt" = $${params.length}`);
     }
 
     if (sets.length === 0) {
       return this.publicPrisma.query(
-        `SELECT * FROM subscriptions WHERE tenant_id = $1::uuid`,
+        `SELECT * FROM subscriptions WHERE "tenantId" = $1`,
         tenantId,
       );
     }
 
-    sets.push(`updated_at = NOW()`);
-    const rows = await this.publicPrisma.query<{ id: string; status: string; plan_id: string }>(
+    sets.push(`"updatedAt" = NOW()`);
+    const rows = await this.publicPrisma.query<{ id: string; status: string; planId: string }>(
       `UPDATE subscriptions SET ${sets.join(', ')}
-       WHERE tenant_id = $1::uuid RETURNING id, status, plan_id`,
+       WHERE "tenantId" = $1 RETURNING id, status, "planId"`,
       ...params,
     );
     if (!rows[0]) throw new NotFoundException(`Subscription for tenant ${tenantId} not found`);

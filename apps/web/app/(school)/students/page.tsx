@@ -172,7 +172,11 @@ export default function StudentsPage() {
               }
             >
               <SelectTrigger className="w-40 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black dark:border-form-strokedark dark:bg-form-input dark:text-white">
-                <SelectValue placeholder="All Classes" />
+                <span className={classId ? '' : 'text-muted-foreground'}>
+                  {classId
+                    ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…')
+                    : 'All Classes'}
+                </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">All Classes</SelectItem>

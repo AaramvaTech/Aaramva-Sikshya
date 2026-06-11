@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { useAuthStore } from '@/store/auth.store';
@@ -32,8 +33,9 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <Loader2 className="h-6 w-6 text-brand-500 animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-gray-900">
+        <Image src="/logo.png" alt="Aaramva Shikshya" width={180} height={46} className="object-contain" priority />
+        <Loader2 className="h-5 w-5 text-brand-500 animate-spin" />
       </div>
     );
   }

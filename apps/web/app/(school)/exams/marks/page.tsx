@@ -12,7 +12,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { BsDate } from '@/components/shared/bs-date';
 import { MarksGrid, type MarksGridRef } from '@/components/exams/marks-grid';
@@ -46,11 +45,12 @@ export default function MarksPage() {
 
   const selectedSchedule = schedules?.find((s) => s.id === selectedScheduleId);
 
-  // Load all students in the class for the marks grid display
+  // Filter by class name (not UUID) so students with class_id = NULL still match.
+  const selectedClassName = classes?.find((cls) => cls.id === selectedClassId)?.name;
   const { data: studentsRes, isLoading: studentsLoading } = useStudents({
-    classId: selectedSchedule?.classId || undefined,
+    className: selectedSchedule ? selectedClassName : undefined,
     status: 'ACTIVE',
-    limit: 200,
+    limit: 100,
   });
   const enrolledStudents = studentsRes?.data?.data ?? [];
 
@@ -115,7 +115,13 @@ export default function MarksPage() {
       <div className="flex flex-wrap gap-3">
         <div className="w-48">
           <Select value={selectedExamTypeId} onValueChange={(v) => handleExamTypeChange(v ?? '')}>
-            <SelectTrigger><SelectValue placeholder="Exam Type" /></SelectTrigger>
+            <SelectTrigger>
+              <span className={selectedExamTypeId ? '' : 'text-muted-foreground'}>
+                {selectedExamTypeId
+                  ? (examTypes?.find((et) => et.id === selectedExamTypeId)?.name ?? 'Loading…')
+                  : 'Exam Type'}
+              </span>
+            </SelectTrigger>
             <SelectContent>
               {examTypes?.map((et) => <SelectItem key={et.id} value={et.id}>{et.name}</SelectItem>)}
             </SelectContent>
@@ -127,7 +133,13 @@ export default function MarksPage() {
             onValueChange={(v) => handleClassChange(v ?? '')}
             disabled={!selectedExamTypeId}
           >
-            <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
+            <SelectTrigger>
+              <span className={selectedClassId ? '' : 'text-muted-foreground'}>
+                {selectedClassId
+                  ? (classes?.find((cls) => cls.id === selectedClassId)?.name ?? 'Loading…')
+                  : 'Class'}
+              </span>
+            </SelectTrigger>
             <SelectContent>
               {classes?.map((cls) => <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>)}
             </SelectContent>
@@ -139,7 +151,18 @@ export default function MarksPage() {
             onValueChange={(v) => setSelectedScheduleId(v ?? '')}
             disabled={!selectedClassId}
           >
-            <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
+            <SelectTrigger>
+              <span className={selectedScheduleId ? '' : 'text-muted-foreground'}>
+                {selectedScheduleId
+                  ? (() => {
+                      const s = schedules?.find((s) => s.id === selectedScheduleId);
+                      if (!s) return 'Loading…';
+                      return classSubjects?.find((cs) => cs.subjectId === s.subjectId)?.subjectName
+                        ?? s.subjectId.slice(0, 8);
+                    })()
+                  : 'Subject'}
+              </span>
+            </SelectTrigger>
             <SelectContent>
               {schedules?.map((s) => {
                 const name = classSubjects?.find((cs) => cs.subjectId === s.subjectId)?.subjectName
@@ -175,9 +198,22 @@ export default function MarksPage() {
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded" />)}
         </div>
       ) : !gridStudents.length ? (
-        <p className="text-sm text-gray-400 text-center py-12">
-          No active students found for this class
-        </p>
+        <div className="text-center py-12 space-y-3">
+          <p className="text-sm font-medium text-gray-600">No students are enrolled in this class</p>
+          <p className="text-xs text-gray-400 max-w-sm mx-auto">
+            Students must be enrolled in a class before marks can be entered.
+            Go to <strong>Students</strong>, open a student&apos;s profile, and use the{' '}
+            <strong>Enroll</strong> action to assign them to this class.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs mt-2"
+            onClick={() => router.push('/students')}
+          >
+            Go to Students
+          </Button>
+        </div>
       ) : (
         <>
           <MarksGrid

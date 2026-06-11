@@ -75,32 +75,21 @@ export default function LoginPage() {
       <div className="flex flex-col flex-1 items-center justify-center p-6 lg:w-1/2 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md">
           {/* Logo */}
-          <div className="mb-8 flex justify-center lg:justify-start">
+          <div className="mb-8 flex justify-center">
             <Image
-              src="/logo.jpeg"
+              src="/logo.png"
               alt="Aaramva Shikshya"
-              width={154}
-              height={32}
-              className="object-contain dark:hidden"
-              priority
-            />
-            <Image
-              src="/logo.jpeg"
-              alt="Aaramva Shikshya"
-              width={154}
-              height={32}
-              className="object-contain hidden dark:block"
+              width={180}
+              height={46}
+              className="object-contain"
               priority
             />
           </div>
 
-          <div className="mb-6">
+          <div className="mb-6 text-center">
             <h1 className="text-title-sm2 font-semibold text-gray-800 dark:text-white">
-              Sign in to Aaramva Shikshya
+              School Login
             </h1>
-            <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-              Enter your school code, email and password to sign in.
-            </p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -212,11 +201,11 @@ export default function LoginPage() {
         />
         <div className="relative z-10 flex flex-col items-center max-w-sm px-8 text-center">
           <Image
-            src="/logo.jpeg"
+            src="/logo.png"
             alt="Aaramva Shikshya"
-            width={180}
-            height={54}
-            className="object-contain mb-6 rounded-lg"
+            width={200}
+            height={50}
+            className="object-contain mb-6 brightness-0 invert"
           />
           <h2 className="text-2xl font-semibold text-white mb-3">
             Aaramva Shikshya

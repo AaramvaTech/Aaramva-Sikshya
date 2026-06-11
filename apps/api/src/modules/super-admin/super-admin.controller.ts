@@ -25,6 +25,7 @@ import { TenantAdminService } from './tenant-admin.service';
 import {
   ManualOnboardTenantDto,
   UpdateSubscriptionDto,
+  UpdateTenantDto,
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
 import { ImpersonationService } from './impersonation.service';
@@ -125,6 +126,17 @@ export class SuperAdminController {
   @Roles(Role.PLATFORM_ADMIN)
   getTenant(@Param('id', ParseUUIDPipe) id: string) {
     return this.tenantAdmin.getTenantDetail(id);
+  }
+
+  @Patch('tenants/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PLATFORM_ADMIN)
+  updateTenant(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTenantDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tenantAdmin.updateTenant(id, dto, user.userId);
   }
 
   @Patch('tenants/:id/activate')

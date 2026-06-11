@@ -13,9 +13,14 @@ export class TenantService {
     return /^[a-z0-9-]{3,30}$/.test(slug);
   }
 
-  /** Convert a tenant slug into its Postgres schema name. */
+  /**
+   * Convert a tenant slug into its Postgres schema name.
+   * Hyphens in slugs are replaced with underscores so the schema name is always
+   * a plain PostgreSQL identifier (no quoting needed in DDL).
+   * e.g. "stacey-mejia" → "tenant_stacey_mejia"
+   */
   static schemaNameFor(slug: string): string {
-    return `tenant_${slug}`;
+    return `tenant_${slug.replace(/-/g, '_')}`;
   }
 
   /**

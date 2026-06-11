@@ -21,7 +21,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { useCreateFeeStructure, useFeeCategories } from '@/lib/hooks/use-finance';
 import { useClasses, useAcademicYears } from '@/lib/hooks/use-students';
@@ -109,7 +108,11 @@ export function FeeStructureForm({ open, onOpenChange, onSuccess }: FeeStructure
                 onValueChange={(v) => setValue('classId', v ?? '', { shouldValidate: true })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
+                  <span className={watch('classId') ? '' : 'text-muted-foreground'}>
+                    {watch('classId')
+                      ? (classes?.find((c) => c.id === watch('classId'))?.name ?? 'Loading…')
+                      : 'Select class'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {classes?.map((c) => (
@@ -127,7 +130,11 @@ export function FeeStructureForm({ open, onOpenChange, onSuccess }: FeeStructure
                 onValueChange={(v) => setValue('academicYearId', v ?? '', { shouldValidate: true })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select year" />
+                  <span className={watch('academicYearId') ? '' : 'text-muted-foreground'}>
+                    {watch('academicYearId')
+                      ? (academicYears?.find((y) => y.id === watch('academicYearId'))?.name ?? 'Loading…')
+                      : 'Select year'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears?.map((y) => (
@@ -179,7 +186,11 @@ export function FeeStructureForm({ open, onOpenChange, onSuccess }: FeeStructure
                       }
                     >
                       <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Category" />
+                        <span className={watch(`items.${index}.feeCategoryId`) ? '' : 'text-muted-foreground'}>
+                          {watch(`items.${index}.feeCategoryId`)
+                            ? (categories?.find((c) => c.id === watch(`items.${index}.feeCategoryId`))?.name ?? 'Loading…')
+                            : 'Category'}
+                        </span>
                       </SelectTrigger>
                       <SelectContent>
                         {categories?.map((c) => (

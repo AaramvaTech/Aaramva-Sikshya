@@ -11,6 +11,7 @@ export type StudentListParams = {
   limit?: number;
   search?: string;
   classId?: string;
+  className?: string;
   sectionId?: string;
   status?: string;
 };
@@ -59,6 +60,7 @@ export function useEnrollStudent(studentId: string) {
     mutationFn: (data: EnrollStudentData) => studentsApi.enroll(studentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['student', studentId] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
     },
   });
 }
@@ -96,6 +98,16 @@ export function useCreateAcademicYear() {
   return useMutation({
     mutationFn: (data: import('@/lib/api/academic-years.api').CreateAcademicYearData) =>
       academicYearsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
+    },
+  });
+}
+
+export function useSetCurrentAcademicYear() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => academicYearsApi.setCurrent(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academic-years'] });
     },

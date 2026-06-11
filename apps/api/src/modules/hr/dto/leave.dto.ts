@@ -17,6 +17,22 @@ export class CreateLeaveTypeDto {
   isPaid?: boolean;
 }
 
+export class UpdateLeaveTypeDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  daysPerYear?: number;
+
+  @IsOptional()
+  isPaid?: boolean;
+}
+
 export class ApplyLeaveDto {
   @IsUUID()
   leaveTypeId: string;

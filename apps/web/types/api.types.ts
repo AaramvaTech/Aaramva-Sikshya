@@ -141,12 +141,18 @@ export interface CreateStudentData {
   middleName?: string;
   lastName: string;
   dateOfBirth: string; // AD date string "YYYY-MM-DD"
+  admissionDate?: string;
   gender: 'MALE' | 'FEMALE' | 'OTHER';
   phone?: string;
   email?: string;
   address?: string;
   bloodGroup?: string;
   religion?: string;
+  photoUrl?: string;
+  classId?: string;
+  sectionId?: string;
+  academicYearId?: string;
+  rollNumber?: number;
   guardians: {
     relation: string;
     firstName: string;
@@ -242,6 +248,18 @@ export interface SchoolAttendanceSummary {
     className: string;
     present: number;
     absent: number;
+    total: number;
+    rate: number;
+  }[];
+  bySection: {
+    classId: string;
+    className: string;
+    sectionId: string;
+    sectionName: string;
+    present: number;
+    absent: number;
+    late: number;
+    leave: number;
     total: number;
     rate: number;
   }[];
@@ -689,10 +707,13 @@ export interface StaffSummary {
 }
 
 export interface StaffDetail extends StaffSummary {
+  departmentId: string | null;
+  designationId: string | null;
   phone: string | null;
   dateOfBirth: { ad: string; bs: string } | null;
   gender: string | null;
   permanentAddress: string | null;
+  endDate: { ad: string; bs: string } | null;
   baseSalary: number;
   panNumber: string | null;
   bankName: string | null;
@@ -701,13 +722,8 @@ export interface StaffDetail extends StaffSummary {
   emergencyContactPhone: string | null;
 }
 
-// Extra fields returned by backend on StaffResponseDto but not in StaffSummary/StaffDetail
-export type StaffResponseDepartmentId = string | null;
-export type StaffResponseDesignationId = string | null;
-export type StaffResponseEndDate = { ad: string; bs: string } | null;
-
 export interface Department { id: string; name: string; }
-export interface Designation { id: string; title: string; departmentId: string | null; }
+export interface Designation { id: string; title: string; departmentId: string | null; departmentName?: string | null; }
 export interface LeaveType { id: string; name: string; daysPerYear: number; isPaid: boolean; }
 
 export interface LeaveRequest {
@@ -767,8 +783,9 @@ export interface CreateStaffData {
   joinDate: string; employmentType?: string;
   baseSalary: number; panNumber?: string;
   bankName?: string; bankAccount?: string;
-  permanentAddress?: string;
+  permanentAddress?: string; temporaryAddress?: string;
   emergencyContactName?: string; emergencyContactPhone?: string;
+  photoUrl?: string;
 }
 
 export interface ApplyLeaveData {
@@ -780,6 +797,15 @@ export interface PayrollOverride {
   additionalAllowances?: { name: string; amount: number }[];
   additionalDeductions?: { name: string; amount: number }[];
 }
+
+export interface StaffDocument {
+	  id: string;
+	  userId: string;
+	  documentType: string;
+	  fileUrl: string;
+	  fileName: string | null;
+	  uploadedAt: string;
+	}
 
 // ── Library Module ──────────────────────────────────────────────────────────
 
@@ -912,6 +938,7 @@ export interface TenantSummary {
   id: string;
   name: string;
   slug: string;
+  logoUrl: string | null;
   isActive: boolean;
   createdAt: string;
   planName: string;
@@ -925,11 +952,26 @@ export interface TenantDetail extends TenantSummary {
   phone: string | null;
   address: string | null;
   panNumber: string | null;
-  logoUrl: string | null;
   primaryColor: string;
+  description: string | null;
+  establishedYear: number | null;
+  website: string | null;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
   planId: string;
+}
+
+export interface UpdateTenantData {
+  schoolName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  description?: string;
+  establishedYear?: number;
+  website?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  panNumber?: string;
 }
 
 export interface ImpersonationToken {
@@ -978,3 +1020,144 @@ export interface RevenueData {
   activeSchools: number;
   revenue: number;
 }
+
+// ── Settings Module ─────────────────────────────────────────────────────────
+
+export interface SchoolProfile {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  description: string | null;
+  motto: string | null;
+  establishedYear: number | null;
+  website: string | null;
+  address: string | null;
+  province: string | null;
+  district: string | null;
+  phone: string | null;
+  alternatePhone: string | null;
+  email: string | null;
+  panNumber: string | null;
+  registrationNumber: string | null;
+  affiliationBoard: string | null;
+  affiliationNumber: string | null;
+  principalName: string | null;
+  principalSignatureUrl: string | null;
+  schoolStampUrl: string | null;
+}
+
+export interface UpdateProfileData {
+  name?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  description?: string;
+  motto?: string;
+  establishedYear?: number;
+  website?: string;
+  address?: string;
+  province?: string;
+  district?: string;
+  phone?: string;
+  alternatePhone?: string;
+  email?: string;
+  panNumber?: string;
+  registrationNumber?: string;
+  affiliationBoard?: string;
+  affiliationNumber?: string;
+  principalName?: string;
+  principalSignatureUrl?: string;
+  schoolStampUrl?: string;
+}
+
+// ── Dashboard Module ─────────────────────────────────────────────────────────
+
+export interface DashboardOverview {
+  asOf: { ad: string; bs: string };
+  students: {
+    total: number;
+    active: number;
+  };
+  attendance: {
+    date: { ad: string; bs: string };
+    totalStudents: number;
+    present: number;
+    absent: number;
+    late: number;
+    leave: number;
+    notMarked: number;
+    attendanceRate: number;
+    byClass: {
+      classId: string;
+      className: string;
+      present: number;
+      absent: number;
+      total: number;
+      rate: number;
+    }[];
+  };
+  fees: {
+    fiscalYear: string;
+    academicYearId: string;
+    asOf: { ad: string; bs: string };
+    totalInvoiced: number;
+    totalCollected: number;
+    totalPending: number;
+    collectionRate: number;
+  } | null;
+  unreadNotifications: number;
+}
+
+export interface WeeklyAttendanceDay {
+  date: { ad: string; bs: string };
+  dayOfWeek: string;
+  present: number;
+  total: number;
+  rate: number;
+}
+
+export interface WeeklyAttendance {
+  weekStart: { ad: string; bs: string };
+  weekEnd: { ad: string; bs: string };
+  days: WeeklyAttendanceDay[];
+}
+
+export interface RecentStudent {
+  id: string;
+  name: string;
+  admittedAt: { ad: string; bs: string };
+}
+
+export interface RecentPayment {
+  id: string;
+  studentName: string;
+  amount: number;
+  createdAt: { ad: string; bs: string };
+}
+
+export interface RecentNotice {
+  id: string;
+  title: string;
+  publishedAt: { ad: string; bs: string } | null;
+}
+
+export interface RecentActivity {
+  recentStudents: RecentStudent[];
+  recentPayments: RecentPayment[];
+  recentNotices: RecentNotice[];
+}
+
+export interface UpcomingExam {
+  id: string;
+  subjectName: string;
+  className: string;
+  examDate: { ad: string; bs: string };
+  startTime: string;
+  endTime: string;
+}
+
+export interface UpcomingEvents {
+  exams: UpcomingExam[];
+}
+

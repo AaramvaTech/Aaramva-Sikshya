@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { getBsYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
@@ -37,16 +37,25 @@ export class StaffService {
 
       const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-      const [user] = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO users (email, password_hash, first_name, last_name, role)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id`,
-        dto.email,
-        passwordHash,
-        dto.firstName,
-        dto.lastName,
-        dto.role,
-      );
+      let user: { id: string };
+      try {
+        [user] = await tx.$queryRawUnsafe<{ id: string }[]>(
+          `INSERT INTO users (email, password_hash, first_name, last_name, role)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id`,
+          dto.email,
+          passwordHash,
+          dto.firstName,
+          dto.lastName,
+          dto.role,
+        );
+      } catch (err: unknown) {
+        const msg = (err as Error)?.message ?? '';
+        if (msg.includes('23505') || msg.includes('unique constraint')) {
+          throw new ConflictException('A user with this email already exists');
+        }
+        throw err;
+      }
 
       const [prof] = await tx.$queryRawUnsafe<StaffProfileRow[]>(
         `INSERT INTO staff_profiles
@@ -177,8 +186,9 @@ export class StaffService {
               temporary_address = $10,
               emergency_contact_name = $11,
               emergency_contact_phone = $12,
+              photo_url = $13,
               updated_at = NOW()
-        WHERE id = $13::uuid
+        WHERE id = $14::uuid
         RETURNING *`,
       dto.departmentId !== undefined ? dto.departmentId : p.department_id,
       dto.designationId !== undefined ? dto.designationId : p.designation_id,
@@ -192,6 +202,7 @@ export class StaffService {
       dto.temporaryAddress !== undefined ? dto.temporaryAddress : p.temporary_address,
       dto.emergencyContactName !== undefined ? dto.emergencyContactName : p.emergency_contact_name,
       dto.emergencyContactPhone !== undefined ? dto.emergencyContactPhone : p.emergency_contact_phone,
+      dto.photoUrl !== undefined ? dto.photoUrl : p.photo_url,
       id,
     );
 

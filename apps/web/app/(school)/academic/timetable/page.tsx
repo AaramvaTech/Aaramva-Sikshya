@@ -11,7 +11,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { TimetableGrid } from '@/components/academic/timetable-grid';
 import { useClasses, useSectionTimetable, useSubjects } from '@/lib/hooks/use-academic';

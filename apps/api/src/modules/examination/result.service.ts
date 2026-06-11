@@ -367,6 +367,12 @@ export class ResultService {
       isPassed: boolean;
     };
   }> {
+    // Accept either UUID (internal id) or admission number (student_id column)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
+    const whereClause = isUuid
+      ? 's.id = $1::uuid'
+      : 's.student_id ILIKE $1';
+
     // Student info
     const students = await this.tenantPrisma.query<{
       id: string;
@@ -388,7 +394,7 @@ export class ResultService {
        JOIN sections sec ON s.section_id = sec.id
        JOIN classes c ON sec.class_id = c.id
        LEFT JOIN academic_years ay ON ay.is_current = true AND ay.deleted_at IS NULL
-       WHERE s.id = $1::uuid AND s.deleted_at IS NULL`,
+       WHERE ${whereClause} AND s.deleted_at IS NULL`,
       studentId,
     );
     if (!students[0]) throw new NotFoundException(`Student ${studentId} not found`);
@@ -397,7 +403,7 @@ export class ResultService {
     // Get all results for this student
     const results = await this.tenantPrisma.query<StudentResultRow>(
       `SELECT * FROM student_results WHERE student_id = $1::uuid ORDER BY computed_at DESC`,
-      studentId,
+      student.id,
     );
 
     // Get subject results for each result

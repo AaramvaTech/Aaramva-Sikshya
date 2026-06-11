@@ -138,17 +138,17 @@ export default function SchoolsPage() {
     try {
       const res = await impersonate.mutateAsync(tenant.id);
       const token = res.data.data;
-      setAuth(token.accessToken, {
-        id: '',
-        email: '',
-        role: 'SCHOOL_OWNER',
-        tenantId: null,
-        tenantSlug: token.tenantSlug,
-      });
-      setTenant({ slug: token.tenantSlug, name: token.schoolName });
-      toast.warning('Impersonation active — all actions are audited', {
-        duration: 6000,
-      });
+      // Pass token to the new tab via localStorage (30s TTL)
+      localStorage.setItem(
+        'impersonation_handoff',
+        JSON.stringify({
+          accessToken: token.accessToken,
+          tenantSlug: token.tenantSlug,
+          schoolName: token.schoolName,
+          expires: Date.now() + 30_000,
+        }),
+      );
+      toast.warning('Impersonation active — all actions are audited', { duration: 6000 });
       window.open(`/?tenant=${token.tenantSlug}`, '_blank');
     } catch {
       toast.error('Impersonation failed');
@@ -159,18 +159,42 @@ export default function SchoolsPage() {
     {
       id: 'name',
       header: 'School',
-      cell: ({ row }) => (
-        <Link
-          href={`/super-admin/schools/${row.original.id}`}
-          className="font-medium text-gray-800 dark:text-white hover:text-brand-500 dark:hover:text-brand-400 hover:underline"
-        >
-          {row.original.name}
-        </Link>
-      ),
+      cell: ({ row }) => {
+        const t = row.original;
+        const initials = t.name
+          .split(' ')
+          .map((w) => w[0])
+          .filter(Boolean)
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        return (
+          <div className="flex items-center gap-3">
+            {t.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={t.logoUrl}
+                alt={`${t.name} logo`}
+                className="h-9 w-9 flex-shrink-0 rounded-lg border border-gray-200 object-contain dark:border-gray-700"
+              />
+            ) : (
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-theme-xs font-semibold text-brand-500 dark:bg-brand-500/10">
+                {initials || '?'}
+              </span>
+            )}
+            <Link
+              href={`/super-admin/schools/${t.id}`}
+              className="font-medium text-gray-800 dark:text-white hover:text-brand-500 dark:hover:text-brand-400 hover:underline"
+            >
+              {t.name}
+            </Link>
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'slug',
-      header: 'Slug',
+      header: 'School Code',
       cell: ({ getValue }) => (
         <span className="font-mono text-theme-xs text-gray-500 dark:text-gray-400">
           {getValue<string>()}
@@ -207,7 +231,7 @@ export default function SchoolsPage() {
       header: 'Joined',
       cell: ({ row }) => (
         <span className="text-theme-xs text-gray-500 dark:text-gray-400">
-          {new Date(row.original.createdAt).toLocaleDateString()}
+          {row.original.createdAt ? new Date(row.original.createdAt).toLocaleDateString() : '—'}
         </span>
       ),
     },
@@ -309,7 +333,7 @@ export default function SchoolsPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Search by name or slug..."
+            placeholder="Search by name or code..."
             className="pl-9 w-72"
             onChange={(e) => handleSearchChange(e.target.value)}
           />
@@ -399,7 +423,7 @@ export default function SchoolsPage() {
                 )}
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label htmlFor="o-slug">School Code / Slug *</Label>
+                <Label htmlFor="o-slug">School Code *</Label>
                 <Input
                   id="o-slug"
                   placeholder="sxs"

@@ -4,6 +4,7 @@ import type {
   PaginatedResponse,
   StaffSummary,
   StaffDetail,
+  StaffDocument,
   Department,
   Designation,
   LeaveType,
@@ -16,8 +17,10 @@ import type {
   PayrollOverride,
 } from '@/types/api.types';
 
+// Departments and designations use paginated response shape from the backend
+
 export const hrApi = {
-  listStaff: (params?: { page?: number; limit?: number; search?: string; departmentId?: string }) =>
+  listStaff: (params?: { page?: number; limit?: number; search?: string; departmentId?: string; role?: string }) =>
     api.get<ApiResponse<PaginatedResponse<StaffSummary>>>('/hr/staff', { params }),
   getStaff: (id: string) =>
     api.get<ApiResponse<StaffDetail>>(`/hr/staff/${id}`),
@@ -26,16 +29,31 @@ export const hrApi = {
   updateStaff: (id: string, data: Partial<CreateStaffData>) =>
     api.patch<ApiResponse<StaffDetail>>(`/hr/staff/${id}`, data),
   deleteStaff: (id: string) => api.delete(`/hr/staff/${id}`),
+  getStaffDocuments: (id: string) =>
+    api.get<ApiResponse<StaffDocument[]>>(`/hr/staff/${id}/documents`),
+  addStaffDocument: (id: string, data: { documentType: string; fileUrl: string; fileName?: string }) =>
+    api.post<ApiResponse<StaffDocument>>(`/hr/staff/${id}/documents`, data),
 
-  listDepartments: () => api.get<ApiResponse<Department[]>>('/hr/departments'),
+  listDepartments: () => api.get<ApiResponse<PaginatedResponse<Department>>>('/hr/departments'),
   createDepartment: (data: { name: string }) =>
     api.post<ApiResponse<Department>>('/hr/departments', data),
+  updateDepartment: (id: string, data: { name: string }) =>
+    api.patch<ApiResponse<Department>>(`/hr/departments/${id}`, data),
+  deleteDepartment: (id: string) => api.delete(`/hr/departments/${id}`),
 
-  listDesignations: () => api.get<ApiResponse<Designation[]>>('/hr/designations'),
+  listDesignations: () => api.get<ApiResponse<PaginatedResponse<Designation>>>('/hr/designations'),
   createDesignation: (data: { title: string; departmentId?: string }) =>
     api.post<ApiResponse<Designation>>('/hr/designations', data),
+  updateDesignation: (id: string, data: { title: string; departmentId?: string }) =>
+    api.patch<ApiResponse<Designation>>(`/hr/designations/${id}`, data),
+  deleteDesignation: (id: string) => api.delete(`/hr/designations/${id}`),
 
   listLeaveTypes: () => api.get<ApiResponse<LeaveType[]>>('/hr/leave-types'),
+  createLeaveType: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>
+    api.post<ApiResponse<LeaveType>>('/hr/leave-types', data),
+  updateLeaveType: (id: string, data: { name?: string; daysPerYear?: number; isPaid?: boolean }) =>
+    api.patch<ApiResponse<LeaveType>>(`/hr/leave-types/${id}`, data),
+  deleteLeaveType: (id: string) => api.delete(`/hr/leave-types/${id}`),
 
   listLeave: (params?: { page?: number; limit?: number; status?: string }) =>
     api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>('/hr/leave', { params }),

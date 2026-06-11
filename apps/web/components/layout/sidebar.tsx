@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
-  MessageSquare, ChevronDown,
+  MessageSquare, ChevronDown, Settings,
 } from 'lucide-react';
 import { useSidebar } from '@/context/sidebar-context';
 import { useTenantStore } from '@/store/tenant.store';
@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
     icon: <CheckSquare className="w-5 h-5" />,
     name: 'Attendance',
     subItems: [
+      { name: 'Overview', path: '/attendance' },
       { name: 'Mark Attendance', path: '/attendance/mark' },
       { name: 'Reports', path: '/attendance/reports' },
     ],
@@ -46,6 +47,7 @@ const navItems: NavItem[] = [
     icon: <BookOpen className="w-5 h-5" />,
     name: 'Academic',
     subItems: [
+      { name: 'Academic Years', path: '/academic/years' },
       { name: 'Classes', path: '/academic/classes' },
       { name: 'Subjects', path: '/academic/subjects' },
       { name: 'Timetable', path: '/academic/timetable' },
@@ -78,6 +80,7 @@ const navItems: NavItem[] = [
       { name: 'Staff', path: '/hr/staff' },
       { name: 'Leave', path: '/hr/leave' },
       { name: 'Payroll', path: '/hr/payroll' },
+      { name: 'Setup', path: '/hr/setup' },
     ],
   },
   {
@@ -95,6 +98,11 @@ const navItems: NavItem[] = [
       { name: 'Notices', path: '/communication/notices' },
       { name: 'SMS Center', path: '/communication/sms' },
     ],
+  },
+  {
+    icon: <Settings className="w-5 h-5" />,
+    name: 'Settings',
+    path: '/settings',
   },
 ];
 
@@ -172,25 +180,37 @@ export function Sidebar() {
             <Image
               src={tenant.logoUrl}
               alt={tenant.name ?? 'School'}
-              width={32}
-              height={32}
-              className="rounded object-contain flex-shrink-0"
+              width={36}
+              height={36}
+              className="rounded-lg object-contain flex-shrink-0"
             />
           ) : (
-            <div className="h-8 w-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {(tenant.name ?? tenant.slug ?? 'AS').slice(0, 2).toUpperCase()}
-            </div>
+            <Image
+              src="/icon.png"
+              alt="Aaramva Shikshya"
+              width={36}
+              height={36}
+              className="object-contain flex-shrink-0"
+              priority
+            />
           )}
           {showLabels && (
-            <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">
-              {tenant.name ?? 'Aaramva Shikshya'}
-            </span>
+            <div className="min-w-0">
+              <span className="block font-semibold text-sm text-gray-900 dark:text-white truncate">
+                {tenant.name ?? 'Aaramva Shikshya'}
+              </span>
+              {!tenant.name && (
+                <span className="block text-[10px] text-gray-400 uppercase tracking-widest">
+                  School Admin
+                </span>
+              )}
+            </div>
           )}
         </Link>
       </div>
 
       {/* Navigation */}
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col overflow-y-auto flex-1 duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -295,6 +315,32 @@ export function Sidebar() {
             </div>
           </div>
         </nav>
+      </div>
+      {/* Powered by footer */}
+      <div className={`py-4 border-t border-gray-100 dark:border-gray-800 flex items-center ${showLabels ? 'justify-start gap-2 px-2' : 'justify-center'}`}>
+        {showLabels ? (
+          <>
+            <span className="text-[10px] text-gray-400 uppercase tracking-widest font-medium whitespace-nowrap">
+              Powered by
+            </span>
+            <Image
+              src="/logo.png"
+              alt="Aaramva Shikshya"
+              width={110}
+              height={28}
+              className="object-contain"
+            />
+          </>
+        ) : (
+          <div className="relative h-7 w-7 overflow-hidden">
+            <Image
+              src="/logo.png"
+              alt="Aaramva Shikshya"
+              fill
+              className="object-cover object-left"
+            />
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import Image from 'next/image';
 import { useSidebar } from '@/context/sidebar-context';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
@@ -245,6 +246,12 @@ export function Header() {
       <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
         {/* Left: sidebar toggle + mobile logo */}
         <div className="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
+          {/* Mobile logo — visible only when sidebar is hidden on mobile */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Image src="/icon.png" alt="Aaramva Shikshya" width={28} height={28} className="object-contain" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">Aaramva Shikshya</span>
+          </div>
+
           <button
             onClick={handleToggle}
             className="items-center justify-center w-10 h-10 text-gray-500 border border-gray-200 rounded-lg z-9999 dark:border-gray-800 lg:flex dark:text-gray-400 lg:h-11 lg:w-11 lg:border hover:bg-gray-100 dark:hover:bg-gray-800"

@@ -38,19 +38,42 @@ export class StudentAttendanceService {
     await this.tenantPrisma.run(async (tx) => {
       const studentIds = dto.records.map((r) => r.studentId);
 
-      const enrolled = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM students
+      // Look up section name for legacy fallback check
+      const sectionRows = await tx.$queryRawUnsafe<{ name: string }[]>(
+        `SELECT name FROM sections WHERE id = $1::uuid`,
+        dto.sectionId,
+      );
+      const sectionName = sectionRows[0]?.name ?? null;
+
+      // Accept students enrolled by UUID OR by name (section_id IS NULL = pre-fix legacy data)
+      const enrolled = await tx.$queryRawUnsafe<{ id: string; section_id: string | null }[]>(
+        `SELECT id, section_id FROM students
          WHERE id = ANY($1::uuid[])
-           AND section_id = $2::uuid
-           AND deleted_at IS NULL`,
+           AND deleted_at IS NULL
+           AND (
+             section_id = $2::uuid
+             OR (section_id IS NULL AND $3::text IS NOT NULL AND section_name = $3)
+           )`,
         studentIds,
         dto.sectionId,
+        sectionName,
       );
       const enrolledIds = new Set(enrolled.map((s) => s.id));
       const missing = studentIds.filter((id) => !enrolledIds.has(id));
       if (missing.length > 0) {
         throw new BadRequestException(
           `Students not enrolled in section: ${missing.join(', ')}`,
+        );
+      }
+
+      // Backfill section_id for legacy students matched by name
+      const legacyIds = enrolled.filter((s) => s.section_id === null).map((s) => s.id);
+      if (legacyIds.length > 0) {
+        await tx.$executeRawUnsafe(
+          `UPDATE students SET section_id = $1::uuid
+           WHERE id = ANY($2::uuid[]) AND section_id IS NULL`,
+          dto.sectionId,
+          legacyIds,
         );
       }
 
@@ -312,9 +335,12 @@ export class StudentAttendanceService {
   async getSchoolSummary(): Promise<SchoolSummaryDto> {
     const today = new Date().toISOString().split('T')[0];
 
+    // Section-level breakdown — the overview UI filters this by grade + section.
     const rows = await this.tenantPrisma.query<{
       class_id: string;
       class_name: string;
+      section_id: string;
+      section_name: string;
       total: string;
       present: string;
       absent: string;
@@ -324,6 +350,7 @@ export class StudentAttendanceService {
     }>(
       `SELECT
          c.id AS class_id, c.name AS class_name,
+         sec.id AS section_id, sec.name AS section_name,
          COUNT(DISTINCT s.id)                                                 AS total,
          COUNT(DISTINCT CASE WHEN sa.status = 'PRESENT' THEN s.id END)       AS present,
          COUNT(DISTINCT CASE WHEN sa.status = 'ABSENT'  THEN s.id END)       AS absent,
@@ -335,31 +362,62 @@ export class StudentAttendanceService {
        JOIN classes  c   ON sec.class_id  = c.id
        LEFT JOIN student_attendance sa ON sa.student_id = s.id AND sa.date = $1::date
        WHERE s.deleted_at IS NULL
-       GROUP BY c.id, c.name
-       ORDER BY c.order_index`,
+       GROUP BY c.id, c.name, c.order_index, sec.id, sec.name
+       ORDER BY c.order_index, sec.name`,
       today,
     );
 
     let totalStudents = 0, present = 0, absent = 0, late = 0, leave = 0, marked = 0;
-    const byClass = rows.map((r) => {
+
+    const bySection = rows.map((r) => {
       const t = parseInt(r.total, 10);
       const p = parseInt(r.present, 10);
       const a = parseInt(r.absent, 10);
+      const l = parseInt(r.late, 10);
+      const lv = parseInt(r.leave, 10);
       totalStudents += t;
       present += p;
       absent += a;
-      late += parseInt(r.late, 10);
-      leave += parseInt(r.leave, 10);
+      late += l;
+      leave += lv;
       marked += parseInt(r.marked, 10);
       return {
         classId: r.class_id,
         className: r.class_name,
+        sectionId: r.section_id,
+        sectionName: r.section_name,
         present: p,
         absent: a,
+        late: l,
+        leave: lv,
         total: t,
         rate: t > 0 ? Math.round((p / t) * 1000) / 10 : 0,
       };
     });
+
+    // Aggregate the section rows up to a per-class summary (preserves DB ordering).
+    const classMap = new Map<string, { classId: string; className: string; present: number; absent: number; total: number }>();
+    for (const r of bySection) {
+      const acc = classMap.get(r.classId) ?? {
+        classId: r.classId,
+        className: r.className,
+        present: 0,
+        absent: 0,
+        total: 0,
+      };
+      acc.present += r.present;
+      acc.absent += r.absent;
+      acc.total += r.total;
+      classMap.set(r.classId, acc);
+    }
+    const byClass = [...classMap.values()].map((c) => ({
+      classId: c.classId,
+      className: c.className,
+      present: c.present,
+      absent: c.absent,
+      total: c.total,
+      rate: c.total > 0 ? Math.round((c.present / c.total) * 1000) / 10 : 0,
+    }));
 
     const notMarked = totalStudents - marked;
     const attendanceRate = totalStudents > 0
@@ -376,6 +434,7 @@ export class StudentAttendanceService {
       notMarked,
       attendanceRate,
       byClass,
+      bySection,
     };
   }
 }

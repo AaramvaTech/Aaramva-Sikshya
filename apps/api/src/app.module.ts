@@ -15,8 +15,10 @@ import { JobsModule } from './jobs/jobs.module';
 import { HrModule } from './modules/hr/hr.module';
 import { ExaminationModule } from './modules/examination/examination.module';
 import { CommunicationModule } from './modules/communication/communication.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { LibraryModule } from './modules/library/library.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
   !!(process.env.REDIS_URL || process.env.REDIS_HOST);
@@ -36,8 +38,10 @@ const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
     ...(redisAvailable ? [JobsModule] : []),
     ExaminationModule,
     CommunicationModule,
+    DashboardModule,
     LibraryModule,
     SuperAdminModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -7,44 +7,105 @@ import type { AuditLog } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
 
-const ACTION_BADGE: Record<string, { label: string; className: string }> = {
+const ACTION_META: Record<string, { label: string; description: string; className: string }> = {
   TENANT_CREATED: {
-    label: 'Created',
+    label: 'School Created',
+    description: 'A new school was onboarded to the platform',
     className: 'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
   },
   TENANT_SUSPENDED: {
-    label: 'Suspended',
+    label: 'School Suspended',
+    description: 'A school account was suspended',
     className: 'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
   },
   TENANT_ACTIVATED: {
-    label: 'Activated',
+    label: 'School Activated',
+    description: 'A school account was re-activated',
     className: 'bg-brand-50 text-brand-700 dark:bg-brand-500/[0.12] dark:text-brand-400',
   },
-  PLAN_CHANGED: {
+  TENANT_UPDATED: {
+    label: 'School Updated',
+    description: 'School details were modified',
+    className: 'bg-brand-50 text-brand-700 dark:bg-brand-500/[0.12] dark:text-brand-400',
+  },
+  PLAN_CREATED: {
+    label: 'Plan Created',
+    description: 'A new subscription plan was created',
+    className: 'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
+  },
+  PLAN_UPDATED: {
+    label: 'Plan Updated',
+    description: 'A subscription plan was modified',
+    className: 'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
+  },
+  PLAN_DEACTIVATED: {
+    label: 'Plan Deactivated',
+    description: 'A subscription plan was deactivated',
+    className: 'bg-error-50 text-error-700 dark:bg-error-500/[0.12] dark:text-error-400',
+  },
+  SUBSCRIPTION_CHANGED: {
     label: 'Plan Changed',
+    description: "A school's subscription plan was changed",
     className: 'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
   },
   IMPERSONATION: {
     label: 'Impersonation',
+    description: 'Admin logged in as a school owner',
     className:
       'bg-orange-50 text-orange-800 font-bold dark:bg-orange-500/[0.12] dark:text-orange-400',
   },
 };
 
 function ActionBadge({ action }: { action: string }) {
-  const cfg = ACTION_BADGE[action];
-  const cls = cfg?.className ?? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
-  const label = cfg?.label ?? action;
+  const meta = ACTION_META[action];
+  const cls = meta?.className ?? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+  const label = meta?.label ?? action;
+  const description = meta?.description;
   return (
     <span
+      title={description}
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium',
+        'inline-flex items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium cursor-help',
         cls,
       )}
     >
       {label}
     </span>
   );
+}
+
+/** Turn the raw details object into a short, human-readable summary. */
+function formatDetails(action: string, details: Record<string, unknown>): string {
+  switch (action) {
+    case 'TENANT_CREATED':
+      return details.schoolName ? `School: ${details.schoolName}` : 'New school onboarded';
+    case 'TENANT_SUSPENDED':
+      return details.schoolName ? `Suspended: ${details.schoolName}` : 'School suspended';
+    case 'TENANT_ACTIVATED':
+      return details.schoolName ? `Activated: ${details.schoolName}` : 'School activated';
+    case 'TENANT_UPDATED':
+      return details.schoolName ? `Updated: ${details.schoolName}` : 'School details updated';
+    case 'PLAN_CREATED':
+    case 'PLAN_UPDATED':
+    case 'PLAN_DEACTIVATED':
+      return details.planName ? `Plan: ${details.planName}` : 'Plan modified';
+    case 'SUBSCRIPTION_CHANGED': {
+      const parts: string[] = [];
+      if (details.schoolName) parts.push(details.schoolName as string);
+      if (details.oldPlan || details.newPlan) {
+        parts.push(`${details.oldPlan ?? '?'} → ${details.newPlan ?? '?'}`);
+      }
+      return parts.length > 0 ? parts.join(' — ') : 'Subscription plan changed';
+    }
+    case 'IMPERSONATION':
+      return details.schoolName ? `Logged in as: ${details.schoolName}` : 'Impersonated a school';
+    default:
+      // Fallback: show up to 2 key-value pairs
+      return Object.entries(details)
+        .slice(0, 2)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+  }
 }
 
 export default function AuditLogPage() {
@@ -60,7 +121,7 @@ export default function AuditLogPage() {
     <div>
       <PageHeader
         title="Audit Log"
-        description="All platform admin actions, ordered by most recent"
+        description="A record of all admin actions — who did what, when, and to which school or plan"
       />
 
       <div className="flex gap-3 mb-4 flex-wrap">
@@ -70,11 +131,11 @@ export default function AuditLogPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All Actions</SelectItem>
-            <SelectItem value="TENANT_CREATED">Created</SelectItem>
-            <SelectItem value="TENANT_SUSPENDED">Suspended</SelectItem>
-            <SelectItem value="TENANT_ACTIVATED">Activated</SelectItem>
-            <SelectItem value="PLAN_CHANGED">Plan Changed</SelectItem>
-            <SelectItem value="IMPERSONATION">Impersonation</SelectItem>
+            {Object.entries(ACTION_META).map(([value, meta]) => (
+              <SelectItem key={value} value={value}>
+                {meta.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -132,27 +193,21 @@ export default function AuditLogPage() {
                         </td>
                         <td className="px-4 py-3 text-theme-xs">
                           {log.targetType || log.targetId ? (
-                            <>
-                              <span className="text-gray-500 dark:text-gray-400">
-                                {log.targetType}
-                              </span>
-                              {log.targetId && (
-                                <span className="ml-1 font-mono text-gray-400 dark:text-gray-500">
-                                  {log.targetId.slice(0, 8)}…
-                                </span>
-                              )}
-                            </>
+                            <span className="text-gray-500 dark:text-gray-400">
+                              {log.targetType === 'TENANT' && log.details?.schoolName
+                                ? `School: ${log.details.schoolName}`
+                                : log.targetType === 'PLAN' && log.details?.planName
+                                  ? `Plan: ${log.details.planName}`
+                                  : log.targetType ?? `${log.targetId?.slice(0, 8)}…`}
+                            </span>
                           ) : (
                             <span className="text-gray-400 dark:text-gray-500">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           {log.details ? (
-                            <span className="text-theme-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px] block">
-                              {Object.entries(log.details)
-                                .slice(0, 2)
-                                .map(([k, v]) => `${k}: ${v}`)
-                                .join(', ')}
+                            <span className="text-theme-xs text-gray-500 dark:text-gray-400 truncate max-w-[240px] block" title={Object.entries(log.details).map(([k, v]) => `${k}: ${v}`).join(', ')}>
+                              {formatDetails(log.action, log.details)}
                             </span>
                           ) : (
                             <span className="text-theme-xs text-gray-400 dark:text-gray-500">—</span>

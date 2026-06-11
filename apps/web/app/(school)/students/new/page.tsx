@@ -1,21 +1,22 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, ChevronLeft } from 'lucide-react';
+import { Camera, Plus, Trash2, Loader2, ChevronLeft } from 'lucide-react';
 import type { Path } from 'react-hook-form';
 import {
   createStudentSchema,
   type CreateStudentFormValues,
 } from '@/lib/schemas/student.schema';
-import { useCreateStudent } from '@/lib/hooks/use-students';
+import { useCreateStudent, useClasses, useCurrentAcademicYear } from '@/lib/hooks/use-students';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { todayBs } from '@/lib/bs-calendar';
 import { BsDate } from '@/components/shared/bs-date';
 import { PageHeader } from '@/components/shared/page-header';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,11 +34,10 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-const STEPS = ['Personal Info', 'Guardian Info', 'Review & Submit'];
+const STEPS = ['Personal & Enrollment', 'Guardian Info', 'Review & Submit'];
 
 const STEP_FIELDS: Path<CreateStudentFormValues>[][] = [
   ['firstName', 'lastName', 'dateOfBirth', 'admissionDate', 'gender'],
@@ -50,8 +50,23 @@ const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 export default function NewStudentPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const createStudent = useCreateStudent();
   const todayBsYear = todayBs().year;
+
+  const { data: classes } = useClasses();
+  const { data: currentYear } = useCurrentAcademicYear();
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be less than 2 MB'); return; }
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoUrl(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   const form = useForm<CreateStudentFormValues>({
     resolver: zodResolver(createStudentSchema),
@@ -67,6 +82,10 @@ export default function NewStudentPage() {
       address: '',
       bloodGroup: '',
       religion: '',
+      academicYearId: '',
+      classId: '',
+      sectionId: '',
+      rollNumber: undefined,
       guardians: [
         {
           relation: '',
@@ -80,10 +99,26 @@ export default function NewStudentPage() {
     },
   });
 
+  // Pre-select current academic year
+  useEffect(() => {
+    if (currentYear?.id && !form.getValues('academicYearId')) {
+      form.setValue('academicYearId', currentYear.id);
+    }
+  }, [currentYear?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'guardians',
   });
+
+  const watchedClassId = form.watch('classId');
+  const selectedClass = classes?.find((c) => c.id === watchedClassId);
+  const sections = selectedClass?.sections ?? [];
+
+  // Reset section when class changes
+  useEffect(() => {
+    form.setValue('sectionId', '');
+  }, [watchedClassId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function goNext() {
     const fieldsToValidate = STEP_FIELDS[step];
@@ -103,6 +138,11 @@ export default function NewStudentPage() {
         address: values.address || undefined,
         bloodGroup: values.bloodGroup || undefined,
         religion: values.religion || undefined,
+        photoUrl: photoUrl || undefined,
+        classId: values.classId || undefined,
+        sectionId: values.sectionId || undefined,
+        academicYearId: values.academicYearId || undefined,
+        rollNumber: values.rollNumber || undefined,
         guardians: values.guardians.map((g) => ({
           ...g,
           email: g.email || undefined,
@@ -169,205 +209,339 @@ export default function NewStudentPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          {/* ── Step 1: Personal Info ──────────────────────────────── */}
+          {/* ── Step 1: Personal Info + Enrollment ──────────────────── */}
           {step === 0 && (
-            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-              <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
-                <h4 className="text-xl font-semibold text-black dark:text-white">Personal Information</h4>
+            <div className="space-y-5">
+              {/* Personal Information */}
+              <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                  <h4 className="text-xl font-semibold text-black dark:text-white">Personal Information</h4>
+                </div>
+                <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
+                  {/* Photo upload */}
+                  <div className="flex items-center gap-5 pb-2 border-b border-stroke dark:border-strokedark">
+                    <div className="relative group shrink-0">
+                      <Avatar className="h-20 w-20 ring-2 ring-brand-100">
+                        <AvatarImage src={photoUrl ?? undefined} className="object-cover" />
+                        <AvatarFallback className="bg-brand-50 text-brand-400">
+                          <Camera className="h-6 w-6" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Camera className="h-5 w-5 text-white" />
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-black dark:text-white mb-1">Profile Photo <span className="text-gray-400 font-normal">(optional)</span></p>
+                      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                      <Button type="button" size="sm" variant="outline" onClick={() => photoInputRef.current?.click()} className="text-xs h-8">
+                        {photoUrl ? 'Change photo' : 'Upload photo'}
+                      </Button>
+                      {photoUrl && (
+                        <button type="button" onClick={() => setPhotoUrl(null)} className="ml-2 text-xs text-red-400 hover:text-red-600">
+                          Remove
+                        </button>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">Max 2 MB · JPG, PNG, WEBP</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name *</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="middleName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Middle Name</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name *</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date of Birth (BS) *</FormLabel>
+                          <FormControl>
+                            <BsDateInput value={field.value} onChange={field.onChange} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="gender"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Gender *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <span className={field.value ? '' : 'text-muted-foreground'}>
+                                  {field.value === 'MALE' ? 'Male' : field.value === 'FEMALE' ? 'Female' : field.value === 'OTHER' ? 'Other' : 'Select gender'}
+                                </span>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="MALE">Male</SelectItem>
+                              <SelectItem value="FEMALE">Female</SelectItem>
+                              <SelectItem value="OTHER">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="admissionDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Admission Date (BS) *</FormLabel>
+                          <FormControl>
+                            <BsDateInput
+                              value={field.value}
+                              onChange={field.onChange}
+                              minYear={todayBsYear - 1}
+                              maxYear={todayBsYear + 1}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bloodGroup"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Blood Group</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <span className={field.value ? '' : 'text-muted-foreground'}>
+                                  {field.value || 'Select blood group'}
+                                </span>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {BLOOD_GROUPS.map((bg) => (
+                                <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="religion"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Religion</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl><Input type="tel" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl><Input type="email" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Address</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name *</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="middleName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Middle Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name *</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="dateOfBirth"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date of Birth (BS) *</FormLabel>
-                        <FormControl>
-                          <BsDateInput
-                            value={field.value}
-                            onChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="gender"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Gender *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ?? ''}
-                        >
+              {/* Class & Enrollment */}
+              <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                  <h4 className="text-xl font-semibold text-black dark:text-white">
+                    Class Assignment
+                    <span className="ml-2 text-sm font-normal text-gray-400">(optional — can be set later)</span>
+                  </h4>
+                </div>
+                <div className="p-4 sm:p-6 xl:p-7.5 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="classId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Class</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <span className={field.value ? '' : 'text-muted-foreground'}>
+                                  {field.value
+                                    ? (classes?.find((c) => c.id === field.value)?.name ?? 'Loading...')
+                                    : 'Select class'}
+                                </span>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {classes?.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="sectionId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Section</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value ?? ''}
+                            disabled={!watchedClassId}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <span className={field.value ? '' : 'text-muted-foreground'}>
+                                  {field.value
+                                    ? (sections.find((s) => s.id === field.value)?.name ?? 'Loading...')
+                                    : watchedClassId ? 'Select section' : 'Select class first'}
+                                </span>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {sections.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="rollNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Roll Number</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select gender" />
-                            </SelectTrigger>
+                            <Input
+                              type="number"
+                              placeholder="Optional"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                              value={field.value ?? ''}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="MALE">Male</SelectItem>
-                            <SelectItem value="FEMALE">Female</SelectItem>
-                            <SelectItem value="OTHER">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="academicYearId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Academic Year</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <span className={field.value ? '' : 'text-muted-foreground'}>
+                                  {field.value
+                                    ? (currentYear?.id === field.value
+                                        ? `${currentYear.name} (Current)`
+                                        : field.value)
+                                    : 'Select academic year'}
+                                </span>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {currentYear && (
+                                <SelectItem value={currentYear.id}>
+                                  {currentYear.name} (Current)
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="admissionDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Admission Date (BS) *</FormLabel>
-                        <FormControl>
-                          <BsDateInput
-                            value={field.value}
-                            onChange={field.onChange}
-                            minYear={todayBsYear - 1}
-                            maxYear={todayBsYear + 1}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="bloodGroup"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Blood Group</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ?? ''}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select blood group" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {BLOOD_GROUPS.map((bg) => (
-                              <SelectItem key={bg} value={bg}>
-                                {bg}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="religion"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Religion</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input type="tel" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
             </div>
           )}
@@ -403,9 +577,7 @@ export default function NewStudentPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Relation *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Father" {...field} />
-                            </FormControl>
+                            <FormControl><Input placeholder="Father" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -416,9 +588,7 @@ export default function NewStudentPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>First Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
+                            <FormControl><Input {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -429,9 +599,7 @@ export default function NewStudentPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Last Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
+                            <FormControl><Input {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -444,9 +612,7 @@ export default function NewStudentPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Phone *</FormLabel>
-                            <FormControl>
-                              <Input type="tel" {...field} />
-                            </FormControl>
+                            <FormControl><Input type="tel" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -457,9 +623,7 @@ export default function NewStudentPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input type="email" {...field} />
-                            </FormControl>
+                            <FormControl><Input type="email" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -471,14 +635,9 @@ export default function NewStudentPage() {
                       render={({ field }) => (
                         <FormItem className="flex items-center gap-2">
                           <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                           </FormControl>
-                          <FormLabel className="!mt-0 cursor-pointer">
-                            Primary Guardian
-                          </FormLabel>
+                          <FormLabel className="!mt-0 cursor-pointer">Primary Guardian</FormLabel>
                         </FormItem>
                       )}
                     />
@@ -490,16 +649,7 @@ export default function NewStudentPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() =>
-                    append({
-                      relation: '',
-                      firstName: '',
-                      lastName: '',
-                      phone: '',
-                      email: '',
-                      isPrimary: false,
-                    })
-                  }
+                  onClick={() => append({ relation: '', firstName: '', lastName: '', phone: '', email: '', isPrimary: false })}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add another guardian
@@ -516,50 +666,40 @@ export default function NewStudentPage() {
                   <h4 className="text-xl font-semibold text-black dark:text-white">Personal Information</h4>
                 </div>
                 <div className="p-4 sm:p-6 xl:p-7.5">
+                  {photoUrl && (
+                    <div className="flex items-center gap-3 mb-4 pb-4 border-b border-stroke dark:border-strokedark">
+                      <Avatar className="h-14 w-14 ring-2 ring-brand-100">
+                        <AvatarImage src={photoUrl} className="object-cover" />
+                        <AvatarFallback className="bg-brand-50 text-brand-400 text-lg">
+                          {[values.firstName?.[0], values.lastName?.[0]].join('').toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium text-black dark:text-white">
+                          {[values.firstName, values.middleName, values.lastName].filter(Boolean).join(' ')}
+                        </p>
+                        <p className="text-xs text-green-600">Photo attached</p>
+                      </div>
+                    </div>
+                  )}
                   <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                     <ReviewRow
                       label="Full Name"
-                      value={[
-                        values.firstName,
-                        values.middleName,
-                        values.lastName,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
+                      value={[values.firstName, values.middleName, values.lastName].filter(Boolean).join(' ')}
                     />
                     <ReviewRow label="Gender" value={values.gender} />
                     <ReviewRow
                       label="Date of Birth (BS)"
-                      value={
-                        values.dateOfBirth ? (
-                          <BsDate date={values.dateOfBirth} />
-                        ) : (
-                          '—'
-                        )
-                      }
+                      value={values.dateOfBirth ? <BsDate date={values.dateOfBirth} /> : '—'}
                     />
                     <ReviewRow
                       label="Admission Date (BS)"
-                      value={
-                        values.admissionDate ? (
-                          <BsDate date={values.admissionDate} />
-                        ) : (
-                          '—'
-                        )
-                      }
+                      value={values.admissionDate ? <BsDate date={values.admissionDate} /> : '—'}
                     />
-                    {values.bloodGroup && (
-                      <ReviewRow label="Blood Group" value={values.bloodGroup} />
-                    )}
-                    {values.religion && (
-                      <ReviewRow label="Religion" value={values.religion} />
-                    )}
-                    {values.phone && (
-                      <ReviewRow label="Phone" value={values.phone} />
-                    )}
-                    {values.email && (
-                      <ReviewRow label="Email" value={values.email} />
-                    )}
+                    {values.bloodGroup && <ReviewRow label="Blood Group" value={values.bloodGroup} />}
+                    {values.religion && <ReviewRow label="Religion" value={values.religion} />}
+                    {values.phone && <ReviewRow label="Phone" value={values.phone} />}
+                    {values.email && <ReviewRow label="Email" value={values.email} />}
                     {values.address && (
                       <div className="col-span-2">
                         <ReviewRow label="Address" value={values.address} />
@@ -569,6 +709,32 @@ export default function NewStudentPage() {
                 </div>
               </div>
 
+              {/* Enrollment summary */}
+              {values.classId && values.sectionId && (
+                <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+                  <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
+                    <h4 className="text-xl font-semibold text-black dark:text-white">Class Assignment</h4>
+                  </div>
+                  <div className="p-4 sm:p-6 xl:p-7.5">
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                      <ReviewRow
+                        label="Class"
+                        value={classes?.find((c) => c.id === values.classId)?.name ?? values.classId}
+                      />
+                      <ReviewRow
+                        label="Section"
+                        value={
+                          classes
+                            ?.find((c) => c.id === values.classId)
+                            ?.sections.find((s) => s.id === values.sectionId)?.name ?? values.sectionId
+                        }
+                      />
+                      {values.rollNumber && <ReviewRow label="Roll Number" value={String(values.rollNumber)} />}
+                    </dl>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
                 <div className="border-b border-stroke px-4 py-4 dark:border-strokedark sm:px-6 xl:px-7.5">
                   <h4 className="text-xl font-semibold text-black dark:text-white">Guardians</h4>
@@ -576,10 +742,7 @@ export default function NewStudentPage() {
                 <div className="p-4 sm:p-6 xl:p-7.5">
                   <div className="space-y-3 divide-y divide-stroke dark:divide-strokedark">
                     {values.guardians.map((g, i) => (
-                      <div
-                        key={i}
-                        className="text-sm pb-3 last:pb-0"
-                      >
+                      <div key={i} className="text-sm pb-3 last:pb-0">
                         <p className="font-medium text-black dark:text-white">
                           {g.firstName} {g.lastName}
                           {g.isPrimary && (

@@ -78,11 +78,52 @@ export function useCreateExamType() {
   });
 }
 
+export function useUpdateExamType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; weightPercent?: number; orderIndex?: number } }) =>
+      examinationApi.updateExamType(id, data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['exam-types'] }),
+  });
+}
+
+export function useDeleteExamType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => examinationApi.deleteExamType(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['exam-types'] }),
+  });
+}
+
 export function useBulkCreateSchedules() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: BulkCreateScheduleData) =>
       examinationApi.bulkCreateSchedules(data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['exam-schedules'] }),
+  });
+}
+
+export function useUpdateSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<{
+        examDate: string;
+        startTime: string;
+        endTime: string;
+        fullMarks: number;
+        passMarks: number;
+        room: string;
+      }>;
+    }) => examinationApi.updateSchedule(id, data),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['exam-schedules'] }),
   });

@@ -10,6 +10,7 @@ import type {
   ImpersonationToken,
   AuditLog,
   OnboardTenantData,
+  UpdateTenantData,
   CreatePlanData,
   RevenueData,
 } from '@/types/api.types';
@@ -51,7 +52,7 @@ export const superAdminApi = {
     api.get<ApiResponse<TenantDetail>>(`/super-admin/tenants/${id}`),
   onboardTenant: (data: OnboardTenantData) =>
     api.post<ApiResponse<TenantDetail>>('/super-admin/tenants', data),
-  updateTenant: (id: string, data: Partial<OnboardTenantData>) =>
+  updateTenant: (id: string, data: UpdateTenantData) =>
     api.patch<ApiResponse<TenantDetail>>(`/super-admin/tenants/${id}`, data),
   suspendTenant: (id: string) =>
     api.patch(`/super-admin/tenants/${id}/suspend`, {}),
