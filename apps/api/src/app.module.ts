@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -27,6 +28,7 @@ const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     PrismaModule,
     TenantModule,
     AuthModule,
@@ -52,6 +54,7 @@ export class AppModule {
       .apply(TenantMiddleware)
       .exclude(
         { path: 'api/v1/super-admin/(.*)', method: RequestMethod.ALL },
+        { path: 'api/v1/tenants/verify/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }
