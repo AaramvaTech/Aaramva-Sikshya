@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+// useRouter kept for future navigation needs
 import type { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
@@ -10,8 +11,9 @@ import { BsDate } from '@/components/shared/bs-date';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { InvoiceStatusBadge } from '@/components/finance/invoice-status-badge';
-import { InvoiceDetailSheet } from '@/components/finance/invoice-detail-sheet';
+import { InvoiceDetailModal } from '@/components/finance/invoice-detail-modal';
 import { PaymentForm } from '@/components/finance/payment-form';
+import { GenerateInvoiceDialog } from '@/components/finance/generate-invoice-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -46,6 +48,7 @@ export default function InvoicesPage() {
   const [searchInput, setSearchInput] = useState(search);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<InvoiceSummary | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const { data: invoiceData, isLoading } = useInvoices({
     page,
@@ -182,9 +185,9 @@ export default function InvoicesPage() {
         action={
           <Button
             className="bg-brand-500 hover:bg-brand-600 text-white"
-            onClick={() => router.push('/finance')}
+            onClick={() => setGenerateOpen(true)}
           >
-            Finance Hub
+            + Generate Invoice
           </Button>
         }
       />
@@ -245,7 +248,7 @@ export default function InvoicesPage() {
         }
       />
 
-      <InvoiceDetailSheet
+      <InvoiceDetailModal
         invoiceId={selectedInvoiceId}
         onClose={() => setSelectedInvoiceId(null)}
       />
@@ -257,6 +260,11 @@ export default function InvoicesPage() {
           onOpenChange={(v) => !v && setPaymentInvoice(null)}
         />
       )}
+
+      <GenerateInvoiceDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+      />
     </div>
   );
 }
