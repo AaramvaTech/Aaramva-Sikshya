@@ -198,12 +198,13 @@ export function InvoiceDetailModal({ invoiceId, onClose }: InvoiceDetailModalPro
                   size="sm"
                   variant="outline"
                   disabled={recalcFine.isPending}
-                  onClick={() =>
-                    recalcFine.mutate(invoiceId!, {
+                  onClick={() => {
+                    if (!invoiceId) return;
+                    recalcFine.mutate(invoiceId, {
                       onSuccess: () => toast.success('Fine recalculated'),
                       onError: () => toast.error('Failed to recalculate fine'),
-                    })
-                  }
+                    });
+                  }}
                 >
                   Recalculate Fine
                 </Button>
