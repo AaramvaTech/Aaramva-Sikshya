@@ -124,7 +124,7 @@ function NotificationBell() {
           </ul>
           <div className="p-3 border-t border-gray-100 dark:border-gray-800">
             <a
-              href="/communication/notices"
+              href="/communication/notifications"
               className="block text-center text-theme-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 py-1"
             >
               View all notifications

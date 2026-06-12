@@ -277,6 +277,13 @@ export class HrController {
     return this.payrollService.adjustSlip(id, slipId, dto);
   }
 
+  @Delete('payroll/months/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.ACCOUNTANT)
+  deletePayrollMonth(@Param('id', ParseUUIDPipe) id: string) {
+    return this.payrollService.deletePayrollMonth(id);
+  }
+
   @Patch('payroll/months/:id/finalize')
   @Roles(...OWNER_ONLY)
   finalizePayroll(@Param('id', ParseUUIDPipe) id: string) {

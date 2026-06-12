@@ -106,6 +106,17 @@ export function usePayFine() {
   });
 }
 
+export function useRegisterLibraryMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { type: 'STUDENT' | 'STAFF'; studentId?: string; userId?: string; maxBooks?: number }) =>
+      libraryApi.registerMember(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library', 'members'] });
+    },
+  });
+}
+
 export function useBookCategories() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

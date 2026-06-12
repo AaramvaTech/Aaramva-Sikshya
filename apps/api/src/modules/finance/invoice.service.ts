@@ -101,37 +101,40 @@ export class InvoiceService {
     const { class_id } = students[0];
 
     // Get fee structure items for this class + academic year
-    let fsiSql = `
-      SELECT fsi.id, fsi.fee_category_id, fc.name AS fee_category_name,
-             fsi.amount, fsi.due_day_of_month, fsi.due_date,
-             fsi.fine_per_day, fsi.grace_period_days
-      FROM fee_structure_items fsi
-      JOIN fee_categories fc ON fc.id = fsi.fee_category_id AND fc.deleted_at IS NULL
-      JOIN fee_structures fs ON fs.id = fsi.fee_structure_id AND fs.deleted_at IS NULL
-      WHERE fs.class_id = $1::uuid AND fs.academic_year_id = $2::uuid
-    `;
-    const fsiParams: unknown[] = [class_id, dto.academicYearId];
-
-    if (dto.feeStructureItemIds?.length) {
-      fsiSql += ` AND fsi.id = ANY($3::uuid[])`;
-      fsiParams.push(dto.feeStructureItemIds);
-    }
-
-    const fsiRows = await this.tenantPrisma.query<FeeStructureItemRow>(fsiSql, ...fsiParams);
-    if (!fsiRows.length) throw new BadRequestException('No fee structure items found for this student');
-
-    const itemIds = fsiRows.map((i) => i.id);
-
-    const assignments = await this.tenantPrisma.query<StudentFeeAssignmentRow>(
-      `SELECT fee_structure_item_id, custom_amount, discount_percent, is_waived
-       FROM student_fee_assignments
-       WHERE student_id = $1::uuid
-         AND fee_structure_item_id = ANY($2::uuid[])
-         AND academic_year_id = $3::uuid`,
-      dto.studentId,
-      itemIds,
+    // Avoid passing JS arrays as $queryRawUnsafe params — Prisma serializes them as JSONB
+    // which cannot be cast to uuid[]. Filter in JS instead (fee items per class are always small).
+    const allFsiRows = await this.tenantPrisma.query<FeeStructureItemRow>(
+      `SELECT fsi.id, fsi.fee_category_id, fc.name AS fee_category_name,
+              fsi.amount, fsi.due_day_of_month, fsi.due_date,
+              fsi.fine_per_day, fsi.grace_period_days
+       FROM fee_structure_items fsi
+       JOIN fee_categories fc ON fc.id = fsi.fee_category_id AND fc.deleted_at IS NULL
+       JOIN fee_structures fs ON fs.id = fsi.fee_structure_id AND fs.deleted_at IS NULL
+       WHERE fs.class_id = $1::uuid AND fs.academic_year_id = $2::uuid`,
+      class_id,
       dto.academicYearId,
     );
+
+    const allowedIds = dto.feeStructureItemIds?.length
+      ? new Set(dto.feeStructureItemIds)
+      : null;
+    const fsiRows = allowedIds
+      ? allFsiRows.filter((r) => allowedIds.has(r.id))
+      : allFsiRows;
+
+    if (!fsiRows.length) throw new BadRequestException('No fee structure items found for this student');
+
+    const itemIdSet = new Set(fsiRows.map((i) => i.id));
+
+    // Query all assignments for this student + year, then filter to the relevant items in JS
+    const allAssignments = await this.tenantPrisma.query<StudentFeeAssignmentRow>(
+      `SELECT fee_structure_item_id, custom_amount, discount_percent, is_waived
+       FROM student_fee_assignments
+       WHERE student_id = $1::uuid AND academic_year_id = $2::uuid`,
+      dto.studentId,
+      dto.academicYearId,
+    );
+    const assignments = allAssignments.filter((a) => itemIdSet.has(a.fee_structure_item_id));
 
     const assignmentMap = new Map(assignments.map((a) => [a.fee_structure_item_id, a]));
     const { invoiceItems, subtotal, discountAmount } = this.calculateItemAmounts(fsiRows, assignmentMap);
@@ -319,6 +322,7 @@ export class InvoiceService {
 
     if (query.studentId) { conditions.push(`i.student_id = $${idx++}::uuid`); params.push(query.studentId); }
     if (query.academicYearId) { conditions.push(`i.academic_year_id = $${idx++}::uuid`); params.push(query.academicYearId); }
+    if (query.classId) { conditions.push(`s.class_id = $${idx++}::uuid`); params.push(query.classId); }
     if (query.status) { conditions.push(`i.status = $${idx++}`); params.push(query.status); }
     if (query.fromDate) { conditions.push(`i.due_date >= $${idx++}::date`); params.push(query.fromDate); }
     if (query.toDate) { conditions.push(`i.due_date <= $${idx++}::date`); params.push(query.toDate); }
@@ -341,8 +345,7 @@ export class InvoiceService {
               COUNT(*) OVER() AS total_count
        FROM invoices i
        JOIN students s ON s.id = i.student_id
-       LEFT JOIN sections sec ON sec.id = s.section_id
-       LEFT JOIN classes c ON c.id = sec.class_id
+       LEFT JOIN classes c ON c.id = s.class_id
        ${where}
        ORDER BY i.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,
@@ -434,17 +437,79 @@ export class InvoiceService {
   }
 
   async getStudentFeeAssignments(studentId: string, academicYearId?: string): Promise<object[]> {
-    const conditions = ['sfa.student_id = $1::uuid'];
-    const params: unknown[] = [studentId];
-    let idx = 2;
-
+    // When academicYearId is provided: return ALL fee structure items for the student's
+    // enrolled class + year, with any per-student overrides merged in.
+    // This lets the Fees tab show every applicable fee item even before any override is set.
     if (academicYearId) {
-      conditions.push(`sfa.academic_year_id = $${idx++}::uuid`);
-      params.push(academicYearId);
+      // 1. Get student's class
+      const studentRows = await this.tenantPrisma.query<{ class_id: string | null }>(
+        `SELECT class_id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+        studentId,
+      );
+      const classId = studentRows[0]?.class_id;
+
+      if (!classId) return [];
+
+      // 2. Get all fee structure items for this class + year
+      const fsiRows = await this.tenantPrisma.query<{
+        id: string;
+        fee_category_name: string;
+        amount: string | number;
+      }>(
+        `SELECT fsi.id, fc.name AS fee_category_name, fsi.amount
+         FROM fee_structure_items fsi
+         JOIN fee_categories fc ON fc.id = fsi.fee_category_id AND fc.deleted_at IS NULL
+         JOIN fee_structures fs ON fs.id = fsi.fee_structure_id AND fs.deleted_at IS NULL
+         WHERE fs.class_id = $1::uuid AND fs.academic_year_id = $2::uuid
+         ORDER BY fsi.created_at`,
+        classId,
+        academicYearId,
+      );
+
+      if (!fsiRows.length) return [];
+
+      // 3. Get any existing per-student overrides (no array param — filter in JS)
+      const allAssignments = await this.tenantPrisma.query<{
+        fee_structure_item_id: string;
+        custom_amount: string | number | null;
+        discount_percent: string | number;
+        discount_reason: string | null;
+        is_waived: boolean;
+      }>(
+        `SELECT fee_structure_item_id, custom_amount, discount_percent, discount_reason, is_waived
+         FROM student_fee_assignments
+         WHERE student_id = $1::uuid AND academic_year_id = $2::uuid`,
+        studentId,
+        academicYearId,
+      );
+      const assignmentMap = new Map(allAssignments.map((a) => [a.fee_structure_item_id, a]));
+
+      // 4. Merge: every fee item gets its override values (or defaults)
+      return fsiRows.map((fsi) => {
+        const assignment = assignmentMap.get(fsi.id);
+        const originalAmount = toNum(fsi.amount);
+        const customAmount = assignment?.custom_amount != null ? toNum(assignment.custom_amount) : null;
+        const effectiveBase = customAmount ?? originalAmount;
+        const discountPercent = assignment ? toNum(assignment.discount_percent) : 0;
+        const isWaived = assignment?.is_waived ?? false;
+        const effectiveAmount = isWaived
+          ? 0
+          : Math.round(effectiveBase * (1 - discountPercent / 100) * 100) / 100;
+        return {
+          feeStructureItemId: fsi.id,
+          feeCategoryName: fsi.fee_category_name,
+          originalAmount,
+          customAmount,
+          discountPercent,
+          discountReason: assignment?.discount_reason ?? null,
+          isWaived,
+          effectiveAmount,
+        };
+      });
     }
 
+    // Fallback (no academicYearId): return only explicit override rows
     const rows = await this.tenantPrisma.query<{
-      id: string;
       fee_structure_item_id: string;
       fee_category_name: string;
       original_amount: string | number;
@@ -453,15 +518,15 @@ export class InvoiceService {
       discount_reason: string | null;
       is_waived: boolean;
     }>(
-      `SELECT sfa.id, sfa.fee_structure_item_id, fc.name AS fee_category_name,
+      `SELECT sfa.fee_structure_item_id, fc.name AS fee_category_name,
               fsi.amount AS original_amount, sfa.custom_amount, sfa.discount_percent,
               sfa.discount_reason, sfa.is_waived
        FROM student_fee_assignments sfa
        JOIN fee_structure_items fsi ON fsi.id = sfa.fee_structure_item_id
        JOIN fee_categories fc ON fc.id = fsi.fee_category_id
-       WHERE ${conditions.join(' AND ')}
+       WHERE sfa.student_id = $1::uuid
        ORDER BY sfa.created_at`,
-      ...params,
+      studentId,
     );
 
     return rows.map((r) => {
@@ -471,7 +536,6 @@ export class InvoiceService {
       const discountPercent = toNum(r.discount_percent);
       const effectiveAmount = r.is_waived ? 0 : Math.round(effectiveBase * (1 - discountPercent / 100) * 100) / 100;
       return {
-        id: r.id,
         feeStructureItemId: r.fee_structure_item_id,
         feeCategoryName: r.fee_category_name,
         originalAmount,

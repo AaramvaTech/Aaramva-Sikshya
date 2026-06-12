@@ -75,4 +75,10 @@ export const superAdminApi = {
   // Audit logs
   getAuditLogs: (params?: { page?: number; limit?: number }) =>
     api.get<ApiResponse<PaginatedResponse<AuditLog>>>('/super-admin/audit-logs', { params }),
+
+  // Platform settings
+  getPlatformSettings: () =>
+    api.get<ApiResponse<import('@/types/api.types').PlatformSettings>>('/super-admin/settings'),
+  updatePlatformSettings: (data: Partial<import('@/types/api.types').PlatformSettings>) =>
+    api.patch<ApiResponse<import('@/types/api.types').PlatformSettings>>('/super-admin/settings', data),
 };

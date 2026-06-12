@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { superAdminApi } from '@/lib/api/super-admin.api';
-import type { OnboardTenantData, UpdateTenantData, CreatePlanData } from '@/types/api.types';
+import type { OnboardTenantData, UpdateTenantData, CreatePlanData, PlatformSettings } from '@/types/api.types';
 
 export function usePlatformOverview() {
   return useQuery({
@@ -134,6 +134,23 @@ export function useUpdateSubscription() {
     onSuccess: (_data, { tenantId }) => {
       queryClient.invalidateQueries({ queryKey: ['platform', 'tenant', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'tenants'] });
+    },
+  });
+}
+
+export function usePlatformSettings() {
+  return useQuery({
+    queryKey: ['platform', 'settings'],
+    queryFn: () => superAdminApi.getPlatformSettings().then((r) => r.data.data),
+  });
+}
+
+export function useUpdatePlatformSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<PlatformSettings>) => superAdminApi.updatePlatformSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform', 'settings'] });
     },
   });
 }

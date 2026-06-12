@@ -760,17 +760,25 @@ export interface PayrollMonth {
   createdAt: string;
 }
 
+export interface SalarySlipLine { name: string; amount: number; }
+
 export interface SalarySlip {
   id: string;
+  payrollMonthId: string;
   userId: string;
+  staffProfileId: string;
   staffName: string;
   employeeId: string;
   baseSalary: number;
   allowanceTotal: number;
+  allowances: SalarySlipLine[];
   deductionTotal: number;
+  deductions: SalarySlipLine[];
+  unpaidLeaveDays: number;
   leaveDeduction: number;
   grossSalary: number;
   netSalary: number;
+  notes: string | null;
   paymentDate: { ad: string; bs: string } | null;
   paymentMethod: string | null;
 }
@@ -1019,6 +1027,13 @@ export interface RevenueData {
   planName: string;
   activeSchools: number;
   revenue: number;
+}
+
+export interface PlatformSettings {
+  platformName: string;
+  defaultTrialDays: number;
+  smsSenderId: string;
+  primaryColor: string;
 }
 
 // ── Settings Module ─────────────────────────────────────────────────────────

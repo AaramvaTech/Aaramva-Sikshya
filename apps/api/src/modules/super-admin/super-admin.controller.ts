@@ -31,6 +31,7 @@ import {
 import { ImpersonationService } from './impersonation.service';
 import { AnalyticsService } from './analytics.service';
 import { AuditService } from './audit.service';
+import { PlatformSettingsService, PlatformSettingsDto } from './platform-settings.service';
 
 @Controller('super-admin')
 export class SuperAdminController {
@@ -41,6 +42,7 @@ export class SuperAdminController {
     private readonly impersonation: ImpersonationService,
     private readonly analytics: AnalyticsService,
     private readonly audit: AuditService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -209,5 +211,21 @@ export class SuperAdminController {
     @Query('limit') limit = 20,
   ) {
     return this.audit.listLogs(Number(page), Number(limit));
+  }
+
+  // ─── Platform Settings ─────────────────────────────────────────────────────
+
+  @Get('settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PLATFORM_ADMIN)
+  getSettings() {
+    return this.platformSettings.getSettings();
+  }
+
+  @Patch('settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PLATFORM_ADMIN)
+  updateSettings(@Body() dto: PlatformSettingsDto) {
+    return this.platformSettings.updateSettings(dto);
   }
 }

@@ -1,42 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Settings, MessageSquare, CreditCard, Palette } from 'lucide-react';
+import { Settings, MessageSquare, CreditCard, Palette, Info } from 'lucide-react';
+import { usePlatformSettings, useUpdatePlatformSettings } from '@/lib/hooks/use-super-admin';
 
 export default function SettingsPage() {
-  const [general, setGeneral] = useState({
-    platformName: 'Aaramva Shikshya',
-    defaultTrialDays: 30,
-  });
-  const [sms, setSms] = useState({
-    enabled: false,
-    token: '',
-    senderId: 'Aaramva',
-  });
-  const [payments, setPayments] = useState({
-    esewaEnabled: false,
-    esewaSecret: '',
-    khaltiEnabled: false,
-    khaltiSecret: '',
-  });
-  const [branding, setBranding] = useState({
-    primaryColor: '#1A5C38',
-  });
-  const [saving, setSaving] = useState(false);
+  const { data: settings, isLoading } = usePlatformSettings();
+  const updateSettings = useUpdatePlatformSettings();
+
+  const [general, setGeneral] = useState({ platformName: '', defaultTrialDays: 30 });
+  const [sms, setSms] = useState({ smsSenderId: '' });
+  const [branding, setBranding] = useState({ primaryColor: '#1A5C38' });
+
+  useEffect(() => {
+    if (settings) {
+      setGeneral({ platformName: settings.platformName, defaultTrialDays: settings.defaultTrialDays });
+      setSms({ smsSenderId: settings.smsSenderId });
+      setBranding({ primaryColor: settings.primaryColor });
+    }
+  }, [settings]);
 
   async function handleSave() {
-    setSaving(true);
-    // TODO: Wire up to backend API when available
-    await new Promise((r) => setTimeout(r, 500));
-    setSaving(false);
-    toast.success('Settings saved successfully');
+    try {
+      await updateSettings.mutateAsync({
+        platformName: general.platformName,
+        defaultTrialDays: general.defaultTrialDays,
+        smsSenderId: sms.smsSenderId,
+        primaryColor: branding.primaryColor,
+      });
+      toast.success('Settings saved');
+    } catch {
+      toast.error('Failed to save settings');
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-sm text-gray-400">Loading settings…</p>
+      </div>
+    );
   }
 
   return (
@@ -49,9 +58,9 @@ export default function SettingsPage() {
             className="bg-brand-500 hover:bg-brand-600 text-white"
             size="sm"
             onClick={handleSave}
-            disabled={saving}
+            disabled={updateSettings.isPending}
           >
-            {saving ? 'Saving...' : 'Save Settings'}
+            {updateSettings.isPending ? 'Saving…' : 'Save Settings'}
           </Button>
         }
       />
@@ -88,7 +97,7 @@ export default function SettingsPage() {
                   setGeneral((g) => ({ ...g, defaultTrialDays: parseInt(e.target.value) || 30 }))
                 }
               />
-              <p className="text-theme-xs text-gray-400">Number of days for new school trials (1-90)</p>
+              <p className="text-xs text-gray-400">Applied to new school onboarding (1–90)</p>
             </div>
           </CardContent>
         </Card>
@@ -100,37 +109,26 @@ export default function SettingsPage() {
               <MessageSquare className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               <div>
                 <CardTitle>SMS Provider</CardTitle>
-                <CardDescription>Configure Sparrow SMS integration</CardDescription>
+                <CardDescription>Sparrow SMS configuration</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="sms-enabled"
-                checked={sms.enabled}
-                onCheckedChange={(v) => setSms((s) => ({ ...s, enabled: !!v }))}
-              />
-              <Label htmlFor="sms-enabled" className="cursor-pointer">Enable SMS Notifications</Label>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Sparrow SMS Token</Label>
-              <Input
-                type="password"
-                value={sms.token}
-                onChange={(e) => setSms((s) => ({ ...s, token: e.target.value }))}
-                placeholder="Enter API token"
-                disabled={!sms.enabled}
-              />
+            <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                The Sparrow SMS API token is configured via the <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">SPARROW_SMS_TOKEN</code> environment variable on the server. Set it in your <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">.env</code> file.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Sender ID</Label>
               <Input
-                value={sms.senderId}
-                onChange={(e) => setSms((s) => ({ ...s, senderId: e.target.value }))}
+                value={sms.smsSenderId}
+                onChange={(e) => setSms((s) => ({ ...s, smsSenderId: e.target.value }))}
                 placeholder="Aaramva"
-                disabled={!sms.enabled}
+                maxLength={11}
               />
+              <p className="text-xs text-gray-400">Max 11 characters — shown as the SMS sender name</p>
             </div>
           </CardContent>
         </Card>
@@ -142,50 +140,19 @@ export default function SettingsPage() {
               <CreditCard className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               <div>
                 <CardTitle>Payment Gateways</CardTitle>
-                <CardDescription>Configure eSewa and Khalti integration</CardDescription>
+                <CardDescription>eSewa and Khalti configuration</CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="esewa-enabled"
-                  checked={payments.esewaEnabled}
-                  onCheckedChange={(v) => setPayments((p) => ({ ...p, esewaEnabled: !!v }))}
-                />
-                <Label htmlFor="esewa-enabled" className="cursor-pointer">Enable eSewa</Label>
-              </div>
-              <div className="space-y-1.5">
-                <Label>eSewa Secret Key</Label>
-                <Input
-                  type="password"
-                  value={payments.esewaSecret}
-                  onChange={(e) => setPayments((p) => ({ ...p, esewaSecret: e.target.value }))}
-                  placeholder="Enter eSewa secret key"
-                  disabled={!payments.esewaEnabled}
-                />
-              </div>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="khalti-enabled"
-                  checked={payments.khaltiEnabled}
-                  onCheckedChange={(v) => setPayments((p) => ({ ...p, khaltiEnabled: !!v }))}
-                />
-                <Label htmlFor="khalti-enabled" className="cursor-pointer">Enable Khalti</Label>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Khalti Secret Key</Label>
-                <Input
-                  type="password"
-                  value={payments.khaltiSecret}
-                  onChange={(e) => setPayments((p) => ({ ...p, khaltiSecret: e.target.value }))}
-                  placeholder="Enter Khalti secret key"
-                  disabled={!payments.khaltiEnabled}
-                />
-              </div>
+          <CardContent>
+            <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Payment gateway secrets are configured via environment variables:{' '}
+                <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">ESEWA_SECRET_KEY</code> and{' '}
+                <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">KHALTI_SECRET_KEY</code>.
+                Set them in your <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">.env</code> file.
+              </p>
             </div>
           </CardContent>
         </Card>

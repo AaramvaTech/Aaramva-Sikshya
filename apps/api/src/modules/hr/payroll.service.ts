@@ -244,6 +244,25 @@ export class PayrollService {
     return toPayrollMonthResponse(updated[0]);
   }
 
+  async deletePayrollMonth(monthId: string): Promise<void> {
+    const months = await this.tenantPrisma.query<PayrollMonthRow>(
+      `SELECT * FROM payroll_months WHERE id = $1::uuid`,
+      monthId,
+    );
+    if (!months[0]) throw new NotFoundException(`Payroll month ${monthId} not found`);
+    if (months[0].status === 'FINALIZED') {
+      throw new BadRequestException('Cannot delete a finalized payroll month');
+    }
+    await this.tenantPrisma.execute(
+      `DELETE FROM salary_slips WHERE payroll_month_id = $1::uuid`,
+      monthId,
+    );
+    await this.tenantPrisma.execute(
+      `DELETE FROM payroll_months WHERE id = $1::uuid`,
+      monthId,
+    );
+  }
+
   async getStaffSalaryHistory(userId: string): Promise<SalarySlipResponseDto[]> {
     const rows = await this.tenantPrisma.query<SalarySlipRow>(
       `SELECT ss.*, u.first_name, u.last_name, sp.employee_id

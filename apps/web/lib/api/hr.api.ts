@@ -65,11 +65,15 @@ export const hrApi = {
     api.get<ApiResponse<LeaveBalance[]>>(`/hr/leave/balance/${userId}`),
 
   listPayrollMonths: () =>
-    api.get<ApiResponse<PayrollMonth[]>>('/hr/payroll/months'),
+    api.get<ApiResponse<{ data: PayrollMonth[]; meta: { page: number; limit: number; total: number } }>>('/hr/payroll/months'),
   getPayrollSlips: (monthId: string) =>
     api.get<ApiResponse<SalarySlip[]>>(`/hr/payroll/months/${monthId}/slips`),
   generatePayroll: (monthId: string, data?: { overrides?: PayrollOverride[] }) =>
-    api.post<ApiResponse<{ generated: number }>>(`/hr/payroll/months/${monthId}/generate`, data ?? {}),
+    api.post<ApiResponse<SalarySlip[]>>(`/hr/payroll/months/${monthId}/generate`, data ?? {}),
+  adjustSlip: (monthId: string, slipId: string, data: { allowances?: { name: string; amount: number }[]; deductions?: { name: string; amount: number }[]; unpaidLeaveDays?: number; notes?: string }) =>
+    api.patch<ApiResponse<SalarySlip>>(`/hr/payroll/months/${monthId}/slips/${slipId}`, data),
+  deletePayrollMonth: (monthId: string) =>
+    api.delete<ApiResponse<null>>(`/hr/payroll/months/${monthId}`),
   finalizePayroll: (monthId: string) =>
     api.patch<ApiResponse<PayrollMonth>>(`/hr/payroll/months/${monthId}/finalize`),
   openPayrollMonth: (data: { monthBs: number; yearBs: number; academicYearId: string }) =>

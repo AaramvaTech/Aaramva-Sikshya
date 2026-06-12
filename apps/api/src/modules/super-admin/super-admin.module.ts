@@ -9,6 +9,7 @@ import { AuditService } from './audit.service';
 import { TenantAdminService } from './tenant-admin.service';
 import { ImpersonationService } from './impersonation.service';
 import { AnalyticsService } from './analytics.service';
+import { PlatformSettingsService } from './platform-settings.service';
 import { SuperAdminController } from './super-admin.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { SuperAdminController } from './super-admin.controller';
     TenantAdminService,
     ImpersonationService,
     AnalyticsService,
+    PlatformSettingsService,
   ],
   exports: [TenantProvisioningService, PublicPrismaService],
 })

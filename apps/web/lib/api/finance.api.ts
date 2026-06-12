@@ -27,6 +27,10 @@ export const financeApi = {
     api.get<ApiResponse<PaginatedResponse<FeeCategory>>>('/finance/fee-categories'),
   createCategory: (data: CreateFeeCategoryData) =>
     api.post<ApiResponse<FeeCategory>>('/finance/fee-categories', data),
+  updateCategory: (id: string, data: Partial<CreateFeeCategoryData>) =>
+    api.patch<ApiResponse<FeeCategory>>(`/finance/fee-categories/${id}`, data),
+  deleteCategory: (id: string) =>
+    api.delete(`/finance/fee-categories/${id}`),
 
   // Fee structures
   listStructures: (params?: { academicYearId?: string }) =>
@@ -35,12 +39,16 @@ export const financeApi = {
     api.get<ApiResponse<FeeStructureDetail>>(`/finance/fee-structures/${id}`),
   createStructure: (data: CreateFeeStructureData) =>
     api.post<ApiResponse<FeeStructureDetail>>('/finance/fee-structures', data),
+  updateStructureItems: (id: string, data: { items: CreateFeeStructureData['items'] }) =>
+    api.patch<ApiResponse<FeeStructureDetail>>(`/finance/fee-structures/${id}/items`, data),
+  deleteStructure: (id: string) =>
+    api.delete(`/finance/fee-structures/${id}`),
 
   // Student fee assignments
-  getStudentAssignments: (studentId: string) =>
-    api.get<ApiResponse<FeeAssignment[]>>(`/finance/students/${studentId}/assignments`),
+  getStudentAssignments: (studentId: string, academicYearId?: string) =>
+    api.get<ApiResponse<FeeAssignment[]>>(`/finance/students/${studentId}/assignments`, { params: { academicYearId } }),
   setStudentAssignment: (studentId: string, data: SetAssignmentData) =>
-    api.post<ApiResponse<FeeAssignment>>(`/finance/students/${studentId}/assignments`, data),
+    api.post<ApiResponse<void>>(`/finance/students/${studentId}/assignments`, data),
 
   // Invoices
   listInvoices: (params: InvoiceListParams) =>
@@ -50,10 +58,12 @@ export const financeApi = {
   generateInvoice: (data: GenerateInvoiceData) =>
     api.post<ApiResponse<InvoiceDetail>>('/finance/invoices/generate', data),
   generateBulkInvoices: (data: GenerateBulkInvoiceData) =>
-    api.post<ApiResponse<{ generated: number; skipped: number; errors: string[] }>>(
+    api.post<ApiResponse<{ generated: number; skipped: number; errors: { studentId: string; error: string }[] }>>(
       '/finance/invoices/generate-bulk',
       data,
     ),
+  recalculateFine: (id: string) =>
+    api.patch(`/finance/invoices/${id}/recalculate-fine`, {}),
   voidInvoice: (id: string) =>
     api.delete(`/finance/invoices/${id}`),
 

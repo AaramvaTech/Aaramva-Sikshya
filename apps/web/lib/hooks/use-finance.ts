@@ -8,6 +8,7 @@ import type {
   RecordPaymentData,
   GenerateInvoiceData,
   GenerateBulkInvoiceData,
+  SetAssignmentData,
 } from '@/types/api.types';
 
 export function useFeeCategories() {
@@ -53,6 +54,93 @@ export function useCreateFeeCategory() {
     mutationFn: (data: CreateFeeCategoryData) => financeApi.createCategory(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'fee-categories'] });
+    },
+  });
+}
+
+export function useUpdateFeeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateFeeCategoryData> }) =>
+      financeApi.updateCategory(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'fee-categories'] });
+    },
+  });
+}
+
+export function useDeleteFeeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => financeApi.deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'fee-categories'] });
+    },
+  });
+}
+
+export function useUpdateFeeStructureItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, items }: { id: string; items: CreateFeeStructureData['items'] }) =>
+      financeApi.updateStructureItems(id, { items }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'fee-structure', id] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'fee-structures'] });
+    },
+  });
+}
+
+export function useDeleteFeeStructure() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => financeApi.deleteStructure(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'fee-structures'] });
+    },
+  });
+}
+
+export function useStudentAssignments(studentId: string, academicYearId?: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['finance', 'student-assignments', studentId, academicYearId],
+    queryFn: () =>
+      financeApi.getStudentAssignments(studentId, academicYearId).then((r) => r.data.data),
+    enabled: !!slug && !!studentId,
+  });
+}
+
+export function useSetStudentAssignment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ studentId, data }: { studentId: string; data: SetAssignmentData }) =>
+      financeApi.setStudentAssignment(studentId, data),
+    onSuccess: (_, { studentId }) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'student-assignments', studentId] });
+    },
+  });
+}
+
+export function useCancelPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => financeApi.cancelPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice'] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'collection-report'] });
+    },
+  });
+}
+
+export function useRecalculateFine() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => financeApi.recalculateFine(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
   });
 }

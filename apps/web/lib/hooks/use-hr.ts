@@ -209,6 +209,7 @@ export function usePayrollMonths() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['hr', 'payroll-months'],
+    // Paginated response: r.data.data = { data: [], meta: {} }
     queryFn: () => hrApi.listPayrollMonths().then((r) => r.data.data),
     enabled: !!slug,
   });
@@ -228,8 +229,36 @@ export function useGeneratePayroll() {
   return useMutation({
     mutationFn: ({ monthId, overrides }: { monthId: string; overrides?: PayrollOverride[] }) =>
       hrApi.generatePayroll(monthId, { overrides }),
+    onSuccess: (_, { monthId }) => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'payroll-slips', monthId] });
+    },
+  });
+}
+
+export function useAdjustSlip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      monthId,
+      slipId,
+      data,
+    }: {
+      monthId: string;
+      slipId: string;
+      data: { allowances?: { name: string; amount: number }[]; deductions?: { name: string; amount: number }[]; unpaidLeaveDays?: number; notes?: string };
+    }) => hrApi.adjustSlip(monthId, slipId, data),
+    onSuccess: (_, { monthId }) => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'payroll-slips', monthId] });
+    },
+  });
+}
+
+export function useDeletePayrollMonth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (monthId: string) => hrApi.deletePayrollMonth(monthId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hr', 'payroll-slips'] });
+      queryClient.invalidateQueries({ queryKey: ['hr', 'payroll-months'] });
     },
   });
 }

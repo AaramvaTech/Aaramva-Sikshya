@@ -91,3 +91,11 @@ enum SubscriptionStatus {
   CANCELLED
   EXPIRED
 }
+
+model PlatformConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_configs")
+}

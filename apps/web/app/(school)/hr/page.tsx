@@ -19,7 +19,8 @@ export default function HrPage() {
 
   const totalStaff = staffResponse?.meta?.total ?? 0;
   const pendingLeave = leaveResponse?.meta?.total ?? 0;
-  const lastMonth = payrollMonths && payrollMonths.length > 0 ? payrollMonths[payrollMonths.length - 1] : null;
+  const payrollList = payrollMonths?.data ?? [];
+  const lastMonth = payrollList.length > 0 ? payrollList[payrollList.length - 1] : null;
 
   const statusColor: Record<string, string> = {
     DRAFT: 'bg-yellow-100 text-yellow-700',

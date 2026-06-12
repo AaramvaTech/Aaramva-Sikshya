@@ -30,6 +30,7 @@ export class InvoiceQueryDto {
   page?: number;
   limit?: number;
   studentId?: string;
+  classId?: string;
   academicYearId?: string;
   status?: string;
   fromDate?: string;

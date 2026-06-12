@@ -78,7 +78,7 @@ export class FinanceController {
 
   @Post('fee-structures')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  createFeeStructure(@Body() dto: CreateFeeStructureDto, @CurrentUser('id') userId: string) {
+  createFeeStructure(@Body() dto: CreateFeeStructureDto, @CurrentUser('userId') userId: string) {
     return this.feeStructureService.createFeeStructure(dto, userId);
   }
 
@@ -135,13 +135,13 @@ export class FinanceController {
 
   @Post('invoices/generate')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  generateInvoice(@Body() dto: GenerateInvoiceDto, @CurrentUser('id') userId: string) {
+  generateInvoice(@Body() dto: GenerateInvoiceDto, @CurrentUser('userId') userId: string) {
     return this.invoiceService.generateInvoice(dto, userId);
   }
 
   @Post('invoices/generate-bulk')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  generateBulkInvoice(@Body() dto: GenerateBulkInvoiceDto, @CurrentUser('id') userId: string) {
+  generateBulkInvoice(@Body() dto: GenerateBulkInvoiceDto, @CurrentUser('userId') userId: string) {
     return this.invoiceService.generateBulkInvoice(dto, userId);
   }
 
@@ -175,7 +175,7 @@ export class FinanceController {
 
   @Post('payments')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  recordPayment(@Body() dto: RecordPaymentDto, @CurrentUser('id') userId: string) {
+  recordPayment(@Body() dto: RecordPaymentDto, @CurrentUser('userId') userId: string) {
     return this.paymentService.recordPayment(dto, userId);
   }
 

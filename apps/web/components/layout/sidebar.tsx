@@ -88,6 +88,7 @@ const navItems: NavItem[] = [
     name: 'Library',
     subItems: [
       { name: 'Books', path: '/library/books' },
+      { name: 'Members', path: '/library/members' },
       { name: 'Issues', path: '/library/issues' },
     ],
   },
@@ -97,6 +98,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: 'Notices', path: '/communication/notices' },
       { name: 'SMS Center', path: '/communication/sms' },
+      { name: 'Notifications', path: '/communication/notifications' },
     ],
   },
   {
