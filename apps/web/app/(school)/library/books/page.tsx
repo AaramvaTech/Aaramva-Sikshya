@@ -18,13 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogBody,
 } from '@/components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -373,173 +368,175 @@ export default function BookCataloguePage() {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={!!selectedBookId} onOpenChange={(open) => { if (!open) { setSelectedBookId(null); setShowAddCopyForm(false); } }}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{bookDetail?.title ?? 'Book Detail'}</SheetTitle>
-          </SheetHeader>
+      <Dialog open={!!selectedBookId} onOpenChange={(open) => { if (!open) { setSelectedBookId(null); setShowAddCopyForm(false); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{bookDetail?.title ?? 'Book Detail'}</DialogTitle>
+          </DialogHeader>
 
-          {detailLoading ? (
-            <div className="mt-4 space-y-3 p-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-5 w-full" />
-              ))}
-            </div>
-          ) : bookDetail ? (
-            <div className="p-4 space-y-6">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Author</span>
-                  <p className="text-black dark:text-white font-medium">{bookDetail.author ?? '—'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Publisher</span>
-                  <p className="text-black dark:text-white">{bookDetail.publisher ?? '—'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Edition</span>
-                  <p className="text-black dark:text-white">{bookDetail.edition ?? '—'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">ISBN</span>
-                  <p className="text-black dark:text-white font-mono">{bookDetail.isbn ?? '—'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Language</span>
-                  <p className="text-black dark:text-white">{bookDetail.language}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Category</span>
-                  <p className="text-black dark:text-white">{bookDetail.categoryName ?? '—'}</p>
-                </div>
-                {bookDetail.description && (
-                  <div className="col-span-2">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Description</span>
-                    <p className="text-gray-700 mt-0.5">{bookDetail.description}</p>
-                  </div>
-                )}
+          <DialogBody className="max-h-[75vh] overflow-y-auto space-y-6">
+            {detailLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-5 w-full" />
+                ))}
               </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    Copies ({bookDetail.copies.length})
-                    <span className="ml-2 text-success-600 font-normal">{bookDetail.availableCopies} available</span>
-                  </h3>
+            ) : bookDetail ? (
+              <>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Author</span>
+                    <p className="text-black dark:text-white font-medium">{bookDetail.author ?? '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Publisher</span>
+                    <p className="text-black dark:text-white">{bookDetail.publisher ?? '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Edition</span>
+                    <p className="text-black dark:text-white">{bookDetail.edition ?? '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">ISBN</span>
+                    <p className="text-black dark:text-white font-mono">{bookDetail.isbn ?? '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Language</span>
+                    <p className="text-black dark:text-white">{bookDetail.language}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Category</span>
+                    <p className="text-black dark:text-white">{bookDetail.categoryName ?? '—'}</p>
+                  </div>
+                  {bookDetail.description && (
+                    <div className="col-span-2">
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">Description</span>
+                      <p className="text-gray-700 mt-0.5">{bookDetail.description}</p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  {bookDetail.copies.map((copy) => (
-                    <div
-                      key={copy.id}
-                      className="rounded-lg border border-gray-200 p-3 text-sm flex items-start justify-between"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-semibold text-gray-800">{copy.copyNumber}</span>
-                          {copy.accessionNumber && (
-                            <span className="text-xs text-gray-400 font-mono">Acc: {copy.accessionNumber}</span>
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">
+                      Copies ({bookDetail.copies.length})
+                      <span className="ml-2 text-success-600 font-normal">{bookDetail.availableCopies} available</span>
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {bookDetail.copies.map((copy) => (
+                      <div
+                        key={copy.id}
+                        className="rounded-lg border border-gray-200 p-3 text-sm flex items-start justify-between"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-semibold text-gray-800">{copy.copyNumber}</span>
+                            {copy.accessionNumber && (
+                              <span className="text-xs text-gray-400 font-mono">Acc: {copy.accessionNumber}</span>
+                            )}
+                          </div>
+                          {copy.shelfLocation && (
+                            <p className="text-xs text-gray-500">Shelf: {copy.shelfLocation}</p>
+                          )}
+                          <p className="text-xs text-gray-500">Condition: {copy.condition}</p>
+                          {!copy.isAvailable && copy.currentIssue && (
+                            <div className="mt-1 text-xs text-orange-700 space-y-0.5">
+                              <p>Member: <span className="font-mono">{copy.currentIssue.memberNumber}</span></p>
+                              <p className="flex items-center gap-1">
+                                Due: <BsDate date={copy.currentIssue.dueDate} showAd={false} />
+                                {copy.currentIssue.isOverdue && (
+                                  <Badge className="bg-error-100 text-error-700 border-0 text-xs ml-1">Overdue</Badge>
+                                )}
+                              </p>
+                            </div>
                           )}
                         </div>
-                        {copy.shelfLocation && (
-                          <p className="text-xs text-gray-500">Shelf: {copy.shelfLocation}</p>
-                        )}
-                        <p className="text-xs text-gray-500">Condition: {copy.condition}</p>
-                        {!copy.isAvailable && copy.currentIssue && (
-                          <div className="mt-1 text-xs text-orange-700 space-y-0.5">
-                            <p>Member: <span className="font-mono">{copy.currentIssue.memberNumber}</span></p>
-                            <p className="flex items-center gap-1">
-                              Due: <BsDate date={copy.currentIssue.dueDate} showAd={false} />
-                              {copy.currentIssue.isOverdue && (
-                                <Badge className="bg-error-100 text-error-700 border-0 text-xs ml-1">Overdue</Badge>
-                              )}
-                            </p>
-                          </div>
-                        )}
+                        <Badge
+                          className={`text-xs border-0 ${copy.isAvailable ? 'bg-success-100 text-success-700' : 'bg-orange-100 text-orange-700'}`}
+                        >
+                          {copy.isAvailable ? 'Available' : 'Checked Out'}
+                        </Badge>
                       </div>
-                      <Badge
-                        className={`text-xs border-0 ${copy.isAvailable ? 'bg-success-100 text-success-700' : 'bg-orange-100 text-orange-700'}`}
-                      >
-                        {copy.isAvailable ? 'Available' : 'Checked Out'}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full flex items-center justify-between"
-                  onClick={() => setShowAddCopyForm((v) => !v)}
-                >
-                  <span>Add Copy</span>
-                  {showAddCopyForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </Button>
-
-                {showAddCopyForm && (
-                  <div className="mt-3 space-y-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cp-number">Copy Number *</Label>
-                      <Input
-                        id="cp-number"
-                        value={copyForm.copyNumber}
-                        onChange={(e) => setCopyField('copyNumber', e.target.value)}
-                        placeholder="e.g. C001"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cp-acc">Accession Number</Label>
-                      <Input
-                        id="cp-acc"
-                        value={copyForm.accessionNumber}
-                        onChange={(e) => setCopyField('accessionNumber', e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cp-shelf">Shelf Location</Label>
-                      <Input
-                        id="cp-shelf"
-                        value={copyForm.shelfLocation}
-                        onChange={(e) => setCopyField('shelfLocation', e.target.value)}
-                        placeholder="e.g. A-12"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Condition</Label>
-                      <Select
-                        value={copyForm.condition || 'NONE'}
-                        onValueChange={(v) => setCopyField('condition', (v ?? '') === 'NONE' ? '' : (v ?? ''))}
-                      >
-                        <SelectTrigger>
-                          <span className="truncate">
-                            {copyForm.condition ? copyForm.condition.charAt(0) + copyForm.condition.slice(1).toLowerCase() : 'Select condition'}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">Select condition</SelectItem>
-                          {CONDITIONS.map((c) => (
-                            <SelectItem key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      className="w-full bg-brand-500 hover:bg-brand-600 text-white"
-                      onClick={handleAddCopy}
-                      disabled={addCopy.isPending || !copyForm.copyNumber.trim()}
-                    >
-                      {addCopy.isPending ? 'Adding…' : 'Add Copy'}
-                    </Button>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+                </div>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full flex items-center justify-between"
+                    onClick={() => setShowAddCopyForm((v) => !v)}
+                  >
+                    <span>Add Copy</span>
+                    {showAddCopyForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+
+                  {showAddCopyForm && (
+                    <div className="mt-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cp-number">Copy Number *</Label>
+                        <Input
+                          id="cp-number"
+                          value={copyForm.copyNumber}
+                          onChange={(e) => setCopyField('copyNumber', e.target.value)}
+                          placeholder="e.g. C001"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cp-acc">Accession Number</Label>
+                        <Input
+                          id="cp-acc"
+                          value={copyForm.accessionNumber}
+                          onChange={(e) => setCopyField('accessionNumber', e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cp-shelf">Shelf Location</Label>
+                        <Input
+                          id="cp-shelf"
+                          value={copyForm.shelfLocation}
+                          onChange={(e) => setCopyField('shelfLocation', e.target.value)}
+                          placeholder="e.g. A-12"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Condition</Label>
+                        <Select
+                          value={copyForm.condition || 'NONE'}
+                          onValueChange={(v) => setCopyField('condition', (v ?? '') === 'NONE' ? '' : (v ?? ''))}
+                        >
+                          <SelectTrigger>
+                            <span className="truncate">
+                              {copyForm.condition ? copyForm.condition.charAt(0) + copyForm.condition.slice(1).toLowerCase() : 'Select condition'}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NONE">Select condition</SelectItem>
+                            {CONDITIONS.map((c) => (
+                              <SelectItem key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        className="w-full bg-brand-500 hover:bg-brand-600 text-white"
+                        onClick={handleAddCopy}
+                        disabled={addCopy.isPending || !copyForm.copyNumber.trim()}
+                      >
+                        {addCopy.isPending ? 'Adding…' : 'Add Copy'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
