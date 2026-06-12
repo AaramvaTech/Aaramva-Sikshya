@@ -11,6 +11,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ClientType } from '../common/decorators/client-type.decorator';
+import type { ClientType as ClientTypeValue } from '../common/decorators/client-type.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import type { AuthUser } from './auth.types';
@@ -45,9 +47,18 @@ export class AuthController {
   @HttpCode(200)
   async login(
     @Body() dto: LoginDto,
+    @ClientType() clientType: ClientTypeValue,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.login(dto);
+    if (clientType === 'mobile') {
+      return {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        user: result.user,
+        tenant: result.tenant,
+      };
+    }
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     return { accessToken: result.accessToken, user: result.user, tenant: result.tenant };
   }
@@ -56,12 +67,22 @@ export class AuthController {
   @HttpCode(200)
   async refresh(
     @Req() req: Request,
+    @Body() body: Record<string, unknown>,
+    @ClientType() clientType: ClientTypeValue,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = (req.cookies as Record<string, string> | undefined)?.[
-      REFRESH_COOKIE
-    ];
+    let token: string | undefined;
+    if (clientType === 'mobile') {
+      token = typeof body?.refreshToken === 'string' ? body.refreshToken : undefined;
+    } else {
+      token = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
+    }
+
     const result = await this.authService.refresh(token);
+
+    if (clientType === 'mobile') {
+      return { accessToken: result.accessToken, refreshToken: result.refreshToken };
+    }
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     return { accessToken: result.accessToken };
   }
@@ -71,13 +92,24 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async logout(
     @Req() req: Request,
+    @Body() body: Record<string, unknown>,
+    @ClientType() clientType: ClientTypeValue,
+    @CurrentUser() user: AuthUser,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = (req.cookies as Record<string, string> | undefined)?.[
-      REFRESH_COOKIE
-    ];
-    await this.authService.logout(token);
-    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    const token =
+      clientType === 'mobile'
+        ? (typeof body?.refreshToken === 'string' ? body.refreshToken : undefined)
+        : (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
+
+    const expoPushToken =
+      typeof body?.expoPushToken === 'string' ? body.expoPushToken : undefined;
+
+    await this.authService.logout(token, { expoPushToken, userId: user?.userId });
+
+    if (clientType === 'web') {
+      res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    }
     return { loggedOut: true };
   }
 

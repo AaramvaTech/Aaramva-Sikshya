@@ -152,14 +152,25 @@ export class AuthService {
   }
 
   // ─── Logout (revoke the presented refresh token) ───────────────────────────
-  async logout(refreshToken: string | undefined): Promise<void> {
+  async logout(
+    refreshToken: string | undefined,
+    options?: { expoPushToken?: string; userId?: string },
+  ): Promise<void> {
     this.tenantContext.getOrThrow();
-    if (!refreshToken) return;
-    const tokenHash = this.hashToken(refreshToken);
-    await this.tenantPrisma.execute(
-      `DELETE FROM refresh_tokens WHERE token_hash = $1`,
-      tokenHash,
-    );
+    if (refreshToken) {
+      const tokenHash = this.hashToken(refreshToken);
+      await this.tenantPrisma.execute(
+        `DELETE FROM refresh_tokens WHERE token_hash = $1`,
+        tokenHash,
+      );
+    }
+    if (options?.expoPushToken && options?.userId) {
+      await this.tenantPrisma.execute(
+        `DELETE FROM device_tokens WHERE token = $1 AND user_id = $2::uuid`,
+        options.expoPushToken,
+        options.userId,
+      );
+    }
   }
 
   // ─── Current user profile ──────────────────────────────────────────────────
