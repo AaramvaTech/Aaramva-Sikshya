@@ -31,15 +31,15 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const AUDIENCE_LABELS: Record<string, string> = {
-  ALL_STUDENTS: 'Students',
-  ALL_TEACHERS: 'Teachers',
-  ALL_PARENTS: 'Parents',
-  ALL_STAFF: 'Staff',
-  CLASS_SPECIFIC: 'Class',
+  ALL: 'Everyone',
+  STUDENTS: 'Students',
+  TEACHERS: 'Teachers',
+  PARENTS: 'Parents',
+  CLASS: 'Specific Class',
 };
 
 const TYPE_OPTIONS = ['GENERAL', 'EXAM', 'EVENT', 'URGENT', 'HOLIDAY'];
-const AUDIENCE_OPTIONS = ['ALL_STUDENTS', 'ALL_TEACHERS', 'ALL_PARENTS', 'ALL_STAFF', 'CLASS_SPECIFIC'];
+const AUDIENCE_OPTIONS = ['ALL', 'STUDENTS', 'TEACHERS', 'PARENTS', 'CLASS'];
 
 function NoticeCardSkeleton() {
   return (
@@ -73,7 +73,7 @@ export default function NoticesPage() {
     title: '',
     body: '',
     type: 'GENERAL',
-    audience: 'ALL_STUDENTS',
+    audience: 'ALL',
     expiresAt: undefined,
   });
 
@@ -91,7 +91,7 @@ export default function NoticesPage() {
   const deleteNotice = useDeleteNotice();
 
   function resetForm() {
-    setForm({ title: '', body: '', type: 'GENERAL', audience: 'ALL_STUDENTS', expiresAt: undefined });
+    setForm({ title: '', body: '', type: 'GENERAL', audience: 'ALL', expiresAt: undefined });
   }
 
   async function handleCreate() {
@@ -282,11 +282,11 @@ export default function NoticesPage() {
               <div className="space-y-1.5">
                 <Label>Audience</Label>
                 <Select
-                  value={form.audience ?? 'ALL_STUDENTS'}
+                  value={form.audience ?? 'ALL'}
                   onValueChange={(v) => setForm((f) => ({ ...f, audience: v ?? undefined }))}
                 >
                   <SelectTrigger>
-                    <span className="truncate">{form.audience ? (AUDIENCE_LABELS[form.audience] ?? form.audience) : 'ALL_STUDENTS'}</span>
+                    <span className="truncate">{form.audience ? (AUDIENCE_LABELS[form.audience] ?? form.audience) : 'ALL'}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {AUDIENCE_OPTIONS.map((a) => (

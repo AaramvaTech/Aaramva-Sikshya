@@ -111,6 +111,24 @@ export interface StudentDetail {
   createdAt: string;
 }
 
+export interface StudentStats {
+  total: number;
+  byStatus: { ACTIVE: number; INACTIVE: number; TRANSFERRED: number; GRADUATED: number };
+  byGender: { MALE: number; FEMALE: number; OTHER: number };
+  newThisMonth: number;
+  byClass: { className: string; count: number }[];
+  recentAdmissions: {
+    id: string;
+    studentId: string;
+    fullName: string;
+    className: string | null;
+    sectionName: string | null;
+    admissionDate: { ad: string; bs: string };
+    photoUrl: string | null;
+    status: string;
+  }[];
+}
+
 export interface StudentDocument {
   id: string;
   documentType: string;

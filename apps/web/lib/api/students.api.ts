@@ -5,12 +5,16 @@ import type {
   StudentSummary,
   StudentDetail,
   StudentDocument,
+  StudentStats,
   Enrollment,
   CreateStudentData,
   EnrollStudentData,
 } from '@/types/api.types';
 
 export const studentsApi = {
+  getStats: () =>
+    api.get<ApiResponse<StudentStats>>('/students/stats'),
+
   list: (params: {
     page?: number;
     limit?: number;

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -42,6 +42,7 @@ export default function BookCataloguePage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [addBookOpen, setAddBookOpen] = useState(false);
@@ -49,21 +50,12 @@ export default function BookCataloguePage() {
   const [showAddCopyForm, setShowAddCopyForm] = useState(false);
 
   const [bookForm, setBookForm] = useState({
-    title: '',
-    author: '',
-    publisher: '',
-    isbn: '',
-    categoryId: '',
-    edition: '',
-    language: 'Nepali',
-    description: '',
+    title: '', author: '', publisher: '', isbn: '',
+    categoryId: '', edition: '', language: 'Nepali', description: '',
   });
 
   const [copyForm, setCopyForm] = useState({
-    copyNumber: '',
-    accessionNumber: '',
-    shelfLocation: '',
-    condition: '',
+    copyNumber: '', accessionNumber: '', shelfLocation: '', condition: '',
   });
 
   const { data: response, isLoading } = useBooks({
@@ -77,8 +69,15 @@ export default function BookCataloguePage() {
   const addBook = useAddBook();
   const addCopy = useAddCopy();
 
-  const books = response?.data ?? [];
+  const allBooks = response?.data ?? [];
   const meta = response?.meta;
+
+  // Availability is client-side filtered
+  const books = availabilityFilter === 'AVAILABLE'
+    ? allBooks.filter((b) => b.availableCopies > 0)
+    : allBooks;
+
+  const activeFilterCount = [search, categoryId, availabilityFilter].filter(Boolean).length;
 
   function handleSearchChange(value: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -86,6 +85,13 @@ export default function BookCataloguePage() {
       setSearch(value);
       setPage(1);
     }, 400);
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setCategoryId('');
+    setAvailabilityFilter('');
+    setPage(1);
   }
 
   function setBookField(key: string, value: string) {
@@ -171,9 +177,7 @@ export default function BookCataloguePage() {
     {
       accessorKey: 'totalCopies',
       header: 'Total Copies',
-      cell: ({ getValue }) => (
-        <span className="font-mono">{getValue<number>()}</span>
-      ),
+      cell: ({ getValue }) => <span className="font-mono">{getValue<number>()}</span>,
     },
     {
       accessorKey: 'availableCopies',
@@ -195,10 +199,7 @@ export default function BookCataloguePage() {
           size="sm"
           variant="outline"
           className="h-7 px-2 text-xs"
-          onClick={() => {
-            setSelectedBookId(row.original.id);
-            setShowAddCopyForm(false);
-          }}
+          onClick={() => { setSelectedBookId(row.original.id); setShowAddCopyForm(false); }}
         >
           View
         </Button>
@@ -206,8 +207,47 @@ export default function BookCataloguePage() {
     },
   ];
 
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search title, author, ISBN..."
+          className="h-9 w-60 pl-9 text-sm"
+          onChange={(e) => handleSearchChange(e.target.value)}
+        />
+      </div>
+
+      <Select value={categoryId} onValueChange={(v) => { setCategoryId(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-40 text-sm">
+          <span className="truncate">
+            {categories?.find((c) => c.id === categoryId)?.name ?? 'All Categories'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Categories</SelectItem>
+          {categories?.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={availabilityFilter} onValueChange={(v) => { setAvailabilityFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-40 text-sm">
+          <span className={availabilityFilter ? '' : 'text-muted-foreground'}>
+            {availabilityFilter === 'AVAILABLE' ? 'Available Only' : 'All Books'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Books</SelectItem>
+          <SelectItem value="AVAILABLE">Available Only</SelectItem>
+        </SelectContent>
+      </Select>
+    </>
+  );
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Book Catalogue"
         description="Manage the school library book collection"
@@ -223,41 +263,25 @@ export default function BookCataloguePage() {
         }
       />
 
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search title, author, ISBN..."
-            className="pl-9 w-72"
-            onChange={(e) => handleSearchChange(e.target.value)}
-          />
-        </div>
-
-        <Select
-          value={categoryId}
-          onValueChange={(v) => {
-            setCategoryId(v ?? '');
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-44">
-            <span className="truncate">
-              {categories?.find((c) => c.id === categoryId)?.name ?? 'All Categories'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Categories</SelectItem>
-            {categories?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable
         columns={columns}
         data={books}
         isLoading={isLoading}
+        filterBar={filterBar}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        exportConfig={{
+          filename: 'books',
+          getData: () =>
+            books.map((b) => ({
+              Title: b.title,
+              Author: b.author ?? '',
+              ISBN: b.isbn ?? '',
+              Category: b.categoryName ?? '',
+              'Total Copies': b.totalCopies,
+              'Available Copies': b.availableCopies,
+            })),
+        }}
         pagination={
           meta
             ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage }
@@ -265,6 +289,7 @@ export default function BookCataloguePage() {
         }
       />
 
+      {/* Add Book Dialog */}
       <Dialog open={addBookOpen} onOpenChange={(open) => { if (!open) setAddBookOpen(false); }}>
         <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -273,55 +298,27 @@ export default function BookCataloguePage() {
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor="b-title">Title *</Label>
-              <Input
-                id="b-title"
-                value={bookForm.title}
-                onChange={(e) => setBookField('title', e.target.value)}
-                placeholder="Book title"
-              />
+              <Input id="b-title" value={bookForm.title} onChange={(e) => setBookField('title', e.target.value)} placeholder="Book title" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-author">Author</Label>
-              <Input
-                id="b-author"
-                value={bookForm.author}
-                onChange={(e) => setBookField('author', e.target.value)}
-                placeholder="Author name"
-              />
+              <Input id="b-author" value={bookForm.author} onChange={(e) => setBookField('author', e.target.value)} placeholder="Author name" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-publisher">Publisher</Label>
-              <Input
-                id="b-publisher"
-                value={bookForm.publisher}
-                onChange={(e) => setBookField('publisher', e.target.value)}
-                placeholder="Publisher"
-              />
+              <Input id="b-publisher" value={bookForm.publisher} onChange={(e) => setBookField('publisher', e.target.value)} placeholder="Publisher" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-isbn">ISBN</Label>
-              <Input
-                id="b-isbn"
-                value={bookForm.isbn}
-                onChange={(e) => setBookField('isbn', e.target.value)}
-                placeholder="ISBN number"
-              />
+              <Input id="b-isbn" value={bookForm.isbn} onChange={(e) => setBookField('isbn', e.target.value)} placeholder="ISBN number" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-edition">Edition</Label>
-              <Input
-                id="b-edition"
-                value={bookForm.edition}
-                onChange={(e) => setBookField('edition', e.target.value)}
-                placeholder="e.g. 2nd"
-              />
+              <Input id="b-edition" value={bookForm.edition} onChange={(e) => setBookField('edition', e.target.value)} placeholder="e.g. 2nd" />
             </div>
             <div className="space-y-1.5">
               <Label>Category</Label>
-              <Select
-                value={bookForm.categoryId || 'NONE'}
-                onValueChange={(v) => setBookField('categoryId', (v ?? '') === 'NONE' ? '' : (v ?? ''))}
-              >
+              <Select value={bookForm.categoryId || 'NONE'} onValueChange={(v) => setBookField('categoryId', (v ?? '') === 'NONE' ? '' : (v ?? ''))}>
                 <SelectTrigger>
                   <span className="truncate">
                     {categories?.find((c) => c.id === bookForm.categoryId)?.name ?? 'Select category'}
@@ -337,49 +334,32 @@ export default function BookCataloguePage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-language">Language</Label>
-              <Input
-                id="b-language"
-                value={bookForm.language}
-                onChange={(e) => setBookField('language', e.target.value)}
-                placeholder="Nepali"
-              />
+              <Input id="b-language" value={bookForm.language} onChange={(e) => setBookField('language', e.target.value)} placeholder="Nepali" />
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor="b-desc">Description</Label>
-              <Textarea
-                id="b-desc"
-                value={bookForm.description}
-                onChange={(e) => setBookField('description', e.target.value)}
-                placeholder="Short description..."
-                rows={3}
-              />
+              <Textarea id="b-desc" value={bookForm.description} onChange={(e) => setBookField('description', e.target.value)} placeholder="Short description..." rows={3} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddBookOpen(false)}>Cancel</Button>
-            <Button
-              className="bg-brand-500 hover:bg-brand-600 text-white"
-              onClick={handleAddBook}
-              disabled={addBook.isPending || !bookForm.title.trim()}
-            >
+            <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={handleAddBook} disabled={addBook.isPending || !bookForm.title.trim()}>
               {addBook.isPending ? 'Adding…' : 'Add Book'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Book Detail Dialog */}
       <Dialog open={!!selectedBookId} onOpenChange={(open) => { if (!open) { setSelectedBookId(null); setShowAddCopyForm(false); } }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{bookDetail?.title ?? 'Book Detail'}</DialogTitle>
           </DialogHeader>
-
           <DialogBody className="max-h-[75vh] overflow-y-auto space-y-6">
             {detailLoading ? (
               <div className="space-y-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-5 w-full" />
-                ))}
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}
               </div>
             ) : bookDetail ? (
               <>
@@ -423,13 +403,9 @@ export default function BookCataloguePage() {
                       <span className="ml-2 text-success-600 font-normal">{bookDetail.availableCopies} available</span>
                     </h3>
                   </div>
-
                   <div className="space-y-2">
                     {bookDetail.copies.map((copy) => (
-                      <div
-                        key={copy.id}
-                        className="rounded-lg border border-gray-200 p-3 text-sm flex items-start justify-between"
-                      >
+                      <div key={copy.id} className="rounded-lg border border-gray-200 p-3 text-sm flex items-start justify-between">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-semibold text-gray-800">{copy.copyNumber}</span>
@@ -437,9 +413,7 @@ export default function BookCataloguePage() {
                               <span className="text-xs text-gray-400 font-mono">Acc: {copy.accessionNumber}</span>
                             )}
                           </div>
-                          {copy.shelfLocation && (
-                            <p className="text-xs text-gray-500">Shelf: {copy.shelfLocation}</p>
-                          )}
+                          {copy.shelfLocation && <p className="text-xs text-gray-500">Shelf: {copy.shelfLocation}</p>}
                           <p className="text-xs text-gray-500">Condition: {copy.condition}</p>
                           {!copy.isAvailable && copy.currentIssue && (
                             <div className="mt-1 text-xs text-orange-700 space-y-0.5">
@@ -453,9 +427,7 @@ export default function BookCataloguePage() {
                             </div>
                           )}
                         </div>
-                        <Badge
-                          className={`text-xs border-0 ${copy.isAvailable ? 'bg-success-100 text-success-700' : 'bg-orange-100 text-orange-700'}`}
-                        >
+                        <Badge className={`text-xs border-0 ${copy.isAvailable ? 'bg-success-100 text-success-700' : 'bg-orange-100 text-orange-700'}`}>
                           {copy.isAvailable ? 'Available' : 'Checked Out'}
                         </Badge>
                       </div>
@@ -473,42 +445,23 @@ export default function BookCataloguePage() {
                     <span>Add Copy</span>
                     {showAddCopyForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
-
                   {showAddCopyForm && (
                     <div className="mt-3 space-y-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="cp-number">Copy Number *</Label>
-                        <Input
-                          id="cp-number"
-                          value={copyForm.copyNumber}
-                          onChange={(e) => setCopyField('copyNumber', e.target.value)}
-                          placeholder="e.g. C001"
-                        />
+                        <Input id="cp-number" value={copyForm.copyNumber} onChange={(e) => setCopyField('copyNumber', e.target.value)} placeholder="e.g. C001" />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="cp-acc">Accession Number</Label>
-                        <Input
-                          id="cp-acc"
-                          value={copyForm.accessionNumber}
-                          onChange={(e) => setCopyField('accessionNumber', e.target.value)}
-                          placeholder="Optional"
-                        />
+                        <Input id="cp-acc" value={copyForm.accessionNumber} onChange={(e) => setCopyField('accessionNumber', e.target.value)} placeholder="Optional" />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="cp-shelf">Shelf Location</Label>
-                        <Input
-                          id="cp-shelf"
-                          value={copyForm.shelfLocation}
-                          onChange={(e) => setCopyField('shelfLocation', e.target.value)}
-                          placeholder="e.g. A-12"
-                        />
+                        <Input id="cp-shelf" value={copyForm.shelfLocation} onChange={(e) => setCopyField('shelfLocation', e.target.value)} placeholder="e.g. A-12" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Condition</Label>
-                        <Select
-                          value={copyForm.condition || 'NONE'}
-                          onValueChange={(v) => setCopyField('condition', (v ?? '') === 'NONE' ? '' : (v ?? ''))}
-                        >
+                        <Select value={copyForm.condition || 'NONE'} onValueChange={(v) => setCopyField('condition', (v ?? '') === 'NONE' ? '' : (v ?? ''))}>
                           <SelectTrigger>
                             <span className="truncate">
                               {copyForm.condition ? copyForm.condition.charAt(0) + copyForm.condition.slice(1).toLowerCase() : 'Select condition'}
@@ -522,11 +475,7 @@ export default function BookCataloguePage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button
-                        className="w-full bg-brand-500 hover:bg-brand-600 text-white"
-                        onClick={handleAddCopy}
-                        disabled={addCopy.isPending || !copyForm.copyNumber.trim()}
-                      >
+                      <Button className="w-full bg-brand-500 hover:bg-brand-600 text-white" onClick={handleAddCopy} disabled={addCopy.isPending || !copyForm.copyNumber.trim()}>
                         {addCopy.isPending ? 'Adding…' : 'Add Copy'}
                       </Button>
                     </div>

@@ -49,6 +49,8 @@ export default function StaffListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deptId, setDeptId] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -69,8 +71,18 @@ export default function StaffListPage() {
   const { data: designations } = useDesignations();
   const createStaff = useCreateStaff();
 
-  const staffList = response?.data ?? [];
+  const allStaff = response?.data ?? [];
   const meta = response?.meta;
+
+  // Role and status are client-side filtered
+  const staffList = allStaff.filter((s) => {
+    if (roleFilter && s.role !== roleFilter) return false;
+    if (statusFilter === 'ACTIVE' && !s.isActive) return false;
+    if (statusFilter === 'INACTIVE' && s.isActive) return false;
+    return true;
+  });
+
+  const activeFilterCount = [search, deptId, roleFilter, statusFilter].filter(Boolean).length;
 
   function handleSearchChange(value: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -78,6 +90,14 @@ export default function StaffListPage() {
       setSearch(value);
       setPage(1);
     }, 400);
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setDeptId('');
+    setRoleFilter('');
+    setStatusFilter('');
+    setPage(1);
   }
 
   function setField(key: string, value: string) {
@@ -155,10 +175,9 @@ export default function StaffListPage() {
     {
       accessorKey: 'role',
       header: 'Role',
-      cell: ({ getValue }) => {
-        const r = getValue<string>();
-        return <span className="text-xs">{r.replace(/_/g, ' ')}</span>;
-      },
+      cell: ({ getValue }) => (
+        <span className="text-xs">{getValue<string>().replace(/_/g, ' ')}</span>
+      ),
     },
     {
       id: 'joinDate',
@@ -172,8 +191,62 @@ export default function StaffListPage() {
     },
   ];
 
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search name or ID..."
+          className="h-9 w-52 pl-9 text-sm"
+          onChange={(e) => handleSearchChange(e.target.value)}
+        />
+      </div>
+
+      <Select value={deptId} onValueChange={(v) => { setDeptId(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-40 text-sm">
+          <span className="truncate">
+            {departments?.find((d) => d.id === deptId)?.name ?? 'All Departments'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Departments</SelectItem>
+          {departments?.map((d) => (
+            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-44 text-sm">
+          <span className="truncate">
+            {roleFilter ? roleFilter.replace(/_/g, ' ') : 'All Roles'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Roles</SelectItem>
+          {ROLES.map((r) => (
+            <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className="truncate">
+            {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="ACTIVE">Active</SelectItem>
+          <SelectItem value="INACTIVE">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+    </>
+  );
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Staff Directory"
         description="Manage employee profiles and records"
@@ -189,35 +262,26 @@ export default function StaffListPage() {
         }
       />
 
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search name or ID..."
-            className="pl-9 w-64"
-            onChange={(e) => handleSearchChange(e.target.value)}
-          />
-        </div>
-
-        <Select value={deptId} onValueChange={(v) => { setDeptId(v ?? ''); setPage(1); }}>
-          <SelectTrigger className="w-44">
-            <span className="truncate">
-              {departments?.find((d) => d.id === deptId)?.name ?? 'All Departments'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Departments</SelectItem>
-            {departments?.map((d) => (
-              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable
         columns={columns}
         data={staffList}
         isLoading={isLoading}
+        filterBar={filterBar}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        exportConfig={{
+          filename: 'staff',
+          getData: () =>
+            staffList.map((s) => ({
+              'Employee ID': s.employeeId,
+              'Full Name': s.fullName,
+              Department: s.departmentName ?? '',
+              Designation: s.designationTitle ?? '',
+              Role: s.role.replace(/_/g, ' '),
+              'Join Date': typeof s.joinDate === 'string' ? s.joinDate : (s.joinDate?.bs ?? ''),
+              Status: s.isActive ? 'Active' : 'Inactive',
+            })),
+        }}
         pagination={
           meta
             ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage }

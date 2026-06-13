@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { UserPlus } from 'lucide-react';
+import { Search, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
@@ -30,6 +30,8 @@ import type { LibraryMember } from '@/types/api.types';
 export default function LibraryMembersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [registerOpen, setRegisterOpen] = useState(false);
 
   const [form, setForm] = useState({
@@ -46,8 +48,25 @@ export default function LibraryMembersPage() {
 
   const registerMember = useRegisterLibraryMember();
 
-  const members = response?.data ?? [];
+  const allMembers = response?.data ?? [];
   const meta = response?.meta;
+
+  // Type and status are client-side filtered
+  const members = allMembers.filter((m) => {
+    if (typeFilter && m.memberType !== typeFilter) return false;
+    if (statusFilter === 'ACTIVE' && !m.isActive) return false;
+    if (statusFilter === 'INACTIVE' && m.isActive) return false;
+    return true;
+  });
+
+  const activeFilterCount = [search, typeFilter, statusFilter].filter(Boolean).length;
+
+  function clearFilters() {
+    setSearch('');
+    setTypeFilter('');
+    setStatusFilter('');
+    setPage(1);
+  }
 
   function resetForm() {
     setForm({ type: 'STUDENT', referenceId: '', maxBooks: '3' });
@@ -127,8 +146,48 @@ export default function LibraryMembersPage() {
     },
   ];
 
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search by name or member no."
+          className="h-9 w-56 pl-9 text-sm"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+        />
+      </div>
+
+      <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className={typeFilter ? '' : 'text-muted-foreground'}>
+            {typeFilter ? typeFilter.charAt(0) + typeFilter.slice(1).toLowerCase() : 'All Types'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Types</SelectItem>
+          <SelectItem value="STUDENT">Student</SelectItem>
+          <SelectItem value="STAFF">Staff</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className={statusFilter ? '' : 'text-muted-foreground'}>
+            {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="ACTIVE">Active</SelectItem>
+          <SelectItem value="INACTIVE">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+    </>
+  );
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Library Members"
         description="Registered students and staff who can borrow books"
@@ -144,19 +203,25 @@ export default function LibraryMembersPage() {
         }
       />
 
-      <div className="mb-4">
-        <Input
-          placeholder="Search by name or member number..."
-          className="w-72"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        />
-      </div>
-
       <DataTable
         columns={columns}
         data={members}
         isLoading={isLoading}
+        filterBar={filterBar}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        exportConfig={{
+          filename: 'library_members',
+          getData: () =>
+            members.map((m) => ({
+              'Member No.': m.memberNumber,
+              Name: m.memberName,
+              Type: m.memberType,
+              'Current Issues': m.currentIssueCount,
+              'Max Books': m.maxBooks,
+              Status: m.isActive ? 'Active' : 'Inactive',
+            })),
+        }}
         pagination={
           meta
             ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage }

@@ -30,10 +30,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !(error.config as any)._retry) {
       (error.config as any)._retry = true;
       try {
+        const slug =
+          useTenantStore.getState().slug ??
+          (typeof window !== 'undefined' ? localStorage.getItem('tenant-slug') : null);
         const { data } = await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'}/auth/refresh`,
           {},
-          { withCredentials: true },
+          {
+            withCredentials: true,
+            headers: slug ? { 'X-Tenant-Slug': slug } : {},
+          },
         );
         const token: string = data.data.accessToken;
         useAuthStore.getState().setAccessToken(token);

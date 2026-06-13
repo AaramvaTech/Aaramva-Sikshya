@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -35,6 +35,8 @@ export default function IssuesPage() {
   const [page, setPage] = useState(1);
   const [memberSearch, setMemberSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dueDateFrom, setDueDateFrom] = useState('');
+  const [dueDateTo, setDueDateTo] = useState('');
 
   const [issueMemberSearch, setIssueMemberSearch] = useState('');
   const [selectedMember, setSelectedMember] = useState<LibraryMember | null>(null);
@@ -71,15 +73,34 @@ export default function IssuesPage() {
   const returnBook = useReturnBook();
   const payFine = usePayFine();
 
-  const issues = issuesResponse?.data ?? [];
+  const allIssues = issuesResponse?.data ?? [];
   const meta = issuesResponse?.meta;
+
+  // Member search + date range are client-side filtered
+  const issues = allIssues.filter((i) => {
+    if (memberSearch) {
+      const q = memberSearch.toLowerCase();
+      if (!i.memberName.toLowerCase().includes(q) && !i.memberNumber.toLowerCase().includes(q)) return false;
+    }
+    if (dueDateFrom && (i.dueDate?.ad ?? '') < dueDateFrom) return false;
+    if (dueDateTo && (i.dueDate?.ad ?? '') > dueDateTo) return false;
+    return true;
+  });
+
+  const activeFilterCount = [memberSearch, statusFilter, dueDateFrom, dueDateTo].filter(Boolean).length;
+
+  function clearFilters() {
+    setMemberSearch('');
+    setStatusFilter('');
+    setDueDateFrom('');
+    setDueDateTo('');
+    setPage(1);
+  }
 
   function handleMemberSearchInput(value: string) {
     setIssueMemberSearch(value);
     if (memberDebounceRef.current) clearTimeout(memberDebounceRef.current);
-    memberDebounceRef.current = setTimeout(() => {
-      setMemberSearchActive(value);
-    }, 400);
+    memberDebounceRef.current = setTimeout(() => setMemberSearchActive(value), 400);
   }
 
   function handleBookSearchInput(value: string) {
@@ -130,18 +151,9 @@ export default function IssuesPage() {
   }
 
   async function handleIssueBook() {
-    if (!selectedMember) {
-      toast.error('Please select a member');
-      return;
-    }
-    if (!selectedCopyId) {
-      toast.error('Please select a book copy');
-      return;
-    }
-    if (!dueDate) {
-      toast.error('Please enter a due date');
-      return;
-    }
+    if (!selectedMember) { toast.error('Please select a member'); return; }
+    if (!selectedCopyId) { toast.error('Please select a book copy'); return; }
+    if (!dueDate) { toast.error('Please enter a due date'); return; }
     try {
       await issueBook.mutateAsync({
         bookCopyId: selectedCopyId,
@@ -237,23 +249,12 @@ export default function IssuesPage() {
         return (
           <div className="flex gap-1.5">
             {canReturn && (
-              <Button
-                size="sm"
-                className="h-7 px-2 text-xs bg-brand-500 hover:bg-brand-600 text-white"
-                onClick={() => handleReturn(issue)}
-                disabled={returnBook.isPending}
-              >
+              <Button size="sm" className="h-7 px-2 text-xs bg-brand-500 hover:bg-brand-600 text-white" onClick={() => handleReturn(issue)} disabled={returnBook.isPending}>
                 Return
               </Button>
             )}
             {canPayFine && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 px-2 text-xs text-orange-600 border-orange-300 hover:bg-orange-50"
-                onClick={() => handlePayFine(issue)}
-                disabled={payFine.isPending}
-              >
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-orange-600 border-orange-300 hover:bg-orange-50" onClick={() => handlePayFine(issue)} disabled={payFine.isPending}>
                 Pay Fine
               </Button>
             )}
@@ -262,6 +263,52 @@ export default function IssuesPage() {
       },
     },
   ];
+
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search member name or no."
+          className="h-9 w-52 pl-9 text-sm"
+          value={memberSearch}
+          onChange={(e) => setMemberSearch(e.target.value)}
+        />
+      </div>
+
+      <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-36 text-sm">
+          <span className={statusFilter ? '' : 'text-muted-foreground'}>
+            {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="ISSUED">Issued</SelectItem>
+          <SelectItem value="OVERDUE">Overdue</SelectItem>
+          <SelectItem value="RETURNED">Returned</SelectItem>
+          <SelectItem value="LOST">Lost</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 shrink-0">Due:</span>
+        <input
+          type="date"
+          value={dueDateFrom}
+          onChange={(e) => setDueDateFrom(e.target.value)}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+        <span className="text-xs text-gray-400">–</span>
+        <input
+          type="date"
+          value={dueDateTo}
+          onChange={(e) => setDueDateTo(e.target.value)}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -273,51 +320,31 @@ export default function IssuesPage() {
           <TabsTrigger value="issue-book">Issue a Book</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="issues" className="mt-4 space-y-4">
-          <div className="flex gap-3 flex-wrap">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search member name or number..."
-                className="pl-9 w-64"
-                value={memberSearch}
-                onChange={(e) => setMemberSearch(e.target.value)}
-              />
-            </div>
-
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(v ?? '');
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-40">
-                <span className="truncate">
-                  {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
-                <SelectItem value="ISSUED">Issued</SelectItem>
-                <SelectItem value="OVERDUE">Overdue</SelectItem>
-                <SelectItem value="RETURNED">Returned</SelectItem>
-                <SelectItem value="LOST">Lost</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+        <TabsContent value="issues" className="mt-4">
           <DataTable
             columns={columns}
-            data={issues.filter((i) =>
-              memberSearch
-                ? i.memberName.toLowerCase().includes(memberSearch.toLowerCase()) ||
-                  i.memberNumber.toLowerCase().includes(memberSearch.toLowerCase())
-                : true
-            )}
+            data={issues}
             isLoading={issuesLoading}
+            filterBar={filterBar}
+            activeFilterCount={activeFilterCount}
+            onClearFilters={clearFilters}
+            exportConfig={{
+              filename: 'book_issues',
+              getData: () =>
+                issues.map((i) => ({
+                  Member: i.memberName,
+                  'Member No.': i.memberNumber,
+                  Book: i.bookTitle,
+                  'Copy No.': i.copyNumber,
+                  'Issued Date': i.issuedAt?.bs ?? '',
+                  'Due Date': i.dueDate?.bs ?? '',
+                  'Fine (NPR)': i.fineAmount,
+                  'Fine Paid': i.finePaid ? 'Yes' : 'No',
+                  Status: i.status,
+                })),
+            }}
             pagination={
-              meta && !memberSearch
+              meta && !memberSearch && !dueDateFrom && !dueDateTo
                 ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage }
                 : undefined
             }
@@ -336,12 +363,7 @@ export default function IssuesPage() {
                       {selectedMember.memberNumber} · {selectedMember.memberType} · {selectedMember.currentIssueCount}/{selectedMember.maxBooks} books
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0 text-gray-400 hover:text-error-500"
-                    onClick={clearMember}
-                  >
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-error-500" onClick={clearMember}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -349,22 +371,12 @@ export default function IssuesPage() {
                 <div className="space-y-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input
-                      placeholder="Search member by name or number..."
-                      className="pl-9"
-                      value={issueMemberSearch}
-                      onChange={(e) => handleMemberSearchInput(e.target.value)}
-                    />
+                    <Input placeholder="Search member by name or number..." className="pl-9" value={issueMemberSearch} onChange={(e) => handleMemberSearchInput(e.target.value)} />
                   </div>
                   {memberResults && memberResults.data && memberResults.data.length > 0 && issueMemberSearch && (
                     <div className="rounded-sm border border-stroke divide-y divide-stroke bg-white dark:border-strokedark dark:divide-strokedark dark:bg-boxdark overflow-hidden">
                       {memberResults.data.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-2 dark:hover:bg-meta-4 transition-colors"
-                          onClick={() => selectMember(m)}
-                        >
+                        <button key={m.id} type="button" className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-2 dark:hover:bg-meta-4 transition-colors" onClick={() => selectMember(m)}>
                           <p className="font-medium text-black dark:text-white">{m.memberName}</p>
                           <p className="text-xs text-gray-500 font-mono">
                             {m.memberNumber} · {m.memberType}
@@ -384,31 +396,19 @@ export default function IssuesPage() {
                 <div className="space-y-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input
-                      placeholder="Search book by title, author, ISBN..."
-                      className="pl-9"
-                      value={bookSearch}
-                      onChange={(e) => handleBookSearchInput(e.target.value)}
-                    />
+                    <Input placeholder="Search book by title, author, ISBN..." className="pl-9" value={bookSearch} onChange={(e) => handleBookSearchInput(e.target.value)} />
                   </div>
                   {bookResults && bookResults.data && bookResults.data.length > 0 && bookSearch && !selectedBookId && (
                     <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
                       {bookResults.data.map((b) => (
-                        <button
-                          key={b.id}
-                          type="button"
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                          onClick={() => selectBook(b.id)}
-                          disabled={b.availableCopies === 0}
-                        >
+                        <button key={b.id} type="button" className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors" onClick={() => selectBook(b.id)} disabled={b.availableCopies === 0}>
                           <p className="font-medium text-gray-800">{b.title}</p>
                           <p className="text-xs text-gray-400">
                             {b.author ?? 'Unknown author'}
-                            {b.availableCopies === 0 ? (
-                              <span className="ml-2 text-error-500">No copies available</span>
-                            ) : (
-                              <span className="ml-2 text-success-600">{b.availableCopies} available</span>
-                            )}
+                            {b.availableCopies === 0
+                              ? <span className="ml-2 text-error-500">No copies available</span>
+                              : <span className="ml-2 text-success-600">{b.availableCopies} available</span>
+                            }
                           </p>
                         </button>
                       ))}
@@ -424,11 +424,7 @@ export default function IssuesPage() {
                           <button
                             key={copy.id}
                             type="button"
-                            className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors ${
-                              selectedCopyId === copy.id
-                                ? 'border-brand-500 bg-brand-50'
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors ${selectedCopyId === copy.id ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
                             onClick={() => setSelectedCopyId(copy.id)}
                           >
                             <p className="font-mono font-semibold text-gray-800">{copy.copyNumber}</p>
@@ -440,12 +436,7 @@ export default function IssuesPage() {
                           </button>
                         ))}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-gray-400 hover:text-gray-600"
-                        onClick={() => { setSelectedBookId(''); setSelectedCopyId(''); setBookSearch(''); }}
-                      >
+                      <Button variant="ghost" size="sm" className="text-xs text-gray-400 hover:text-gray-600" onClick={() => { setSelectedBookId(''); setSelectedCopyId(''); setBookSearch(''); }}>
                         ← Change book
                       </Button>
                     </div>
@@ -459,12 +450,7 @@ export default function IssuesPage() {
                       Copy: {bookDetail?.copies.find((c) => c.id === selectedCopyId)?.copyNumber}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0 text-gray-400 hover:text-error-500"
-                    onClick={() => { setSelectedCopyId(''); setSelectedBookId(''); setBookSearch(''); setBookSearchActive(''); }}
-                  >
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-error-500" onClick={() => { setSelectedCopyId(''); setSelectedBookId(''); setBookSearch(''); setBookSearchActive(''); }}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -484,14 +470,7 @@ export default function IssuesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="fine-per-day">Fine Per Day (NPR)</Label>
-                <Input
-                  id="fine-per-day"
-                  type="number"
-                  min={0}
-                  value={finePerDay}
-                  onChange={(e) => setFinePerDay(e.target.value)}
-                  placeholder="Optional"
-                />
+                <Input id="fine-per-day" type="number" min={0} value={finePerDay} onChange={(e) => setFinePerDay(e.target.value)} placeholder="Optional" />
               </div>
             </div>
 
@@ -499,12 +478,11 @@ export default function IssuesPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
                 <p className="font-medium text-gray-700">Summary</p>
                 <p className="text-gray-600">
-                  Issuing <span className="font-semibold">{bookDetail?.title}</span> (copy {bookDetail?.copies.find((c) => c.id === selectedCopyId)?.copyNumber}) to{' '}
+                  Issuing <span className="font-semibold">{bookDetail?.title}</span> (copy{' '}
+                  {bookDetail?.copies.find((c) => c.id === selectedCopyId)?.copyNumber}) to{' '}
                   <span className="font-semibold">{selectedMember.memberName}</span>
                 </p>
-                {dueDate && (
-                  <p className="text-gray-500 text-xs">Due: <BsDate date={dueDate} showAd={false} /></p>
-                )}
+                {dueDate && <p className="text-gray-500 text-xs">Due: <BsDate date={dueDate} showAd={false} /></p>}
               </div>
             )}
 

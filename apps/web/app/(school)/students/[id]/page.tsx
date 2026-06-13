@@ -1,11 +1,27 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode, type ElementType } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, Edit2, Loader2, Mail, Pencil, Phone, User, X } from 'lucide-react';
+import {
+  Activity,
+  BookOpen,
+  Camera,
+  CalendarDays,
+  Edit2,
+  Loader2,
+  Mail,
+  Pencil,
+  Phone,
+  TrendingUp,
+  User,
+  Wallet,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useStudent, useAcademicYears, useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
+import { useStudentLedger } from '@/lib/hooks/use-finance';
 import { studentsApi } from '@/lib/api/students.api';
 import { useStudentAssignments, useSetStudentAssignment } from '@/lib/hooks/use-finance';
 import { PageHeader } from '@/components/shared/page-header';
@@ -54,6 +70,130 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between items-start gap-2 py-2 border-b border-stroke/50 dark:border-strokedark/50 last:border-0 text-sm">
+      <span className="text-gray-500 shrink-0 text-xs uppercase tracking-wide font-medium">{label}</span>
+      <span className="font-medium text-right text-black dark:text-white">{value}</span>
+    </div>
+  );
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color = 'blue',
+  loading = false,
+}: {
+  icon: ElementType;
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  color?: 'blue' | 'green' | 'orange' | 'red';
+  loading?: boolean;
+}) {
+  const colorMap = {
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20',
+    green: 'bg-green-50 text-green-600 dark:bg-green-900/20',
+    orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/20',
+    red: 'bg-red-50 text-red-600 dark:bg-red-900/20',
+  };
+  return (
+    <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-4 flex items-center gap-4">
+      <div className={cn('flex-shrink-0 p-2.5 rounded-lg', colorMap[color])}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-0.5">{label}</p>
+        {loading ? (
+          <Skeleton className="h-6 w-20 mt-1" />
+        ) : (
+          <p className="text-xl font-bold text-black dark:text-white leading-tight">{value}</p>
+        )}
+        {sub && !loading && (
+          <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Overview Stats ────────────────────────────────────────────────────────────
+
+function OverviewStats({ studentId, academicYearId }: { studentId: string; academicYearId: string }) {
+  const { data: attendance, isLoading: attendanceLoading } = useStudentAttendanceSummary(
+    studentId,
+    academicYearId || undefined,
+  );
+  const { data: ledger, isLoading: ledgerLoading } = useStudentLedger(studentId, academicYearId);
+
+  const attendanceRate = attendance?.attendancePercent ?? null;
+  const presentDays = attendance?.present ?? null;
+  const totalDays = attendance?.totalWorkingDays ?? null;
+
+  const totalBalance = ledger?.summary?.totalBalance ?? null;
+  const totalPaid = ledger?.summary?.totalPaid ?? null;
+
+  const attendanceColor: 'green' | 'orange' | 'red' =
+    attendanceRate === null ? 'green'
+    : attendanceRate >= 75 ? 'green'
+    : attendanceRate >= 60 ? 'orange'
+    : 'red';
+
+  if (!academicYearId) return null;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCard
+        icon={TrendingUp}
+        label="Attendance Rate"
+        value={attendanceRate !== null ? `${attendanceRate.toFixed(1)}%` : '—'}
+        sub="This academic year"
+        color={attendanceColor}
+        loading={attendanceLoading}
+      />
+      <StatCard
+        icon={CalendarDays}
+        label="Present Days"
+        value={presentDays !== null ? presentDays : '—'}
+        sub={totalDays !== null ? `of ${totalDays} working days` : undefined}
+        color="blue"
+        loading={attendanceLoading}
+      />
+      <StatCard
+        icon={Wallet}
+        label="Fees Paid"
+        value={
+          totalPaid !== null ? (
+            <AmountDisplay amount={totalPaid} className="text-xl font-bold" />
+          ) : '—'
+        }
+        sub="Total payments received"
+        color="green"
+        loading={ledgerLoading}
+      />
+      <StatCard
+        icon={Activity}
+        label="Outstanding Balance"
+        value={
+          totalBalance !== null ? (
+            <AmountDisplay amount={totalBalance} className="text-xl font-bold" />
+          ) : '—'
+        }
+        sub="Amount still due"
+        color={totalBalance !== null && totalBalance > 0 ? 'orange' : 'green'}
+        loading={ledgerLoading}
+      />
+    </div>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function StudentProfilePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,6 +207,7 @@ export default function StudentProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: student, isLoading } = useStudent(id);
+  const { data: currentYear } = useCurrentAcademicYear();
 
   const { data: documents, isLoading: docsLoading } = useQuery({
     queryKey: ['student-documents', id],
@@ -125,7 +266,10 @@ export default function StudentProfilePage() {
           {TABS.map((t) => <Skeleton key={t.key} className="h-9 w-24" />)}
         </div>
         <div className="space-y-4">
-          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-44 rounded-lg" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <Skeleton className="h-64 rounded-lg" />
             <Skeleton className="h-64 rounded-lg" />
@@ -181,91 +325,128 @@ export default function StudentProfilePage() {
       {activeTab === 'overview' && (
         <div className="space-y-5">
           {/* Hero card */}
-          <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-            <div className="p-5 sm:p-7 flex items-center gap-6">
-              {/* Avatar with upload button */}
-              <div className="relative shrink-0 group">
-                <Avatar className="h-24 w-24 ring-2 ring-brand-100">
-                  <AvatarImage src={student.photoUrl ?? undefined} className="object-cover" />
-                  <AvatarFallback className="text-2xl bg-brand-50 text-brand-500">
-                    {initials(student.fullName)}
-                  </AvatarFallback>
-                </Avatar>
-                <button
-                  onClick={openPhotoDialog}
-                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  title="Change photo"
-                >
-                  <Camera className="h-6 w-6 text-white" />
-                </button>
-              </div>
+          <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden">
+            {/* Color stripe */}
+            <div className="h-2 bg-gradient-to-r from-brand-400 to-brand-600" />
 
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-3 mb-1">
-                  <h2 className="text-xl font-bold text-black dark:text-white truncate">
-                    {student.fullName}
-                  </h2>
-                  <StatusBadge status={student.status} />
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start gap-5">
+                {/* Avatar with upload */}
+                <div className="relative shrink-0 group mt-1">
+                  <Avatar className="h-20 w-20 ring-2 ring-brand-100 ring-offset-2">
+                    <AvatarImage src={student.photoUrl ?? undefined} className="object-cover" />
+                    <AvatarFallback className="text-xl bg-brand-50 text-brand-500 font-bold">
+                      {initials(student.fullName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <button
+                    onClick={openPhotoDialog}
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    title="Change photo"
+                  >
+                    <Camera className="h-5 w-5 text-white" />
+                  </button>
                 </div>
-                <p className="text-sm text-gray-500 font-mono mb-3">{student.studentId}</p>
 
-                <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-gray-600 dark:text-gray-400">
-                  {student.className && (
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-medium text-black dark:text-white">Class:</span>
-                      {student.className}{student.sectionName ? ` — ${student.sectionName}` : ''}
-                      {student.rollNumber ? ` · Roll ${student.rollNumber}` : ''}
-                    </span>
-                  )}
-                  {primaryGuardian && (
-                    <span className="flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5" />
-                      {primaryGuardian.firstName} {primaryGuardian.lastName}
-                      <span className="text-gray-400">({primaryGuardian.relation})</span>
-                    </span>
-                  )}
-                  {student.phone && (
-                    <span className="flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5" />
-                      {student.phone}
-                    </span>
-                  )}
-                  {student.email && (
-                    <span className="flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5" />
-                      {student.email}
-                    </span>
-                  )}
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-3 mb-1.5">
+                    <h2 className="text-xl font-bold text-black dark:text-white">
+                      {student.fullName}
+                    </h2>
+                    <StatusBadge status={student.status} />
+                  </div>
+
+                  <p className="text-xs text-gray-400 font-mono mb-3">{student.studentId}</p>
+
+                  {/* Info chips */}
+                  <div className="flex flex-wrap gap-2">
+                    {student.className && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <BookOpen className="h-3 w-3" />
+                        {student.className}
+                        {student.sectionName ? ` · ${student.sectionName}` : ''}
+                        {student.rollNumber ? ` · Roll ${student.rollNumber}` : ''}
+                      </span>
+                    )}
+                    {primaryGuardian && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <User className="h-3 w-3" />
+                        {primaryGuardian.firstName} {primaryGuardian.lastName}
+                        <span className="text-gray-400 capitalize">({primaryGuardian.relation.toLowerCase()})</span>
+                      </span>
+                    )}
+                    {student.phone && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <Phone className="h-3 w-3" />
+                        {student.phone}
+                      </span>
+                    )}
+                    {student.email && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <Mail className="h-3 w-3" />
+                        {student.email}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="hidden md:flex flex-col items-end gap-1.5 text-sm text-right shrink-0">
-                <span className="text-gray-400">Admitted</span>
-                <span className="font-medium"><BsDate date={student.admissionDate} /></span>
-                {student.academicYear && (
-                  <>
-                    <span className="text-gray-400 mt-1">Academic Year</span>
-                    <span className="font-medium">{student.academicYear}</span>
-                  </>
-                )}
+                {/* Right column: dates + quick actions */}
+                <div className="hidden md:flex flex-col items-end gap-3 shrink-0">
+                  <div className="text-right text-sm">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide">Admitted</p>
+                    <p className="font-medium text-black dark:text-white mt-0.5">
+                      <BsDate date={student.admissionDate} />
+                    </p>
+                    {student.academicYear && (
+                      <>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide mt-2">Academic Year</p>
+                        <p className="font-medium text-black dark:text-white mt-0.5">{student.academicYear}</p>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-2 mt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setActiveTab('fees')}
+                    >
+                      View Fees
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setActiveTab('enrollment')}
+                    >
+                      Enrollment
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Stats row */}
+          <OverviewStats studentId={id} academicYearId={currentYear?.id ?? ''} />
 
           {/* Two column: personal info + guardians */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Personal details */}
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-              <div className="border-b border-stroke px-5 py-4 dark:border-strokedark">
-                <h4 className="font-semibold text-black dark:text-white">Personal Details</h4>
+              <div className="border-b border-stroke px-5 py-3.5 dark:border-strokedark">
+                <h4 className="font-semibold text-sm text-black dark:text-white">Personal Details</h4>
               </div>
-              <div className="p-5 space-y-3">
+              <div className="px-5 py-3">
                 <InfoRow label="Date of Birth" value={<BsDate date={student.dateOfBirth} />} />
                 <InfoRow
                   label="Gender"
                   value={student.gender.charAt(0) + student.gender.slice(1).toLowerCase()}
                 />
-                {student.bloodGroup && <InfoRow label="Blood Group" value={student.bloodGroup} />}
+                {student.bloodGroup && <InfoRow label="Blood Group" value={
+                  <span className="font-bold text-red-600">{student.bloodGroup}</span>
+                } />}
                 {student.religion && <InfoRow label="Religion" value={student.religion} />}
                 {student.ethnicity && <InfoRow label="Ethnicity" value={student.ethnicity} />}
                 {student.motherTongue && <InfoRow label="Mother Tongue" value={student.motherTongue} />}
@@ -284,8 +465,8 @@ export default function StudentProfilePage() {
 
             {/* Guardians */}
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-              <div className="border-b border-stroke px-5 py-4 dark:border-strokedark flex items-center justify-between">
-                <h4 className="font-semibold text-black dark:text-white">Guardians</h4>
+              <div className="border-b border-stroke px-5 py-3.5 dark:border-strokedark flex items-center justify-between">
+                <h4 className="font-semibold text-sm text-black dark:text-white">Guardians</h4>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -295,9 +476,10 @@ export default function StudentProfilePage() {
                   Edit
                 </Button>
               </div>
-              <div className="p-5">
+              <div className="p-4">
                 {validGuardians.length === 0 ? (
                   <div className="text-center py-6">
+                    <User className="h-8 w-8 text-gray-200 mx-auto mb-2" />
                     <p className="text-sm text-gray-400 mb-3">No guardians on record</p>
                     <Button
                       size="sm"
@@ -308,15 +490,15 @@ export default function StudentProfilePage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {validGuardians.map((g) => (
                       <div
                         key={g.id}
                         className="p-3.5 rounded-lg border border-gray-100 bg-gray-50/60 dark:border-gray-700 dark:bg-gray-800/30"
                       >
-                        <div className="flex items-start justify-between mb-1.5">
+                        <div className="flex items-start justify-between mb-2">
                           <div>
-                            <p className="font-medium text-sm text-black dark:text-white">
+                            <p className="font-semibold text-sm text-black dark:text-white">
                               {g.firstName} {g.lastName}
                             </p>
                             <p className="text-xs text-gray-500 capitalize mt-0.5">
@@ -326,7 +508,7 @@ export default function StudentProfilePage() {
                           {g.isPrimary && (
                             <Badge
                               variant="outline"
-                              className="text-xs border-brand-500/30 text-brand-500 shrink-0"
+                              className="text-xs border-brand-500/30 bg-brand-50 text-brand-600 shrink-0"
                             >
                               Primary
                             </Badge>
@@ -334,11 +516,13 @@ export default function StudentProfilePage() {
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                           <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" />{g.phone}
+                            <Phone className="h-3 w-3 text-gray-400" />
+                            {g.phone}
                           </span>
                           {g.email && (
                             <span className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />{g.email}
+                              <Mail className="h-3 w-3 text-gray-400" />
+                              {g.email}
                             </span>
                           )}
                         </div>
@@ -355,7 +539,6 @@ export default function StudentProfilePage() {
       {/* ── Enrollment ────────────────────────────────────────────── */}
       {activeTab === 'enrollment' && (
         <div className="space-y-4">
-          {/* Current enrollment summary */}
           {student.className ? (
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
               <div className="border-b border-stroke px-5 py-4 dark:border-strokedark flex items-center justify-between">
@@ -391,7 +574,6 @@ export default function StudentProfilePage() {
             </div>
           )}
 
-          {/* Enrollment form (shown when changing or first enrollment) */}
           {(showEnrollForm || !student.className) && (
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
               <div className="border-b border-stroke px-5 py-4 dark:border-strokedark">
@@ -477,7 +659,6 @@ export default function StudentProfilePage() {
           </DialogHeader>
 
           <div className="flex flex-col items-center gap-4 py-2">
-            {/* Preview */}
             <div className="relative">
               <Avatar className="h-28 w-28 ring-2 ring-brand-100">
                 <AvatarImage
@@ -537,16 +718,7 @@ export default function StudentProfilePage() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex justify-between items-start gap-2 text-sm">
-      <span className="text-gray-500 shrink-0">{label}</span>
-      <span className="font-medium text-right text-black dark:text-white">{value}</span>
-    </div>
-  );
-}
-
-// ─── Fee Assignment Row ────────────────────────────────────────────────────
+// ─── Fee Assignment Row ────────────────────────────────────────────────────────
 
 function AssignmentRow({
   item,
@@ -691,7 +863,7 @@ function AssignmentRow({
   );
 }
 
-// ─── Fees Tab ──────────────────────────────────────────────────────────────
+// ─── Fees Tab ──────────────────────────────────────────────────────────────────
 
 function FeesTab({ studentId }: { studentId: string }) {
   const { data: currentYear } = useCurrentAcademicYear();

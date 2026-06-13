@@ -14,7 +14,18 @@ export type StudentListParams = {
   className?: string;
   sectionId?: string;
   status?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 };
+
+export function useStudentStats() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['students', 'stats'],
+    queryFn: () => studentsApi.getStats().then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
 
 export function useStudents(params: StudentListParams) {
   const slug = useTenantStore((s) => s.slug);

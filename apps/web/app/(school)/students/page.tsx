@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search } from 'lucide-react';
 import { useStudents, useClasses } from '@/lib/hooks/use-students';
 import { DataTable } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
@@ -17,18 +17,49 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { StudentSummary } from '@/types/api.types';
 
 function initials(name: string) {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  return name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+}
+
+type SortField = 'first_name' | 'student_id' | 'admission_date';
+
+function SortHeader({
+  label,
+  field,
+  sortBy,
+  sortOrder,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  sortBy: string;
+  sortOrder: string;
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = sortBy === field;
+  return (
+    <button
+      className="flex items-center gap-1 group text-left font-semibold"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      <span className={isActive ? 'text-brand-500' : 'text-gray-300 group-hover:text-gray-400'}>
+        {isActive ? (
+          sortOrder === 'asc' ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ChevronsUpDown className="h-3.5 w-3.5" />
+        )}
+      </span>
+    </button>
+  );
 }
 
 export default function StudentsPage() {
@@ -39,8 +70,10 @@ export default function StudentsPage() {
   const search = searchParams.get('search') ?? '';
   const classId = searchParams.get('classId') ?? '';
   const status = searchParams.get('status') ?? '';
+  const gender = searchParams.get('gender') ?? '';
+  const sortBy = searchParams.get('sortBy') ?? 'first_name';
+  const sortOrder = (searchParams.get('sortOrder') ?? 'asc') as 'asc' | 'desc';
 
-  // Local input state for immediate feedback; URL update is debounced
   const [searchInput, setSearchInput] = useState(search);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -50,12 +83,20 @@ export default function StudentsPage() {
     search: search || undefined,
     classId: classId || undefined,
     status: status || undefined,
+    sortBy,
+    sortOrder,
   });
-
   const { data: classes } = useClasses();
 
-  const students = response?.data?.data ?? [];
+  const allStudents = response?.data?.data ?? [];
   const meta = response?.data?.meta;
+
+  // Gender is client-side filtered (API doesn't expose this param)
+  const students = gender
+    ? allStudents.filter((s) => s.gender === gender)
+    : allStudents;
+
+  const activeFilterCount = [search, classId, status, gender].filter(Boolean).length;
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -74,10 +115,23 @@ export default function StudentsPage() {
     }, 400);
   }
 
+  function handleSort(field: SortField) {
+    if (sortBy === field) {
+      updateParams({ sortOrder: sortOrder === 'asc' ? 'desc' : 'asc', page: '1' });
+    } else {
+      updateParams({ sortBy: field, sortOrder: 'asc', page: '1' });
+    }
+  }
+
+  function clearFilters() {
+    setSearchInput('');
+    router.push('?');
+  }
+
   const columns: ColumnDef<StudentSummary>[] = [
     {
       id: 'photo',
-      header: 'Photo',
+      header: '',
       cell: ({ row }) => (
         <Avatar className="h-8 w-8">
           <AvatarImage src={row.original.photoUrl ?? undefined} />
@@ -89,19 +143,32 @@ export default function StudentsPage() {
     },
     {
       accessorKey: 'studentId',
-      header: 'Student ID',
+      header: () => (
+        <SortHeader
+          label="Student ID"
+          field="student_id"
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+        />
+      ),
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-gray-600">{getValue<string>()}</span>
       ),
     },
     {
       id: 'name',
-      header: 'Full Name',
+      header: () => (
+        <SortHeader
+          label="Full Name"
+          field="first_name"
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+        />
+      ),
       cell: ({ row }) => (
-        <Link
-          href={`/students/${row.original.id}`}
-          className="font-medium text-brand-500 hover:underline"
-        >
+        <Link href={`/students/${row.original.id}`} className="font-medium text-brand-500 hover:underline">
           {row.original.fullName}
         </Link>
       ),
@@ -136,8 +203,65 @@ export default function StudentsPage() {
     },
   ];
 
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search name or admission no."
+          className="h-9 w-56 pl-9 text-sm"
+          value={searchInput}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+      </div>
+
+      <Select value={classId} onValueChange={(v) => updateParams({ classId: v ?? '', page: '1' })}>
+        <SelectTrigger className="h-9 w-36 text-sm">
+          <span className={classId ? '' : 'text-muted-foreground'}>
+            {classId ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…') : 'All Classes'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Classes</SelectItem>
+          {classes?.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={gender} onValueChange={(v) => updateParams({ gender: v ?? '', page: '1' })}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className={gender ? '' : 'text-muted-foreground'}>
+            {gender ? gender.charAt(0) + gender.slice(1).toLowerCase() : 'All Gender'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Gender</SelectItem>
+          <SelectItem value="MALE">Male</SelectItem>
+          <SelectItem value="FEMALE">Female</SelectItem>
+          <SelectItem value="OTHER">Other</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={status} onValueChange={(v) => updateParams({ status: v ?? '', page: '1' })}>
+        <SelectTrigger className="h-9 w-36 text-sm">
+          <span className={status ? '' : 'text-muted-foreground'}>
+            {status ? status.charAt(0) + status.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="ACTIVE">Active</SelectItem>
+          <SelectItem value="INACTIVE">Inactive</SelectItem>
+          <SelectItem value="TRANSFERRED">Transferred</SelectItem>
+          <SelectItem value="GRADUATED">Graduated</SelectItem>
+        </SelectContent>
+      </Select>
+    </>
+  );
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Students"
         description="Manage student admissions and profiles"
@@ -151,68 +275,25 @@ export default function StudentsPage() {
         }
       />
 
-      {/* TailAdmin card wrapper for filters + table */}
-      <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
-        <div className="max-w-full overflow-x-auto">
-          <div className="flex gap-3 mb-5 flex-wrap items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search name or admission no."
-                className="pl-9 w-64 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black outline-none focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-                value={searchInput}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-            </div>
-
-            <Select
-              value={classId}
-              onValueChange={(v) =>
-                updateParams({ classId: v ?? '', page: '1' })
-              }
-            >
-              <SelectTrigger className="w-40 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black dark:border-form-strokedark dark:bg-form-input dark:text-white">
-                <span className={classId ? '' : 'text-muted-foreground'}>
-                  {classId
-                    ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…')
-                    : 'All Classes'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All Classes</SelectItem>
-                {classes?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={status}
-              onValueChange={(v) =>
-                updateParams({ status: v ?? '', page: '1' })
-              }
-            >
-              <SelectTrigger className="w-36 rounded-lg border border-stroke bg-transparent py-2.5 text-sm text-black dark:border-form-strokedark dark:bg-form-input dark:text-white">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="INACTIVE">Inactive</SelectItem>
-                <SelectItem value="TRANSFERRED">Transferred</SelectItem>
-                <SelectItem value="GRADUATED">Graduated</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
       <DataTable
         columns={columns}
         data={students}
         isLoading={isLoading}
+        filterBar={filterBar}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        exportConfig={{
+          filename: 'students',
+          getData: () =>
+            students.map((s) => ({
+              'Student ID': s.studentId,
+              'Full Name': s.fullName,
+              Class: s.className ?? '',
+              Section: s.sectionName ?? '',
+              Gender: s.gender,
+              Status: s.status,
+            })),
+        }}
         pagination={
           meta
             ? {

@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -23,6 +25,10 @@ import type { LeaveRequest } from '@/types/api.types';
 export default function LeavePage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const [applyForm, setApplyForm] = useState({
     leaveTypeId: '',
@@ -40,8 +46,28 @@ export default function LeavePage() {
   const reviewLeave = useReviewLeave();
   const applyLeave = useApplyLeave();
 
-  const requests = response?.data ?? [];
+  const allRequests = response?.data ?? [];
   const meta = response?.meta;
+
+  // Staff search, leave type, and date range are client-side filtered
+  const requests = allRequests.filter((r) => {
+    if (staffSearch && !r.staffName.toLowerCase().includes(staffSearch.toLowerCase())) return false;
+    if (leaveTypeFilter && r.leaveTypeName !== leaveTypeFilter) return false;
+    if (dateFrom && (r.fromDate?.ad ?? '') < dateFrom) return false;
+    if (dateTo && (r.toDate?.ad ?? '') > dateTo) return false;
+    return true;
+  });
+
+  const activeFilterCount = [statusFilter, staffSearch, leaveTypeFilter, dateFrom, dateTo].filter(Boolean).length;
+
+  function clearFilters() {
+    setStatusFilter('');
+    setStaffSearch('');
+    setLeaveTypeFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  }
 
   async function handleApprove(id: string) {
     try {
@@ -118,21 +144,10 @@ export default function LeavePage() {
         if (row.original.status !== 'PENDING') return null;
         return (
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => handleApprove(row.original.id)}
-              disabled={reviewLeave.isPending}
-            >
+            <Button size="sm" className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => handleApprove(row.original.id)} disabled={reviewLeave.isPending}>
               Approve
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-error-600 border-error-200 hover:bg-error-50"
-              onClick={() => handleReject(row.original.id)}
-              disabled={reviewLeave.isPending}
-            >
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-error-600 border-error-200 hover:bg-error-50" onClick={() => handleReject(row.original.id)} disabled={reviewLeave.isPending}>
               Reject
             </Button>
           </div>
@@ -140,6 +155,68 @@ export default function LeavePage() {
       },
     },
   ];
+
+  const leaveTypeNames = [...new Set(allRequests.map((r) => r.leaveTypeName))];
+
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search staff name..."
+          className="h-9 w-48 pl-9 text-sm"
+          value={staffSearch}
+          onChange={(e) => setStaffSearch(e.target.value)}
+        />
+      </div>
+
+      <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className={statusFilter ? '' : 'text-muted-foreground'}>
+            {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="PENDING">Pending</SelectItem>
+          <SelectItem value="APPROVED">Approved</SelectItem>
+          <SelectItem value="REJECTED">Rejected</SelectItem>
+          <SelectItem value="CANCELLED">Cancelled</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={leaveTypeFilter} onValueChange={(v) => { setLeaveTypeFilter(v ?? ''); setPage(1); }}>
+        <SelectTrigger className="h-9 w-36 text-sm">
+          <span className={leaveTypeFilter ? '' : 'text-muted-foreground'}>
+            {leaveTypeFilter || 'All Leave Types'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Leave Types</SelectItem>
+          {leaveTypeNames.map((name) => (
+            <SelectItem key={name} value={name}>{name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 shrink-0">Date:</span>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+        <span className="text-xs text-gray-400">–</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -151,30 +228,28 @@ export default function LeavePage() {
           <TabsTrigger value="apply">Apply for Leave</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="requests" className="mt-4 space-y-4">
-          <div className="flex gap-3">
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
-              <SelectTrigger className="w-40">
-                <span className="truncate">
-                  {statusFilter ? statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase() : 'All Status'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="APPROVED">Approved</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
-                <SelectItem value="CANCELLED">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+        <TabsContent value="requests" className="mt-4">
           <DataTable
             columns={columns}
             data={requests}
             isLoading={isLoading}
+            filterBar={filterBar}
+            activeFilterCount={activeFilterCount}
+            onClearFilters={clearFilters}
+            exportConfig={{
+              filename: 'leave_requests',
+              getData: () =>
+                requests.map((r) => ({
+                  'Staff Name': r.staffName,
+                  'Leave Type': r.leaveTypeName,
+                  'From Date': r.fromDate?.bs ?? '',
+                  'To Date': r.toDate?.bs ?? '',
+                  Days: r.totalDays,
+                  Status: r.status,
+                })),
+            }}
             pagination={
-              meta
+              meta && !staffSearch && !leaveTypeFilter && !dateFrom && !dateTo
                 ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage }
                 : undefined
             }
@@ -238,11 +313,7 @@ export default function LeavePage() {
               />
             </div>
 
-            <Button
-              className="bg-brand-500 hover:bg-brand-600 text-white"
-              onClick={handleApplyLeave}
-              disabled={applyLeave.isPending}
-            >
+            <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={handleApplyLeave} disabled={applyLeave.isPending}>
               {applyLeave.isPending ? 'Submitting…' : 'Submit Application'}
             </Button>
           </div>

@@ -329,64 +329,62 @@ export default function SchoolsPage() {
         }
       />
 
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by name or code..."
-            className="pl-9 w-72"
-            onChange={(e) => handleSearchChange(e.target.value)}
-          />
-        </div>
-        <Select
-          value={planFilter}
-          onValueChange={(v) => {
-            setPlanFilter(v ?? '');
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-36">
-            <span className="truncate">
-              {plans?.find((p) => p.id === planFilter)?.name ?? 'All Plans'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Plans</SelectItem>
-            {plans?.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v ?? '');
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-36">
-            <span className="truncate">
-              {statusFilter === 'active'
-                ? 'Active'
-                : statusFilter === 'suspended'
-                  ? 'Suspended'
-                  : 'All Status'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable
         columns={columns}
         data={tenants}
         isLoading={isLoading}
+        filterBar={
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <Input
+                placeholder="Search by name or code..."
+                className="h-9 w-64 pl-9 text-sm"
+                onChange={(e) => handleSearchChange(e.target.value)}
+              />
+            </div>
+            <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v ?? ''); setPage(1); }}>
+              <SelectTrigger className="h-9 w-32 text-sm">
+                <span className="truncate">
+                  {plans?.find((p) => p.id === planFilter)?.name ?? 'All Plans'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Plans</SelectItem>
+                {plans?.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? ''); setPage(1); }}>
+              <SelectTrigger className="h-9 w-32 text-sm">
+                <span className="truncate">
+                  {statusFilter === 'active' ? 'Active' : statusFilter === 'suspended' ? 'Suspended' : 'All Status'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+        activeFilterCount={[search, planFilter, statusFilter].filter(Boolean).length}
+        onClearFilters={() => { setSearch(''); setPlanFilter(''); setStatusFilter(''); setPage(1); }}
+        exportConfig={{
+          filename: 'schools',
+          getData: () =>
+            tenants.map((t) => ({
+              Name: t.name,
+              'School Code': t.slug,
+              Plan: t.planName ?? '',
+              Status: t.isActive ? 'Active' : 'Suspended',
+              Students: t.studentCount,
+              Staff: t.staffCount,
+              Joined: t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '',
+            })),
+        }}
         pagination={
           meta ? { page, limit: meta.limit, total: meta.total, onPageChange: setPage } : undefined
         }

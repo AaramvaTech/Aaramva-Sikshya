@@ -72,19 +72,24 @@ function SessionRestorer() {
     }
 
     // Restore tenant slug: subdomain (prod) → ?tenant= param (local dev) → localStorage fallback.
-    // The Axios interceptor reads slug from Zustand when attaching X-Tenant-Slug.
-    if (!slug && typeof window !== 'undefined') {
+    let effectiveSlug = slug;
+    if (!effectiveSlug && typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       const subdomain = hostname.split('.')[0].split(':')[0];
       const devSlug = new URLSearchParams(window.location.search).get('tenant');
       const lsSlug = localStorage.getItem('tenant-slug');
       const resolved =
         (subdomain !== 'localhost' && subdomain !== 'www') ? subdomain : devSlug ?? lsSlug;
-      if (resolved) setTenant({ slug: resolved });
+      if (resolved) {
+        setTenant({ slug: resolved });
+        effectiveSlug = resolved;
+      }
     }
 
     rawApi
-      .post('/auth/refresh')
+      .post('/auth/refresh', {}, {
+        headers: effectiveSlug ? { 'X-Tenant-Slug': effectiveSlug } : {},
+      })
       .then(async (res) => {
         const token: string = res.data?.data?.accessToken;
         if (!token) return;

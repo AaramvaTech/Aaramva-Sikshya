@@ -1,26 +1,25 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-// useRouter kept for future navigation needs
 import type { ColumnDef } from '@tanstack/react-table';
+import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { BsDate } from '@/components/shared/bs-date';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { InvoiceStatusBadge } from '@/components/finance/invoice-status-badge';
 import { InvoiceDetailModal } from '@/components/finance/invoice-detail-modal';
 import { PaymentForm } from '@/components/finance/payment-form';
 import { GenerateInvoiceDialog } from '@/components/finance/generate-invoice-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import {
   DropdownMenu,
@@ -30,7 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import { useInvoices, useVoidInvoice } from '@/lib/hooks/use-finance';
-import { useClasses, useAcademicYears } from '@/lib/hooks/use-students';
+import { useClasses } from '@/lib/hooks/use-students';
 import type { InvoiceSummary } from '@/types/api.types';
 
 const STATUSES = ['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'WAIVED'];
@@ -44,6 +43,8 @@ export default function InvoicesPage() {
   const search = searchParams.get('search') ?? '';
   const status = searchParams.get('status') ?? '';
   const classId = searchParams.get('classId') ?? '';
+  const dueDateFrom = searchParams.get('dueDateFrom') ?? '';
+  const dueDateTo = searchParams.get('dueDateTo') ?? '';
 
   const [searchInput, setSearchInput] = useState(search);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -60,8 +61,18 @@ export default function InvoicesPage() {
   const { data: classes } = useClasses();
   const voidMutation = useVoidInvoice();
 
-  const invoices = invoiceData?.data ?? [];
+  const allInvoices = invoiceData?.data ?? [];
   const meta = invoiceData?.meta;
+
+  // Due date range is client-side filtered
+  const invoices = allInvoices.filter((inv) => {
+    const dateAd = inv.dueDate?.ad ?? '';
+    if (dueDateFrom && dateAd < dueDateFrom) return false;
+    if (dueDateTo && dateAd > dueDateTo) return false;
+    return true;
+  });
+
+  const activeFilterCount = [search, status, classId, dueDateFrom, dueDateTo].filter(Boolean).length;
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -78,6 +89,19 @@ export default function InvoicesPage() {
     debounceRef.current = setTimeout(() => {
       updateParams({ search: value, page: '1' });
     }, 400);
+  }
+
+  function clearFilters() {
+    setSearchInput('');
+    router.push('?');
+  }
+
+  function handleVoid(id: string, invoiceNumber: string) {
+    if (!confirm(`Void invoice ${invoiceNumber}? This cannot be undone.`)) return;
+    voidMutation.mutate(id, {
+      onSuccess: () => toast.success('Invoice voided'),
+      onError: () => toast.error('Failed to void invoice'),
+    });
   }
 
   const columns: ColumnDef<InvoiceSummary>[] = [
@@ -169,16 +193,67 @@ export default function InvoicesPage() {
     },
   ];
 
-  function handleVoid(id: string, invoiceNumber: string) {
-    if (!confirm(`Void invoice ${invoiceNumber}? This cannot be undone.`)) return;
-    voidMutation.mutate(id, {
-      onSuccess: () => toast.success('Invoice voided'),
-      onError: () => toast.error('Failed to void invoice'),
-    });
-  }
+  const filterBar = (
+    <>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search by name or invoice no."
+          className="h-9 w-56 pl-9 text-sm"
+          value={searchInput}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+      </div>
+
+      <Select value={status} onValueChange={(v) => updateParams({ status: v ?? '', page: '1' })}>
+        <SelectTrigger className="h-9 w-32 text-sm">
+          <span className={status ? '' : 'text-muted-foreground'}>
+            {status ? status.charAt(0) + status.slice(1).toLowerCase() : 'All Status'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          {STATUSES.map((s) => (
+            <SelectItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={classId} onValueChange={(v) => updateParams({ classId: v ?? '', page: '1' })}>
+        <SelectTrigger className="h-9 w-36 text-sm">
+          <span className={classId ? '' : 'text-muted-foreground'}>
+            {classId ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…') : 'All Classes'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Classes</SelectItem>
+          {classes?.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 shrink-0">Due:</span>
+        <input
+          type="date"
+          value={dueDateFrom}
+          onChange={(e) => updateParams({ dueDateFrom: e.target.value, page: '1' })}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+        <span className="text-xs text-gray-400">–</span>
+        <input
+          type="date"
+          value={dueDateTo}
+          onChange={(e) => updateParams({ dueDateTo: e.target.value, page: '1' })}
+          className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+        />
+      </div>
+    </>
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="Invoices"
         description="Student fee invoices and payment records"
@@ -192,50 +267,28 @@ export default function InvoicesPage() {
         }
       />
 
-      <div className="flex gap-3 flex-wrap">
-        <Select
-          value={status}
-          onValueChange={(v) => updateParams({ status: v ?? '', page: '1' })}
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s.charAt(0) + s.slice(1).toLowerCase()}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={classId}
-          onValueChange={(v) => updateParams({ classId: v ?? '', page: '1' })}
-        >
-          <SelectTrigger className="w-40">
-            <span className={classId ? '' : 'text-muted-foreground'}>
-              {classId
-                ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…')
-                : 'All Classes'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Classes</SelectItem>
-            {classes?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <DataTable
         columns={columns}
         data={invoices}
         isLoading={isLoading}
-        searchPlaceholder="Search by name or invoice no."
-        onSearchChange={handleSearch}
+        filterBar={filterBar}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        exportConfig={{
+          filename: 'invoices',
+          getData: () =>
+            invoices.map((inv) => ({
+              'Invoice No.': inv.invoiceNumber,
+              Student: inv.studentName,
+              'Admission No.': inv.admissionNumber,
+              Class: inv.className ?? '',
+              'Due Date': inv.dueDate?.bs ?? '',
+              'Total Amount': inv.totalAmount,
+              Paid: inv.paidAmount,
+              Balance: inv.balance,
+              Status: inv.status,
+            })),
+        }}
         pagination={
           meta
             ? {
@@ -261,10 +314,7 @@ export default function InvoicesPage() {
         />
       )}
 
-      <GenerateInvoiceDialog
-        open={generateOpen}
-        onOpenChange={setGenerateOpen}
-      />
+      <GenerateInvoiceDialog open={generateOpen} onOpenChange={setGenerateOpen} />
     </div>
   );
 }

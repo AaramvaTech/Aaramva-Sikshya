@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
     icon: <Users className="w-5 h-5" />,
     name: 'Students',
     subItems: [
+      { name: 'Overview', path: '/students/overview' },
       { name: 'All Students', path: '/students' },
       { name: 'Admit Student', path: '/students/new' },
     ],
