@@ -708,3 +708,44 @@ CREATE TABLE IF NOT EXISTS leave_applications (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at       TIMESTAMPTZ
 );
+
+-- ─── GUARDIANS (normalized — replaces JSONB guardians column on students) ────
+-- IDs preserved from existing JSONB data so guardianId URL params still work.
+CREATE TABLE IF NOT EXISTS guardians (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id  UUID        NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  relation    VARCHAR(50) NOT NULL,
+  first_name  VARCHAR(100) NOT NULL,
+  last_name   VARCHAR(100),
+  phone       VARCHAR(20),
+  email       VARCHAR(255),
+  is_primary  BOOLEAN     NOT NULL DEFAULT false,
+  user_id     UUID        REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_guardians_student ON guardians(student_id);
+CREATE INDEX IF NOT EXISTS idx_guardians_user    ON guardians(user_id) WHERE user_id IS NOT NULL;
+
+-- Migrate existing JSONB guardian data into the new table.
+-- Uses the 'id' field already embedded in each JSONB element so URL params stay valid.
+-- ON CONFLICT (id) DO NOTHING makes this idempotent (safe to re-run).
+INSERT INTO guardians (id, student_id, relation, first_name, last_name, phone, email, is_primary)
+SELECT COALESCE((g->>'id')::uuid, gen_random_uuid()), s.id, COALESCE(g->>'relation', 'GUARDIAN'), COALESCE(g->>'firstName', ''), g->>'lastName', g->>'phone', g->>'email', COALESCE((g->>'isPrimary')::boolean, false) FROM students s, jsonb_array_elements(s.guardians) g WHERE s.guardians IS NOT NULL AND jsonb_typeof(s.guardians) = 'array' ON CONFLICT (id) DO NOTHING;
+
+-- ─── DEVICE TOKENS ───────────────────────────────────────────────────────────
+-- Hard delete (no deletedAt) — deliberate convention exception.
+-- Stale tokens cause failed push sends with zero audit value.
+-- See CLAUDE.md for the documented exception.
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token       VARCHAR(200) NOT NULL UNIQUE,
+  platform    VARCHAR(10)  NOT NULL CHECK (platform IN ('ANDROID', 'IOS')),
+  device_name VARCHAR(100),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
