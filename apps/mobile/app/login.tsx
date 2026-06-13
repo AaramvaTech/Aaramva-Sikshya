@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import api from '../lib/api';
