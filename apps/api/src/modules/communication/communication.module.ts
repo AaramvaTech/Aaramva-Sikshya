@@ -5,6 +5,7 @@ import { NoticeService } from './notice.service';
 import { NotificationService } from './notification.service';
 import { AttendanceListener } from './listeners/attendance.listener';
 import { FinanceListener } from './listeners/finance.listener';
+import { DeviceTokenService } from './device-token.service';
 
 @Module({
   controllers: [CommunicationController],
@@ -14,6 +15,7 @@ import { FinanceListener } from './listeners/finance.listener';
     NotificationService,
     AttendanceListener,
     FinanceListener,
+    DeviceTokenService,
   ],
   exports: [SmsService, NoticeService, NotificationService],
 })

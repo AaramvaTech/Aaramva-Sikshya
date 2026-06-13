@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -19,9 +20,11 @@ import type { AuthUser } from '../auth/auth.types';
 import { NoticeService } from './notice.service';
 import { SmsService } from './sms.service';
 import { NotificationService } from './notification.service';
+import { DeviceTokenService } from './device-token.service';
 import { CreateNoticeDto, ListNoticesQueryDto, UpdateNoticeDto } from './dto/notice.dto';
 import { BulkSmsDto, SendSmsDto, SmsLogsQueryDto } from './dto/sms.dto';
 import { GetNotificationsQueryDto } from './dto/notification.dto';
+import { RegisterDeviceDto } from './dto/device-token.dto';
 
 const ALL_ROLES = Object.values(Role);
 
@@ -48,6 +51,7 @@ export class CommunicationController {
     private readonly noticeService: NoticeService,
     private readonly smsService: SmsService,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
   ) {}
 
   // ─── Notices ──────────────────────────────────────────────────────────────
@@ -158,5 +162,26 @@ export class CommunicationController {
   @Roles(...ALL_ROLES)
   markAllAsRead(@CurrentUser() user: AuthUser) {
     return this.notificationService.markAllAsRead(user.userId);
+  }
+
+  // ─── Device Tokens ────────────────────────────────────────────────────────
+
+  @Post('devices')
+  @Roles(
+    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
+    Role.ACCOUNTANT, Role.LIBRARIAN, Role.TEACHER, Role.STUDENT, Role.PARENT,
+  )
+  registerDevice(@Body() dto: RegisterDeviceDto, @CurrentUser() user: AuthUser) {
+    return this.deviceTokenService.register(user.userId, dto);
+  }
+
+  @Delete('devices/:token')
+  @HttpCode(204)
+  @Roles(
+    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
+    Role.ACCOUNTANT, Role.LIBRARIAN, Role.TEACHER, Role.STUDENT, Role.PARENT,
+  )
+  removeDevice(@Param('token') token: string, @CurrentUser() user: AuthUser) {
+    return this.deviceTokenService.remove(user.userId, token);
   }
 }
