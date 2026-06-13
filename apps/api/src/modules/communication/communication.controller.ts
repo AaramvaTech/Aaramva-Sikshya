@@ -167,20 +167,14 @@ export class CommunicationController {
   // ─── Device Tokens ────────────────────────────────────────────────────────
 
   @Post('devices')
-  @Roles(
-    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
-    Role.ACCOUNTANT, Role.LIBRARIAN, Role.TEACHER, Role.STUDENT, Role.PARENT,
-  )
+  @Roles(...ALL_ROLES)
   registerDevice(@Body() dto: RegisterDeviceDto, @CurrentUser() user: AuthUser) {
     return this.deviceTokenService.register(user.userId, dto);
   }
 
   @Delete('devices/:token')
   @HttpCode(204)
-  @Roles(
-    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
-    Role.ACCOUNTANT, Role.LIBRARIAN, Role.TEACHER, Role.STUDENT, Role.PARENT,
-  )
+  @Roles(...ALL_ROLES)
   removeDevice(@Param('token') token: string, @CurrentUser() user: AuthUser) {
     return this.deviceTokenService.remove(user.userId, token);
   }
