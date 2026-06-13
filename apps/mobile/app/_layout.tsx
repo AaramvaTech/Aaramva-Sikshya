@@ -33,10 +33,12 @@ export default function RootLayout() {
 
   if (status === 'booting') {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#4f46e5" />
-        <Text className="text-gray-400 mt-4 text-sm">Loading...</Text>
-      </View>
+      <QueryClientProvider client={queryClient}>
+        <View className="flex-1 bg-white items-center justify-center">
+          <ActivityIndicator size="large" color="#4f46e5" />
+          <Text className="text-gray-400 mt-4 text-sm">Loading...</Text>
+        </View>
+      </QueryClientProvider>
     );
   }
 

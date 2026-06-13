@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { router } from 'expo-router';
 import { rawApi } from '../lib/api';
 import { setSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
@@ -49,8 +48,8 @@ export default function SchoolEntryScreen() {
     if (!tenant) return;
     await setSecureItem('tenantSlug', tenant.slug);
     storeSetSlug(tenant.slug);
+    // setStatus('unauthed') triggers _layout.tsx useEffect → router.replace('/login')
     setStatus('unauthed');
-    router.replace('/login');
   };
 
   return (

@@ -32,12 +32,11 @@ async function registerPushToken(): Promise<void> {
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') return;
 
-  // getExpoPushTokenAsync throws without a valid EAS projectId.
-  // We use the env var with a placeholder fallback so the call is graceful
-  // in Expo Go / dev builds where EAS is not yet configured.
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: process.env.EXPO_PUBLIC_PROJECT_ID ?? 'placeholder',
-  });
+  // getExpoPushTokenAsync requires a valid EAS projectId — skip if not configured.
+  const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
+  if (!projectId) return;
+
+  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
 
   await api.post('/communication/devices', { token: tokenData.data });
 }
