@@ -21,7 +21,7 @@ Dev domain: `localhost` (use X-Tenant-Slug header for local testing)
 | Cache / Queue | Redis + BullMQ | Sessions, background jobs |
 | File storage | AWS S3 (or Cloudflare R2) | Student docs, photos, PDFs |
 | Frontend (web) | Next.js 14 (App Router) | Admin portal, teacher/parent dashboard |
-| Mobile | React Native + Expo | Student app, Parent app, Teacher (Guru) app |
+| Mobile | React Native + Expo | Student app, Parent app, Teacher (Guru) app; Expo SDK 56, expo-router (file-based routing, app/ dir) |
 | API style | REST (primary) + WebSocket (real-time) | No GraphQL unless specified |
 | Auth | JWT (access + refresh tokens) | Stored in httpOnly cookies |
 | Containerization | Docker + docker-compose | Dev environment |
@@ -194,6 +194,39 @@ The `guardians` table has a nullable `user_id UUID REFERENCES users(id)`. Most g
 
 ---
 
+## Mobile app conventions (added Session 20)
+
+**Location:** `apps/mobile/` — Expo SDK 56 managed workflow
+
+**Routing:** expo-router (file-based). Route files in `app/`:
+- `app/index.tsx` — school code entry (no auth)
+- `app/login.tsx` — login screen
+- `app/_layout.tsx` — root layout + auth-state routing
+- `app/(student)/`, `app/(parent)/`, `app/(teacher)/` — role-scoped screens
+- `app/web-portal.tsx` — admin role redirect
+
+**Token storage contract (DO NOT deviate):**
+- Access token: in-memory only (Zustand `useAuthStore.accessToken`). Never written to disk.
+- Refresh token: `expo-secure-store` key `"refreshToken"` (Keychain/Keystore)
+- Tenant slug: `expo-secure-store` key `"tenantSlug"` (persisted across cold launches)
+
+**Auth status state machine:**
+```
+'booting' → reads SecureStore on app launch
+  → no slug: 'noSchool' → app/index.tsx
+  → slug, no token: 'unauthed' → app/login.tsx
+  → slug + token: attempts refresh → 'authed' (or 'unauthed' on failure)
+'authed' → role-based tab screen
+'unauthed' → app/login.tsx (slug retained so school name is shown)
+'noSchool' → app/index.tsx (fresh install or slug wiped)
+```
+
+**API client:** `lib/api.ts` — main axios instance auto-injects `X-Client-Type: mobile` + `X-Tenant-Slug`. `rawApi` (no interceptors) used for `/auth/refresh` and `/auth/me` to prevent 401 loops.
+
+**Session 21 needs:** When adding a new screen under a role group, create `app/(student)/newscreen.tsx` (or parent/teacher). Update `app/(student)/_layout.tsx` Stack if a new route needs header config. The root layout's useEffect in `_layout.tsx` controls auth routing — don't add `router.replace()` in individual screens to avoid race conditions.
+
+---
+
 ## Environment variables (never hardcode these)
 
 ```
@@ -239,6 +272,7 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] Dashboard module (`apps/api/src/modules/dashboard/`) — DashboardService (overview aggregation: student count + today's attendance with byClass breakdown + fee collection using current academic year + unread notifications, weekly attendance last 7 days, recent activity feed: students/payments/notices, upcoming exam schedules), DashboardController (4 endpoints: /overview, /weekly-attendance, /activity, /upcoming with RBAC guards), DashboardModule registered in AppModule — 8 unit tests passing (180 total passing)
 - [x] School Dashboard UI (`apps/web/app/(school)/dashboard/`) — Fixed all 6 bugs (pending fees missing academicYearId, attendance .percent→.attendanceRate, hardcoded chart data, missing PageHeader, no dashboard hook, no dashboard types). New: StatCard shared component, use-dashboard.ts hooks (useDashboardOverview, useWeeklyAttendance, useRecentActivity, useUpcomingEvents), dashboard.api.ts client, class-wise attendance breakdown, recent activity feed, upcoming exams section, quick action buttons (Mark Attendance, Add Student, Send Notice, Record Payment), dashboard types in api.types.ts
 - [x] Mobile Backend Prep (Session 19) — `X-Client-Type: mobile` header on auth endpoints (login/refresh/logout); `@ClientType()` param decorator; mobile gets refresh token in body, no cookie; `GET /api/v1/tenants/verify/:slug` (public, throttled 10/min, excluded from TenantMiddleware); `device_tokens` table + `POST /communication/devices` + `DELETE /communication/devices/:token` (Expo push token registry, hard delete, all roles); `guardians` relational table migrated from JSONB (with JSONB backfill), `user_id FK` for PARENT linkage; `POST /students/:studentId/guardians/:guardianId/account` (creates PARENT user, atomic tx, handles existing-PARENT reuse + 409 conflicts); `GET /students/my-children` (PARENT role only) — 30 new unit tests (194 total passing, 5 pre-existing failures in student-attendance.service.spec.ts unrelated to this session)
+- [x] Mobile App scaffold (Session 20) — `apps/mobile/` Expo SDK 56 managed workflow, expo-router, TypeScript strict; auth flow: school code entry → tenant verify → login → secure token storage → auto-refresh → session restore → logout; role-based navigation shell (Student/Parent/Teacher/Admin); NativeWind v4 styling; bs-calendar integration; push token registration (fire-and-forget); Metro monorepo config for packages/bs-calendar access
 
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
