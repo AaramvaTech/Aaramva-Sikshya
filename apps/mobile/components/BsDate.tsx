@@ -1,9 +1,20 @@
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
+import { adToBs, formatBs } from 'bs-calendar';
 
-/**
- * Placeholder BsDate component.
- * Real implementation (BS calendar conversion) happens in Task 10.
- */
-export default function BsDate({ isoDate }: { isoDate: string }) {
-  return <Text>{isoDate}</Text>;
+interface Props {
+  isoDate: string;
+  lang?: 'en' | 'np';
+}
+
+export default function BsDate({ isoDate, lang = 'en' }: Props) {
+  const adDate = new Date(isoDate);
+  const bsDate = adToBs(adDate);
+  const formatted = formatBs(bsDate, lang);
+
+  return (
+    <View className="items-center">
+      <Text className="text-base font-medium text-indigo-700">{formatted}</Text>
+      <Text className="text-xs text-gray-400">{adDate.toLocaleDateString()}</Text>
+    </View>
+  );
 }
