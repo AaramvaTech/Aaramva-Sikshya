@@ -149,8 +149,8 @@ export class NoticeService {
     userRole: string,
     classId: string | null,
   ): Promise<{ data: ReturnType<typeof toNoticeResponse>[]; meta: { page: number; limit: number; total: number } }> {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const page = Number(query.page ?? 1);
+    const limit = Number(query.limit ?? 20);
     const offset = (page - 1) * limit;
 
     const allowedAudiences = ROLE_AUDIENCES[userRole] ?? ['ALL'];

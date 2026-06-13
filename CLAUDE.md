@@ -71,7 +71,7 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 ## Authentication & authorization
 
 - JWT access token: 15 min expiry
-- JWT refresh token: 7 days, stored in httpOnly cookie
+- JWT refresh token: 7 days, stored in httpOnly cookie (web) or returned in response body (mobile — see Mobile API conventions)
 - RBAC roles (in order of privilege):
   1. `PLATFORM_ADMIN` — you (the SaaS owner)
   2. `SCHOOL_OWNER` — founder/proprietor of a school
@@ -165,6 +165,33 @@ Query params: `?page=1&limit=20&search=&sortBy=createdAt&sortOrder=desc`
 All main entities use soft delete: `deletedAt DateTime?` field.
 Never use Prisma `delete()` — always `update({ data: { deletedAt: new Date() } })`.
 
+**Exception: `device_tokens` table has NO `deletedAt`.** Hard delete only. Stale push tokens cause silent send failures with zero audit value — a hard delete is the correct semantic here. Do not "fix" this by adding `deletedAt`.
+
+---
+
+## Mobile API conventions (added Session 19)
+
+React Native clients (Expo) cannot reliably use httpOnly cookies.
+
+### `X-Client-Type: mobile` header
+Send on all auth requests. Absence or any other value = web behavior (unchanged).
+
+| Endpoint | Web (no header) | Mobile (`X-Client-Type: mobile`) |
+|---|---|---|
+| `POST /auth/login` | refresh token in httpOnly cookie | refresh token in response body; no cookie set |
+| `POST /auth/refresh` | reads cookie | reads `{ refreshToken }` from body; missing body → 401 (no fallback to cookie) |
+| `POST /auth/logout` | reads + clears cookie | reads `{ refreshToken, expoPushToken? }` from body; clears device token if expoPushToken given |
+
+Services receive `clientType: 'web' | 'mobile'` as a plain arg — use the `@ClientType()` param decorator in controllers.
+
+### Guardian → Parent account linkage
+The `guardians` table has a nullable `user_id UUID REFERENCES users(id)`. Most guardian rows have `user_id = NULL`. When an admin creates a parent account via `POST /students/:studentId/guardians/:guardianId/account`, a `users` row with `role = PARENT` is created and `guardian.user_id` is set. A single parent user may be linked to multiple guardian rows (one per child).
+
+`GET /students/my-children` (PARENT role only) JOINs `students` + `guardians` on `guardian.user_id = currentUser.id`.
+
+### Public tenant verification (no auth, no X-Tenant-Slug)
+`GET /api/v1/tenants/verify/:slug` — reads the public schema to confirm a school exists and is active. Throttled 10/min. Used by the mobile app's school-code entry screen before showing login. This route is excluded from TenantMiddleware.
+
 ---
 
 ## Environment variables (never hardcode these)
@@ -211,12 +238,13 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] Staff Profile Page (`apps/web/app/(school)/hr/staff/[id]/`) — Hero card with avatar + photo upload (base64), custom tab bar (Overview/Documents/Leave), Personal Details card, Employment Details card, Emergency Contact card, Documents tab with upload dialog & table, Leave Balance tab. Edit page (`/hr/staff/[id]/edit/`) with React Hook Form + Zod for all editable fields. Backend: photoUrl added to UpdateStaffDto + staff service SQL. Web: staff schema (staff.schema.ts), useUpdateStaff/useStaffDocuments/useAddStaffDocument hooks, StaffDocument type in api.types.ts.
 - [x] Dashboard module (`apps/api/src/modules/dashboard/`) — DashboardService (overview aggregation: student count + today's attendance with byClass breakdown + fee collection using current academic year + unread notifications, weekly attendance last 7 days, recent activity feed: students/payments/notices, upcoming exam schedules), DashboardController (4 endpoints: /overview, /weekly-attendance, /activity, /upcoming with RBAC guards), DashboardModule registered in AppModule — 8 unit tests passing (180 total passing)
 - [x] School Dashboard UI (`apps/web/app/(school)/dashboard/`) — Fixed all 6 bugs (pending fees missing academicYearId, attendance .percent→.attendanceRate, hardcoded chart data, missing PageHeader, no dashboard hook, no dashboard types). New: StatCard shared component, use-dashboard.ts hooks (useDashboardOverview, useWeeklyAttendance, useRecentActivity, useUpcomingEvents), dashboard.api.ts client, class-wise attendance breakdown, recent activity feed, upcoming exams section, quick action buttons (Mark Attendance, Add Student, Send Notice, Record Payment), dashboard types in api.types.ts
+- [x] Mobile Backend Prep (Session 19) — `X-Client-Type: mobile` header on auth endpoints (login/refresh/logout); `@ClientType()` param decorator; mobile gets refresh token in body, no cookie; `GET /api/v1/tenants/verify/:slug` (public, throttled 10/min, excluded from TenantMiddleware); `device_tokens` table + `POST /communication/devices` + `DELETE /communication/devices/:token` (Expo push token registry, hard delete, all roles); `guardians` relational table migrated from JSONB (with JSONB backfill), `user_id FK` for PARENT linkage; `POST /students/:studentId/guardians/:guardianId/account` (creates PARENT user, atomic tx, handles existing-PARENT reuse + 409 conflicts); `GET /students/my-children` (PARENT role only) — 30 new unit tests (194 total passing, 5 pre-existing failures in student-attendance.service.spec.ts unrelated to this session)
 
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
 - DB: PostgreSQL 17 local (password: <REDACTED>). Redis not running yet (needed for queues)
-- Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
+- Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*) AND /api/v1/tenants/verify/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
 - Run migrations: `cd apps/api && npx prisma migrate dev`
 - Run tests: `cd apps/api && npm test`
 

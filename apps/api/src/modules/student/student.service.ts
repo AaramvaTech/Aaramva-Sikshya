@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { getBsYear } from 'bs-calendar';
+import { adToBs, getBsYear } from 'bs-calendar';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { StudentRow, StudentResponseDto, toStudentResponse } from './entities/student.entity';
@@ -332,6 +332,93 @@ export class StudentService {
       id, tenantId,
     );
     if (affected === 0) throw new NotFoundException(`Student ${id} not found`);
+  }
+
+  async getStats() {
+    const summaryRows = await this.tenantPrisma.query<{
+      total: string;
+      active: string;
+      inactive: string;
+      transferred: string;
+      graduated: string;
+      male: string;
+      female: string;
+      other_gender: string;
+      new_this_month: string;
+    }>(
+      `SELECT
+         COUNT(*)                                                                AS total,
+         COUNT(*) FILTER (WHERE status = 'ACTIVE')                             AS active,
+         COUNT(*) FILTER (WHERE status = 'INACTIVE')                           AS inactive,
+         COUNT(*) FILTER (WHERE status = 'TRANSFERRED')                        AS transferred,
+         COUNT(*) FILTER (WHERE status = 'GRADUATED')                          AS graduated,
+         COUNT(*) FILTER (WHERE gender = 'MALE')                               AS male,
+         COUNT(*) FILTER (WHERE gender = 'FEMALE')                             AS female,
+         COUNT(*) FILTER (WHERE gender = 'OTHER')                              AS other_gender,
+         COUNT(*) FILTER (WHERE DATE_TRUNC('month', created_at)
+                               = DATE_TRUNC('month', CURRENT_DATE))            AS new_this_month
+       FROM students
+       WHERE deleted_at IS NULL`,
+    );
+
+    const classRows = await this.tenantPrisma.query<{ class_name: string; count: string }>(
+      `SELECT class_name, COUNT(*) AS count
+       FROM students
+       WHERE deleted_at IS NULL AND status = 'ACTIVE' AND class_name IS NOT NULL
+       GROUP BY class_name
+       ORDER BY class_name`,
+    );
+
+    const recentRows = await this.tenantPrisma.query<Pick<
+      StudentRow,
+      'id' | 'student_id' | 'first_name' | 'last_name' | 'class_name' | 'section_name' | 'admission_date' | 'photo_url' | 'status'
+    >>(
+      `SELECT id, student_id, first_name, last_name, class_name, section_name,
+              admission_date, photo_url, status
+       FROM students
+       WHERE deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 8`,
+    );
+
+    const s = summaryRows[0] ?? { total: '0', active: '0', inactive: '0', transferred: '0', graduated: '0', male: '0', female: '0', other_gender: '0', new_this_month: '0' };
+
+    const toAd = (d: Date | string) => {
+      const date = d instanceof Date ? d : new Date(d);
+      return date.toISOString().split('T')[0];
+    };
+    const toBs = (d: Date | string) => {
+      const date = d instanceof Date ? d : new Date(d);
+      const bs = adToBs(date);
+      return `${bs.year}-${String(bs.month).padStart(2, '0')}-${String(bs.day).padStart(2, '0')}`;
+    };
+
+    return {
+      total: Number(s.total),
+      byStatus: {
+        ACTIVE: Number(s.active),
+        INACTIVE: Number(s.inactive),
+        TRANSFERRED: Number(s.transferred),
+        GRADUATED: Number(s.graduated),
+      },
+      byGender: {
+        MALE: Number(s.male),
+        FEMALE: Number(s.female),
+        OTHER: Number(s.other_gender),
+      },
+      newThisMonth: Number(s.new_this_month),
+      byClass: classRows.map((r) => ({ className: r.class_name, count: Number(r.count) })),
+      recentAdmissions: recentRows.map((r) => ({
+        id: r.id,
+        studentId: r.student_id,
+        fullName: `${r.first_name} ${r.last_name}`,
+        className: r.class_name,
+        sectionName: r.section_name,
+        admissionDate: { ad: toAd(r.admission_date), bs: toBs(r.admission_date) },
+        photoUrl: r.photo_url,
+        status: r.status,
+      })),
+    };
   }
 
   private async generateStudentId(tx: TenantTx, admissionDate: Date): Promise<string> {
