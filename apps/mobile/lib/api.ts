@@ -62,10 +62,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Another refresh is already in flight — queue this request until it resolves.
       if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
+        return (new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
+        }))
+          .then((token): ReturnType<typeof api> => {
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return api(originalRequest);
           })
@@ -113,10 +113,6 @@ api.interceptors.response.use(
         // Wipe only the refresh token — keep tenantSlug in SecureStore so the user
         // is routed to the login screen for their school, not the school-code entry screen.
         await deleteSecureItem('refreshToken');
-
-        // Drive the navigation by setting status to 'unauthed'.
-        // clearSession() already does this, but being explicit is safe.
-        useAuthStore.getState().setStatus('unauthed');
 
         return Promise.reject(refreshError);
       } finally {
