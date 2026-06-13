@@ -41,7 +41,7 @@ describe('DeviceTokenService', () => {
 
     expect(mockTenantPrisma.query).toHaveBeenCalledWith(
       expect.stringContaining('ON CONFLICT (token) DO UPDATE'),
-      userId, dto.token, dto.platform, dto.deviceName,
+      userId, dto.token, dto.platform, 'Pixel 7',
     );
     expect(result.userId).toBe(userId);
     expect(result.token).toBe(dto.token);

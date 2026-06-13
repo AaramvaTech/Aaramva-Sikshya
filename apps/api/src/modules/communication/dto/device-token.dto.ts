@@ -19,6 +19,6 @@ export interface DeviceTokenRow {
   token: string;
   platform: string;
   device_name: string | null;
-  last_seen_at: Date | string;
-  created_at: Date | string;
+  last_seen_at: Date;
+  created_at: Date;
 }
