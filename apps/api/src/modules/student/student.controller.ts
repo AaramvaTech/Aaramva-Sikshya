@@ -18,7 +18,9 @@ import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { StudentService } from './student.service';
+import { GuardianService } from './guardian.service';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
@@ -27,7 +29,10 @@ import { ListStudentsQueryDto } from './dto/list-students-query.dto';
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class StudentController {
-  constructor(private readonly studentService: StudentService) {}
+  constructor(
+    private readonly studentService: StudentService,
+    private readonly guardianService: GuardianService,
+  ) {}
 
   @Post()
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
@@ -46,6 +51,21 @@ export class StudentController {
   )
   findAll(@Query() query: ListStudentsQueryDto) {
     return this.studentService.findAll(query);
+  }
+
+  @Get('stats')
+  @Roles(
+    Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
+    Role.ACCOUNTANT, Role.TEACHER,
+  )
+  getStats() {
+    return this.studentService.getStats();
+  }
+
+  @Get('my-children')
+  @Roles(Role.PARENT)
+  getMyChildren(@CurrentUser() user: AuthUser) {
+    return this.guardianService.getMyChildren(user.userId);
   }
 
   @Get(':id')
@@ -81,5 +101,15 @@ export class StudentController {
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.removeStudent(id);
+  }
+
+  @Post(':studentId/guardians/:guardianId/account')
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  createGuardianAccount(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('guardianId', ParseUUIDPipe) guardianId: string,
+    @Body() dto: CreateGuardianAccountDto,
+  ) {
+    return this.guardianService.createGuardianAccount(studentId, guardianId, dto);
   }
 }
