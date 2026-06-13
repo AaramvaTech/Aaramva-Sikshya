@@ -1,56 +1,48 @@
-import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { View, Text, ActivityIndicator } from 'react-native';
+import { Stack, router } from 'expo-router';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../lib/queryClient';
+import { useAuthStore } from '../store/auth';
+import { useBootSession } from '../lib/session';
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  useBootSession();
+  const { status, user } = useAuthStore();
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (status === 'booting') return;
+
+    if (status === 'noSchool') {
+      router.replace('/');
+    } else if (status === 'unauthed') {
+      router.replace('/login');
+    } else if (status === 'authed') {
+      const role = user?.role;
+      if (role === 'STUDENT') {
+        router.replace('/(student)/home');
+      } else if (role === 'PARENT') {
+        router.replace('/(parent)/home');
+      } else if (role === 'TEACHER') {
+        router.replace('/(teacher)/home');
+      } else {
+        router.replace('/web-portal');
+      }
     }
-  }, [loaded]);
+  }, [status, user?.role]);
 
-  if (!loaded) {
-    return null;
+  if (status === 'booting') {
+    return (
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text className="text-gray-400 mt-4 text-sm">Loading...</Text>
+      </View>
+    );
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <Stack screenOptions={{ headerShown: false }} />
+    </QueryClientProvider>
   );
 }

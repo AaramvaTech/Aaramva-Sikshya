@@ -79,7 +79,9 @@ export default function LoginScreen() {
         console.warn('[push] token registration failed:', err),
       );
 
-      router.replace('/(tabs)');
+      // Navigation is handled by the root layout's useEffect, which watches
+      // the auth status. Setting the session (above) transitions status to
+      // 'authed', triggering a role-based redirect to (student)/(parent)/(teacher).
     } catch (err: unknown) {
       // Surface a human-readable message. The api interceptor turns non-2xx
       // responses into Error objects with the format "<CODE>: <message>".
