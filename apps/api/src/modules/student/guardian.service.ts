@@ -33,7 +33,6 @@ interface StudentRow {
   class_name: string | null;
   section_name: string | null;
   roll_number: number | null;
-  deleted_at: Date | null;
 }
 
 @Injectable()
@@ -45,70 +44,74 @@ export class GuardianService {
     guardianId: string,
     dto: CreateGuardianAccountDto,
   ) {
-    // 1. Verify student exists
     const studentRows = await this.tenantPrisma.query<{ id: string }>(
       `SELECT id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
       studentId,
     );
     if (!studentRows[0]) throw new NotFoundException('Student not found');
 
-    // 2. Verify guardian exists and belongs to student
-    const guardianRows = await this.tenantPrisma.query<GuardianRow>(
-      `SELECT * FROM guardians WHERE id = $1::uuid AND student_id = $2::uuid`,
-      guardianId, studentId,
-    );
-    if (!guardianRows[0]) throw new NotFoundException('Guardian not found');
-    const guardian = guardianRows[0];
+    // Hash before the transaction to keep the DB lock duration short
+    const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // 3. Already linked — conflict
-    if (guardian.user_id) {
-      throw new ConflictException('Guardian already has a linked account');
-    }
-
-    // 4. Check if email already exists
-    const existingUserRows = await this.tenantPrisma.query<UserRow>(
-      `SELECT id, email, role, first_name, last_name FROM users WHERE email = $1`,
-      dto.email,
-    );
-    const existingUser = existingUserRows[0] ?? null;
-
-    let userId: string;
-
-    if (existingUser) {
-      // 4a. Email belongs to a non-PARENT user — conflict
-      if (existingUser.role !== Role.PARENT) {
-        throw new ConflictException('Email is already used by a non-PARENT account');
-      }
-      // 4b. Email belongs to existing PARENT — link, no new user
-      userId = existingUser.id;
-    } else {
-      // 4c. Create new PARENT user
-      const passwordHash = await bcrypt.hash(dto.password, 10);
-      const newUserRows = await this.tenantPrisma.query<UserRow>(
-        `INSERT INTO users (email, password, role, first_name, last_name)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, email, role, first_name, last_name`,
-        dto.email, passwordHash, Role.PARENT,
-        guardian.first_name, guardian.last_name ?? '',
+    return this.tenantPrisma.run(async (tx) => {
+      // Lock the guardian row to prevent concurrent account creation
+      const guardianRows = await tx.$queryRawUnsafe<GuardianRow[]>(
+        `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
+         FROM guardians WHERE id = $1::uuid AND student_id = $2::uuid FOR UPDATE`,
+        guardianId,
+        studentId,
       );
-      userId = newUserRows[0].id;
-    }
+      if (!guardianRows[0]) throw new NotFoundException('Guardian not found');
+      const guardian = guardianRows[0];
 
-    // 5. Link guardian to user
-    await this.tenantPrisma.execute(
-      `UPDATE guardians SET user_id = $1::uuid, updated_at = NOW()
-       WHERE id = $2::uuid`,
-      userId, guardianId,
-    );
+      if (guardian.user_id) {
+        throw new ConflictException('Guardian already has a linked account');
+      }
 
-    return { userId, guardianId, email: dto.email, linked: true };
+      const existingUserRows = await tx.$queryRawUnsafe<UserRow[]>(
+        `SELECT id, email, role, first_name, last_name FROM users WHERE email = $1`,
+        dto.email,
+      );
+      const existingUser = existingUserRows[0] ?? null;
+
+      let userId: string;
+
+      if (existingUser) {
+        if (existingUser.role !== Role.PARENT) {
+          throw new ConflictException('Email is already used by a non-PARENT account');
+        }
+        userId = existingUser.id;
+      } else {
+        const newUserRows = await tx.$queryRawUnsafe<UserRow[]>(
+          `INSERT INTO users (email, password_hash, role, first_name, last_name)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, email, role, first_name, last_name`,
+          dto.email,
+          passwordHash,
+          Role.PARENT,
+          guardian.first_name,
+          guardian.last_name ?? null,
+        );
+        userId = newUserRows[0].id;
+      }
+
+      // Atomic final guard: only update if still unlinked
+      const affected = await tx.$executeRawUnsafe(
+        `UPDATE guardians SET user_id = $1::uuid, updated_at = NOW()
+         WHERE id = $2::uuid AND user_id IS NULL`,
+        userId,
+        guardianId,
+      );
+      if (affected === 0) {
+        throw new ConflictException('Guardian already has a linked account');
+      }
+
+      return { userId, guardianId, email: dto.email, linked: true };
+    });
   }
 
   async getMyChildren(userId: string) {
-    // Find all non-deleted students where this user is a linked guardian
-    const rows = await this.tenantPrisma.query<
-      StudentRow & { relation: string }
-    >(
+    const rows = await this.tenantPrisma.query<StudentRow & { relation: string }>(
       `SELECT s.id, s.student_id, s.first_name, s.last_name, s.photo_url,
               s.class_name, s.section_name, s.roll_number,
               g.relation
@@ -127,11 +130,7 @@ export class GuardianService {
       photoUrl: r.photo_url,
       relation: r.relation,
       currentEnrollment: r.class_name
-        ? {
-            className: r.class_name,
-            sectionName: r.section_name,
-            rollNumber: r.roll_number,
-          }
+        ? { className: r.class_name, sectionName: r.section_name, rollNumber: r.roll_number }
         : null,
     }));
   }
