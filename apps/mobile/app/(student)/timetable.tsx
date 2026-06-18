@@ -1,5 +1,5 @@
 import {
-  View, Text, ScrollView, ActivityIndicator,
+  View, Text, ScrollView,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMyTimetable } from '../../hooks/useStudentMe';
 import BsDate from '../../components/BsDate';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 import type { TimetablePeriod } from '../../types';
 import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
@@ -52,9 +53,15 @@ export default function StudentTimetable() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} className="bg-background">
-        <ActivityIndicator size="large" color={c.primary} />
-        <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">Loading classes...</Text>
+      <View style={{ flex: 1 }} className="bg-background">
+        <Skeleton style={{ height: 180 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: -48, gap: 12 }}>
+          <Skeleton style={{ height: 72 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 72 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 72 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 72 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 72 }} className="rounded-2xl" />
+        </View>
       </View>
     );
   }
@@ -63,13 +70,14 @@ export default function StudentTimetable() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }} className="bg-background">
         <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
-        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Failed to load</Text>
+        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Couldn't load today's classes</Text>
+        <Text style={{ fontSize: 14, marginTop: 4, textAlign: 'center' }} className="text-muted-foreground">Check your connection and try again.</Text>
         <TouchableOpacity
           onPress={() => refetch()}
           style={{ paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
           className="bg-primary"
         >
-          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Retry</Text>
+          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Try again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -134,12 +142,12 @@ export default function StudentTimetable() {
               <Ionicons name="sunny" size={36} color={c.primary} />
             </View>
             <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }} className="text-foreground">
-              No School Today
+              No school today
             </Text>
             <Text style={{ fontSize: 14, textAlign: 'center' }} className="text-muted-foreground">
               {data.dayOfWeek === 6
-                ? 'Saturday is a weekly holiday. Rest and recharge!'
-                : 'You are not assigned to a class yet.'}
+                ? "Saturday's a holiday — rest up."
+                : "You're not in a class yet. Ask your school to add you."}
             </Text>
           </View>
         ) : totalPeriods === 0 ? (
@@ -149,7 +157,7 @@ export default function StudentTimetable() {
             shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
           }} className="bg-surface">
             <Ionicons name="calendar-clear-outline" size={44} color={c.placeholderIcon} />
-            <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">No classes scheduled for today.</Text>
+            <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">Nothing scheduled for today.</Text>
           </View>
         ) : (
           data.periods.map((period, idx) => {

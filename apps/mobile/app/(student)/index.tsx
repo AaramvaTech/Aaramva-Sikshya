@@ -3,7 +3,6 @@ import {
   Text,
   Image,
   ScrollView,
-  ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useState } from 'react';
 
 import { useMyProfile, useMyTimetable, useMyAttendanceSummary } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 import { useAuthStore } from '../../store/auth';
 import { logout } from '../../lib/session';
 import { STATUS_CONFIG } from '../../lib/attendance';
@@ -188,8 +188,12 @@ export default function StudentDashboard() {
   // -------------------------------------------------------------------------
   if (isLoading) {
     return (
-      <View style={styles.centerFill} className="bg-background">
-        <ActivityIndicator size="large" color={c.primary} />
+      <View style={{ flex: 1 }} className="bg-background">
+        <Skeleton style={{ height: 180 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: -48, gap: 12 }}>
+          <Skeleton style={{ height: 150 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 180 }} className="rounded-2xl" />
+        </View>
       </View>
     );
   }
@@ -201,7 +205,8 @@ export default function StudentDashboard() {
     return (
       <View style={styles.centerFill} className="bg-background">
         <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
-        <Text style={styles.errorTitle} className="text-foreground">Failed to load</Text>
+        <Text style={styles.errorTitle} className="text-foreground">Couldn't load your dashboard</Text>
+        <Text style={styles.errorSubtext} className="text-muted-foreground">Check your connection and try again.</Text>
         <TouchableOpacity
           style={styles.retryButton}
           className="bg-primary"
@@ -211,7 +216,7 @@ export default function StudentDashboard() {
             void summary.refetch();
           }}
         >
-          <Text style={styles.retryText} className="text-primary-foreground">Retry</Text>
+          <Text style={styles.retryText} className="text-primary-foreground">Try again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -333,6 +338,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 12,
     fontSize: 16,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
   },
   retryButton: {
     paddingHorizontal: 24,

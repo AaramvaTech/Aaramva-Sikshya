@@ -1,5 +1,5 @@
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, RefreshControl, Dimensions,
 } from 'react-native';
 import NpText from '../../components/NpText';
@@ -12,6 +12,7 @@ import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { SATURDAY_HIGHLIGHT, useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import Skeleton from '../../components/Skeleton';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // 16px padding each side, 16px card padding each side = 64px total horizontal offset
@@ -74,9 +75,14 @@ function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
 
   if (isLoading) {
     return (
-      <View style={styles.calendarLoadingContainer}>
-        <ActivityIndicator size="small" color={c.primary} />
-        <Text style={styles.calendarLoadingText} className="text-muted-foreground">Loading calendar...</Text>
+      <View style={{ gap: 4 }}>
+        {[0, 1, 2, 3, 4, 5].map((rowIdx) => (
+          <View key={rowIdx} style={{ flexDirection: 'row', gap: 4 }}>
+            {[0, 1, 2, 3, 4, 5, 6].map((colIdx) => (
+              <Skeleton key={colIdx} style={{ height: CELL_SIZE, flex: 1 }} />
+            ))}
+          </View>
+        ))}
       </View>
     );
   }
@@ -339,9 +345,9 @@ export default function StudentAttendance() {
 
           {historyResult.isError && !historyResult.isLoading && (
             <View style={styles.errorRow}>
-              <Text style={styles.errorText} className="text-muted-foreground">Failed to load attendance data.</Text>
+              <Text style={styles.errorText} className="text-muted-foreground">Couldn't load this month's attendance.</Text>
               <TouchableOpacity onPress={() => historyResult.refetch()} style={styles.retryBtn} className="bg-primary">
-                <Text style={styles.retryBtnText} className="text-primary-foreground">Retry</Text>
+                <Text style={styles.retryBtnText} className="text-primary-foreground">Try again</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -463,14 +469,6 @@ const styles = StyleSheet.create({
   },
 
   // Calendar grid
-  calendarLoadingContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
-  },
-  calendarLoadingText: {
-    fontSize: 13,
-  },
   calendarRow: {
     flexDirection: 'row',
     marginBottom: 4,

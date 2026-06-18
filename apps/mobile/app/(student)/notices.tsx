@@ -1,5 +1,5 @@
 import {
-  View, Text, ScrollView, ActivityIndicator,
+  View, Text, ScrollView,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useNotices } from '../../hooks/useStudentMe';
 import type { NoticeItem } from '../../types';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
@@ -136,9 +137,13 @@ export default function StudentNotices() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} className="bg-background">
-        <ActivityIndicator size="large" color={c.primary} />
-        <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">Loading notices...</Text>
+      <View style={{ flex: 1 }} className="bg-background">
+        <Skeleton style={{ height: 180 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: -48, gap: 12 }}>
+          <Skeleton style={{ height: 96 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 96 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 96 }} className="rounded-2xl" />
+        </View>
       </View>
     );
   }
@@ -147,13 +152,14 @@ export default function StudentNotices() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }} className="bg-background">
         <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
-        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Failed to load notices</Text>
+        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Couldn't load notices</Text>
+        <Text style={{ fontSize: 14, marginTop: 4, textAlign: 'center' }} className="text-muted-foreground">Check your connection and try again.</Text>
         <TouchableOpacity
           onPress={() => refetch()}
           style={{ paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
           className="bg-primary"
         >
-          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Retry</Text>
+          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Try again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -209,10 +215,10 @@ export default function StudentNotices() {
               <Ionicons name="notifications-off-outline" size={36} color={c.primary} />
             </View>
             <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 6 }} className="text-foreground">
-              No Notices Yet
+              No notices yet
             </Text>
             <Text style={{ fontSize: 14, textAlign: 'center', lineHeight: 20 }} className="text-muted-foreground">
-              Your school hasn't posted any notices. Pull down to refresh.
+              When your school posts an update, you'll see it here.
             </Text>
           </View>
         ) : (
