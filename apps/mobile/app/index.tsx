@@ -16,7 +16,13 @@ import { rawApi } from '../lib/api';
 import { setSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 
-type TenantInfo = { name: string; slug: string; logoUrl: string | null };
+type TenantInfo = {
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  primaryForeground: string | null;
+};
 
 export default function SchoolEntryScreen() {
   const [slug, setSlug] = useState('');

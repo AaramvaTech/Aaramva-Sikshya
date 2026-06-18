@@ -7,6 +7,7 @@ import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../store/auth';
 import { useBootSession } from '../lib/session';
 import { ThemeProvider } from '../lib/theme/provider';
+import ThemeSync from '../components/ThemeSync';
 import { useFonts } from 'expo-font';
 import { NotoSansDevanagari_400Regular } from '@expo-google-fonts/noto-sans-devanagari';
 
@@ -39,6 +40,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <ThemeSync />
         {(status === 'booting' || !fontsLoaded) ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#065f46" />

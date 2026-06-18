@@ -20,6 +20,7 @@ import { STATUS_CONFIG } from '../../lib/attendance';
 import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, formatBs } from 'bs-calendar';
 import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import { useBranding } from '../../lib/theme/provider';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,6 +166,7 @@ export default function StudentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const tenant = useAuthStore((s) => s.tenant);
   const c = useThemeColors();
+  const { branding } = useBranding();
 
   const profile = useMyProfile();
   const timetable = useMyTimetable();
@@ -261,12 +263,22 @@ export default function StudentDashboard() {
       >
         {/* Top row: logo + logout */}
         <View style={styles.headerTopRow}>
-          <Image
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            source={require('../../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          {branding?.logoUrl ? (
+            <View className="bg-surface rounded-xl px-2.5 py-1.5">
+              <Image
+                source={{ uri: branding.logoUrl }}
+                style={{ width: 92, height: 26 }}
+                resizeMode="contain"
+              />
+            </View>
+          ) : (
+            <Image
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              source={require('../../assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          )}
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityLabel="Logout">
             <Ionicons name="log-out-outline" size={18} color={c.primaryForeground} />
           </TouchableOpacity>

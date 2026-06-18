@@ -79,3 +79,16 @@ export async function removePersistedSession(sessionId: string): Promise<void> {
   const existing = await getMsSessions();
   await saveMsSessions(existing.filter((s) => s.id !== sessionId));
 }
+
+// ─── Per-school branding cache (non-sensitive; keyed by slug) ────────────────
+export async function getBrandingCache(slug: string): Promise<string | null> {
+  const key = `branding_${slug}`;
+  if (Platform.OS === 'web') return localStorage.getItem(key);
+  return SecureStore.getItemAsync(key);
+}
+
+export async function setBrandingCache(slug: string, value: string): Promise<void> {
+  const key = `branding_${slug}`;
+  if (Platform.OS === 'web') { localStorage.setItem(key, value); return; }
+  await SecureStore.setItemAsync(key, value);
+}
