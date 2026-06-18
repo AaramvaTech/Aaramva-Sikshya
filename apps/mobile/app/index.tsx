@@ -101,7 +101,8 @@ export default function SchoolEntryScreen() {
             <Image
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               source={require('../assets/images/brand-icon.png')}
-              style={{ width: 36, height: 36, tintColor: '#FFFFFF' }}
+              style={{ width: 36, height: 36 }}
+              tintColor="#FFFFFF"
               resizeMode="contain"
             />
           </View>
@@ -205,7 +206,8 @@ export default function SchoolEntryScreen() {
                   <Image
                     // eslint-disable-next-line @typescript-eslint/no-require-imports
                     source={require('../assets/images/brand-icon.png')}
-                    style={{ width: 28, height: 28, tintColor: c.primary }}
+                    style={{ width: 28, height: 28 }}
+                    tintColor={c.primary}
                     resizeMode="contain"
                   />
                 </View>

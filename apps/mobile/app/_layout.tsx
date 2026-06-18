@@ -17,7 +17,13 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({ NotoSansDevanagari: NotoSansDevanagari_400Regular });
 
   useEffect(() => {
-    if (status === 'booting') return;
+    // Wait until boot resolves AND the <Stack> navigator is mounted (fontsLoaded).
+    // Navigating earlier queues the action into an unmounted navigator (the <Stack>
+    // render is also gated on fontsLoaded), which then replays in a passive effect on
+    // mount and loops focus/dispatch → "Maximum update depth exceeded" (seen on Android,
+    // where fonts load async). This effect only runs on auth-state changes — never on
+    // in-state navigation — so pushes like /help-code are left alone.
+    if (status === 'booting' || !fontsLoaded) return;
 
     if (status === 'noSchool') {
       router.replace('/');
@@ -35,7 +41,7 @@ export default function RootLayout() {
         router.replace('/web-portal');
       }
     }
-  }, [status, user?.role]);
+  }, [status, user?.role, fontsLoaded]);
 
   return (
     <QueryClientProvider client={queryClient}>
