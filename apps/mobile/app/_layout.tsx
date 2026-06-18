@@ -1,3 +1,4 @@
+import '../global.css';
 import { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Stack, router } from 'expo-router';
@@ -5,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../store/auth';
 import { useBootSession } from '../lib/session';
+import { ThemeProvider } from '../lib/theme/provider';
 
 export default function RootLayout() {
   useBootSession();
@@ -20,11 +22,11 @@ export default function RootLayout() {
     } else if (status === 'authed') {
       const role = user?.role;
       if (role === 'STUDENT') {
-        router.replace('/(student)/home');
+        router.replace('/(student)');
       } else if (role === 'PARENT') {
-        router.replace('/(parent)/home');
+        router.replace('/(parent)');
       } else if (role === 'TEACHER') {
-        router.replace('/(teacher)/home');
+        router.replace('/(teacher)');
       } else {
         router.replace('/web-portal');
       }
@@ -34,17 +36,21 @@ export default function RootLayout() {
   if (status === 'booting') {
     return (
       <QueryClientProvider client={queryClient}>
-        <View className="flex-1 bg-white items-center justify-center">
-          <ActivityIndicator size="large" color="#4f46e5" />
-          <Text className="text-gray-400 mt-4 text-sm">Loading...</Text>
-        </View>
+        <ThemeProvider>
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#1a8055" />
+            <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>
+          </View>
+        </ThemeProvider>
       </QueryClientProvider>
     );
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Stack screenOptions={{ headerShown: false }} />
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
