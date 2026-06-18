@@ -18,6 +18,7 @@ export const AARAMVA_COLORS = {
   border: channelsToHex(aaramvaTheme['--border']),
   foreground: channelsToHex(aaramvaTheme['--foreground']),
   mutedForeground: channelsToHex(aaramvaTheme['--muted-foreground']),
+  danger: channelsToHex(aaramvaTheme['--danger']),
 };
 
 // Non-token neutral used only for large faded placeholder icons (empty/error states).
@@ -97,5 +98,6 @@ export function useThemeColors() {
     placeholderIcon: PLACEHOLDER_ICON,
     primary: branding?.primaryColor ?? AARAMVA_COLORS.primary,
     primaryForeground: branding?.primaryForeground ?? AARAMVA_COLORS.primaryForeground,
+    danger: AARAMVA_COLORS.danger,
   };
 }
