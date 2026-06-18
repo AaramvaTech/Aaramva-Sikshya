@@ -33,23 +33,17 @@ export default function RootLayout() {
     }
   }, [status, user?.role]);
 
-  if (status === 'booting') {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        {status === 'booting' ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#1a8055" />
             <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>
           </View>
-        </ThemeProvider>
-      </QueryClientProvider>
-    );
-  }
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        ) : (
+          <Stack screenOptions={{ headerShown: false }} />
+        )}
       </ThemeProvider>
     </QueryClientProvider>
   );

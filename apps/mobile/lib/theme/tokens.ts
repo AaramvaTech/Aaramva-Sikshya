@@ -16,9 +16,14 @@ export const aaramvaTheme = {
 
 // Runtime helper: "#1D4ED8" -> "29 78 216"
 export function hexToRgbChannels(hex: string): string {
-  const h = hex.replace('#', '');
+  const stripped = hex.replace('#', '');
+  const h = stripped.length === 3
+    ? stripped.split('').map((c) => c + c).join('')
+    : stripped.slice(0, 6);
+  if (h.length !== 6) throw new Error(`Invalid hex color: ${hex}`);
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) throw new Error(`Invalid hex color: ${hex}`);
   return `${r} ${g} ${b}`;
 }
