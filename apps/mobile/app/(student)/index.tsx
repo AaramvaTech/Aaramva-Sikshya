@@ -18,6 +18,7 @@ import { logout } from '../../lib/session';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, formatBs } from 'bs-calendar';
+import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,12 +29,6 @@ function getGreeting(): string {
   if (hour < 12) return 'Good Morning 👋';
   if (hour < 17) return 'Good Afternoon 👋';
   return 'Good Evening 👋';
-}
-
-function percentColor(p: number): string {
-  if (p >= 75) return '#065f46';
-  if (p >= 50) return '#d97706';
-  return '#dc2626';
 }
 
 // ---------------------------------------------------------------------------
@@ -55,8 +50,6 @@ function AttendanceCard({
   percent: number;
   totalWorkingDays: number;
 }) {
-  const color = percentColor(percent);
-
   const chips: { key: AttendanceStatus; count: number }[] = [
     { key: 'PRESENT', count: present },
     { key: 'ABSENT', count: absent },
@@ -64,15 +57,19 @@ function AttendanceCard({
     { key: 'LEAVE', count: leave },
   ];
 
+  // Semantic token className for percent text and fill bar
+  const percentColorClass = percent >= 75 ? 'text-primary' : percent >= 50 ? 'text-warning' : 'text-danger';
+  const progressFillClass = percent >= 75 ? 'bg-primary' : percent >= 50 ? 'bg-warning' : 'bg-danger';
+
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardLabel}>ATTENDANCE THIS YEAR</Text>
+    <View style={styles.card} className="bg-surface">
+      <Text style={styles.cardLabel} className="text-muted-foreground">ATTENDANCE THIS YEAR</Text>
 
       <View style={styles.attendanceRow}>
         {/* Big percent */}
         <View style={styles.percentBox}>
-          <Text style={[styles.percentText, { color }]}>{percent}%</Text>
-          <Text style={styles.workingDaysText}>{totalWorkingDays} working days</Text>
+          <Text style={styles.percentText} className={percentColorClass}>{percent}%</Text>
+          <Text style={styles.workingDaysText} className="text-muted-foreground">{totalWorkingDays} working days</Text>
         </View>
 
         {/* Stat chips */}
@@ -90,12 +87,11 @@ function AttendanceCard({
       </View>
 
       {/* Progress bar */}
-      <View style={styles.progressTrack}>
+      <View style={styles.progressTrack} className="bg-surface-muted">
+        {/* width must stay as inline style — className can't express dynamic percentages */}
         <View
-          style={[
-            styles.progressFill,
-            { width: `${Math.min(percent, 100)}%` as `${number}%`, backgroundColor: color },
-          ]}
+          style={[styles.progressFill, { width: `${Math.min(percent, 100)}%` as `${number}%` }]}
+          className={progressFillClass}
         />
       </View>
     </View>
@@ -117,39 +113,38 @@ function TimetableCard({
     room: string | null;
   }[];
 }) {
+  const c = useThemeColors();
   const empty = !isSchoolDay || periods.length === 0;
 
   return (
-    <View style={[styles.card, { marginBottom: 32 }]}>
-      <Text style={styles.cardLabel}>TODAY'S CLASSES</Text>
+    <View style={[styles.card, { marginBottom: 32 }]} className="bg-surface">
+      <Text style={styles.cardLabel} className="text-muted-foreground">TODAY'S CLASSES</Text>
 
       {empty ? (
         <View style={styles.emptyState}>
-          <Ionicons name="moon-outline" size={40} color="#d1d5db" />
-          <Text style={styles.emptyText}>No classes today</Text>
+          <Ionicons name="moon-outline" size={40} color={c.placeholderIcon} />
+          <Text style={styles.emptyText} className="text-muted-foreground">No classes today</Text>
         </View>
       ) : (
         periods.map((p, idx) => (
           <View
             key={p.slotId}
-            style={[
-              styles.periodRow,
-              idx < periods.length - 1 && styles.periodBorder,
-            ]}
+            style={styles.periodRow}
+            className={idx < periods.length - 1 ? 'border-b border-border' : undefined}
           >
             {/* Period number badge */}
-            <View style={styles.periodBadge}>
-              <Text style={styles.periodBadgeText}>{p.periodNumber}</Text>
+            <View style={styles.periodBadge} className="bg-primary/10">
+              <Text style={styles.periodBadgeText} className="text-primary">{p.periodNumber}</Text>
             </View>
 
             <View style={styles.periodInfo}>
               <View style={styles.periodTopRow}>
-                <Text style={styles.subjectName}>{p.subject.name}</Text>
-                <Text style={styles.timeText}>
+                <Text style={styles.subjectName} className="text-foreground">{p.subject.name}</Text>
+                <Text style={styles.timeText} className="text-muted-foreground">
                   {p.startTime}–{p.endTime}
                 </Text>
               </View>
-              <Text style={styles.teacherText}>
+              <Text style={styles.teacherText} className="text-muted-foreground">
                 {p.teacher.fullName}
                 {p.room ? ` · Room ${p.room}` : ''}
               </Text>
@@ -168,6 +163,7 @@ function TimetableCard({
 export default function StudentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const tenant = useAuthStore((s) => s.tenant);
+  const c = useThemeColors();
 
   const profile = useMyProfile();
   const timetable = useMyTimetable();
@@ -191,8 +187,8 @@ export default function StudentDashboard() {
   // -------------------------------------------------------------------------
   if (isLoading) {
     return (
-      <View style={styles.centerFill}>
-        <ActivityIndicator size="large" color="#065f46" />
+      <View style={styles.centerFill} className="bg-background">
+        <ActivityIndicator size="large" color={c.primary} />
       </View>
     );
   }
@@ -202,18 +198,19 @@ export default function StudentDashboard() {
   // -------------------------------------------------------------------------
   if (isError) {
     return (
-      <View style={styles.centerFill}>
-        <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
-        <Text style={styles.errorTitle}>Failed to load</Text>
+      <View style={styles.centerFill} className="bg-background">
+        <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
+        <Text style={styles.errorTitle} className="text-foreground">Failed to load</Text>
         <TouchableOpacity
           style={styles.retryButton}
+          className="bg-primary"
           onPress={() => {
             void profile.refetch();
             void timetable.refetch();
             void summary.refetch();
           }}
         >
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText} className="text-primary-foreground">Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -241,16 +238,17 @@ export default function StudentDashboard() {
   return (
     <ScrollView
       style={styles.root}
+      className="bg-background"
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#065f46" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />
       }
     >
       {/* ------------------------------------------------------------------ */}
       {/* Gradient Header                                                     */}
       {/* ------------------------------------------------------------------ */}
       <LinearGradient
-        colors={['#064e3b', '#065f46', '#047857']}
+        colors={headerGradient(c.primary) as [string, string, string]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -264,25 +262,29 @@ export default function StudentDashboard() {
             resizeMode="contain"
           />
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityLabel="Logout">
-            <Ionicons name="log-out-outline" size={18} color="white" />
+            <Ionicons name="log-out-outline" size={18} color={c.primaryForeground} />
           </TouchableOpacity>
         </View>
 
         {/* BS Date */}
-        <Text style={styles.bsDate}>{todayLabel}</Text>
+        {/* ON_PRIMARY_ACCENTS.bright — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.bsDate, { color: ON_PRIMARY_ACCENTS.bright }]}>{todayLabel}</Text>
 
         {/* Greeting */}
-        <Text style={styles.greeting}>{getGreeting()}</Text>
+        {/* ON_PRIMARY_ACCENTS.soft — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.greeting, { color: ON_PRIMARY_ACCENTS.soft }]}>{getGreeting()}</Text>
 
         {/* Student name */}
-        <Text style={styles.studentName}>{fullName}</Text>
+        <Text style={styles.studentName} className="text-primary-foreground">{fullName}</Text>
 
         {/* Enrollment */}
-        <Text style={styles.enrollmentLine}>{enrollmentLine}</Text>
+        {/* ON_PRIMARY_ACCENTS.pale — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.enrollmentLine, { color: ON_PRIMARY_ACCENTS.pale }]}>{enrollmentLine}</Text>
 
         {/* Tenant name */}
         {tenant?.name ? (
-          <Text style={styles.tenantName}>{tenant.name}</Text>
+          /* ON_PRIMARY_ACCENTS.soft — documented accent exception: on-primary decorative tint */
+          <Text style={[styles.tenantName, { color: ON_PRIMARY_ACCENTS.soft }]}>{tenant.name}</Text>
         ) : null}
       </LinearGradient>
 
@@ -313,36 +315,31 @@ export default function StudentDashboard() {
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Styles — layout only; colors removed and delegated to className tokens
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f9fafb',
   },
   centerFill: {
     flex: 1,
-    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   errorTitle: {
-    color: '#374151',
     fontWeight: '600',
     marginTop: 12,
     fontSize: 16,
   },
   retryButton: {
-    backgroundColor: '#065f46',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 14,
     marginTop: 16,
   },
   retryText: {
-    color: 'white',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -367,30 +364,25 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   bsDate: {
-    color: '#6ee7b7',
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 4,
   },
   greeting: {
-    color: '#a7f3d0',
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 6,
   },
   studentName: {
-    color: 'white',
     fontSize: 26,
     fontWeight: '800',
     marginBottom: 4,
   },
   enrollmentLine: {
-    color: '#d1fae5',
     fontSize: 13,
     fontWeight: '500',
   },
   tenantName: {
-    color: '#a7f3d0',
     fontSize: 11,
     fontWeight: '500',
     marginTop: 4,
@@ -404,7 +396,6 @@ const styles = StyleSheet.create({
 
   // Shared card
   card: {
-    backgroundColor: 'white',
     borderRadius: 24,
     padding: 20,
     marginBottom: 12,
@@ -416,7 +407,6 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 11,
-    color: '#6b7280',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -439,7 +429,6 @@ const styles = StyleSheet.create({
   },
   workingDaysText: {
     fontSize: 11,
-    color: '#9ca3af',
     fontWeight: '500',
     marginTop: 2,
   },
@@ -469,7 +458,6 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 6,
-    backgroundColor: '#f3f4f6',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -484,7 +472,6 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   emptyText: {
-    color: '#9ca3af',
     fontSize: 14,
     fontWeight: '500',
     marginTop: 10,
@@ -494,22 +481,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: 12,
   },
-  periodBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
   periodBadge: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#d1fae5',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
     marginTop: 2,
   },
   periodBadgeText: {
-    color: '#065f46',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -525,18 +506,15 @@ const styles = StyleSheet.create({
   subjectName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
     flex: 1,
     marginRight: 8,
   },
   timeText: {
     fontSize: 12,
-    color: '#6b7280',
     fontWeight: '500',
   },
   teacherText: {
     fontSize: 12,
-    color: '#9ca3af',
     fontWeight: '400',
   },
 });
