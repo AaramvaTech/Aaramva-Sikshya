@@ -225,6 +225,8 @@ The `guardians` table has a nullable `user_id UUID REFERENCES users(id)`. Most g
 
 **Session 21 needs:** When adding a new screen under a role group, create `app/(student)/newscreen.tsx` (or parent/teacher). Update `app/(student)/_layout.tsx` Stack if a new route needs header config. The root layout's useEffect in `_layout.tsx` controls auth routing — don't add `router.replace()` in individual screens to avoid race conditions.
 
+**Canonical brand color (mobile):** Aaramva primary is `#065f46` (`--primary: 6 95 70`), single source of truth in `apps/mobile/lib/theme/tokens.ts`. Auth + student screens read it only via the `--primary` token / `useThemeColors()` — never a second green literal. Per-school themes override `--primary` at runtime (ThemeSync → applySchool). (Web's `#1a8055` reconciliation is out of scope.)
+
 ---
 
 ## Environment variables (never hardcode these)

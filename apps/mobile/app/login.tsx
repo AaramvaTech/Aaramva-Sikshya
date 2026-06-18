@@ -109,6 +109,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex1}
+      className="bg-background"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="light-content" />
@@ -128,7 +129,7 @@ export default function LoginScreen() {
         >
           {/* School logo chip — light backing so it reads on ANY school color */}
           {branding?.logoUrl ? (
-            <View style={styles.logoChip}>
+            <View style={styles.logoChip} className="bg-surface">
               <Image
                 source={{ uri: branding.logoUrl }}
                 style={{ width: 44, height: 44 }}
@@ -318,12 +319,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
   },
-  // Light backing chip — reads on any school color
+  // Light backing chip — reads on any school color; bg set via bg-surface className
   logoChip: {
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
