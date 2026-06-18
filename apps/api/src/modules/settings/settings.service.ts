@@ -2,18 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
-import { BrandingColorService, contrastRatio } from '../branding/branding-color.service';
-
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
-  } catch {
-    return null;
-  }
-}
+import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 
 interface TenantProfileRow {
   id: string;

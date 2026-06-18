@@ -15,18 +15,7 @@ import {
   UpdateTenantDto,
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
-import { BrandingColorService, contrastRatio } from '../branding/branding-color.service';
-
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
-  } catch {
-    return null;
-  }
-}
+import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 
 interface DbTenant {
   id: string;
@@ -278,10 +267,10 @@ export class TenantAdminService {
     }
 
     params.push(id);
-    const rows = await this.publicPrisma.query<{ id: string }>(
+    const rows = await this.publicPrisma.query<{ id: string; color_source: string }>(
       `UPDATE tenants SET ${sets.join(', ')}, "updatedAt" = NOW()
        WHERE id = $${params.length} AND "deletedAt" IS NULL
-       RETURNING id`,
+       RETURNING id, "colorSource" AS color_source`,
       ...params,
     );
     if (!rows[0]) throw new NotFoundException(`Tenant ${id} not found`);
@@ -293,11 +282,7 @@ export class TenantAdminService {
     });
 
     if (dto.logoUrl !== undefined) {
-      const csRows = await this.publicPrisma.query<{ color_source: string }>(
-        `SELECT "colorSource" AS color_source FROM tenants WHERE id = $1`,
-        id,
-      );
-      const colorSource = csRows[0]?.color_source ?? 'auto';
+      const colorSource = rows[0].color_source ?? 'auto';
       if (colorSource !== 'manual') {
         const buffer = await fetchImageBuffer(dto.logoUrl);
         if (buffer) {
