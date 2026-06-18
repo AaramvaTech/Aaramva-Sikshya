@@ -1,6 +1,12 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth';
-import { getSecureItem, setSecureItem, deleteSecureItem } from './secureStore';
+import {
+  getSecureItem,
+  deleteSecureItem,
+  getMsSessions,
+  getMsActiveSessionId,
+  saveMsSessions,
+} from './secureStore';
 
 // 10.0.2.2 is the Android emulator's alias for the host machine's localhost.
 // For a real device or iOS simulator, set EXPO_PUBLIC_API_URL to the dev machine's LAN IP.
@@ -76,10 +82,15 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await getSecureItem('refreshToken');
-        // Slug may still be in Zustand if the store is warm; fall back to SecureStore.
         const slug =
           useAuthStore.getState().slug ?? (await getSecureItem('tenantSlug'));
+        const activeId = useAuthStore.getState().activeSessionId;
+
+        // Read refresh token from the multi-session store; fall back to legacy key.
+        const sessions = await getMsSessions();
+        const activeMs = activeId ? sessions.find((s) => s.id === activeId) : null;
+        const refreshToken =
+          activeMs?.refreshToken ?? (await getSecureItem('refreshToken'));
 
         if (!refreshToken) {
           throw new Error('No refresh token available');
@@ -97,9 +108,15 @@ api.interceptors.response.use(
         const newAccessToken = refreshResponse.data.data.accessToken;
         const newRefreshToken = refreshResponse.data.data.refreshToken;
 
-        // Persist new tokens.
+        // Persist rotated refresh token.
         useAuthStore.getState().setAccessToken(newAccessToken);
-        await setSecureItem('refreshToken', newRefreshToken);
+        if (activeMs) {
+          await saveMsSessions(
+            sessions.map((s) =>
+              s.id === activeId ? { ...s, refreshToken: newRefreshToken } : s,
+            ),
+          );
+        }
 
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -107,12 +124,18 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
 
-        // Clear in-memory session state.
+        // Clear in-memory session state; keep slug so we route to login not school-code entry.
         useAuthStore.getState().clearSession();
 
-        // Wipe only the refresh token — keep tenantSlug in SecureStore so the user
-        // is routed to the login screen for their school, not the school-code entry screen.
-        await deleteSecureItem('refreshToken');
+        // Remove only the active session from persisted store (keep other school sessions).
+        const activeId = useAuthStore.getState().activeSessionId;
+        if (activeId) {
+          const sessions = await getMsSessions();
+          await saveMsSessions(sessions.filter((s) => s.id !== activeId));
+        } else {
+          // Legacy fallback cleanup
+          await deleteSecureItem('refreshToken');
+        }
 
         return Promise.reject(refreshError);
       } finally {

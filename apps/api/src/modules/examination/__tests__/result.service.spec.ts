@@ -1,7 +1,9 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ResultService } from '../result.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { GradingScaleService } from '../grading-scale.service';
+import { Role } from '../../common/enums/role.enum';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -291,6 +293,38 @@ describe('ResultService', () => {
 
       // 20*70 + 30*80 + 50*90 = 1400 + 2400 + 4500 = 8300 / 100 = 83
       expect(reportCard.annualResult.weightedPercentage).toBeCloseTo(83, 1);
+    });
+  });
+
+  describe('IDOR protection — PARENT role', () => {
+    it('getStudentResults throws ForbiddenException when student is not the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+
+      await expect(
+        service.getStudentResults('other-student', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStudentResults skips IDOR check for non-PARENT roles', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // student_results query
+
+      const result = await service.getStudentResults('any-student', 'teacher-uuid', Role.TEACHER);
+
+      expect(result).toEqual([]);
+    });
+
+    it('getReportCard throws ForbiddenException for PARENT when studentId is not a valid UUID', async () => {
+      await expect(
+        service.getReportCard('ADM-2082-001', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getReportCard throws ForbiddenException when UUID student is not the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+
+      await expect(
+        service.getReportCard('550e8400-e29b-41d4-a716-446655440000', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

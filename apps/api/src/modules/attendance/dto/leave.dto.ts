@@ -16,8 +16,9 @@ export enum LeaveStatus {
 }
 
 export class ApplyLeaveDto {
+  @IsOptional()
   @IsUUID()
-  studentId: string;
+  studentId?: string;
 
   @IsUUID()
   academicYearId: string;

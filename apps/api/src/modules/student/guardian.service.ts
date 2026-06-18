@@ -111,12 +111,16 @@ export class GuardianService {
   }
 
   async getMyChildren(userId: string) {
-    const rows = await this.tenantPrisma.query<StudentRow & { relation: string }>(
+    const rows = await this.tenantPrisma.query<
+      StudentRow & { relation: string; section_id: string | null; academic_year_id: string | null; academic_year_name: string | null }
+    >(
       `SELECT s.id, s.student_id, s.first_name, s.last_name, s.photo_url,
-              s.class_name, s.section_name, s.roll_number,
-              g.relation
+              s.class_name, s.section_name, s.roll_number, s.section_id,
+              g.relation,
+              ay.id AS academic_year_id, ay.name AS academic_year_name
        FROM students s
        JOIN guardians g ON g.student_id = s.id
+       LEFT JOIN academic_years ay ON ay.is_current = true AND ay.deleted_at IS NULL
        WHERE g.user_id = $1::uuid
          AND s.deleted_at IS NULL`,
       userId,
@@ -130,7 +134,14 @@ export class GuardianService {
       photoUrl: r.photo_url,
       relation: r.relation,
       currentEnrollment: r.class_name
-        ? { className: r.class_name, sectionName: r.section_name, rollNumber: r.roll_number }
+        ? {
+            className: r.class_name,
+            sectionName: r.section_name,
+            rollNumber: r.roll_number,
+            sectionId: r.section_id ?? null,
+            academicYearId: r.academic_year_id ?? null,
+            academicYearName: r.academic_year_name ?? null,
+          }
         : null,
     }));
   }

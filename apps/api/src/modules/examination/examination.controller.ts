@@ -17,6 +17,7 @@ import {
   CreateGradingScaleDto,
   CreateExamTypeDto, UpdateExamTypeDto, ExamTypeQueryDto,
   CreateExamScheduleDto, BulkCreateScheduleDto, UpdateExamScheduleDto, ExamScheduleQueryDto,
+  MyExamScheduleQueryDto,
   BulkEnterMarksDto, UpdateMarkDto, MarksQueryDto,
   ComputeResultsDto,
 } from './dto/examination.dto';
@@ -109,6 +110,15 @@ export class ExaminationController {
     return this.examScheduleService.bulkCreate(dto);
   }
 
+  @Get('schedules/my')
+  @Roles(...TEACHER_AND_ABOVE)
+  getMySchedules(
+    @Query() query: MyExamScheduleQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.examScheduleService.getMySchedules(user.userId, query.examTypeId);
+  }
+
   @Get('schedules')
   @Roles(...TEACHER_AND_ABOVE)
   listSchedules(@Query() query: ExamScheduleQueryDto) {
@@ -176,14 +186,20 @@ export class ExaminationController {
   }
 
   @Get('results/student/:studentId')
-  @Roles(...TEACHER_AND_ABOVE)
-  getStudentResults(@Param('studentId', ParseUUIDPipe) studentId: string) {
-    return this.resultService.getStudentResults(studentId);
+  @Roles(Role.PARENT, ...TEACHER_AND_ABOVE)
+  getStudentResults(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.resultService.getStudentResults(studentId, user.userId, user.role);
   }
 
   @Get('results/report-card/:studentId')
-  @Roles(...TEACHER_AND_ABOVE)
-  getReportCard(@Param('studentId') studentId: string) {
-    return this.resultService.getReportCard(studentId);
+  @Roles(Role.PARENT, ...TEACHER_AND_ABOVE)
+  getReportCard(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.resultService.getReportCard(studentId, user.userId, user.role);
   }
 }

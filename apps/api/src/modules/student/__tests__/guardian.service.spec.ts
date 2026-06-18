@@ -123,6 +123,8 @@ describe('GuardianService', () => {
         id: 'student-uuid', student_id: '2082-0001',
         first_name: 'Aarav', last_name: 'Shrestha', photo_url: null,
         class_name: 'Class 8', section_name: 'B', roll_number: 12,
+        section_id: 'section-uuid',
+        academic_year_id: 'ay-uuid', academic_year_name: '2081-2082',
         relation: 'FATHER',
       },
     ]);
@@ -137,7 +139,11 @@ describe('GuardianService', () => {
       lastName: 'Shrestha',
       photoUrl: null,
       relation: 'FATHER',
-      currentEnrollment: { className: 'Class 8', sectionName: 'B', rollNumber: 12 },
+      currentEnrollment: {
+        className: 'Class 8', sectionName: 'B', rollNumber: 12,
+        sectionId: 'section-uuid',
+        academicYearId: 'ay-uuid', academicYearName: '2081-2082',
+      },
     });
   });
 

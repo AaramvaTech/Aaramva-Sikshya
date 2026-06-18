@@ -7,6 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
+import type { AuthUser } from '../auth/auth.types';
 import { FeeCategoryService } from './fee-category.service';
 import { FeeStructureService } from './fee-structure.service';
 import { InvoiceService } from './invoice.service';
@@ -123,12 +124,13 @@ export class FinanceController {
   }
 
   @Get('students/:studentId/assignments')
-  @Roles(...ACCOUNTANT_AND_ABOVE)
+  @Roles(Role.PARENT, ...ACCOUNTANT_AND_ABOVE)
   getStudentFeeAssignments(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Query('academicYearId') academicYearId?: string,
+    @CurrentUser() user?: AuthUser,
   ) {
-    return this.invoiceService.getStudentFeeAssignments(studentId, academicYearId);
+    return this.invoiceService.getStudentFeeAssignments(studentId, academicYearId, user?.userId, user?.role);
   }
 
   // ─── Invoices ──────────────────────────────────────────────────────────────
@@ -213,11 +215,12 @@ export class FinanceController {
   }
 
   @Get('reports/student/:studentId')
-  @Roles(...ACCOUNTANT_AND_ABOVE)
+  @Roles(Role.PARENT, ...ACCOUNTANT_AND_ABOVE)
   getStudentLedger(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Query('academicYearId') academicYearId: string,
+    @CurrentUser() user?: AuthUser,
   ) {
-    return this.reportService.getStudentLedger(studentId, academicYearId);
+    return this.reportService.getStudentLedger(studentId, academicYearId, user?.userId, user?.role);
   }
 }

@@ -1,14 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { adToBs, getBsYear } from 'bs-calendar';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { StudentRow, StudentResponseDto, toStudentResponse } from './entities/student.entity';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
+import { Role } from '../common/enums/role.enum';
 
 const SORT_WHITELIST: Record<string, string> = {
   created_at: 'created_at',
@@ -322,6 +325,70 @@ export class StudentService {
     );
 
     return this.findOne(id);
+  }
+
+  async createStudentAccount(
+    studentId: string,
+    dto: CreateStudentAccountDto,
+  ): Promise<{ userId: string; studentId: string; email: string; linked: true }> {
+    const { tenantId } = this.tenantContext.getOrThrow();
+
+    const preCheck = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM students WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL`,
+      studentId, tenantId,
+    );
+    if (!preCheck[0]) throw new NotFoundException(`Student ${studentId} not found`);
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    return this.tenantPrisma.run(async (tx) => {
+      const rows = await tx.$queryRawUnsafe<{
+        id: string;
+        user_id: string | null;
+        first_name: string;
+        last_name: string;
+      }[]>(
+        `SELECT id, user_id, first_name, last_name
+         FROM students
+         WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL
+         FOR UPDATE`,
+        studentId, tenantId,
+      );
+      if (!rows[0]) throw new NotFoundException(`Student ${studentId} not found`);
+      const student = rows[0];
+
+      if (student.user_id) {
+        throw new ConflictException('Student already has a linked login account');
+      }
+
+      const emailConflict = await tx.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM users WHERE email = $1`,
+        dto.email,
+      );
+      if (emailConflict[0]) {
+        throw new ConflictException('Email is already in use');
+      }
+
+      const userRows = await tx.$queryRawUnsafe<{ id: string; email: string }[]>(
+        `INSERT INTO users (email, password_hash, role, first_name, last_name)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email`,
+        dto.email, passwordHash, Role.STUDENT,
+        student.first_name, student.last_name,
+      );
+      const userId = userRows[0].id;
+
+      const affected = await tx.$executeRawUnsafe(
+        `UPDATE students SET user_id = $1::uuid, updated_at = NOW()
+         WHERE id = $2::uuid AND user_id IS NULL`,
+        userId, studentId,
+      );
+      if (affected === 0) {
+        throw new ConflictException('Student already has a linked login account');
+      }
+
+      return { userId, studentId, email: dto.email, linked: true };
+    });
   }
 
   async removeStudent(id: string): Promise<void> {

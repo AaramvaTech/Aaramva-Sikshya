@@ -4,6 +4,9 @@ import {
   ExamScheduleRow,
   ExamScheduleResponseDto,
   toExamScheduleResponse,
+  MyExamScheduleRow,
+  MyExamScheduleDto,
+  toMyExamScheduleResponse,
 } from './entities/examination.entity';
 import {
   CreateExamScheduleDto,
@@ -116,6 +119,47 @@ export class ExamScheduleService {
       `UPDATE exam_schedules SET deleted_at = NOW() WHERE id = $1::uuid`,
       id,
     );
+  }
+
+  async getMySchedules(
+    userId: string,
+    examTypeId?: string,
+  ): Promise<MyExamScheduleDto[]> {
+    const conditions: string[] = [
+      'es.deleted_at IS NULL',
+      `(es.class_id, es.subject_id) IN (
+        SELECT DISTINCT sec.class_id, ts.subject_id
+        FROM timetable_slots ts
+        JOIN sections sec ON ts.section_id = sec.id
+        WHERE ts.teacher_id = $1::uuid
+          AND ts.deleted_at IS NULL
+      )`,
+    ];
+    const params: unknown[] = [userId];
+    let idx = 2;
+
+    if (examTypeId) {
+      conditions.push(`es.exam_type_id = $${idx++}::uuid`);
+      params.push(examTypeId);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const rows = await this.tenantPrisma.query<MyExamScheduleRow>(
+      `SELECT DISTINCT
+              es.*,
+              et.name  AS exam_type_name,
+              sub.name AS subject_name,
+              c.name   AS class_name
+       FROM exam_schedules es
+       JOIN exam_types et  ON et.id  = es.exam_type_id
+       JOIN subjects  sub  ON sub.id = es.subject_id
+       JOIN classes   c    ON c.id   = es.class_id
+       ${where}
+       ORDER BY es.exam_date ASC, es.start_time ASC`,
+      ...params,
+    );
+
+    return rows.map(toMyExamScheduleResponse);
   }
 
   private async _checkDuplicate(

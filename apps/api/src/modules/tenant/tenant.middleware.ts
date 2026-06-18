@@ -13,6 +13,7 @@ export class TenantMiddleware implements NestMiddleware {
   private static readonly PUBLIC_PATH_SUFFIXES = [
     '/auth/register-school',
     '/super-admin/',        // all platform-admin routes need no tenant context
+    '/tenants/verify/',     // public school-code lookup used before login
   ];
 
   constructor(

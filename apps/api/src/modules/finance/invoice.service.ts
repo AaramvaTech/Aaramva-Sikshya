@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getBsYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
@@ -436,7 +437,21 @@ export class InvoiceService {
     );
   }
 
-  async getStudentFeeAssignments(studentId: string, academicYearId?: string): Promise<object[]> {
+  async getStudentFeeAssignments(
+    studentId: string,
+    academicYearId?: string,
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<object[]> {
+    if (callerRole === Role.PARENT && callerId) {
+      const children = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+        callerId,
+      );
+      if (!children.some((c) => c.student_id === studentId)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
     // When academicYearId is provided: return ALL fee structure items for the student's
     // enrolled class + year, with any per-student overrides merged in.
     // This lets the Fees tab show every applicable fee item even before any override is set.

@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
   TimetableSlotRow,
@@ -50,7 +51,17 @@ export class TimetableService {
     });
   }
 
-  async getSectionTimetable(sectionId: string): Promise<SectionTimetableDto> {
+  async getSectionTimetable(sectionId: string, callerId?: string, callerRole?: Role): Promise<SectionTimetableDto> {
+    if (callerRole === Role.PARENT && callerId) {
+      const enrollment = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT s.id FROM students s
+         JOIN guardians g ON g.student_id = s.id
+         WHERE g.user_id = $1::uuid AND s.section_id = $2::uuid AND s.deleted_at IS NULL`,
+        callerId,
+        sectionId,
+      );
+      if (!enrollment[0]) throw new ForbiddenException('Access denied');
+    }
     const rows = await this.tenantPrisma.query<
       TimetableSlotRow & {
         subject_name: string;
@@ -203,5 +214,40 @@ export class TimetableService {
       slotId,
     );
     if (affected === 0) throw new NotFoundException(`Timetable slot ${slotId} not found`);
+  }
+
+  async getMyTimetable(userId: string): Promise<TeacherTimetableDto> {
+    return this.getTeacherTimetable(userId);
+  }
+
+  async getMySections(userId: string): Promise<Array<{ sectionId: string; sectionName: string; className: string; classId: string }>> {
+    const rows = await this.tenantPrisma.query<{
+      section_id: string;
+      section_name: string;
+      class_name: string;
+      class_id: string;
+    }>(
+      `SELECT DISTINCT sec.id   AS section_id,
+                       sec.name AS section_name,
+                       c.name   AS class_name,
+                       c.id     AS class_id
+       FROM sections sec
+       JOIN classes c ON sec.class_id = c.id
+       WHERE sec.deleted_at IS NULL
+         AND (
+               sec.class_teacher_id = $1::uuid
+               OR sec.id IN (
+                 SELECT section_id FROM timetable_slots
+                 WHERE teacher_id = $1::uuid AND deleted_at IS NULL
+               )
+             )`,
+      userId,
+    );
+    return rows.map((r) => ({
+      sectionId: r.section_id,
+      sectionName: r.section_name,
+      className: r.class_name,
+      classId: r.class_id,
+    }));
   }
 }

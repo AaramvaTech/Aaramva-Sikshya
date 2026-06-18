@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { GradingScaleService } from './grading-scale.service';
 import {
@@ -314,7 +315,20 @@ export class ResultService {
     }));
   }
 
-  async getStudentResults(studentId: string) {
+  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
+    const children = await this.tenantPrisma.query<{ student_id: string }>(
+      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+      callerId,
+    );
+    if (!children.some((c) => c.student_id === studentId)) {
+      throw new ForbiddenException('Access denied');
+    }
+  }
+
+  async getStudentResults(studentId: string, callerId?: string, callerRole?: Role) {
+    if (callerRole === Role.PARENT && callerId) {
+      await this.assertGuardianOwnsStudent(studentId, callerId);
+    }
     const rows = await this.tenantPrisma.query<StudentResultRow & { exam_type_name: string }>(
       `SELECT sr.*, et.name AS exam_type_name
        FROM student_results sr
@@ -329,7 +343,7 @@ export class ResultService {
     }));
   }
 
-  async getReportCard(studentId: string): Promise<{
+  async getReportCard(studentId: string, callerId?: string, callerRole?: Role): Promise<{
     student: {
       id: string;
       admissionNumber: string;
@@ -367,6 +381,12 @@ export class ResultService {
       isPassed: boolean;
     };
   }> {
+    if (callerRole === Role.PARENT && callerId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
+      if (!isUuid) throw new ForbiddenException('Access denied');
+      await this.assertGuardianOwnsStudent(studentId, callerId);
+    }
+
     // Accept either UUID (internal id) or admission number (student_id column)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
     const whereClause = isUuid

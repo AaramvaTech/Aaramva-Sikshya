@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { Role } from '../common/enums/role.enum';
 import {
   StudentAttendanceRow,
   StudentSummaryDto,
@@ -16,6 +17,7 @@ import {
   BulkStudentAttendanceDto,
   GetAttendanceQueryDto,
   GetSectionReportQueryDto,
+  GetStudentHistoryQueryDto,
 } from './dto/student-attendance.dto';
 
 @Injectable()
@@ -149,7 +151,39 @@ export class StudentAttendanceService {
     };
   }
 
-  async getStudentSummary(studentId: string, academicYearId: string): Promise<StudentSummaryDto> {
+  async getStudentHistory(
+    studentId: string,
+    query: GetStudentHistoryQueryDto,
+    callerId?: string,
+    callerRole?: Role,
+  ) {
+    if (callerRole === Role.PARENT && callerId) {
+      const children = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+        callerId,
+      );
+      if (!children.some((c) => c.student_id === studentId)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+    return this.getByQuery({ ...query, studentId });
+  }
+
+  async getStudentSummary(
+    studentId: string,
+    academicYearId: string,
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<StudentSummaryDto> {
+    if (callerRole === Role.PARENT && callerId) {
+      const children = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+        callerId,
+      );
+      if (!children.some((c) => c.student_id === studentId)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
     const students = await this.tenantPrisma.query<{
       id: string;
       full_name: string;

@@ -21,8 +21,12 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  const devOrigins = [
+    'http://localhost:3000',  // Next.js web portal
+    'http://localhost:8081',  // Expo web (dev)
+  ];
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:3001'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') ?? devOrigins,
     credentials: true,
   });
 

@@ -5,6 +5,7 @@ export interface StudentRow {
   id: string;
   tenant_id: string;
   student_id: string;
+  user_id: string | null;
   first_name: string;
   last_name: string;
   date_of_birth: Date | string;
@@ -54,6 +55,7 @@ export interface StudentResponseDto {
   id: string;
   studentId: string;
   tenantId: string;
+  userId: string | null;
   firstName: string;
   lastName: string;
   fullName: string;
@@ -97,6 +99,7 @@ export function toStudentResponse(row: StudentRow): StudentResponseDto {
     id: row.id,
     studentId: row.student_id,
     tenantId: row.tenant_id,
+    userId: row.user_id ?? null,
     firstName: row.first_name,
     lastName: row.last_name,
     fullName: `${row.first_name} ${row.last_name}`,

@@ -116,6 +116,12 @@ export class HrController {
     return this.staffService.listStaff(query);
   }
 
+  @Get('staff/me')
+  @Roles(...TEACHER_AND_ABOVE)
+  getMyStaffProfile(@CurrentUser() user: AuthUser) {
+    return this.staffService.getMyProfile(user.userId);
+  }
+
   @Get('staff/:id')
   @Roles(...PRINCIPAL_AND_ABOVE)
   getStaff(@Param('id', ParseUUIDPipe) id: string) {

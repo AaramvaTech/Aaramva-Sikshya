@@ -18,19 +18,26 @@ import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { StudentService } from './student.service';
+import { StudentMeService } from './student-me.service';
 import { GuardianService } from './guardian.service';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
+import {
+  StudentMeAttendanceSummaryDto,
+  StudentMeAttendanceHistoryDto,
+} from './dto/student-me-query.dto';
 
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class StudentController {
   constructor(
     private readonly studentService: StudentService,
+    private readonly studentMeService: StudentMeService,
     private readonly guardianService: GuardianService,
   ) {}
 
@@ -68,11 +75,44 @@ export class StudentController {
     return this.guardianService.getMyChildren(user.userId);
   }
 
+  // ─── /me routes MUST come before /:id to avoid "me" matching as UUID ─────────
+
+  @Get('me')
+  @Roles(Role.STUDENT)
+  getMyProfile(@CurrentUser() user: AuthUser) {
+    return this.studentMeService.getMyProfile(user.userId);
+  }
+
+  @Get('me/timetable/today')
+  @Roles(Role.STUDENT)
+  getMyTodayTimetable(@CurrentUser() user: AuthUser) {
+    return this.studentMeService.getMyTodayTimetable(user.userId);
+  }
+
+  @Get('me/attendance/summary')
+  @Roles(Role.STUDENT)
+  getMyAttendanceSummary(
+    @CurrentUser() user: AuthUser,
+    @Query() dto: StudentMeAttendanceSummaryDto,
+  ) {
+    return this.studentMeService.getMyAttendanceSummary(user.userId, dto);
+  }
+
+  @Get('me/attendance/history')
+  @Roles(Role.STUDENT)
+  getMyAttendanceHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() dto: StudentMeAttendanceHistoryDto,
+  ) {
+    return this.studentMeService.getMyAttendanceHistory(user.userId, dto);
+  }
+
+  // ─── Parameterised routes ─────────────────────────────────────────────────────
+
   @Get(':id')
   @Roles(
     Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR,
     Role.TEACHER, Role.ACCOUNTANT, Role.LIBRARIAN,
-    // STUDENT and PARENT access re-added when user-student linking is implemented in Academic module
   )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.findOne(id);
@@ -101,6 +141,15 @@ export class StudentController {
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentService.removeStudent(id);
+  }
+
+  @Post(':id/account')
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  createStudentAccount(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateStudentAccountDto,
+  ) {
+    return this.studentService.createStudentAccount(id, dto);
   }
 
   @Post(':studentId/guardians/:guardianId/account')

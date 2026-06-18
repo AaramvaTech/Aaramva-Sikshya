@@ -1,7 +1,9 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ReportService } from '../report.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { Role } from '../../common/enums/role.enum';
 
 describe('ReportService', () => {
   let service: ReportService;
@@ -135,6 +137,33 @@ describe('ReportService', () => {
       expect(inv.items).toHaveLength(1);
       expect(inv.payments).toHaveLength(1);
       expect(result.summary.totalPaid).toBe(2000);
+    });
+  });
+
+  describe('IDOR protection — PARENT role', () => {
+    it('getStudentLedger throws ForbiddenException when student is not the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+
+      await expect(
+        service.getStudentLedger('other-student', 'year-1', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStudentLedger skips IDOR check for non-PARENT roles', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{         // student lookup
+          id: 'student-1',
+          admission_number: 'ADM-001',
+          full_name: 'Ram Sharma',
+          class_name: 'Grade 10',
+        }])
+        .mockResolvedValueOnce([{ id: 'year-1', name: '2081/82' }]) // academic year
+        .mockResolvedValueOnce([]);                                   // invoices
+
+      const result = await service.getStudentLedger('student-1', 'year-1', 'accountant-uuid', Role.ACCOUNTANT);
+
+      expect(result.student.id).toBe('student-1');
+      expect(result.invoices).toHaveLength(0);
     });
   });
 });

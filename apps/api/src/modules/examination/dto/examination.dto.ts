@@ -88,6 +88,10 @@ export class ExamScheduleQueryDto {
   @IsOptional() @IsUUID() classId?: string;
 }
 
+export class MyExamScheduleQueryDto {
+  @IsOptional() @IsUUID() examTypeId?: string;
+}
+
 // ─── Marks ─────────────────────────────────────────────────────────────────────
 
 export class MarkEntryDto {

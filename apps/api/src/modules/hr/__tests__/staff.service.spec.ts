@@ -163,6 +163,26 @@ describe('StaffService', () => {
     });
   });
 
+  describe('getMyProfile()', () => {
+    it('queries by sp.user_id not by sp.id', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseProfileRow]);
+
+      const result = await service.getMyProfile('user-1');
+
+      const [sql, userId] = (tenantPrisma.query as jest.Mock).mock.calls[0] as [string, string];
+      expect(sql).toContain('sp.user_id = $1::uuid');
+      expect(userId).toBe('user-1');
+      expect(result.id).toBe('profile-1');
+      expect(result.employeeId).toBe('EMP-2081-0001');
+    });
+
+    it('throws NotFoundException when no staff profile is linked to this userId', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(service.getMyProfile('not-a-staff-user')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('softDeleteStaff()', () => {
     it('sets end_date and is_active = false on both profile and user', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseProfileRow]);

@@ -164,6 +164,15 @@ ALTER TABLE students
   ADD COLUMN IF NOT EXISTS class_id   UUID REFERENCES classes(id),
   ADD COLUMN IF NOT EXISTS section_id UUID REFERENCES sections(id);
 
+-- ─── STUDENT ACCOUNT LINKAGE (Session 20.5) ──────────────────────────────────
+-- Links a Student record to a login user account (role=STUDENT).
+-- Nullable: most students start without a login until an admin creates one.
+ALTER TABLE students
+  ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_user_id
+  ON students (user_id) WHERE user_id IS NOT NULL;
+
 -- ─── STUDENT ATTENDANCE ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS student_attendance (
   id               UUID      PRIMARY KEY DEFAULT gen_random_uuid(),

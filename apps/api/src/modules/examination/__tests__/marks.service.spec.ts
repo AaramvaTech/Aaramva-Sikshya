@@ -88,6 +88,26 @@ describe('MarksService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('records entered_by = caller userId on every marks row', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([baseScheduleRow])
+        .mockResolvedValueOnce([baseMarkRow]);
+
+      await service.bulkEnterMarks(
+        {
+          examScheduleId: 'schedule-1',
+          marks: [{ studentId: 'student-1', marksObtained: 80 }],
+        },
+        'entering-teacher-uuid',
+      );
+
+      const calls = (mockTx.$queryRawUnsafe as jest.Mock).mock.calls;
+      const insertCall = calls.find(([sql]: [string]) => sql?.includes('entered_by'));
+      expect(insertCall).toBeDefined();
+      const [, ...params] = insertCall as [string, ...unknown[]];
+      expect(params).toContain('entering-teacher-uuid');
+    });
+
     it('uses UPSERT — safe to submit twice', async () => {
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([baseScheduleRow])

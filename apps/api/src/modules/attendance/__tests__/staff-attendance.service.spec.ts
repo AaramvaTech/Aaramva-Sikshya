@@ -62,6 +62,41 @@ describe('StaffAttendanceService', () => {
     });
   });
 
+  describe('getByQuery() — self-scoped (my attendance)', () => {
+    it('filters by the provided userId so a caller can only see their own records', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await service.getByQuery({ userId: 'my-user-id' });
+
+      const [sql, ...params] = (tenantPrisma.query as jest.Mock).mock.calls[0] as [string, ...unknown[]];
+      expect(sql).toContain('user_id');
+      expect(params).toContain('my-user-id');
+    });
+
+    it('returns paginated result scoped to the userId', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 'attn-1',
+          user_id: 'my-user-id',
+          date: new Date('2024-04-15'),
+          status: 'PRESENT',
+          check_in: null,
+          check_out: null,
+          remarks: null,
+          marked_by: 'admin-1',
+          marked_at: new Date('2024-04-15'),
+          updated_at: new Date('2024-04-15'),
+          total_count: '1',
+        },
+      ]);
+
+      const result = await service.getByQuery({ userId: 'my-user-id', page: 1, limit: 20 });
+
+      expect(result.meta.total).toBe(1);
+      expect(result.data).toHaveLength(1);
+    });
+  });
+
   describe('getStaffSummary()', () => {
     it('returns correct counts for a month', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([

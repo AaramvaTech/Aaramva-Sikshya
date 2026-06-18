@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
   LeaveApplicationRow,
@@ -11,13 +12,46 @@ import { ApplyLeaveDto, GetLeaveQueryDto, ReviewLeaveDto } from './dto/leave.dto
 export class LeaveService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  async applyLeave(dto: ApplyLeaveDto, appliedById: string): Promise<LeaveApplicationResponseDto> {
+  async applyLeave(
+    dto: ApplyLeaveDto,
+    appliedById: string,
+    callerRole: Role,
+  ): Promise<LeaveApplicationResponseDto> {
+    let studentId: string;
+
+    if (callerRole === Role.STUDENT) {
+      const linked = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM students WHERE user_id = $1::uuid AND deleted_at IS NULL`,
+        appliedById,
+      );
+      if (!linked[0]) {
+        throw new ForbiddenException('No student record is linked to this account');
+      }
+      studentId = linked[0].id;
+    } else if (callerRole === Role.PARENT) {
+      // PARENT: dto.studentId is required; verify the student is one of the caller's children
+      if (!dto.studentId) throw new BadRequestException('studentId is required');
+      const children = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+        appliedById,
+      );
+      const childIds = new Set(children.map((c) => c.student_id));
+      if (!childIds.has(dto.studentId)) {
+        throw new ForbiddenException('You can only file leave for your own children');
+      }
+      studentId = dto.studentId;
+    } else {
+      // Staff roles: studentId is required in the body
+      if (!dto.studentId) throw new BadRequestException('studentId is required');
+      studentId = dto.studentId;
+    }
+
     const rows = await this.tenantPrisma.query<LeaveApplicationRow>(
       `INSERT INTO leave_applications
          (student_id, academic_year_id, from_date, to_date, reason, applied_by)
        VALUES ($1::uuid, $2::uuid, $3::date, $4::date, $5, $6::uuid)
        RETURNING *`,
-      dto.studentId,
+      studentId,
       dto.academicYearId,
       dto.fromDate,
       dto.toDate,

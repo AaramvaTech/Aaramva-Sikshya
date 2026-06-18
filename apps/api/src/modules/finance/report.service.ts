@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { getCurrentFiscalYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
@@ -161,12 +162,24 @@ export class ReportService {
   async getStudentLedger(
     studentId: string,
     academicYearId: string,
+    callerId?: string,
+    callerRole?: Role,
   ): Promise<{
     student: { id: string; admissionNumber: string; fullName: string; className: string };
     academicYear: { id: string; name: string };
     invoices: import('./entities/finance.entity').InvoiceResponseDto[];
     summary: { totalInvoiced: number; totalPaid: number; totalBalance: number };
   }> {
+    if (callerRole === Role.PARENT && callerId) {
+      const children = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
+        callerId,
+      );
+      if (!children.some((c) => c.student_id === studentId)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+
     const studentRows = await this.tenantPrisma.query<{
       id: string;
       admission_number: string;

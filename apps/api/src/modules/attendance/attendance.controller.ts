@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -19,7 +20,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { StudentAttendanceService } from './student-attendance.service';
 import { StaffAttendanceService } from './staff-attendance.service';
 import { LeaveService } from './leave.service';
-import { BulkStudentAttendanceDto, GetAttendanceQueryDto, GetSectionReportQueryDto } from './dto/student-attendance.dto';
+import { BulkStudentAttendanceDto, GetAttendanceQueryDto, GetSectionReportQueryDto, GetStudentHistoryQueryDto } from './dto/student-attendance.dto';
 import { BulkStaffAttendanceDto, GetStaffAttendanceQueryDto } from './dto/staff-attendance.dto';
 import { ApplyLeaveDto, GetLeaveQueryDto, ReviewLeaveDto } from './dto/leave.dto';
 
@@ -73,12 +74,23 @@ export class AttendanceController {
   }
 
   @Get('students/:studentId/summary')
-  @Roles(...TEACHER_AND_ABOVE)
+  @Roles(Role.PARENT, ...TEACHER_AND_ABOVE)
   getStudentSummary(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Query('academicYearId', ParseUUIDPipe) academicYearId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.studentAttendanceService.getStudentSummary(studentId, academicYearId);
+    return this.studentAttendanceService.getStudentSummary(studentId, academicYearId, user.userId, user.role);
+  }
+
+  @Get('students/:studentId/history')
+  @Roles(Role.PARENT, ...TEACHER_AND_ABOVE)
+  getStudentHistory(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Query() query: GetStudentHistoryQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studentAttendanceService.getStudentHistory(studentId, query, user.userId, user.role);
   }
 
   @Get('students')
@@ -96,6 +108,27 @@ export class AttendanceController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.staffAttendanceService.bulkMark(dto, user.userId);
+  }
+
+  // Self-scoped — declared before parameterised routes to win routing priority
+
+  @Get('staff/my/summary')
+  @Roles(...TEACHER_AND_ABOVE)
+  getMyStaffSummary(
+    @Query('year', ParseIntPipe) year: number,
+    @Query('month', ParseIntPipe) month: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.staffAttendanceService.getStaffSummary(user.userId, year, month);
+  }
+
+  @Get('staff/my')
+  @Roles(...TEACHER_AND_ABOVE)
+  getMyStaffAttendance(
+    @Query() query: GetStaffAttendanceQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.staffAttendanceService.getByQuery({ ...query, userId: user.userId });
   }
 
   @Get('staff/:userId/summary')
@@ -123,7 +156,7 @@ export class AttendanceController {
     ...TEACHER_AND_ABOVE,
   )
   applyLeave(@Body() dto: ApplyLeaveDto, @CurrentUser() user: AuthUser) {
-    return this.leaveService.applyLeave(dto, user.userId);
+    return this.leaveService.applyLeave(dto, user.userId, user.role);
   }
 
   @Get('leave')

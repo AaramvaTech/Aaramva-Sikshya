@@ -241,6 +241,27 @@ export function toExamScheduleResponse(row: ExamScheduleRow): ExamScheduleRespon
   };
 }
 
+export interface MyExamScheduleRow extends ExamScheduleRow {
+  exam_type_name: string;
+  subject_name: string;
+  class_name: string;
+}
+
+export interface MyExamScheduleDto extends ExamScheduleResponseDto {
+  examTypeName: string;
+  subjectName: string;
+  className: string;
+}
+
+export function toMyExamScheduleResponse(row: MyExamScheduleRow): MyExamScheduleDto {
+  return {
+    ...toExamScheduleResponse(row),
+    examTypeName: row.exam_type_name,
+    subjectName: row.subject_name,
+    className: row.class_name,
+  };
+}
+
 export interface MarksResponseDto {
   id: string;
   examScheduleId: string;

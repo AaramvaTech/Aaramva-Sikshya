@@ -1,7 +1,8 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TimetableService } from '../timetable.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { Role } from '../../common/enums/role.enum';
 
 const mockSlotRow = {
   id: 'slot-1',
@@ -162,6 +163,106 @@ describe('TimetableService', () => {
       expect(result.schedule[2]).toHaveLength(1);
       expect(result.schedule[0]).toHaveLength(0);
       expect(result.schedule[1][0].subject.name).toBe('Math');
+    });
+  });
+
+  describe('getMyTimetable()', () => {
+    it('delegates to getTeacherTimetable using the callerʼs userId', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        {
+          ...mockSlotRow,
+          day_of_week: 1,
+          period_number: 2,
+          subject_name: 'English',
+          subject_code: 'ENG',
+          teacher_full_name: 'Sita Rai',
+          section_name: 'B',
+          class_id: 'class-2',
+          class_name: 'Grade 9',
+        },
+      ]);
+
+      const result = await service.getMyTimetable('user-teacher-1');
+
+      const [sql, userId] = (tenantPrisma.query as jest.Mock).mock.calls[0] as [string, string];
+      expect(sql).toContain('teacher_id = $1::uuid');
+      expect(userId).toBe('user-teacher-1');
+      expect(result.teacherId).toBe('user-teacher-1');
+      expect(result.schedule[1]).toHaveLength(1);
+    });
+  });
+
+  describe('getMySections()', () => {
+    it('returns sections from the union of class-teacher role and timetable slots', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { section_id: 'sec-1', section_name: 'A', class_name: 'Grade 10', class_id: 'cls-1' },
+        { section_id: 'sec-2', section_name: 'B', class_name: 'Grade 10', class_id: 'cls-1' },
+        { section_id: 'sec-3', section_name: 'A', class_name: 'Grade 11', class_id: 'cls-2' },
+      ]);
+
+      const result = await service.getMySections('user-1');
+
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual({ sectionId: 'sec-1', sectionName: 'A', className: 'Grade 10', classId: 'cls-1' });
+      expect(result[2]).toEqual({ sectionId: 'sec-3', sectionName: 'A', className: 'Grade 11', classId: 'cls-2' });
+    });
+
+    it('SQL uses DISTINCT and passes userId once for both clauses via $1', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { section_id: 'sec-1', section_name: 'A', class_name: 'Grade 10', class_id: 'cls-1' },
+      ]);
+
+      await service.getMySections('teacher-uuid');
+
+      const [sql, userId] = (tenantPrisma.query as jest.Mock).mock.calls[0] as [string, string];
+      expect(sql).toContain('DISTINCT');
+      expect(sql).toContain('class_teacher_id = $1::uuid');
+      expect(sql).toContain('teacher_id = $1::uuid');
+      expect(userId).toBe('teacher-uuid');
+    });
+
+    it('returns an empty array when the teacher has no sections', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      const result = await service.getMySections('new-teacher-uuid');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('IDOR protection — PARENT role', () => {
+    it('getSectionTimetable throws ForbiddenException when no child of parent is enrolled in the section', async () => {
+      // enrollment check returns no matching student
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(
+        service.getSectionTimetable('other-section', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getSectionTimetable proceeds when parent has a child enrolled in the section', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'child-uuid' }])       // IDOR enrollment check passes
+        .mockResolvedValueOnce([{                             // timetable slots query
+          ...mockSlotRow,
+          subject_name: 'Math', subject_code: 'MTH',
+          teacher_full_name: 'Ram Sharma',
+          section_name: 'A', class_name: 'Grade 10',
+        }]);
+
+      const result = await service.getSectionTimetable('sec-1', 'parent-uuid', Role.PARENT);
+
+      // schedule is a Record<dayOfWeek, SlotItemDto[]>; day 1 has 1 slot from mockSlotRow
+      expect(result.schedule[1]).toHaveLength(1);
+    });
+
+    it('getSectionTimetable skips IDOR check for non-PARENT roles', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // only the slots query
+
+      const result = await service.getSectionTimetable('sec-1', 'teacher-uuid', Role.TEACHER);
+
+      // empty slots → all days are empty arrays
+      expect(result.schedule[0]).toHaveLength(0);
     });
   });
 });

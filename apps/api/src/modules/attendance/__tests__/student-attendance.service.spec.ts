@@ -1,10 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { StudentAttendanceService } from '../student-attendance.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StudentAttendanceStatus } from '../dto/student-attendance.dto';
+import { Role } from '../../common/enums/role.enum';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -83,10 +84,12 @@ describe('StudentAttendanceService', () => {
 
   describe('bulkMark()', () => {
     it('inserts N records for N students in a section', async () => {
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
-        { id: 'student-1' },
-        { id: 'student-2' },
-      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])               // section name lookup
+        .mockResolvedValueOnce([                                       // enrollment check
+          { id: 'student-1', section_id: 'section-1' },
+          { id: 'student-2', section_id: 'section-1' },
+        ]);
       mockTx.$executeRawUnsafe.mockResolvedValue(1);
 
       await service.bulkMark(baseBulkDto, 'teacher-1');
@@ -95,7 +98,9 @@ describe('StudentAttendanceService', () => {
     });
 
     it('is idempotent — SQL uses ON CONFLICT DO UPDATE', async () => {
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'student-1' }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])               // section name lookup
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]); // enrollment
       mockTx.$executeRawUnsafe.mockResolvedValue(1);
 
       await service.bulkMark(
@@ -110,7 +115,9 @@ describe('StudentAttendanceService', () => {
 
     it('throws BadRequestException if a studentId is not enrolled in the section', async () => {
       // Only student-1 returned as enrolled; student-not-in-section is missing
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'student-1' }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])               // section name lookup
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]); // enrollment
 
       await expect(
         service.bulkMark(
@@ -133,7 +140,9 @@ describe('StudentAttendanceService', () => {
     });
 
     it("emits 'attendance.absent' event for absent students", async () => {
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'student-1' }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])               // section name lookup
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]); // enrollment
       mockTx.$executeRawUnsafe.mockResolvedValue(1);
 
       await service.bulkMark(
@@ -156,8 +165,26 @@ describe('StudentAttendanceService', () => {
       );
     });
 
+    it('records marked_by = caller userId on every attendance row', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]);
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+
+      await service.bulkMark(
+        { ...baseBulkDto, records: [{ studentId: 'student-1', status: StudentAttendanceStatus.PRESENT }] },
+        'marking-teacher-uuid',
+      );
+
+      const [sql, ...params] = (mockTx.$executeRawUnsafe as jest.Mock).mock.calls[0] as [string, ...unknown[]];
+      expect(sql).toContain('marked_by');
+      expect(params).toContain('marking-teacher-uuid');
+    });
+
     it('does not emit event when no students are absent', async () => {
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'student-1' }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section A' }])               // section name lookup
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]); // enrollment
       mockTx.$executeRawUnsafe.mockResolvedValue(1);
 
       await service.bulkMark(
@@ -204,6 +231,78 @@ describe('StudentAttendanceService', () => {
       expect(result.totalWorkingDays).toBe(60);
       // (50 + 0) / 60 * 100 = 83.3
       expect(result.attendancePercent).toBe(83.3);
+    });
+  });
+
+  describe('soft-scope policy', () => {
+    it('a TEACHER not assigned to a section can still call bulkMark — no 403 thrown', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section X' }])               // section name lookup
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]); // enrollment
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+
+      await expect(
+        service.bulkMark(
+          { ...baseBulkDto, records: [{ studentId: 'student-1', status: StudentAttendanceStatus.PRESENT }] },
+          'some-cover-teacher-uuid',
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it('records the substitute teacherʼs userId in marked_by even for a non-assigned section', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: 'Section X' }])
+        .mockResolvedValueOnce([{ id: 'student-1', section_id: 'section-1' }]);
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+
+      await service.bulkMark(
+        { ...baseBulkDto, records: [{ studentId: 'student-1', status: StudentAttendanceStatus.PRESENT }] },
+        'substitute-teacher-uuid',
+      );
+
+      const [, ...params] = (mockTx.$executeRawUnsafe as jest.Mock).mock.calls[0] as [string, ...unknown[]];
+      expect(params).toContain('substitute-teacher-uuid');
+    });
+  });
+
+  describe('IDOR protection — PARENT role', () => {
+    it('getStudentSummary throws ForbiddenException when student is not the caller\'s child', async () => {
+      // guardians query returns no children for this parent
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(
+        service.getStudentSummary('other-student', 'year-1', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStudentSummary allows a PARENT whose child matches the requested student', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ student_id: 'child-uuid' }]) // IDOR check returns a match
+        .mockResolvedValueOnce([{ id: 'child-uuid', full_name: 'Aarav Sharma', section_id: 'sec-1' }])
+        .mockResolvedValueOnce([{ status: 'PRESENT', count: '40' }])
+        .mockResolvedValueOnce([{ working_days: '50' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getStudentSummary('child-uuid', 'year-1', 'parent-uuid', Role.PARENT);
+
+      expect(result.present).toBe(40);
+    });
+
+    it('getStudentHistory throws ForbiddenException when student is not the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(
+        service.getStudentHistory('other-student', {}, 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStudentHistory skips IDOR check when callerRole is not PARENT', async () => {
+      // No guardians query should be issued for a TEACHER
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);  // getByQuery result
+
+      await expect(
+        service.getStudentHistory('any-student', {}, 'teacher-uuid', Role.TEACHER),
+      ).resolves.toBeDefined();
     });
   });
 });

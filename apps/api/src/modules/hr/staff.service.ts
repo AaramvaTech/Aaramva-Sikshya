@@ -164,6 +164,21 @@ export class StaffService {
     return toStaffResponse(rows[0]);
   }
 
+  async getMyProfile(userId: string): Promise<StaffResponseDto> {
+    const rows = await this.tenantPrisma.query<StaffProfileRow>(
+      `SELECT sp.*, u.email, u.first_name, u.last_name, u.role, u.is_active,
+              d.name AS department_name, des.title AS designation_title
+         FROM staff_profiles sp
+         JOIN users u ON u.id = sp.user_id
+         LEFT JOIN departments d ON d.id = sp.department_id AND d.deleted_at IS NULL
+         LEFT JOIN designations des ON des.id = sp.designation_id AND des.deleted_at IS NULL
+         WHERE sp.user_id = $1::uuid AND sp.deleted_at IS NULL`,
+      userId,
+    );
+    if (!rows[0]) throw new NotFoundException('Staff profile not found for this user');
+    return toStaffResponse(rows[0]);
+  }
+
   async updateStaff(id: string, dto: UpdateStaffDto): Promise<StaffResponseDto> {
     const existing = await this.tenantPrisma.query<StaffProfileRow>(
       `SELECT * FROM staff_profiles WHERE id = $1::uuid AND deleted_at IS NULL`,

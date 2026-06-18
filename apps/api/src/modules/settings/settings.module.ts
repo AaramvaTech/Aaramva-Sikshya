@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { BrandingModule } from '../branding/branding.module';
 import { SuperAdminModule } from '../super-admin/super-admin.module';
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 
 @Module({
-  imports: [SuperAdminModule],
+  imports: [SuperAdminModule, BrandingModule],
   controllers: [SettingsController],
   providers: [SettingsService],
 })

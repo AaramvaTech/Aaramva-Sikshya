@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentService } from '../student.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
@@ -16,6 +16,7 @@ const mockStudentRow = {
   id: 'sid-1',
   tenant_id: 'tid-1',
   student_id: '2081-0001',
+  user_id: null,
   first_name: 'Aarav',
   last_name: 'Sharma',
   date_of_birth: new Date('2010-05-15'),
@@ -359,6 +360,57 @@ describe('StudentService', () => {
       (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(0);
 
       await expect(service.removeStudent('unknown')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('createStudentAccount()', () => {
+    const accountDto = { email: 'aarav@school.edu.np', password: 'SecurePass1' };
+
+    it('creates a STUDENT user and links it to the student record', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'sid-1' }]); // pre-check
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'sid-1', user_id: null, first_name: 'Aarav', last_name: 'Sharma' }]) // FOR UPDATE
+        .mockResolvedValueOnce([]) // email conflict check → empty
+        .mockResolvedValueOnce([{ id: 'uid-new', email: accountDto.email }]); // INSERT users
+      mockTx.$executeRawUnsafe.mockResolvedValueOnce(1); // UPDATE students SET user_id
+
+      const result = await service.createStudentAccount('sid-1', accountDto as any);
+
+      expect(result.linked).toBe(true);
+      expect(result.userId).toBe('uid-new');
+      expect(result.email).toBe(accountDto.email);
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('user_id'),
+        'uid-new',
+        'sid-1',
+      );
+    });
+
+    it('throws NotFoundException if student does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // pre-check → not found
+
+      await expect(service.createStudentAccount('bad-id', accountDto as any))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ConflictException if student already has a linked account', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'sid-1' }]); // pre-check
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { id: 'sid-1', user_id: 'existing-uid', first_name: 'Aarav', last_name: 'Sharma' },
+      ]); // FOR UPDATE → already linked
+
+      await expect(service.createStudentAccount('sid-1', accountDto as any))
+        .rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException if email is already in use', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'sid-1' }]); // pre-check
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'sid-1', user_id: null, first_name: 'Aarav', last_name: 'Sharma' }]) // FOR UPDATE
+        .mockResolvedValueOnce([{ id: 'other-uid' }]); // email already taken
+
+      await expect(service.createStudentAccount('sid-1', accountDto as any))
+        .rejects.toThrow(ConflictException);
     });
   });
 });

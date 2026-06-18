@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { BrandingModule } from '../branding/branding.module';
 import { PublicPrismaService } from './public-prisma.service';
 import { TenantProvisioningService } from './tenant-provisioning.service';
 import { PlatformAuthService } from './platform-auth.service';
@@ -16,6 +17,7 @@ import { SuperAdminController } from './super-admin.controller';
   imports: [
     PassportModule,
     JwtModule.register({}),
+    BrandingModule,
   ],
   controllers: [SuperAdminController],
   providers: [

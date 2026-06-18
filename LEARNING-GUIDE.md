@@ -441,3 +441,147 @@ Using `.catch(console.warn)` means: try to register, and if anything goes wrong,
 2. Add `EXPO_PUBLIC_PROJECT_ID=your-eas-project-id` to `apps/mobile/.env`
 3. Build a development build or production build (not Expo Go): `eas build --profile development`
 4. Run that native build on your device — push tokens will work
+
+---
+
+## Session 21 — IDOR vulnerabilities and timezone-aware "today"
+
+### Concept E — What is an IDOR and why does it matter?
+
+**What does IDOR stand for?**
+Insecure Direct Object Reference. It's a type of security vulnerability where a client can access or modify data belonging to another user by supplying a different ID.
+
+**A concrete example from this codebase:**
+Before Session 20.5, the "apply leave" endpoint (`POST /attendance/leave`) accepted a `studentId` in the request body. The intent was: the caller says "file leave for student X." But the endpoint didn't check whether the caller *is* student X or is related to student X. Any STUDENT user with a valid login token could put any other student's UUID in the body and file leave on their behalf. That's an IDOR — the `studentId` is a "direct reference to an object" and access was not properly restricted.
+
+**How it was fixed:**
+When the caller role is `STUDENT`, the server now ignores any `studentId` in the body entirely. Instead it runs:
+```sql
+SELECT id FROM students WHERE user_id = $1 AND deleted_at IS NULL
+```
+where `$1` is the `userId` from the JWT token. The token cannot be forged (it's signed with a secret only the server knows), so this lookup always returns *the caller's own student record*. The client never gets to choose which student record is affected.
+
+When the caller is `PARENT`, a different check applies: the parent can only file leave for students where their user account appears in the `guardians` table (`guardians.user_id = parent_user_id`). Supplying a studentId not in their guardian list returns 403.
+
+**The general rule:** For any action that affects a specific resource, derive the resource identity from the authenticated token on the server — never trust an ID supplied by the client without verifying ownership.
+
+**The /students/me endpoints follow the same principle:**
+`GET /students/me` does not accept a `studentId` query param. It always resolves:
+`token.userId → students.user_id → student row`. A STUDENT user physically cannot see another student's profile or attendance through these endpoints.
+
+---
+
+### Concept F — Why "today" must be timezone-aware in Nepal
+
+**The problem with `new Date()` in a Node.js server:**
+Node.js runs on UTC by default. `new Date()` gives you the current UTC time. Nepal is UTC+05:45 — five hours and forty-five minutes ahead. That means:
+
+- At 11:00 PM UTC, it is already 4:45 AM the *next day* in Nepal.
+- At 6:00 AM UTC on a Sunday, it is already 11:45 AM on Sunday in Nepal.
+
+If you wrote `new Date().toISOString().split('T')[0]` on the server to get "today's date" and your server clock is UTC, you'd get the wrong date in Nepal for a 5:45-hour window every night.
+
+**This matters for the timetable endpoint:**
+`GET /students/me/timetable/today` returns the student's class schedule for *today*. "Today" must mean today in Nepal, not today in UTC. If the school server ran this in UTC, at 11 PM Nepal time (5:15 PM UTC) a student would still see Saturday's timetable even though it's already 11 PM Saturday in Nepal and Sunday school starts in 7 hours.
+
+**The fix — `todayInNepal()` in `student-me.service.ts`:**
+```typescript
+const NEPAL_OFFSET_MS = 345 * 60 * 1000;  // 345 minutes = 5h45m
+
+export function todayInNepal(): { dateAd: string; dayOfWeek: number } {
+  const nowNepal = new Date(Date.now() + NEPAL_OFFSET_MS);
+  const dateAd = nowNepal.toISOString().split('T')[0];
+  const dayOfWeek = nowNepal.getUTCDay();
+  return { dateAd, dayOfWeek };
+}
+```
+
+`Date.now() + NEPAL_OFFSET_MS` shifts the UTC timestamp to Nepal local time. Then `.toISOString()` formats it as if it were UTC, but since we already added the offset, the date portion reflects Nepal's current date. `.getUTCDay()` returns the day of week (0=Sunday, 6=Saturday) in that adjusted time — which is the Nepal local day.
+
+**Why `Date.now()` instead of `new Date()`?**
+`new Date()` cannot be easily mocked in Jest — it creates a real Date object. `Date.now()` is a static method that can be intercepted with `jest.spyOn(Date, 'now').mockReturnValue(timestamp)`. This lets unit tests simulate any point in time, including the exact Nepal midnight boundary (2026-06-13T18:15:00Z), without needing to run the test at that exact moment.
+
+**School week in Nepal:**
+Nepal schools run Sunday through Friday. Saturday is the weekly holiday. So the timetable endpoint returns `isSchoolDay: false` when `dayOfWeek === 6` (Saturday in Nepal), without even querying the database.
+
+---
+
+## Session 22 — Student Mobile Screens (Dashboard + Attendance Calendar)
+
+### Concept A — Building a BS-month calendar grid when the package has no "days-in-month" helper (and what to do when it does)
+
+The spec said: *if there is NO `daysInBsMonth` export, derive month length via AD date-diff: diff between `bsToAd(y, m, 1)` and `bsToAd(y, m+1, 1)`.* Before writing any code, we read the actual package exports and found `daysInBsMonth` already exists. The lesson: **always read before assuming**. The fallback technique is still worth understanding:
+
+**The AD-date-diff trick (for reference, in case a future package doesn't export this):**
+```typescript
+const firstOfMonth = bsToAd({ year, month, day: 1 });
+const firstOfNext  = month === 12
+  ? bsToAd({ year: year + 1, month: 1, day: 1 })
+  : bsToAd({ year, month: month + 1, day: 1 });
+const days = Math.round(
+  (firstOfNext.getTime() - firstOfMonth.getTime()) / 86400000
+);
+```
+Because BS calendar month lengths are irregular (28–32 days, not a fixed pattern), you cannot use a formula. Converting to AD and measuring the gap gives the exact count. Handle the Chaitra→Baishakh year-rollover by checking `month === 12`.
+
+**The actual calendar grid algorithm (what we used):**
+```typescript
+const daysInMonth = daysInBsMonth(year, month);         // e.g. 31
+const firstAd     = bsToAd({ year, month, day: 1 });
+const weekdayOfFirst = firstAd.getDay();                // 0=Sun … 6=Sat
+
+// Build cell array: leading blanks then day numbers
+const cells: (number | null)[] = [
+  ...Array(weekdayOfFirst).fill(null),                  // blank slots
+  ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+];
+
+// Render in rows of 7 (Nepal week is Sun–Sat)
+for (let i = 0; i < cells.length; i += 7) {
+  const row = cells.slice(i, i + 7);
+  // render each cell
+}
+```
+
+`getDay()` on a JavaScript `Date` returns 0=Sunday, which matches Nepal's Sunday-first week — no offset adjustment needed.
+
+**Today's cell**: compare the cell's `{ year, month, day }` against `todayBs()` and add a green border.
+
+**Saturday column (index 6)**: style with amber background/text to mark the weekend, regardless of whether there is attendance data.
+
+---
+
+### Concept B — Why "view attendance by BS month" requires converting month bounds to an AD date range before querying
+
+The API stores all dates in **AD ISO format** (`dateAd: "2026-04-14"`). The query endpoint is:
+```
+GET /students/me/attendance/history?fromDate=2026-04-14&toDate=2026-05-13
+```
+
+The user is browsing a **BS month** — say Baisakh 2083. But the server knows nothing about BS months; it filters rows by their `dateAd` column. So we must translate the BS month boundaries into the equivalent AD start and end dates:
+
+```typescript
+const fromAd = bsToAd({ year, month, day: 1 });          // first day of BS month → AD
+
+const nextBs = month === 12
+  ? { year: year + 1, month: 1, day: 1 }                  // Chaitra → Baisakh next year
+  : { year, month: month + 1, day: 1 };
+const toAdRaw = bsToAd(nextBs);
+toAdRaw.setDate(toAdRaw.getDate() - 1);                   // one day before next month's first day
+
+const fromDate = fromAd.toISOString().split('T')[0];      // "2026-04-14"
+const toDate   = toAdRaw.toISOString().split('T')[0];     // "2026-05-13"
+```
+
+This pattern applies everywhere you need to filter server data by a BS period: convert the BS period boundaries to AD, pass them as query params, and convert individual record dates back to BS at display time.
+
+**Why not just fetch everything and filter client-side?**
+A student might have 200+ attendance records across a year. Fetching all of them for a single month view wastes bandwidth and makes the screen slow. The `fromDate`/`toDate` filter lets the server return only the ~30 records that matter.
+
+**The response extraction discipline:**
+The attendance history endpoint is paginated (`ResponseInterceptor` wraps in `{ success, data }` and the service adds `{ data: [], meta: {} }` inside), so the full path is:
+- `response.data` → `{ success: true, data: { data: [...], meta: {} } }`
+- `response.data.data` → `{ data: [...], meta: {} }`  ← this is what the hook returns
+- `hook.data?.data ?? []` → the actual array of attendance records
+
+Getting this wrong (using `hook.data` directly instead of `hook.data?.data`) returns the `{ data, meta }` wrapper object, not the array — which is the class of bug that has appeared before in the web app.

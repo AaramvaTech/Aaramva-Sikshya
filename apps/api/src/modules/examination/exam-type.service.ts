@@ -15,7 +15,7 @@ export class ExamTypeService {
   async create(dto: CreateExamTypeDto): Promise<ExamTypeResponseDto & { totalWeight: number; isComplete: boolean }> {
     const rows = await this.tenantPrisma.query<ExamTypeRow>(
       `INSERT INTO exam_types (name, weight_percent, academic_year_id, grading_scale_id, order_index)
-         VALUES ($1, $2, $3::uuid, $4, $5)
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5)
          RETURNING *`,
       dto.name,
       dto.weightPercent,

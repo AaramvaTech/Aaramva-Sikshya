@@ -1,9 +1,10 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InvoiceService } from '../invoice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { Role } from '../../common/enums/role.enum';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -246,6 +247,34 @@ describe('InvoiceService', () => {
       expect(result.generated).toBe(2);
       expect(result.skipped).toBe(1);
       expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe('IDOR protection — PARENT role', () => {
+    it('getStudentFeeAssignments throws ForbiddenException when student is not the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+
+      await expect(
+        service.getStudentFeeAssignments('other-student', undefined, 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStudentFeeAssignments allows access when the student is the caller\'s child', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ student_id: 'child-uuid' }]) // guardians — match found
+        .mockResolvedValueOnce([]);                             // fee assignments query
+
+      const result = await service.getStudentFeeAssignments('child-uuid', undefined, 'parent-uuid', Role.PARENT);
+
+      expect(result).toEqual([]);
+    });
+
+    it('getStudentFeeAssignments skips IDOR check for non-PARENT roles', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // fee assignments query only
+
+      const result = await service.getStudentFeeAssignments('any-student', undefined, 'teacher-uuid', Role.TEACHER);
+
+      expect(result).toEqual([]);
     });
   });
 
