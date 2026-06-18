@@ -24,6 +24,9 @@ export const AARAMVA_COLORS = {
 // No semantic token exists for this tint; centralized here so no screen holds a hex literal.
 export const PLACEHOLDER_ICON = '#d1d5db';
 
+// Saturday calendar highlight (Nepal weekend). Documented exception — amber tint, no token.
+export const SATURDAY_HIGHLIGHT = { bg: '#fef9ee', text: '#d97706' };
+
 // Decorative on-primary accent tints used on the gradient header (sit on the brand green).
 // Documented exception: a brand-ramp detail with no single-token equivalent.
 export const ON_PRIMARY_ACCENTS = {

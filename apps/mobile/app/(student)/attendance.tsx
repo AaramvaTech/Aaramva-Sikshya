@@ -10,6 +10,7 @@ import { STATUS_CONFIG } from '../../lib/attendance';
 import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
+import { SATURDAY_HIGHLIGHT, useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // 16px padding each side, 16px card padding each side = 64px total horizontal offset
@@ -38,6 +39,9 @@ interface CalendarGridProps {
 }
 
 function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
+  // Rules of Hooks: unconditional call before any early return
+  const c = useThemeColors();
+
   const todayBsDate = todayBs();
   const { year, month } = viewMonth;
 
@@ -70,8 +74,8 @@ function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
   if (isLoading) {
     return (
       <View style={styles.calendarLoadingContainer}>
-        <ActivityIndicator size="small" color="#065f46" />
-        <Text style={styles.calendarLoadingText}>Loading calendar...</Text>
+        <ActivityIndicator size="small" color={c.primary} />
+        <Text style={styles.calendarLoadingText} className="text-muted-foreground">Loading calendar...</Text>
       </View>
     );
   }
@@ -87,9 +91,11 @@ function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
       <View style={styles.calendarRow}>
         {DAY_HEADERS.map((day, idx) => (
           <View key={day} style={[styles.dayHeader, idx === 6 && styles.saturdayHeader]}>
-            <Text style={[styles.dayHeaderText, idx === 6 && styles.saturdayHeaderText]}>
-              {day}
-            </Text>
+            {idx !== 6 ? (
+              <Text style={styles.dayHeaderText} className="text-muted-foreground">{day}</Text>
+            ) : (
+              <Text style={[styles.dayHeaderText, { color: SATURDAY_HIGHLIGHT.text }]}>{day}</Text>
+            )}
           </View>
         ))}
       </View>
@@ -111,8 +117,8 @@ function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
             const cellBg = cfg
               ? cfg.bg
               : isSaturday
-              ? '#fef9ee'
-              : '#f3f4f6';
+              ? SATURDAY_HIGHLIGHT.bg
+              : c.surfaceMuted;
 
             return (
               <View
@@ -120,14 +126,18 @@ function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
                 style={[
                   styles.cell,
                   { backgroundColor: cellBg },
-                  today && styles.todayCell,
                 ]}
+                className={today ? 'border-2 border-primary' : undefined}
               >
                 <Text
                   style={[
                     styles.cellDayNum,
-                    cfg ? { color: cfg.color } : isSaturday ? { color: '#d97706' } : styles.cellDayNumDefault,
-                    today && styles.todayText,
+                    cfg
+                      ? { color: cfg.color }
+                      : isSaturday
+                      ? { color: SATURDAY_HIGHLIGHT.text }
+                      : { color: c.mutedForeground },
+                    today ? { color: c.primary } : undefined,
                   ]}
                 >
                   {dayNum}
@@ -166,7 +176,11 @@ function MonthlySummaryStrip({ counts }: { counts: MonthlyCounts }) {
       {items.map(({ key, label }, idx) => {
         const cfg = STATUS_CONFIG[key];
         return (
-          <View key={key} style={[styles.summaryItem, idx > 0 && styles.summaryItemBorder]}>
+          <View
+            key={key}
+            style={[styles.summaryItem]}
+            className={idx > 0 ? 'border-l border-border' : undefined}
+          >
             <Text style={[styles.summaryCode, { color: cfg.color }]}>{label}</Text>
             <Text style={[styles.summaryCount, { color: cfg.color }]}>{counts[key]}</Text>
           </View>
@@ -186,13 +200,13 @@ function Legend() {
         return (
           <View key={key} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: cfg.bg, borderColor: cfg.dot }]} />
-            <Text style={styles.legendLabel}>{cfg.label}</Text>
+            <Text style={styles.legendLabel} className="text-foreground">{cfg.label}</Text>
           </View>
         );
       })}
       <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: '#fef9ee', borderColor: '#d97706' }]} />
-        <Text style={styles.legendLabel}>Saturday</Text>
+        <View style={[styles.legendDot, { backgroundColor: SATURDAY_HIGHLIGHT.bg, borderColor: SATURDAY_HIGHLIGHT.text }]} />
+        <Text style={styles.legendLabel} className="text-foreground">Saturday</Text>
       </View>
     </View>
   );
@@ -206,6 +220,8 @@ export default function StudentAttendance() {
     const t = todayBs();
     return { year: t.year, month: t.month, day: 1 };
   });
+
+  const c = useThemeColors();
 
   const summaryResult = useMyAttendanceSummary();
 
@@ -263,36 +279,37 @@ export default function StudentAttendance() {
   return (
     <ScrollView
       style={styles.root}
+      className="bg-background"
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#065f46" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />
       }
     >
       {/* ── Gradient header with month nav ── */}
       <LinearGradient
-        colors={['#064e3b', '#065f46', '#047857']}
+        colors={headerGradient(c.primary) as [string, string, string]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         {annualPercent !== null && (
-          <Text style={styles.headerSubtitle}>
+          <Text style={[styles.headerSubtitle, { color: ON_PRIMARY_ACCENTS.bright }]}>
             Annual attendance: {annualPercent}%
           </Text>
         )}
-        <Text style={styles.headerTitle}>My Attendance</Text>
+        <Text style={styles.headerTitle} className="text-primary-foreground">My Attendance</Text>
 
         {/* Month navigation */}
-        <View style={styles.monthNav}>
+        <View style={styles.monthNav} className="bg-white/15">
           <TouchableOpacity
             onPress={() => setViewMonth(prevMonthOf(viewMonth))}
             style={styles.navBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chevron-back" size={20} color="white" />
+            <Ionicons name="chevron-back" size={20} color={c.primaryForeground} />
           </TouchableOpacity>
 
-          <Text style={styles.monthNavTitle}>
+          <Text style={styles.monthNavTitle} className="text-primary-foreground">
             {monthName} {viewMonth.year}
           </Text>
 
@@ -301,7 +318,7 @@ export default function StudentAttendance() {
             style={styles.navBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chevron-forward" size={20} color="white" />
+            <Ionicons name="chevron-forward" size={20} color={c.primaryForeground} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -310,8 +327,8 @@ export default function StudentAttendance() {
       <View style={styles.body}>
 
         {/* Calendar card */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Attendance Calendar</Text>
+        <View style={styles.card} className="bg-surface">
+          <Text style={styles.cardLabel} className="text-muted-foreground">Attendance Calendar</Text>
 
           <CalendarGrid
             viewMonth={viewMonth}
@@ -321,30 +338,30 @@ export default function StudentAttendance() {
 
           {historyResult.isError && !historyResult.isLoading && (
             <View style={styles.errorRow}>
-              <Text style={styles.errorText}>Failed to load attendance data.</Text>
-              <TouchableOpacity onPress={() => historyResult.refetch()} style={styles.retryBtn}>
-                <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={styles.errorText} className="text-muted-foreground">Failed to load attendance data.</Text>
+              <TouchableOpacity onPress={() => historyResult.refetch()} style={styles.retryBtn} className="bg-primary">
+                <Text style={styles.retryBtnText} className="text-primary-foreground">Retry</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Legend card */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Legend</Text>
+        <View style={styles.card} className="bg-surface">
+          <Text style={styles.cardLabel} className="text-muted-foreground">Legend</Text>
           <Legend />
         </View>
 
         {/* Monthly summary strip card */}
-        <View style={[styles.card, styles.summaryCard]}>
-          <Text style={styles.cardLabel}>This Month</Text>
+        <View style={[styles.card, styles.summaryCard]} className="bg-surface">
+          <Text style={styles.cardLabel} className="text-muted-foreground">This Month</Text>
           <MonthlySummaryStrip counts={monthlyCounts} />
         </View>
 
         {/* Annual summary line from summary endpoint */}
         {summaryResult.data && (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>Annual Overview</Text>
+          <View style={styles.card} className="bg-surface">
+            <Text style={styles.cardLabel} className="text-muted-foreground">Annual Overview</Text>
             <View style={styles.annualRow}>
               {(
                 [
@@ -360,12 +377,12 @@ export default function StudentAttendance() {
                     <Text style={[styles.annualStatNum, { color: cfg.color }]}>
                       {summaryResult.data![key]}
                     </Text>
-                    <Text style={styles.annualStatLabel}>{label}</Text>
+                    <Text style={styles.annualStatLabel} className="text-muted-foreground">{label}</Text>
                   </View>
                 );
               })}
             </View>
-            <Text style={styles.annualWorkingDays}>
+            <Text style={styles.annualWorkingDays} className="text-muted-foreground">
               {summaryResult.data.totalWorkingDays} working days · {summaryResult.data.academicYearName}
             </Text>
           </View>
@@ -381,7 +398,6 @@ export default function StudentAttendance() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f9fafb',
   },
 
   // Header
@@ -391,7 +407,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   headerSubtitle: {
-    color: '#6ee7b7',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -399,7 +414,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerTitle: {
-    color: 'white',
     fontSize: 24,
     fontWeight: '800',
     marginBottom: 20,
@@ -408,7 +422,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -417,7 +430,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   monthNavTitle: {
-    color: 'white',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -433,7 +445,6 @@ const styles = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: 'white',
     borderRadius: 20,
     padding: 16,
     shadowColor: '#000',
@@ -444,7 +455,6 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 11,
-    color: '#6b7280',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -458,7 +468,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   calendarLoadingText: {
-    color: '#9ca3af',
     fontSize: 13,
   },
   calendarRow: {
@@ -477,10 +486,6 @@ const styles = StyleSheet.create({
   dayHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6b7280',
-  },
-  saturdayHeaderText: {
-    color: '#d97706',
   },
   cell: {
     width: CELL_SIZE,
@@ -490,20 +495,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 1,
   },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: '#065f46',
-  },
   cellDayNum: {
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 14,
-  },
-  cellDayNumDefault: {
-    color: '#6b7280',
-  },
-  todayText: {
-    color: '#065f46',
   },
   cellCode: {
     fontSize: 9,
@@ -519,17 +514,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   errorText: {
-    color: '#6b7280',
     fontSize: 13,
   },
   retryBtn: {
-    backgroundColor: '#065f46',
     borderRadius: 10,
     paddingHorizontal: 20,
     paddingVertical: 8,
   },
   retryBtnText: {
-    color: 'white',
     fontWeight: '700',
     fontSize: 13,
   },
@@ -553,7 +545,6 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 12,
-    color: '#374151',
     fontWeight: '500',
   },
 
@@ -569,10 +560,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
-  },
-  summaryItemBorder: {
-    borderLeftWidth: 1,
-    borderLeftColor: '#f3f4f6',
   },
   summaryCode: {
     fontSize: 13,
@@ -601,14 +588,12 @@ const styles = StyleSheet.create({
   },
   annualStatLabel: {
     fontSize: 11,
-    color: '#9ca3af',
     fontWeight: '600',
     marginTop: 2,
   },
   annualWorkingDays: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#9ca3af',
     marginTop: 4,
   },
 });
