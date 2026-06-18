@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, ReactNode } from 'react';
 import { View } from 'react-native';
 import { vars } from 'nativewind';
 import { hexToRgbChannels } from './tokens';
@@ -17,6 +17,9 @@ export const useBranding = () => useContext(ThemeCtx);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding | null>(null);
 
+  const applySchool = useCallback((b: Branding) => setBranding(b), []);
+  const reset = useCallback(() => setBranding(null), []);
+
   const style = useMemo(() => {
     if (!branding?.primaryColor) return undefined;
     return vars({
@@ -25,10 +28,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, [branding]);
 
-  const value = useMemo(
-    () => ({ branding, applySchool: setBranding, reset: () => setBranding(null) }),
-    [branding]
-  );
+  const value = useMemo(() => ({ branding, applySchool, reset }), [branding, applySchool, reset]);
 
   return (
     <ThemeCtx.Provider value={value}>
