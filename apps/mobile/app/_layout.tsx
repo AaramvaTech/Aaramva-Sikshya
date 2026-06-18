@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient';
@@ -43,17 +43,26 @@ export default function RootLayout() {
     }
   }, [status, user?.role, fontsLoaded]);
 
+  // The navigator must be rendered UNCONDITIONALLY — expo-router needs it mounted
+  // to provide navigation context. Swapping it for a loading View leaves router
+  // actions with no navigator to land in ("Couldn't find a navigation context").
+  // Instead, keep <Stack> always mounted and cover it with the loader overlay
+  // until boot + fonts are ready.
+  const showLoader = status === 'booting' || !fontsLoaded;
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ThemeSync />
-        {(status === 'booting' || !fontsLoaded) ? (
-          <View className="flex-1 items-center justify-center">
+        <Stack screenOptions={{ headerShown: false }} />
+        {showLoader && (
+          <View
+            style={StyleSheet.absoluteFill}
+            className="items-center justify-center bg-background"
+          >
             <ActivityIndicator size="large" color="#065f46" />
             <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>
           </View>
-        ) : (
-          <Stack screenOptions={{ headerShown: false }} />
         )}
       </ThemeProvider>
     </QueryClientProvider>
