@@ -1,18 +1,20 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, type ColorValue } from 'react-native';
+import { useThemeColors } from '../../lib/theme/colors';
 
 function TabIcon({ name, color, focused }: {
   name: keyof typeof Ionicons.glyphMap;
   color: ColorValue;
   focused: boolean;
 }) {
+  const c = useThemeColors();
   return (
     <View style={{ alignItems: 'center' }}>
       {focused && (
         <View style={{
           width: 4, height: 4, borderRadius: 2,
-          backgroundColor: '#065f46', marginBottom: 2,
+          backgroundColor: c.primary, marginBottom: 2,
         }} />
       )}
       <Ionicons name={name} size={24} color={color} />
@@ -21,15 +23,16 @@ function TabIcon({ name, color, focused }: {
 }
 
 export default function StudentLayout() {
+  const c = useThemeColors();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#065f46',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: c.primary,
+        tabBarInactiveTintColor: c.mutedForeground,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#f0fdf4',
+          backgroundColor: c.surface,
+          borderTopColor: c.border,
           borderTopWidth: 1,
           paddingBottom: 8,
           paddingTop: 4,

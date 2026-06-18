@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useNotices } from '../../hooks/useStudentMe';
 import type { NoticeItem } from '../../types';
 import { adToBs, formatBs } from 'bs-calendar';
+import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
 const TYPE_CONFIG: Record<string, { bg: string; text: string; icon: keyof typeof Ionicons.glyphMap; label: string }> = {
   GENERAL:     { bg: '#dbeafe', text: '#1d4ed8', icon: 'information-circle', label: 'General'     },
@@ -37,6 +38,7 @@ function timeAgo(dateStr: string): string {
 
 function NoticeCard({ notice }: { notice: NoticeItem }) {
   const [expanded, setExpanded] = useState(false);
+  const c = useThemeColors();
   const cfg = typeConfig(notice.type);
   const date = notice.publishedAt ?? notice.createdAt;
 
@@ -45,11 +47,12 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
       activeOpacity={0.85}
       onPress={() => setExpanded(!expanded)}
       style={{
-        backgroundColor: 'white', borderRadius: 20, marginBottom: 12,
+        borderRadius: 20, marginBottom: 12,
         shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
         overflow: 'hidden',
       }}
+      className="bg-surface"
     >
       {/* Top accent bar */}
       <View style={{ height: 4, backgroundColor: cfg.text }} />
@@ -64,7 +67,7 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
             <Ionicons name={cfg.icon} size={20} color={cfg.text} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 3, lineHeight: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', marginBottom: 3, lineHeight: 20 }} className="text-foreground">
               {notice.title}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -77,14 +80,14 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="time-outline" size={11} color="#9ca3af" />
-                <Text style={{ fontSize: 11, color: '#9ca3af', marginLeft: 3 }}>{timeAgo(date)}</Text>
+                <Ionicons name="time-outline" size={11} color={c.mutedForeground} />
+                <Text style={{ fontSize: 11, marginLeft: 3 }} className="text-muted-foreground">{timeAgo(date)}</Text>
               </View>
             </View>
           </View>
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
-            size={18} color="#9ca3af"
+            size={18} color={c.mutedForeground}
             style={{ marginTop: 2 }}
           />
         </View>
@@ -92,17 +95,18 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
         {/* Body */}
         {expanded ? (
           <View style={{
-            backgroundColor: '#f9fafb', borderRadius: 12, padding: 14,
+            borderRadius: 12, padding: 14,
             borderLeftWidth: 3, borderLeftColor: cfg.text,
-          }}>
-            <Text style={{ fontSize: 14, color: '#374151', lineHeight: 22 }}>
+          }} className="bg-background">
+            <Text style={{ fontSize: 14, lineHeight: 22 }} className="text-foreground">
               {notice.body}
             </Text>
           </View>
         ) : (
           <Text
             numberOfLines={2}
-            style={{ fontSize: 13, color: '#6b7280', lineHeight: 20 }}
+            style={{ fontSize: 13, lineHeight: 20 }}
+            className="text-muted-foreground"
           >
             {notice.body}
           </Text>
@@ -121,6 +125,7 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
 export default function StudentNotices() {
   const [refreshing, setRefreshing] = useState(false);
   const { data: notices, isLoading, isError, refetch } = useNotices();
+  const c = useThemeColors();
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -130,23 +135,24 @@ export default function StudentNotices() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#065f46" />
-        <Text style={{ color: '#9ca3af', marginTop: 12, fontSize: 14 }}>Loading notices...</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} className="bg-background">
+        <ActivityIndicator size="large" color={c.primary} />
+        <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">Loading notices...</Text>
       </View>
     );
   }
 
   if (isError) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
-        <Text style={{ color: '#374151', fontWeight: '600', marginTop: 12, fontSize: 16 }}>Failed to load notices</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }} className="bg-background">
+        <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
+        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Failed to load notices</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          style={{ backgroundColor: '#065f46', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
+          style={{ paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
+          className="bg-primary"
         >
-          <Text style={{ color: 'white', fontWeight: '700' }}>Retry</Text>
+          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -154,32 +160,34 @@ export default function StudentNotices() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#f9fafb' }}
+      style={{ flex: 1 }}
+      className="bg-background"
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#065f46" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       {/* Header */}
       <LinearGradient
-        colors={['#064e3b', '#065f46', '#047857']}
+        colors={headerGradient(c.primary) as [string, string, string]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ paddingTop: 56, paddingBottom: 72, paddingHorizontal: 20 }}
       >
-        <Text style={{ color: '#6ee7b7', fontSize: 12, fontWeight: '700',
-          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+        <Text style={{ fontSize: 12, fontWeight: '700',
+          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6,
+          color: ON_PRIMARY_ACCENTS.bright }}>
           School
         </Text>
-        <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 4 }}>
+        <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 4 }} className="text-primary-foreground">
           Notices
         </Text>
         {notices && notices.length > 0 && (
           <View style={{
             flexDirection: 'row', alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20,
+            borderRadius: 20,
             paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 8,
-          }}>
-            <Ionicons name="notifications" size={12} color="#a7f3d0" />
-            <Text style={{ color: '#a7f3d0', fontSize: 12, fontWeight: '600', marginLeft: 5 }}>
+          }} className="bg-white/12">
+            <Ionicons name="notifications" size={12} color={ON_PRIMARY_ACCENTS.soft} />
+            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: ON_PRIMARY_ACCENTS.soft }}>
               {notices.length} {notices.length === 1 ? 'notice' : 'notices'}
             </Text>
           </View>
@@ -189,20 +197,20 @@ export default function StudentNotices() {
       <View style={{ marginTop: -52, paddingHorizontal: 16, paddingBottom: 32 }}>
         {!notices || notices.length === 0 ? (
           <View style={{
-            backgroundColor: 'white', borderRadius: 24, padding: 40,
+            borderRadius: 24, padding: 40,
             alignItems: 'center', shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-          }}>
+          }} className="bg-surface">
             <View style={{
               width: 72, height: 72, borderRadius: 24,
-              backgroundColor: '#d1fae5', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-            }}>
-              <Ionicons name="notifications-off-outline" size={36} color="#065f46" />
+              alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }} className="bg-primary/10">
+              <Ionicons name="notifications-off-outline" size={36} color={c.primary} />
             </View>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 6 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 6 }} className="text-foreground">
               No Notices Yet
             </Text>
-            <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center', lineHeight: 20 }}>
+            <Text style={{ fontSize: 14, textAlign: 'center', lineHeight: 20 }} className="text-muted-foreground">
               Your school hasn't posted any notices. Pull down to refresh.
             </Text>
           </View>

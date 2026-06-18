@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMyTimetable } from '../../hooks/useStudentMe';
 import BsDate from '../../components/BsDate';
 import type { TimetablePeriod } from '../../types';
+import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -40,6 +41,7 @@ function isUpcomingPeriod(period: TimetablePeriod): boolean {
 export default function StudentTimetable() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyTimetable();
+  const c = useThemeColors();
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -49,23 +51,24 @@ export default function StudentTimetable() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#065f46" />
-        <Text style={{ color: '#9ca3af', marginTop: 12, fontSize: 14 }}>Loading classes...</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} className="bg-background">
+        <ActivityIndicator size="large" color={c.primary} />
+        <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">Loading classes...</Text>
       </View>
     );
   }
 
   if (isError || !data) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
-        <Text style={{ color: '#374151', fontWeight: '600', marginTop: 12, fontSize: 16 }}>Failed to load</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }} className="bg-background">
+        <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
+        <Text style={{ fontWeight: '600', marginTop: 12, fontSize: 16 }} className="text-foreground">Failed to load</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          style={{ backgroundColor: '#065f46', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
+          style={{ paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 16 }}
+          className="bg-primary"
         >
-          <Text style={{ color: 'white', fontWeight: '700' }}>Retry</Text>
+          <Text style={{ fontWeight: '700' }} className="text-primary-foreground">Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -76,26 +79,28 @@ export default function StudentTimetable() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#f9fafb' }}
+      style={{ flex: 1 }}
+      className="bg-background"
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#065f46" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       {/* Header */}
       <LinearGradient
-        colors={['#064e3b', '#065f46', '#047857']}
+        colors={headerGradient(c.primary) as [string, string, string]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ paddingTop: 56, paddingBottom: 72, paddingHorizontal: 20 }}
       >
-        <Text style={{ color: '#6ee7b7', fontSize: 12, fontWeight: '700',
-          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+        <Text style={{ fontSize: 12, fontWeight: '700',
+          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6,
+          color: ON_PRIMARY_ACCENTS.bright }}>
           {DAY_NAMES[data.dayOfWeek]}
         </Text>
-        <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 6 }}>
+        <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 6 }} className="text-primary-foreground">
           Today's Classes
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="calendar-outline" size={13} color="#6ee7b7" />
+          <Ionicons name="calendar-outline" size={13} color={ON_PRIMARY_ACCENTS.bright} />
           <View style={{ marginLeft: 6 }}>
             <BsDate isoDate={`${data.dateAd}T12:00:00.000Z`} />
           </View>
@@ -103,11 +108,11 @@ export default function StudentTimetable() {
         {data.isSchoolDay && totalPeriods > 0 && (
           <View style={{
             flexDirection: 'row', alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20,
+            borderRadius: 20,
             paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 10,
-          }}>
-            <Ionicons name="book-outline" size={12} color="#a7f3d0" />
-            <Text style={{ color: '#a7f3d0', fontSize: 12, fontWeight: '600', marginLeft: 5 }}>
+          }} className="bg-white/12">
+            <Ionicons name="book-outline" size={12} color={ON_PRIMARY_ACCENTS.soft} />
+            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: ON_PRIMARY_ACCENTS.soft }}>
               {totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} today
             </Text>
           </View>
@@ -117,20 +122,20 @@ export default function StudentTimetable() {
       <View style={{ marginTop: -52, paddingHorizontal: 16, paddingBottom: 32 }}>
         {!data.isSchoolDay ? (
           <View style={{
-            backgroundColor: 'white', borderRadius: 20, padding: 32,
+            borderRadius: 20, padding: 32,
             alignItems: 'center', shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-          }}>
+          }} className="bg-surface">
             <View style={{
               width: 72, height: 72, borderRadius: 24,
-              backgroundColor: '#d1fae5', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-            }}>
-              <Ionicons name="sunny" size={36} color="#065f46" />
+              alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }} className="bg-primary/10">
+              <Ionicons name="sunny" size={36} color={c.primary} />
             </View>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }} className="text-foreground">
               No School Today
             </Text>
-            <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
+            <Text style={{ fontSize: 14, textAlign: 'center' }} className="text-muted-foreground">
               {data.dayOfWeek === 6
                 ? 'Saturday is a weekly holiday. Rest and recharge!'
                 : 'You are not assigned to a class yet.'}
@@ -138,12 +143,12 @@ export default function StudentTimetable() {
           </View>
         ) : totalPeriods === 0 ? (
           <View style={{
-            backgroundColor: 'white', borderRadius: 20, padding: 32,
+            borderRadius: 20, padding: 32,
             alignItems: 'center', shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-          }}>
-            <Ionicons name="calendar-clear-outline" size={44} color="#d1d5db" />
-            <Text style={{ color: '#9ca3af', marginTop: 12, fontSize: 14 }}>No classes scheduled for today.</Text>
+          }} className="bg-surface">
+            <Ionicons name="calendar-clear-outline" size={44} color={c.placeholderIcon} />
+            <Text style={{ marginTop: 12, fontSize: 14 }} className="text-muted-foreground">No classes scheduled for today.</Text>
           </View>
         ) : (
           data.periods.map((period, idx) => {
@@ -156,7 +161,6 @@ export default function StudentTimetable() {
               <View
                 key={period.slotId}
                 style={{
-                  backgroundColor: 'white',
                   borderRadius: 20, marginBottom: 12,
                   shadowColor: isCurrent ? color.bar : '#000',
                   shadowOffset: { width: 0, height: isCurrent ? 6 : 3 },
@@ -168,6 +172,7 @@ export default function StudentTimetable() {
                   opacity: isPast ? 0.55 : 1,
                   overflow: 'hidden',
                 }}
+                className="bg-surface"
               >
                 {/* Current class live banner */}
                 {isCurrent && (
@@ -177,9 +182,9 @@ export default function StudentTimetable() {
                   }}>
                     <View style={{
                       width: 7, height: 7, borderRadius: 4,
-                      backgroundColor: 'white', marginRight: 7,
-                    }} />
-                    <Text style={{ color: 'white', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>
+                      marginRight: 7,
+                    }} className="bg-white" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1 }} className="text-white">
                       HAPPENING NOW
                     </Text>
                   </View>
@@ -192,10 +197,9 @@ export default function StudentTimetable() {
                   {/* Time column */}
                   <View style={{
                     width: 60, alignItems: 'center', justifyContent: 'center',
-                    paddingVertical: 16, borderRightWidth: 1, borderRightColor: '#f3f4f6',
-                    marginRight: 14,
-                  }}>
-                    <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '600' }}>
+                    paddingVertical: 16, marginRight: 14,
+                  }} className="border-r border-border">
+                    <Text style={{ fontSize: 11, fontWeight: '600' }} className="text-muted-foreground">
                       {period.startTime}
                     </Text>
                     <View style={{
@@ -207,7 +211,7 @@ export default function StudentTimetable() {
                         P{period.periodNumber}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '600' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600' }} className="text-muted-foreground">
                       {period.endTime}
                     </Text>
                   </View>
@@ -226,29 +230,29 @@ export default function StudentTimetable() {
                       </View>
                       {isUpcoming && (
                         <View style={{
-                          backgroundColor: '#f0fdf4', borderRadius: 8,
+                          borderRadius: 8,
                           paddingHorizontal: 8, paddingVertical: 2,
-                        }}>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#065f46' }}>UPCOMING</Text>
+                        }} className="bg-primary/10">
+                          <Text style={{ fontSize: 10, fontWeight: '700' }} className="text-primary">UPCOMING</Text>
                         </View>
                       )}
                     </View>
 
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }} className="text-foreground">
                       {period.subject.name}
                     </Text>
 
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="person-outline" size={12} color="#9ca3af" />
-                        <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>
+                        <Ionicons name="person-outline" size={12} color={c.mutedForeground} />
+                        <Text style={{ fontSize: 12, marginLeft: 4 }} className="text-muted-foreground">
                           {period.teacher.fullName}
                         </Text>
                       </View>
                       {period.room && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="location-outline" size={12} color="#9ca3af" />
-                          <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>
+                          <Ionicons name="location-outline" size={12} color={c.mutedForeground} />
+                          <Text style={{ fontSize: 12, marginLeft: 4 }} className="text-muted-foreground">
                             Room {period.room}
                           </Text>
                         </View>
