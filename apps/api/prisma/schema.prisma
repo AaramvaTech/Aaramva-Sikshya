@@ -23,7 +23,10 @@ model Tenant {
   name         String // "St. Xavier's School"
   slug         String    @unique // "sxs" → sxs.yourdomain.com (immutable: subdomain + schema key)
   logoUrl      String?
-  primaryColor String    @default("#2563EB")
+  primaryColor      String  @default("#2563EB")
+  primaryForeground String?              // WCAG-safe text color on primary bg; null = use default #FFFFFF
+  colorSource       String  @default("auto")  // "auto" = extracted from logo; "manual" = admin override
+  logoPalette       Json?                // full vibrant palette hex map; null until first extraction
   description     String? // Short about/mission text — filled by school admin later
   motto           String? // School motto / tagline (shown on documents)
   establishedYear Int? // Year founded (AD)

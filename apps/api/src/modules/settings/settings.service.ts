@@ -26,6 +26,9 @@ interface TenantProfileRow {
   principal_name: string | null;
   principal_signature_url: string | null;
   school_stamp_url: string | null;
+  primary_foreground: string | null;
+  color_source: string;
+  logo_palette: Record<string, string> | null;
 }
 
 function toProfileResponse(row: TenantProfileRow) {
@@ -52,6 +55,9 @@ function toProfileResponse(row: TenantProfileRow) {
     principalName: row.principal_name,
     principalSignatureUrl: row.principal_signature_url,
     schoolStampUrl: row.school_stamp_url,
+    primaryForeground: row.primary_foreground,
+    colorSource: row.color_source,
+    logoPalette: row.logo_palette,
   };
 }
 
@@ -66,7 +72,10 @@ const PROFILE_SELECT = `id, name, slug,
   "affiliationNumber" AS affiliation_number,
   "principalName" AS principal_name,
   "principalSignatureUrl" AS principal_signature_url,
-  "schoolStampUrl" AS school_stamp_url`;
+  "schoolStampUrl" AS school_stamp_url,
+  "primaryForeground" AS primary_foreground,
+  "colorSource" AS color_source,
+  "logoPalette" AS logo_palette`;
 
 @Injectable()
 export class SettingsService {
