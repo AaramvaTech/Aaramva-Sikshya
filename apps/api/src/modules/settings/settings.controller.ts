@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -24,5 +24,12 @@ export class SettingsController {
   @Roles(...EDITOR_ROLES)
   updateProfile(@Body() dto: UpdateProfileDto) {
     return this.settingsService.updateProfile(dto);
+  }
+
+  @Post('branding/rederive')
+  @Roles(Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER)
+  async rederiveBrandingColor() {
+    await this.settingsService.rederiveBrandingColor();
+    return { message: 'Branding color re-derived from logo' };
   }
 }

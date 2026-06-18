@@ -15,6 +15,18 @@ import {
   UpdateTenantDto,
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
+import { BrandingColorService, contrastRatio } from '../branding/branding-color.service';
+
+async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const ab = await res.arrayBuffer();
+    return Buffer.from(ab);
+  } catch {
+    return null;
+  }
+}
 
 interface DbTenant {
   id: string;
@@ -51,6 +63,7 @@ export class TenantAdminService {
     private readonly tenantContext: TenantContextService,
     private readonly tenantService: TenantService,
     private readonly audit: AuditService,
+    private readonly brandingColor: BrandingColorService,
   ) {}
 
   async onboardTenant(dto: ManualOnboardTenantDto, adminId: string) {
@@ -253,6 +266,13 @@ export class TenantAdminService {
       }
     }
 
+    if (dto.primaryColor !== undefined) {
+      const fg = contrastRatio(dto.primaryColor, '#FFFFFF') >= 4.5 ? '#FFFFFF' : '#0B1220';
+      params.push(fg);
+      sets.push(`"primaryForeground" = $${params.length}`);
+      sets.push(`"colorSource" = 'manual'`);
+    }
+
     if (sets.length === 0) {
       return this.getTenantDetail(id);
     }
@@ -271,6 +291,32 @@ export class TenantAdminService {
         (k) => (dto as Record<string, unknown>)[k] !== undefined,
       ),
     });
+
+    if (dto.logoUrl !== undefined) {
+      const csRows = await this.publicPrisma.query<{ color_source: string }>(
+        `SELECT "colorSource" AS color_source FROM tenants WHERE id = $1`,
+        id,
+      );
+      const colorSource = csRows[0]?.color_source ?? 'auto';
+      if (colorSource !== 'manual') {
+        const buffer = await fetchImageBuffer(dto.logoUrl);
+        if (buffer) {
+          const result = await this.brandingColor.deriveThemeFromLogo(buffer);
+          if (result) {
+            await this.publicPrisma.query(
+              `UPDATE tenants
+               SET "primaryColor" = $1, "primaryForeground" = $2,
+                   "colorSource" = 'auto', "logoPalette" = $3, "updatedAt" = NOW()
+               WHERE id = $4`,
+              result.primaryColor,
+              result.primaryForeground,
+              JSON.stringify(result.palette),
+              id,
+            );
+          }
+        }
+      }
+    }
 
     return this.getTenantDetail(id);
   }

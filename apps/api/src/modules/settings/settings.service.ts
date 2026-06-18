@@ -2,6 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
+import { BrandingColorService, contrastRatio } from '../branding/branding-color.service';
+
+async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const ab = await res.arrayBuffer();
+    return Buffer.from(ab);
+  } catch {
+    return null;
+  }
+}
 
 interface TenantProfileRow {
   id: string;
@@ -82,6 +94,7 @@ export class SettingsService {
   constructor(
     private readonly publicPrisma: PublicPrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly brandingColor: BrandingColorService,
   ) {}
 
   async getProfile() {
@@ -101,7 +114,12 @@ export class SettingsService {
 
     if (dto.name !== undefined) { updates.push(`name = $${idx++}`); values.push(dto.name); }
     if (dto.logoUrl !== undefined) { updates.push(`"logoUrl" = $${idx++}`); values.push(dto.logoUrl); }
-    if (dto.primaryColor !== undefined) { updates.push(`"primaryColor" = $${idx++}`); values.push(dto.primaryColor); }
+    if (dto.primaryColor !== undefined) {
+      updates.push(`"primaryColor" = $${idx++}`); values.push(dto.primaryColor);
+      const fg = contrastRatio(dto.primaryColor, '#FFFFFF') >= 4.5 ? '#FFFFFF' : '#0B1220';
+      updates.push(`"primaryForeground" = $${idx++}`); values.push(fg);
+      updates.push(`"colorSource" = 'manual'`);
+    }
     if (dto.description !== undefined) { updates.push(`description = $${idx++}`); values.push(dto.description); }
     if (dto.establishedYear !== undefined) { updates.push(`"establishedYear" = $${idx++}`); values.push(dto.establishedYear); }
     if (dto.website !== undefined) { updates.push(`website = $${idx++}`); values.push(dto.website); }
@@ -130,6 +148,54 @@ export class SettingsService {
        RETURNING ${PROFILE_SELECT}`,
       ...values,
     );
+
+    if (dto.logoUrl !== undefined) {
+      const buffer = await fetchImageBuffer(dto.logoUrl);
+      if (buffer && rows[0].color_source !== 'manual') {
+        const result = await this.brandingColor.deriveThemeFromLogo(buffer);
+        if (result) {
+          await this.publicPrisma.query(
+            `UPDATE tenants
+             SET "primaryColor" = $1, "primaryForeground" = $2,
+                 "colorSource" = 'auto', "logoPalette" = $3, "updatedAt" = NOW()
+             WHERE id = $4`,
+            result.primaryColor,
+            result.primaryForeground,
+            JSON.stringify(result.palette),
+            tenantId,
+          );
+          return this.getProfile();
+        }
+      }
+    }
+
     return toProfileResponse(rows[0]);
+  }
+
+  async rederiveBrandingColor(): Promise<void> {
+    const { tenantId } = this.tenantContext.getOrThrow();
+    const rows = await this.publicPrisma.query<{ logo_url: string | null; color_source: string }>(
+      `SELECT "logoUrl" AS logo_url, "colorSource" AS color_source FROM tenants WHERE id = $1`,
+      tenantId,
+    );
+    const row = rows[0];
+    if (!row?.logo_url) return;
+
+    const buffer = await fetchImageBuffer(row.logo_url);
+    if (!buffer) return;
+
+    const result = await this.brandingColor.deriveThemeFromLogo(buffer);
+    if (!result) return;
+
+    await this.publicPrisma.query(
+      `UPDATE tenants
+       SET "primaryColor" = $1, "primaryForeground" = $2,
+           "colorSource" = 'auto', "logoPalette" = $3, "updatedAt" = NOW()
+       WHERE id = $4`,
+      result.primaryColor,
+      result.primaryForeground,
+      JSON.stringify(result.palette),
+      tenantId,
+    );
   }
 }

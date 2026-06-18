@@ -21,7 +21,7 @@ export class TenantController {
 
     const tenant = await this.prisma.tenant.findFirst({
       where: { slug, isActive: true, deletedAt: null },
-      select: { slug: true, name: true, logoUrl: true, address: true },
+      select: { slug: true, name: true, logoUrl: true, address: true, primaryColor: true, primaryForeground: true },
     });
 
     if (!tenant) {
@@ -33,6 +33,8 @@ export class TenantController {
       name: tenant.name,
       logoUrl: tenant.logoUrl ?? null,
       address: tenant.address ?? null,
+      primaryColor: tenant.primaryColor ?? null,
+      primaryForeground: tenant.primaryForeground ?? null,
     };
   }
 }

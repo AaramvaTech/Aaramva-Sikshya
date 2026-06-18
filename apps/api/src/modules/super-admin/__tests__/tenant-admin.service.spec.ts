@@ -8,6 +8,7 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantService } from '../../tenant/tenant.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { BrandingColorService } from '../../branding/branding-color.service';
 
 const mockTenant = {
   id: 'tenant-uuid-1',
@@ -60,6 +61,10 @@ describe('TenantAdminService', () => {
         {
           provide: PrismaService,
           useValue: {},
+        },
+        {
+          provide: BrandingColorService,
+          useValue: { deriveThemeFromLogo: jest.fn().mockResolvedValue(null) },
         },
       ],
     }).compile();
