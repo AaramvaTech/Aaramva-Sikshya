@@ -27,13 +27,18 @@ export const PLACEHOLDER_ICON = '#d1d5db';
 // Saturday calendar highlight (Nepal weekend). Documented exception — amber tint, no token.
 export const SATURDAY_HIGHLIGHT = { bg: '#fef9ee', text: '#d97706' };
 
-// Decorative on-primary accent tints used on the gradient header (sit on the brand green).
-// Documented exception: a brand-ramp detail with no single-token equivalent.
-export const ON_PRIMARY_ACCENTS = {
-  bright: '#6ee7b7',
-  soft: '#a7f3d0',
-  pale: '#d1fae5',
-};
+// Derives on-primary header accent tints from the resolved primary.
+// Preserves the primary's hue, softens saturation, fixes lightness stops so
+// the tints read as "light ink on the brand header" for ANY brand color.
+export function deriveOnPrimary(primary: string): { bright: string; soft: string; pale: string } {
+  const [h, s] = hexToHsl(primary);
+  const sClamped = Math.min(s, 0.65);
+  return {
+    bright: hslToHex(h, sClamped, 0.67),
+    soft: hslToHex(h, sClamped, 0.80),
+    pale: hslToHex(h, sClamped, 0.90),
+  };
+}
 
 // hex -> {h,s,l} (h 0..360, s/l 0..1)
 function hexToHsl(hex: string): [number, number, number] {

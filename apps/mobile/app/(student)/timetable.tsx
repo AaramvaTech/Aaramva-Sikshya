@@ -10,7 +10,7 @@ import BsDate from '../../components/BsDate';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 import type { TimetablePeriod } from '../../types';
-import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import { useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -44,6 +44,7 @@ export default function StudentTimetable() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyTimetable();
   const c = useThemeColors();
+  const onPrimary = deriveOnPrimary(c.primary);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -100,16 +101,18 @@ export default function StudentTimetable() {
         end={{ x: 1, y: 1 }}
         style={{ paddingTop: 56, paddingBottom: 72, paddingHorizontal: 20 }}
       >
+        {/* onPrimary.bright — documented accent exception: on-primary decorative tint */}
         <Text style={{ fontSize: 12, fontWeight: '700',
           textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6,
-          color: ON_PRIMARY_ACCENTS.bright }}>
+          color: onPrimary.bright }}>
           {DAY_NAMES[data.dayOfWeek]}
         </Text>
         <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 6 }} className="text-primary-foreground">
           Today's Classes
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="calendar-outline" size={13} color={ON_PRIMARY_ACCENTS.bright} />
+          {/* onPrimary.bright — documented accent exception: on-primary decorative tint */}
+          <Ionicons name="calendar-outline" size={13} color={onPrimary.bright} />
           <View style={{ marginLeft: 6 }}>
             <BsDate isoDate={`${data.dateAd}T12:00:00.000Z`} />
           </View>
@@ -120,8 +123,9 @@ export default function StudentTimetable() {
             borderRadius: 20,
             paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 10,
           }} className="bg-white/12">
-            <Ionicons name="book-outline" size={12} color={ON_PRIMARY_ACCENTS.soft} />
-            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: ON_PRIMARY_ACCENTS.soft }}>
+            {/* onPrimary.soft — documented accent exception: on-primary decorative tint */}
+            <Ionicons name="book-outline" size={12} color={onPrimary.soft} />
+            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: onPrimary.soft }}>
               {totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} today
             </Text>
           </View>

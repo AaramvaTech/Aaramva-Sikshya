@@ -19,7 +19,7 @@ import { logout } from '../../lib/session';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, formatBs } from 'bs-calendar';
-import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import { useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
 import { useBranding } from '../../lib/theme/provider';
 
 // ---------------------------------------------------------------------------
@@ -166,6 +166,7 @@ export default function StudentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const tenant = useAuthStore((s) => s.tenant);
   const c = useThemeColors();
+  const onPrimary = deriveOnPrimary(c.primary);
   const { branding } = useBranding();
 
   const profile = useMyProfile();
@@ -285,24 +286,24 @@ export default function StudentDashboard() {
         </View>
 
         {/* BS Date */}
-        {/* ON_PRIMARY_ACCENTS.bright — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.bsDate, { color: ON_PRIMARY_ACCENTS.bright }]}>{todayLabel}</Text>
+        {/* onPrimary.bright — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.bsDate, { color: onPrimary.bright }]}>{todayLabel}</Text>
 
         {/* Greeting */}
-        {/* ON_PRIMARY_ACCENTS.soft — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.greeting, { color: ON_PRIMARY_ACCENTS.soft }]}>{getGreeting()}</Text>
+        {/* onPrimary.soft — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.greeting, { color: onPrimary.soft }]}>{getGreeting()}</Text>
 
         {/* Student name */}
         <NpText style={styles.studentName} className="text-primary-foreground">{fullName}</NpText>
 
         {/* Enrollment */}
-        {/* ON_PRIMARY_ACCENTS.pale — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.enrollmentLine, { color: ON_PRIMARY_ACCENTS.pale }]}>{enrollmentLine}</Text>
+        {/* onPrimary.pale — documented accent exception: on-primary decorative tint */}
+        <Text style={[styles.enrollmentLine, { color: onPrimary.pale }]}>{enrollmentLine}</Text>
 
         {/* Tenant name */}
         {tenant?.name ? (
-          /* ON_PRIMARY_ACCENTS.soft — documented accent exception: on-primary decorative tint */
-          <NpText style={[styles.tenantName, { color: ON_PRIMARY_ACCENTS.soft }]}>{tenant.name}</NpText>
+          /* onPrimary.soft — documented accent exception: on-primary decorative tint */
+          <NpText style={[styles.tenantName, { color: onPrimary.soft }]}>{tenant.name}</NpText>
         ) : null}
       </LinearGradient>
 

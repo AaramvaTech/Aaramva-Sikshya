@@ -10,7 +10,7 @@ import type { NoticeItem } from '../../types';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 import { adToBs, formatBs } from 'bs-calendar';
-import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import { useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
 
 const TYPE_CONFIG: Record<string, { bg: string; text: string; icon: keyof typeof Ionicons.glyphMap; label: string }> = {
   GENERAL:     { bg: '#dbeafe', text: '#1d4ed8', icon: 'information-circle', label: 'General'     },
@@ -128,6 +128,7 @@ export default function StudentNotices() {
   const [refreshing, setRefreshing] = useState(false);
   const { data: notices, isLoading, isError, refetch } = useNotices();
   const c = useThemeColors();
+  const onPrimary = deriveOnPrimary(c.primary);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -179,9 +180,10 @@ export default function StudentNotices() {
         end={{ x: 1, y: 1 }}
         style={{ paddingTop: 56, paddingBottom: 72, paddingHorizontal: 20 }}
       >
+        {/* onPrimary.bright — documented accent exception: on-primary decorative tint */}
         <Text style={{ fontSize: 12, fontWeight: '700',
           textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6,
-          color: ON_PRIMARY_ACCENTS.bright }}>
+          color: onPrimary.bright }}>
           School
         </Text>
         <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 4 }} className="text-primary-foreground">
@@ -193,8 +195,9 @@ export default function StudentNotices() {
             borderRadius: 20,
             paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 8,
           }} className="bg-white/12">
-            <Ionicons name="notifications" size={12} color={ON_PRIMARY_ACCENTS.soft} />
-            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: ON_PRIMARY_ACCENTS.soft }}>
+            {/* onPrimary.soft — documented accent exception: on-primary decorative tint */}
+            <Ionicons name="notifications" size={12} color={onPrimary.soft} />
+            <Text style={{ fontSize: 12, fontWeight: '600', marginLeft: 5, color: onPrimary.soft }}>
               {notices.length} {notices.length === 1 ? 'notice' : 'notices'}
             </Text>
           </View>

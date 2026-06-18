@@ -11,7 +11,7 @@ import { STATUS_CONFIG } from '../../lib/attendance';
 import type { AttendanceStatus } from '../../lib/attendance';
 import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
-import { SATURDAY_HIGHLIGHT, useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
+import { SATURDAY_HIGHLIGHT, useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
 import Skeleton from '../../components/Skeleton';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -229,6 +229,7 @@ export default function StudentAttendance() {
   });
 
   const c = useThemeColors();
+  const onPrimary = deriveOnPrimary(c.primary);
 
   const summaryResult = useMyAttendanceSummary();
 
@@ -300,7 +301,8 @@ export default function StudentAttendance() {
         style={styles.header}
       >
         {annualPercent !== null && (
-          <Text style={[styles.headerSubtitle, { color: ON_PRIMARY_ACCENTS.bright }]}>
+          /* onPrimary.bright — documented accent exception: on-primary decorative tint */
+          <Text style={[styles.headerSubtitle, { color: onPrimary.bright }]}>
             Annual attendance: {annualPercent}%
           </Text>
         )}
