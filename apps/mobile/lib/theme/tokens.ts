@@ -1,12 +1,12 @@
 // Aaramva platform default. DO NOT change the token key names.
 export const aaramvaTheme = {
-  '--primary': '26 128 85',              // #1a8055 — Aaramva brand green
+  '--primary': '26 128 85',
   '--primary-foreground': '255 255 255',
   '--background': '255 255 255',
-  '--surface': '248 250 252',            // cards
+  '--surface': '248 250 252',
   '--surface-muted': '241 245 249',
   '--border': '226 232 240',
-  '--foreground': '15 23 42',            // primary text
+  '--foreground': '15 23 42',
   '--muted-foreground': '100 116 139',
   '--success': '22 163 74',
   '--warning': '202 138 4',
