@@ -39,6 +39,7 @@ function deriveFromSession(
 interface AuthActions {
   setStatus: (status: AuthStatus) => void;
   setSlug: (slug: string) => void;
+  clearSlug: () => void;
   // Add or replace a session (used by login + session restore)
   upsertSession: (session: SchoolSession) => void;
   // Make a session active and update derived fields
@@ -74,6 +75,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   setStatus: (status) => set({ status }),
 
   setSlug: (slug) => set({ slug }),
+
+  clearSlug: () => set({ slug: null }),
 
   upsertSession: (session) =>
     set((state) => {
