@@ -7,10 +7,13 @@ import { queryClient } from '../lib/queryClient';
 import { useAuthStore } from '../store/auth';
 import { useBootSession } from '../lib/session';
 import { ThemeProvider } from '../lib/theme/provider';
+import { useFonts } from 'expo-font';
+import { NotoSansDevanagari_400Regular } from '@expo-google-fonts/noto-sans-devanagari';
 
 export default function RootLayout() {
   useBootSession();
   const { status, user } = useAuthStore();
+  const [fontsLoaded] = useFonts({ NotoSansDevanagari: NotoSansDevanagari_400Regular });
 
   useEffect(() => {
     if (status === 'booting') return;
@@ -36,7 +39,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {status === 'booting' ? (
+        {(status === 'booting' || !fontsLoaded) ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#065f46" />
             <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>

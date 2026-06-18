@@ -2,6 +2,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, RefreshControl, Dimensions,
 } from 'react-native';
+import NpText from '../../components/NpText';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useMemo } from 'react';
@@ -382,9 +383,9 @@ export default function StudentAttendance() {
                 );
               })}
             </View>
-            <Text style={styles.annualWorkingDays} className="text-muted-foreground">
+            <NpText style={styles.annualWorkingDays} className="text-muted-foreground">
               {summaryResult.data.totalWorkingDays} working days · {summaryResult.data.academicYearName}
-            </Text>
+            </NpText>
           </View>
         )}
 

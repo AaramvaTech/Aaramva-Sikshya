@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { useNotices } from '../../hooks/useStudentMe';
 import type { NoticeItem } from '../../types';
+import NpText from '../../components/NpText';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
@@ -67,9 +68,9 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
             <Ionicons name={cfg.icon} size={20} color={cfg.text} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', marginBottom: 3, lineHeight: 20 }} className="text-foreground">
+            <NpText style={{ fontSize: 15, fontWeight: '700', marginBottom: 3, lineHeight: 20 }} className="text-foreground">
               {notice.title}
-            </Text>
+            </NpText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{
                 backgroundColor: cfg.bg, borderRadius: 20,
@@ -98,18 +99,18 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
             borderRadius: 12, padding: 14,
             borderLeftWidth: 3, borderLeftColor: cfg.text,
           }} className="bg-background">
-            <Text style={{ fontSize: 14, lineHeight: 22 }} className="text-foreground">
+            <NpText style={{ fontSize: 14, lineHeight: 22 }} className="text-foreground">
               {notice.body}
-            </Text>
+            </NpText>
           </View>
         ) : (
-          <Text
+          <NpText
             numberOfLines={2}
             style={{ fontSize: 13, lineHeight: 20 }}
             className="text-muted-foreground"
           >
             {notice.body}
-          </Text>
+          </NpText>
         )}
 
         {!expanded && notice.body.length > 100 && (

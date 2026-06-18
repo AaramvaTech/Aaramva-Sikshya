@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/noto-sans-devanagari": "^0.4.1",
     "@expo/vector-icons": "^15.1.1",
     "@tanstack/react-query": "^5.101.0",
     "axios": "^1.17.0",

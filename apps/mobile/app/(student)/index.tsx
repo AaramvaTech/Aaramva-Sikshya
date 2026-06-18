@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 
 import { useMyProfile, useMyTimetable, useMyAttendanceSummary } from '../../hooks/useStudentMe';
+import NpText from '../../components/NpText';
 import { useAuthStore } from '../../store/auth';
 import { logout } from '../../lib/session';
 import { STATUS_CONFIG } from '../../lib/attendance';
@@ -139,15 +140,15 @@ function TimetableCard({
 
             <View style={styles.periodInfo}>
               <View style={styles.periodTopRow}>
-                <Text style={styles.subjectName} className="text-foreground">{p.subject.name}</Text>
+                <NpText style={styles.subjectName} className="text-foreground">{p.subject.name}</NpText>
                 <Text style={styles.timeText} className="text-muted-foreground">
                   {p.startTime}–{p.endTime}
                 </Text>
               </View>
-              <Text style={styles.teacherText} className="text-muted-foreground">
+              <NpText style={styles.teacherText} className="text-muted-foreground">
                 {p.teacher.fullName}
                 {p.room ? ` · Room ${p.room}` : ''}
-              </Text>
+              </NpText>
             </View>
           </View>
         ))
@@ -275,7 +276,7 @@ export default function StudentDashboard() {
         <Text style={[styles.greeting, { color: ON_PRIMARY_ACCENTS.soft }]}>{getGreeting()}</Text>
 
         {/* Student name */}
-        <Text style={styles.studentName} className="text-primary-foreground">{fullName}</Text>
+        <NpText style={styles.studentName} className="text-primary-foreground">{fullName}</NpText>
 
         {/* Enrollment */}
         {/* ON_PRIMARY_ACCENTS.pale — documented accent exception: on-primary decorative tint */}
@@ -284,7 +285,7 @@ export default function StudentDashboard() {
         {/* Tenant name */}
         {tenant?.name ? (
           /* ON_PRIMARY_ACCENTS.soft — documented accent exception: on-primary decorative tint */
-          <Text style={[styles.tenantName, { color: ON_PRIMARY_ACCENTS.soft }]}>{tenant.name}</Text>
+          <NpText style={[styles.tenantName, { color: ON_PRIMARY_ACCENTS.soft }]}>{tenant.name}</NpText>
         ) : null}
       </LinearGradient>
 

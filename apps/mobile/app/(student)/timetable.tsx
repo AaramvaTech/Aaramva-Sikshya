@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { useMyTimetable } from '../../hooks/useStudentMe';
 import BsDate from '../../components/BsDate';
+import NpText from '../../components/NpText';
 import type { TimetablePeriod } from '../../types';
 import { useThemeColors, headerGradient, ON_PRIMARY_ACCENTS } from '../../lib/theme/colors';
 
@@ -238,16 +239,16 @@ export default function StudentTimetable() {
                       )}
                     </View>
 
-                    <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }} className="text-foreground">
+                    <NpText style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }} className="text-foreground">
                       {period.subject.name}
-                    </Text>
+                    </NpText>
 
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="person-outline" size={12} color={c.mutedForeground} />
-                        <Text style={{ fontSize: 12, marginLeft: 4 }} className="text-muted-foreground">
+                        <NpText style={{ fontSize: 12, marginLeft: 4 }} className="text-muted-foreground">
                           {period.teacher.fullName}
-                        </Text>
+                        </NpText>
                       </View>
                       {period.room && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
