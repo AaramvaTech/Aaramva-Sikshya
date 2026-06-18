@@ -38,7 +38,7 @@ export default function RootLayout() {
       <ThemeProvider>
         {status === 'booting' ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#1a8055" />
+            <ActivityIndicator size="large" color="#065f46" />
             <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>
           </View>
         ) : (
