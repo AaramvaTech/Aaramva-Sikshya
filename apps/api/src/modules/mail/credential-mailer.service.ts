@@ -2,6 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface CredentialParams {
   tenantId: string;
   to: string;
@@ -34,7 +43,7 @@ export class CredentialMailer {
 
   private loginUrl(slug: string): string {
     const domain = process.env.APP_DOMAIN ?? 'aaramvashikshya.com';
-    return `https://${slug}.${domain}`;
+    return slug ? `https://${slug}.${domain}` : `https://${domain}`;
   }
 
   async sendNewCredentials(p: CredentialParams): Promise<void> {
@@ -70,14 +79,14 @@ export class CredentialMailer {
     ].join('\n');
     const html = `
       <p>Hello,</p>
-      <p>Your login for <strong>${school.name}</strong> on Aaramva Shikshya is ready.</p>
+      <p>Your login for <strong>${escapeHtml(school.name)}</strong> on Aaramva Shikshya is ready.</p>
       <ul>
-        <li><strong>School code:</strong> ${school.slug}</li>
-        <li><strong>Login email:</strong> ${p.loginEmail}</li>
+        <li><strong>School code:</strong> ${escapeHtml(school.slug)}</li>
+        <li><strong>Login email:</strong> ${escapeHtml(p.loginEmail)}</li>
         <li><strong>Temporary password:</strong> ${p.password}</li>
       </ul>
       <p><strong>Web:</strong> <a href="${url}">${url}</a><br/>
-      <strong>Mobile app:</strong> open Aaramva Shikshya, enter the school code "<strong>${school.slug}</strong>", then log in.</p>
+      <strong>Mobile app:</strong> open Aaramva Shikshya, enter the school code "<strong>${escapeHtml(school.slug)}</strong>", then log in.</p>
       <p>Please change your password after your first login.</p>`;
     await this.mail.send({
       to: p.to, subject, html, text, type, tenantId: p.tenantId, relatedUserId: p.relatedUserId,
@@ -100,8 +109,8 @@ export class CredentialMailer {
     ].join('\n');
     const html = `
       <p>Hello,</p>
-      <p>The login email for your <strong>${school.name}</strong> account was changed to <strong>${p.newLoginEmail}</strong>.</p>
-      <ul><li><strong>School code:</strong> ${school.slug}</li></ul>
+      <p>The login email for your <strong>${escapeHtml(school.name)}</strong> account was changed to <strong>${escapeHtml(p.newLoginEmail)}</strong>.</p>
+      <ul><li><strong>School code:</strong> ${escapeHtml(school.slug)}</li></ul>
       <p><strong>Web:</strong> <a href="${url}">${url}</a></p>
       <p>If you did not expect this change, contact your school administrator.</p>`;
     await this.mail.send({

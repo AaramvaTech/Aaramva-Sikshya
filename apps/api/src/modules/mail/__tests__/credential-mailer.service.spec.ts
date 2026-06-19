@@ -48,5 +48,26 @@ describe('CredentialMailer', () => {
     expect(arg.type).toBe('LOGIN_EMAIL_CHANGED');
     expect(arg.html).toContain('new@x.com');
     expect(arg.html).not.toMatch(/password/i);
+    expect(arg.text).not.toMatch(/password/i);
+  });
+
+  it('sendPasswordReset uses CREDENTIALS_RESET type and includes password and login email', async () => {
+    await mailer.sendPasswordReset({
+      tenantId: 't1', to: 'kid@x.com', loginEmail: 'kid@x.com', password: 'NewPass99!', relatedUserId: 'u1',
+    });
+    const arg = mockMail.send.mock.calls[0][0];
+    expect(arg.type).toBe('CREDENTIALS_RESET');
+    expect(arg.html).toContain('NewPass99!');
+    expect(arg.html).toContain('kid@x.com');
+  });
+
+  it('sendNewCredentials escapes a malicious school name in html', async () => {
+    mockPublicPrisma.query.mockResolvedValueOnce([{ name: '<script>x</script>', slug: 'sunrise' }]);
+    await mailer.sendNewCredentials({
+      tenantId: 't1', to: 'kid@x.com', loginEmail: 'kid@x.com', password: 'Abcd23!x', relatedUserId: 'u1',
+    });
+    const arg = mockMail.send.mock.calls[0][0];
+    expect(arg.html).toContain('&lt;script&gt;');
+    expect(arg.html).not.toContain('<script>');
   });
 });
