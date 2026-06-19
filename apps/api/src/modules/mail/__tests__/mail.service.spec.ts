@@ -27,13 +27,30 @@ describe('MailService', () => {
       to: 'a@b.com', subject: 'Hi', html: '<p>hi</p>', text: 'hi', type: 'CREDENTIALS_NEW',
     });
     expect(res).toEqual({ status: 'MOCK', logId: 'log-1' });
-    // first query = INSERT email_log PENDING
-    expect(mockPublicPrisma.query).toHaveBeenCalled();
+    // first query = INSERT email_log PENDING — assert SQL and all positional args
+    expect(mockPublicPrisma.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO email_log'),
+      null,           // tenantId
+      'a@b.com',      // recipient
+      'CREDENTIALS_NEW', // type
+      'Hi',           // subject
+      null,           // relatedUserId
+    );
     // status updated to MOCK
     expect(mockPublicPrisma.execute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE email_log'),
       'MOCK', null, null, 'log-1',
     );
+  });
+
+  it('returns FAILED with empty logId and does not throw when the log INSERT itself throws', async () => {
+    mockPublicPrisma.query.mockRejectedValueOnce(new Error('db down'));
+    const res = await service.send({
+      to: 'a@b.com', subject: 'Hi', html: '<p>hi</p>', text: 'hi', type: 'CREDENTIALS_NEW',
+    });
+    expect(res).toEqual({ status: 'FAILED', logId: '' });
+    // no UPDATE should have been attempted — no log row was created
+    expect(mockPublicPrisma.execute).not.toHaveBeenCalled();
   });
 
   it('never throws and records FAILED when the transport throws', async () => {

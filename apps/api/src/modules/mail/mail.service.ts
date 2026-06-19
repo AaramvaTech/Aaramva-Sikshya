@@ -33,7 +33,7 @@ export class MailService {
     if (!this.transporter) {
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT ?? 587),
+        port: Number(process.env.SMTP_PORT || 587),
         secure: process.env.SMTP_SECURE === 'true',
         auth: process.env.SMTP_USER
           ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
@@ -61,17 +61,24 @@ export class MailService {
    * Best-effort send: always records an email_log row, never throws to the caller.
    */
   async send(input: SendMailInput): Promise<SendMailResult> {
-    const rows = await this.publicPrisma.query<{ id: string }>(
-      `INSERT INTO email_log (tenant_id, recipient_email, email_type, subject, status, related_user_id)
-       VALUES ($1::uuid, $2, $3, $4, 'PENDING', $5::uuid)
-       RETURNING id`,
-      input.tenantId ?? null,
-      input.to,
-      input.type,
-      input.subject,
-      input.relatedUserId ?? null,
-    );
-    const logId = rows[0].id;
+    let logId: string;
+    try {
+      const rows = await this.publicPrisma.query<{ id: string }>(
+        `INSERT INTO email_log (tenant_id, recipient_email, email_type, subject, status, related_user_id)
+         VALUES ($1::uuid, $2, $3, $4, 'PENDING', $5::uuid)
+         RETURNING id`,
+        input.tenantId ?? null,
+        input.to,
+        input.type,
+        input.subject,
+        input.relatedUserId ?? null,
+      );
+      logId = rows[0].id;
+    } catch (err) {
+      const message = (err as Error)?.message ?? 'Unknown error';
+      this.logger.error(`Email log INSERT failed for ${input.to}: ${message}`);
+      return { status: 'FAILED', logId: '' };
+    }
 
     if (!this.isConfigured) {
       this.logger.log(`[MAIL MOCK] To: ${input.to} | ${input.subject}`);
