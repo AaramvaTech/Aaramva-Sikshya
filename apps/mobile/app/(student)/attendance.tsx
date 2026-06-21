@@ -1,225 +1,28 @@
-import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, RefreshControl, Dimensions,
-} from 'react-native';
-import NpText from '../../components/NpText';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import NpText from '../../components/NpText';
 import { useAttendanceHistory, useMyAttendanceSummary } from '../../hooks/useStudentMe';
-import { STATUS_CONFIG } from '../../lib/attendance';
-import type { AttendanceStatus } from '../../lib/attendance';
+import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
-import { SATURDAY_HIGHLIGHT, useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
-import Skeleton from '../../components/Skeleton';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-// 16px padding each side, 16px card padding each side = 64px total horizontal offset
-const CELL_SIZE = Math.floor((SCREEN_WIDTH - 64) / 7);
-
-const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-// ─── Month navigation ──────────────────────────────────────────────────────────
+import { localDateKey } from '../../lib/time';
+import { SATURDAY_HIGHLIGHT, useThemeColors } from '../../lib/theme/colors';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
+import { CARD_SHADOW } from '../../components/ui/Card';
+import { FONT } from '../../lib/theme/fonts';
 
 function prevMonthOf(curr: BsDate): BsDate {
   if (curr.month === 1) return { year: curr.year - 1, month: 12, day: 1 };
   return { year: curr.year, month: curr.month - 1, day: 1 };
 }
-
 function nextMonthOf(curr: BsDate): BsDate {
   if (curr.month === 12) return { year: curr.year + 1, month: 1, day: 1 };
   return { year: curr.year, month: curr.month + 1, day: 1 };
 }
 
-// ─── Calendar grid ─────────────────────────────────────────────────────────────
-
-interface CalendarGridProps {
-  viewMonth: BsDate;
-  recordMap: Map<string, string>;
-  isLoading: boolean;
-}
-
-function CalendarGrid({ viewMonth, recordMap, isLoading }: CalendarGridProps) {
-  // Rules of Hooks: unconditional call before any early return
-  const c = useThemeColors();
-
-  const todayBsDate = todayBs();
-  const { year, month } = viewMonth;
-
-  const { weekdayOfFirst, daysInMonth } = useMemo(() => {
-    const days = daysInBsMonth(year, month);
-    const firstAd = bsToAd({ year, month, day: 1 });
-    return { weekdayOfFirst: firstAd.getDay(), daysInMonth: days };
-  }, [year, month]);
-
-  const cells = useMemo<(number | null)[]>(() => {
-    const result: (number | null)[] = [];
-    for (let i = 0; i < weekdayOfFirst; i++) result.push(null);
-    for (let d = 1; d <= daysInMonth; d++) result.push(d);
-    return result;
-  }, [weekdayOfFirst, daysInMonth]);
-
-  function getAdStr(dayNum: number): string {
-    const ad = bsToAd({ year, month, day: dayNum });
-    return ad.toISOString().split('T')[0];
-  }
-
-  function isToday(dayNum: number): boolean {
-    return (
-      todayBsDate.year === year &&
-      todayBsDate.month === month &&
-      todayBsDate.day === dayNum
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <View style={{ gap: 4 }}>
-        {[0, 1, 2, 3, 4, 5].map((rowIdx) => (
-          <View key={rowIdx} style={{ flexDirection: 'row', gap: 4 }}>
-            {[0, 1, 2, 3, 4, 5, 6].map((colIdx) => (
-              <Skeleton key={colIdx} style={{ height: CELL_SIZE, flex: 1 }} />
-            ))}
-          </View>
-        ))}
-      </View>
-    );
-  }
-
-  const rows: (number | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    rows.push(cells.slice(i, i + 7));
-  }
-
-  return (
-    <View>
-      {/* Day header row */}
-      <View style={styles.calendarRow}>
-        {DAY_HEADERS.map((day, idx) => (
-          <View key={day} style={[styles.dayHeader, idx === 6 && styles.saturdayHeader]}>
-            {idx !== 6 ? (
-              <Text style={styles.dayHeaderText} className="text-muted-foreground">{day}</Text>
-            ) : (
-              <Text style={[styles.dayHeaderText, { color: SATURDAY_HIGHLIGHT.text }]}>{day}</Text>
-            )}
-          </View>
-        ))}
-      </View>
-
-      {/* Week rows */}
-      {rows.map((row, rowIdx) => (
-        <View key={rowIdx} style={styles.calendarRow}>
-          {row.map((dayNum, colIdx) => {
-            if (dayNum === null) {
-              return <View key={`blank-${colIdx}`} style={styles.cell} />;
-            }
-
-            const adStr = getAdStr(dayNum);
-            const status = (recordMap.get(adStr) ?? null) as AttendanceStatus | null;
-            const cfg = status ? STATUS_CONFIG[status] : null;
-            const today = isToday(dayNum);
-            const isSaturday = colIdx === 6;
-
-            const cellBg = cfg
-              ? cfg.bg
-              : isSaturday
-              ? SATURDAY_HIGHLIGHT.bg
-              : c.surfaceMuted;
-
-            return (
-              <View
-                key={dayNum}
-                style={[
-                  styles.cell,
-                  { backgroundColor: cellBg },
-                ]}
-                className={today ? 'border-2 border-primary' : undefined}
-              >
-                <Text
-                  style={[
-                    styles.cellDayNum,
-                    cfg
-                      ? { color: cfg.color }
-                      : isSaturday
-                      ? { color: SATURDAY_HIGHLIGHT.text }
-                      : { color: c.mutedForeground },
-                    today ? { color: c.primary } : undefined,
-                  ]}
-                >
-                  {dayNum}
-                </Text>
-                {cfg ? (
-                  <Text style={[styles.cellCode, { color: cfg.color }]}>{cfg.shortCode}</Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// ─── Mini summary strip ────────────────────────────────────────────────────────
-
-interface MonthlyCounts {
-  PRESENT: number;
-  ABSENT: number;
-  LATE: number;
-  LEAVE: number;
-}
-
-function MonthlySummaryStrip({ counts }: { counts: MonthlyCounts }) {
-  const items: { key: AttendanceStatus; label: string }[] = [
-    { key: 'PRESENT', label: 'P' },
-    { key: 'ABSENT',  label: 'A' },
-    { key: 'LATE',    label: 'L' },
-    { key: 'LEAVE',   label: 'LV' },
-  ];
-
-  return (
-    <View style={styles.summaryStrip}>
-      {items.map(({ key, label }, idx) => {
-        const cfg = STATUS_CONFIG[key];
-        return (
-          <View
-            key={key}
-            style={[styles.summaryItem]}
-            className={idx > 0 ? 'border-l border-border' : undefined}
-          >
-            <Text style={[styles.summaryCode, { color: cfg.color }]}>{label}</Text>
-            <Text style={[styles.summaryCount, { color: cfg.color }]}>{counts[key]}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-// ─── Legend ───────────────────────────────────────────────────────────────────
-
-function Legend() {
-  return (
-    <View style={styles.legend}>
-      {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map((key) => {
-        const cfg = STATUS_CONFIG[key];
-        return (
-          <View key={key} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: cfg.bg, borderColor: cfg.dot }]} />
-            <Text style={styles.legendLabel} className="text-foreground">{cfg.label}</Text>
-          </View>
-        );
-      })}
-      <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: SATURDAY_HIGHLIGHT.bg, borderColor: SATURDAY_HIGHLIGHT.text }]} />
-        <Text style={styles.legendLabel} className="text-foreground">Saturday</Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
+const STATUS_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
+const STAT_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
 
 export default function StudentAttendance() {
   const [refreshing, setRefreshing] = useState(false);
@@ -227,53 +30,24 @@ export default function StudentAttendance() {
     const t = todayBs();
     return { year: t.year, month: t.month, day: 1 };
   });
-
   const c = useThemeColors();
-  const onPrimary = deriveOnPrimary(c.primary);
+  const insets = useSafeAreaInsets();
 
   const summaryResult = useMyAttendanceSummary();
 
-  // Compute AD date range for the viewed BS month
   const { fromDate, toDate, daysInMonth } = useMemo(() => {
     const { year, month } = viewMonth;
     const days = daysInBsMonth(year, month);
-
     const firstAd = bsToAd({ year, month, day: 1 });
-
-    const nextBs: BsDate =
-      month === 12
-        ? { year: year + 1, month: 1, day: 1 }
-        : { year, month: month + 1, day: 1 };
+    const nextBs: BsDate = month === 12 ? { year: year + 1, month: 1, day: 1 } : { year, month: month + 1, day: 1 };
     const toAdDate = bsToAd(nextBs);
     toAdDate.setDate(toAdDate.getDate() - 1);
-
-    return {
-      fromDate: firstAd.toISOString().split('T')[0],
-      toDate: toAdDate.toISOString().split('T')[0],
-      daysInMonth: days,
-    };
+    return { fromDate: localDateKey(firstAd), toDate: localDateKey(toAdDate), daysInMonth: days };
   }, [viewMonth]);
 
-  const historyResult = useAttendanceHistory({
-    fromDate,
-    toDate,
-    limit: daysInMonth + 1,
-  });
-
+  const historyResult = useAttendanceHistory({ fromDate, toDate, limit: daysInMonth + 1 });
   const records = historyResult.data?.data ?? [];
-
-  const recordMap = useMemo(
-    () => new Map(records.map((r) => [r.dateAd, r.status])),
-    [records],
-  );
-
-  const monthlyCounts = useMemo<MonthlyCounts>(() => {
-    const counts: MonthlyCounts = { PRESENT: 0, ABSENT: 0, LATE: 0, LEAVE: 0 };
-    records.forEach((r) => {
-      if (r.status in counts) counts[r.status as AttendanceStatus]++;
-    });
-    return counts;
-  }, [records]);
+  const recordMap = useMemo(() => new Map(records.map((r) => [r.dateAd, r.status])), [records]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -281,320 +55,111 @@ export default function StudentAttendance() {
     setRefreshing(false);
   };
 
-  const monthName = BS_MONTH_NAMES_EN[viewMonth.month - 1];
-  const annualPercent = summaryResult.data?.attendancePercent ?? null;
+  const t = todayBs();
+  const isCurrentMonth = viewMonth.year === t.year && viewMonth.month === t.month;
+  const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
+  const summary = summaryResult.data;
+  const annualPercent = summary?.attendancePercent ?? null;
+
+  const legendItems = [
+    ...STATUS_KEYS.map((k) => ({ label: STATUS_CONFIG[k].label, bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
+    { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
+  ];
 
   return (
-    <ScrollView
-      style={styles.root}
-      className="bg-background"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />
-      }
-    >
-      {/* ── Gradient header with month nav ── */}
-      <LinearGradient
-        colors={headerGradient(c.primary) as [string, string, string]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+    <View style={[styles.root, { backgroundColor: c.background }]}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        {annualPercent !== null && (
-          /* onPrimary.bright — documented accent exception: on-primary decorative tint */
-          <Text style={[styles.headerSubtitle, { color: onPrimary.bright }]}>
-            Annual attendance: {annualPercent}%
-          </Text>
-        )}
-        <Text style={styles.headerTitle} className="text-primary-foreground">My Attendance</Text>
-
-        {/* Month navigation */}
-        <View style={styles.monthNav} className="bg-white/15">
-          <TouchableOpacity
-            onPress={() => setViewMonth(prevMonthOf(viewMonth))}
-            style={styles.navBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="chevron-back" size={20} color={c.primaryForeground} />
-          </TouchableOpacity>
-
-          <Text style={styles.monthNavTitle} className="text-primary-foreground">
-            {monthName} {viewMonth.year}
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => setViewMonth(nextMonthOf(viewMonth))}
-            style={styles.navBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="chevron-forward" size={20} color={c.primaryForeground} />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {/* ── Cards area ── */}
-      <View style={styles.body}>
-
-        {/* Calendar card */}
-        <View style={styles.card} className="bg-surface">
-          <Text style={styles.cardLabel} className="text-muted-foreground">Attendance Calendar</Text>
-
-          <CalendarGrid
-            viewMonth={viewMonth}
-            recordMap={recordMap}
-            isLoading={historyResult.isLoading}
-          />
-
-          {historyResult.isError && !historyResult.isLoading && (
-            <View style={styles.errorRow}>
-              <Text style={styles.errorText} className="text-muted-foreground">Couldn't load this month's attendance.</Text>
-              <TouchableOpacity onPress={() => historyResult.refetch()} style={styles.retryBtn} className="bg-primary">
-                <Text style={styles.retryBtnText} className="text-primary-foreground">Try again</Text>
-              </TouchableOpacity>
-            </View>
+        {/* Plain header */}
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
+          ]}
+        >
+          <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
+          {annualPercent !== null && (
+            <Text style={[styles.headerSub, { color: c.mutedForeground }]}>
+              {annualPercent}% present this year
+            </Text>
           )}
         </View>
 
-        {/* Legend card */}
-        <View style={styles.card} className="bg-surface">
-          <Text style={styles.cardLabel} className="text-muted-foreground">Legend</Text>
-          <Legend />
-        </View>
+        <View style={styles.body}>
+          {/* Calendar card (month nav inside) */}
+          <View style={[styles.card, CARD_SHADOW]}>
+            <MonthNav
+              label={monthLabel}
+              variant="card"
+              onPrev={() => setViewMonth(prevMonthOf(viewMonth))}
+              onNext={() => setViewMonth(nextMonthOf(viewMonth))}
+              nextDisabled={isCurrentMonth}
+            />
+            <View style={{ marginTop: 12 }}>
+              <AttendanceCalendar
+                viewMonth={viewMonth}
+                recordMap={recordMap}
+                statusConfig={STATUS_CONFIG}
+                isLoading={historyResult.isLoading}
+              />
+            </View>
+            {historyResult.isError && !historyResult.isLoading && (
+              <View style={{ marginTop: 8 }}>
+                <ErrorState compact title="Couldn't load this month." subtitle="" onRetry={() => historyResult.refetch()} />
+              </View>
+            )}
+          </View>
 
-        {/* Monthly summary strip card */}
-        <View style={[styles.card, styles.summaryCard]} className="bg-surface">
-          <Text style={styles.cardLabel} className="text-muted-foreground">This Month</Text>
-          <MonthlySummaryStrip counts={monthlyCounts} />
-        </View>
+          {/* Legend */}
+          <View style={styles.legendWrap}>
+            <Legend items={legendItems} />
+          </View>
 
-        {/* Annual summary line from summary endpoint */}
-        {summaryResult.data && (
-          <View style={styles.card} className="bg-surface">
-            <Text style={styles.cardLabel} className="text-muted-foreground">Annual Overview</Text>
-            <View style={styles.annualRow}>
-              {(
-                [
-                  { key: 'present' as const,  label: 'Present', statusKey: 'PRESENT' as AttendanceStatus },
-                  { key: 'absent'  as const,  label: 'Absent',  statusKey: 'ABSENT'  as AttendanceStatus },
-                  { key: 'late'    as const,  label: 'Late',    statusKey: 'LATE'    as AttendanceStatus },
-                  { key: 'leave'   as const,  label: 'Leave',   statusKey: 'LEAVE'   as AttendanceStatus },
-                ] as const
-              ).map(({ key, label, statusKey }) => {
-                const cfg = STATUS_CONFIG[statusKey];
+          {/* Annual stats */}
+          {summary && (
+            <View style={styles.statRow}>
+              {STAT_KEYS.map((key) => {
+                const cfg = STATUS_CONFIG[key];
+                const val = key === 'PRESENT' ? summary.present : key === 'ABSENT' ? summary.absent : summary.late;
                 return (
-                  <View key={key} style={styles.annualStatBox}>
-                    <Text style={[styles.annualStatNum, { color: cfg.color }]}>
-                      {summaryResult.data![key]}
-                    </Text>
-                    <Text style={styles.annualStatLabel} className="text-muted-foreground">{label}</Text>
+                  <View key={key} style={[styles.statCard, CARD_SHADOW]}>
+                    <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
+                    <Text style={[styles.statLabel, { color: c.mutedForeground }]}>{cfg.label}</Text>
                   </View>
                 );
               })}
             </View>
-            <NpText style={styles.annualWorkingDays} className="text-muted-foreground">
-              {summaryResult.data.totalWorkingDays} working days · {summaryResult.data.academicYearName}
-            </NpText>
-          </View>
-        )}
+          )}
 
-      </View>
-    </ScrollView>
+          {summary && (
+            <NpText style={[styles.working, { color: c.mutedForeground }]}>
+              {summary.totalWorkingDays} working days · {summary.academicYearName}
+            </NpText>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
+  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
-  // Header
-  header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 20,
-  },
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  navBtn: {
-    padding: 4,
-  },
-  monthNavTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
+  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16 },
 
-  // Body
-  body: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
-    gap: 12,
-  },
+  legendWrap: { marginTop: 14, alignItems: 'center' },
 
-  // Cards
-  card: {
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  cardLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
+  statRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+  statNum: { fontFamily: FONT.extrabold, fontSize: 20 },
+  statLabel: { fontFamily: FONT.bold, fontSize: 10, textTransform: 'uppercase', marginTop: 2 },
 
-  // Calendar grid
-  calendarRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  dayHeader: {
-    width: CELL_SIZE,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saturdayHeader: {
-    // no extra background on header row — just text color change
-  },
-  dayHeaderText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 1,
-  },
-  cellDayNum: {
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  cellCode: {
-    fontSize: 9,
-    fontWeight: '800',
-    lineHeight: 11,
-    marginTop: 1,
-  },
-
-  // Error
-  errorRow: {
-    alignItems: 'center',
-    paddingTop: 12,
-    gap: 8,
-  },
-  errorText: {
-    fontSize: 13,
-  },
-  retryBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  retryBtnText: {
-    fontWeight: '700',
-    fontSize: 13,
-  },
-
-  // Legend
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  legendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 4,
-    borderWidth: 1.5,
-  },
-  legendLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Monthly summary strip
-  summaryCard: {
-    // uses standard card style
-  },
-  summaryStrip: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  summaryCode: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  summaryCount: {
-    fontSize: 26,
-    fontWeight: '800',
-    lineHeight: 30,
-    marginTop: 2,
-  },
-
-  // Annual overview
-  annualRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  annualStatBox: {
-    alignItems: 'center',
-  },
-  annualStatNum: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  annualStatLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  annualWorkingDays: {
-    textAlign: 'center',
-    fontSize: 12,
-    marginTop: 4,
-  },
+  working: { fontFamily: FONT.regular, fontSize: 12, textAlign: 'center', marginTop: 14 },
 });

@@ -23,6 +23,7 @@ import { GuardianService } from './guardian.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
+import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
@@ -107,6 +108,18 @@ export class StudentController {
     return this.studentMeService.getMyAttendanceHistory(user.userId, dto);
   }
 
+  @Get('me/results')
+  @Roles(Role.STUDENT)
+  getMyResults(@CurrentUser() user: AuthUser) {
+    return this.studentMeService.getMyResults(user.userId);
+  }
+
+  @Get('me/report-card')
+  @Roles(Role.STUDENT)
+  getMyReportCard(@CurrentUser() user: AuthUser) {
+    return this.studentMeService.getMyReportCard(user.userId);
+  }
+
   // ─── Parameterised routes ─────────────────────────────────────────────────────
 
   @Get(':id')
@@ -150,6 +163,15 @@ export class StudentController {
     @Body() dto: CreateStudentAccountDto,
   ) {
     return this.studentService.createStudentAccount(id, dto);
+  }
+
+  @Post(':studentId/guardians')
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  provisionGuardian(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() dto: ProvisionGuardianDto,
+  ) {
+    return this.guardianService.provisionGuardian(studentId, dto);
   }
 
   @Post(':studentId/guardians/:guardianId/account')

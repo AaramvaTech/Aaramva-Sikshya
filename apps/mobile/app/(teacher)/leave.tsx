@@ -1,39 +1,39 @@
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, Alert, RefreshControl, Modal, KeyboardAvoidingView, Platform,
+  View, Text, ScrollView, TouchableOpacity, TextInput, Alert,
+  RefreshControl, Modal, KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useMemo } from 'react';
 import { useMyLeaveRequests, useLeaveTypes, useApplyLeave } from '../../hooks/useTeacher';
-import { todayBs, bsToAd, adToBs, BS_MONTH_NAMES_EN, formatBs } from 'bs-calendar';
+import { todayBs, bsToAd, adToBs, BS_MONTH_NAMES_EN, formatBs, daysInBsMonth } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import type { LeaveRequest, LeaveType } from '../../types';
+import { useThemeColors } from '../../lib/theme/colors';
+import {
+  ScreenHeader, Card, CardLabel, PrimaryButton, StatusBadge, SelectChip,
+  MonthNav, EmptyState, ErrorState, LoadingBlock,
+} from '../../components/ui';
 
+// Semantic leave-status palette (not brand-coupled).
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  PENDING:  { bg: '#fef3c7', text: '#92400e' },
-  APPROVED: { bg: '#d1fae5', text: '#065f46' },
-  REJECTED: { bg: '#fee2e2', text: '#991b1b' },
-  CANCELLED:{ bg: '#f3f4f6', text: '#6b7280' },
+  PENDING:   { bg: '#fef3c7', text: '#92400e' },
+  APPROVED:  { bg: '#d1fae5', text: '#065f46' },
+  REJECTED:  { bg: '#fee2e2', text: '#991b1b' },
+  CANCELLED: { bg: '#f3f4f6', text: '#6b7280' },
 };
 
-function formatBsDate(bsAdDate: { ad: string; bs: string } | null | undefined): string {
-  if (!bsAdDate) return '—';
-  if (bsAdDate.bs) return bsAdDate.bs;
-  if (bsAdDate.ad) {
-    try {
-      const adDate = new Date(bsAdDate.ad + 'T12:00:00Z');
-      const bs = adToBs(adDate);
-      return formatBs(bs, 'en');
-    } catch { return bsAdDate.ad; }
+function formatLeaveDate(d: { ad: string; bs: string } | null | undefined): string {
+  if (!d) return '—';
+  if (d.bs) return d.bs;
+  if (d.ad) {
+    try { return formatBs(adToBs(new Date(d.ad + 'T12:00:00Z')), 'en'); }
+    catch { return d.ad; }
   }
   return '—';
 }
-
-function bsDateToAdString(bs: BsDate): string {
+function bsToAdString(bs: BsDate): string {
   return bsToAd(bs).toISOString().split('T')[0];
 }
-
 function prevMonth(b: BsDate): BsDate {
   if (b.month === 1) return { year: b.year - 1, month: 12, day: 1 };
   return { year: b.year, month: b.month - 1, day: 1 };
@@ -43,121 +43,91 @@ function nextMonth(b: BsDate): BsDate {
   return { year: b.year, month: b.month + 1, day: 1 };
 }
 
-// ─── Simple BS date picker ─────────────────────────────────────────────────────
+// ── BS date picker (month nav + day strip) ────────────────────────────────────
 
-function BsDatePicker({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: BsDate;
-  onChange: (bs: BsDate) => void;
-}) {
+function BsDatePicker({ label, value, onChange }: { label: string; value: BsDate; onChange: (bs: BsDate) => void }) {
+  const c = useThemeColors();
   const [viewMonth, setViewMonth] = useState<BsDate>({ year: value.year, month: value.month, day: 1 });
-  const { daysInBsMonth } = require('bs-calendar');
   const days = useMemo(() => {
-    const n = daysInBsMonth(viewMonth.year, viewMonth.month) as number;
+    const n = daysInBsMonth(viewMonth.year, viewMonth.month);
     return Array.from({ length: n }, (_, i) => i + 1);
   }, [viewMonth.year, viewMonth.month]);
 
   return (
     <View>
-      <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600', marginBottom: 8 }}>{label}</Text>
-      {/* Month nav */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <TouchableOpacity onPress={() => setViewMonth(prevMonth(viewMonth))} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={18} color="#1e40af" />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }}>
-          {BS_MONTH_NAMES_EN[viewMonth.month - 1]} {viewMonth.year}
-        </Text>
-        <TouchableOpacity onPress={() => setViewMonth(nextMonth(viewMonth))} style={{ padding: 4 }}>
-          <Ionicons name="chevron-forward" size={18} color="#1e40af" />
-        </TouchableOpacity>
+      <Text className="text-muted-foreground" style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.pickerNav}>
+        <MonthNav
+          label={`${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`}
+          onPrev={() => setViewMonth(prevMonth(viewMonth))}
+          onNext={() => setViewMonth(nextMonth(viewMonth))}
+        />
       </View>
-      {/* Day row */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
         {days.map((d) => {
-          const isSelected = value.year === viewMonth.year &&
-            value.month === viewMonth.month && value.day === d;
+          const selected = value.year === viewMonth.year && value.month === viewMonth.month && value.day === d;
           return (
             <TouchableOpacity
               key={d}
               onPress={() => onChange({ year: viewMonth.year, month: viewMonth.month, day: d })}
-              style={{
-                width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: isSelected ? '#1e40af' : '#f3f4f6',
-              }}
+              activeOpacity={0.8}
+              accessibilityState={{ selected }}
+              className={selected ? 'bg-primary' : 'bg-surface-muted'}
+              style={styles.dayBtn}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? 'white' : '#374151' }}>
+              <Text
+                className={selected ? 'text-primary-foreground' : 'text-foreground'}
+                style={styles.dayBtnText}
+              >
                 {d}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-        AD: {bsDateToAdString(value)}
-      </Text>
+      <Text className="text-muted-foreground" style={styles.adHint}>AD: {bsToAdString(value)}</Text>
     </View>
   );
 }
 
-// ─── Leave request card ────────────────────────────────────────────────────────
+// ── Leave request card ────────────────────────────────────────────────────────
 
 function LeaveCard({ req }: { req: LeaveRequest }) {
-  const statusStyle = STATUS_STYLE[req.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
+  const c = useThemeColors();
+  const st = STATUS_STYLE[req.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
   return (
-    <View style={{
-      backgroundColor: 'white', borderRadius: 16, padding: 14, marginBottom: 10,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-    }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 }}>
-          {req.leaveTypeName ?? 'Leave'}
-        </Text>
-        <View style={{ backgroundColor: statusStyle.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: statusStyle.text }}>{req.status}</Text>
-        </View>
+    <Card padded style={styles.leaveCard}>
+      <View style={styles.leaveTop}>
+        <Text className="text-foreground" style={styles.leaveTitle}>{req.leaveTypeName ?? 'Leave'}</Text>
+        <StatusBadge label={req.status} bg={st.bg} color={st.text} />
       </View>
-      <View style={{ flexDirection: 'row', gap: 16, marginBottom: 4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="calendar-outline" size={12} color="#9ca3af" />
-          <Text style={{ fontSize: 12, color: '#6b7280' }}>
-            {formatBsDate(req.fromDate)} → {formatBsDate(req.toDate)}
+      <View style={styles.leaveMeta}>
+        <View style={styles.leaveMetaItem}>
+          <Ionicons name="calendar-outline" size={12} color={c.mutedForeground} />
+          <Text className="text-muted-foreground" style={styles.leaveMetaText}>
+            {formatLeaveDate(req.fromDate)} → {formatLeaveDate(req.toDate)}
           </Text>
         </View>
-        <Text style={{ fontSize: 12, color: '#6b7280' }}>
+        <Text className="text-muted-foreground" style={styles.leaveMetaText}>
           {req.totalDays} day{req.totalDays !== 1 ? 's' : ''}
         </Text>
       </View>
-      {req.reason && (
-        <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }} numberOfLines={2}>
-          {req.reason}
-        </Text>
-      )}
-      {req.reviewerNote && (
-        <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 8 }}>
-          <Text style={{ fontSize: 11, color: '#6b7280' }}>Note: {req.reviewerNote}</Text>
+      {req.reason ? (
+        <Text className="text-muted-foreground" style={styles.leaveReason} numberOfLines={2}>{req.reason}</Text>
+      ) : null}
+      {req.reviewerNote ? (
+        <View className="bg-background" style={styles.noteBox}>
+          <Text className="text-muted-foreground" style={styles.noteText}>Note: {req.reviewerNote}</Text>
         </View>
-      )}
-    </View>
+      ) : null}
+    </Card>
   );
 }
 
-// ─── Apply leave modal ─────────────────────────────────────────────────────────
+// ── Apply modal ───────────────────────────────────────────────────────────────
 
-function ApplyLeaveModal({
-  visible,
-  onClose,
-  leaveTypes,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  leaveTypes: LeaveType[];
-}) {
+function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; onClose: () => void; leaveTypes: LeaveType[] }) {
+  const c = useThemeColors();
   const applyMutation = useApplyLeave();
   const today = todayBs();
   const [selectedType, setSelectedType] = useState<string | null>(leaveTypes[0]?.id ?? null);
@@ -166,15 +136,12 @@ function ApplyLeaveModal({
   const [reason, setReason] = useState('');
 
   const handleSubmit = async () => {
-    if (!selectedType) {
-      Alert.alert('Required', 'Please select a leave type.');
-      return;
-    }
+    if (!selectedType) { Alert.alert('Required', 'Please select a leave type.'); return; }
     try {
       await applyMutation.mutateAsync({
         leaveTypeId: selectedType,
-        fromDate: bsDateToAdString(fromBs),
-        toDate: bsDateToAdString(toBs),
+        fromDate: bsToAdString(fromBs),
+        toDate: bsToAdString(toBs),
         reason: reason || undefined,
       });
       onClose();
@@ -185,99 +152,61 @@ function ApplyLeaveModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView style={{ flex: 1, backgroundColor: '#f9fafb' }} contentContainerStyle={{ padding: 20, paddingTop: 48 }}>
-          {/* Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Apply for Leave</Text>
-            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
-              <Ionicons name="close" size={24} color="#6b7280" />
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView className="bg-background" style={styles.fill} contentContainerStyle={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text className="text-foreground" style={styles.modalTitle}>Apply for Leave</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close">
+              <Ionicons name="close" size={24} color={c.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {/* Leave type */}
-          <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600', marginBottom: 8 }}>Leave Type</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+          <Text className="text-muted-foreground" style={styles.fieldLabel}>Leave Type</Text>
+          <View style={styles.typeRow}>
             {leaveTypes.map((lt) => (
-              <TouchableOpacity
-                key={lt.id}
-                onPress={() => setSelectedType(lt.id)}
-                style={{
-                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1.5,
-                  borderColor: selectedType === lt.id ? '#1e40af' : '#e5e7eb',
-                  backgroundColor: selectedType === lt.id ? '#eff6ff' : 'white',
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600',
-                  color: selectedType === lt.id ? '#1e40af' : '#374151' }}>
-                  {lt.name}
-                </Text>
-              </TouchableOpacity>
+              <SelectChip key={lt.id} label={lt.name} selected={selectedType === lt.id} onPress={() => setSelectedType(lt.id)} />
             ))}
           </View>
 
-          {/* From date */}
-          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, marginBottom: 12 }}>
+          <Card padded style={styles.modalCard}>
             <BsDatePicker label="From Date" value={fromBs} onChange={setFromBs} />
-          </View>
-
-          {/* To date */}
-          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, marginBottom: 12 }}>
+          </Card>
+          <Card padded style={styles.modalCard}>
             <BsDatePicker label="To Date" value={toBs} onChange={setToBs} />
-          </View>
+          </Card>
 
-          {/* Reason */}
-          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, marginBottom: 24 }}>
-            <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600', marginBottom: 8 }}>
-              Reason (optional)
-            </Text>
+          <Card padded style={styles.modalCardLast}>
+            <Text className="text-muted-foreground" style={styles.fieldLabel}>Reason (optional)</Text>
             <TextInput
               value={reason}
               onChangeText={setReason}
               multiline
               numberOfLines={3}
-              placeholder="Enter reason for leave..."
-              placeholderTextColor="#9ca3af"
-              style={{
-                fontSize: 14, color: '#111827', minHeight: 72,
-                textAlignVertical: 'top', lineHeight: 20,
-              }}
+              placeholder="Enter reason for leave…"
+              placeholderTextColor={c.mutedForeground}
+              className="text-foreground"
+              style={styles.reasonInput}
             />
-          </View>
+          </Card>
 
-          {/* Submit */}
-          <TouchableOpacity
+          <PrimaryButton
+            label={applyMutation.isPending ? 'Submitting…' : 'Submit Application'}
+            icon="send-outline"
+            loading={applyMutation.isPending}
             onPress={handleSubmit}
-            disabled={applyMutation.isPending}
-            style={{
-              backgroundColor: applyMutation.isPending ? '#93c5fd' : '#1e40af',
-              borderRadius: 16, padding: 16,
-              alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
-            }}
-          >
-            {applyMutation.isPending ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Ionicons name="send-outline" size={18} color="white" />
-            )}
-            <Text style={{ color: 'white', fontSize: 15, fontWeight: '800' }}>
-              {applyMutation.isPending ? 'Submitting...' : 'Submit Application'}
-            </Text>
-          </TouchableOpacity>
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function TeacherLeave() {
   const [refreshing, setRefreshing] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const c = useThemeColors();
 
   const leaveResult = useMyLeaveRequests();
   const typesResult = useLeaveTypes();
@@ -292,95 +221,67 @@ export default function TeacherLeave() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#f9fafb' }}
+      className="bg-background"
+      style={styles.fill}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e40af" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
-      {/* Header */}
-      <LinearGradient
-        colors={['#1e3a8a', '#1e40af', '#2563eb']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ paddingTop: 56, paddingBottom: 28, paddingHorizontal: 20 }}
-      >
-        <Text style={{ color: '#bfdbfe', fontSize: 12, fontWeight: '700',
-          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-          Leave Management
-        </Text>
-        <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 4 }}>
-          My Leave
-        </Text>
-        <Text style={{ color: '#93c5fd', fontSize: 13 }}>
-          {requests.length} request{requests.length !== 1 ? 's' : ''}
-        </Text>
-      </LinearGradient>
+      <ScreenHeader
+        eyebrow="Leave Management"
+        title="My Leave"
+        subtitle={`${requests.length} request${requests.length !== 1 ? 's' : ''}`}
+      />
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, gap: 12 }}>
+      <View style={styles.body}>
+        <PrimaryButton label="Apply for Leave" icon="add-circle-outline" onPress={() => setShowApplyModal(true)} />
 
-        {/* Apply button */}
-        <TouchableOpacity
-          onPress={() => setShowApplyModal(true)}
-          style={{
-            backgroundColor: '#1e40af', borderRadius: 20, padding: 16,
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-            shadowColor: '#1e40af', shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3, shadowRadius: 10, elevation: 5,
-          }}
-        >
-          <Ionicons name="add-circle-outline" size={22} color="white" />
-          <Text style={{ color: 'white', fontSize: 15, fontWeight: '800' }}>Apply for Leave</Text>
-        </TouchableOpacity>
-
-        {/* Leave list */}
         <View>
-          <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700',
-            textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
-            Leave Requests
-          </Text>
-
+          <CardLabel>Leave Requests</CardLabel>
           {leaveResult.isLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <ActivityIndicator size="large" color="#1e40af" />
-            </View>
+            <Card><LoadingBlock /></Card>
           ) : leaveResult.isError ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Ionicons name="cloud-offline-outline" size={44} color="#d1d5db" />
-              <Text style={{ color: '#374151', fontWeight: '600', marginTop: 10 }}>Failed to load</Text>
-              <TouchableOpacity
-                onPress={() => leaveResult.refetch()}
-                style={{ backgroundColor: '#1e40af', paddingHorizontal: 20, paddingVertical: 10,
-                  borderRadius: 12, marginTop: 12 }}
-              >
-                <Text style={{ color: 'white', fontWeight: '700' }}>Retry</Text>
-              </TouchableOpacity>
-            </View>
+            <Card><ErrorState title="Failed to load" onRetry={() => leaveResult.refetch()} /></Card>
           ) : requests.length === 0 ? (
-            <View style={{
-              backgroundColor: 'white', borderRadius: 20, padding: 32, alignItems: 'center',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
-            }}>
-              <Ionicons name="document-outline" size={44} color="#d1d5db" />
-              <Text style={{ color: '#6b7280', marginTop: 12, fontSize: 14, fontWeight: '500' }}>
-                No leave requests yet.
-              </Text>
-              <Text style={{ color: '#9ca3af', marginTop: 4, fontSize: 13 }}>
-                Tap "Apply for Leave" to submit one.
-              </Text>
-            </View>
+            <Card>
+              <EmptyState icon="document-outline" title="No leave requests yet" subtitle='Tap "Apply for Leave" to submit one.' />
+            </Card>
           ) : (
             requests.map((req) => <LeaveCard key={req.id} req={req} />)
           )}
         </View>
-
       </View>
 
-      {/* Apply modal */}
-      <ApplyLeaveModal
-        visible={showApplyModal}
-        onClose={() => setShowApplyModal(false)}
-        leaveTypes={typesResult.data ?? []}
-      />
+      <ApplyLeaveModal visible={showApplyModal} onClose={() => setShowApplyModal(false)} leaveTypes={typesResult.data ?? []} />
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, gap: 14 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  // date picker
+  pickerNav: { marginBottom: 8 },
+  dayStrip: { gap: 6 },
+  dayBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dayBtnText: { fontSize: 14, fontWeight: '700' },
+  adHint: { fontSize: 11, marginTop: 8 },
+  // leave card
+  leaveCard: { padding: 14, marginBottom: 10 },
+  leaveTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  leaveTitle: { fontSize: 15, fontWeight: '700', flex: 1, marginRight: 8 },
+  leaveMeta: { flexDirection: 'row', gap: 16, marginBottom: 4, flexWrap: 'wrap' },
+  leaveMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  leaveMetaText: { fontSize: 12 },
+  leaveReason: { fontSize: 12, marginTop: 4 },
+  noteBox: { marginTop: 8, borderRadius: 8, padding: 8 },
+  noteText: { fontSize: 11 },
+  // modal
+  modalContent: { padding: 20, paddingTop: 48, gap: 0 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  modalCard: { marginBottom: 12 },
+  modalCardLast: { marginBottom: 24 },
+  reasonInput: { fontSize: 14, minHeight: 72, textAlignVertical: 'top', lineHeight: 20 },
+});

@@ -1,173 +1,48 @@
 import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  StyleSheet,
+  View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyProfile, useMyTimetable, useMyAttendanceSummary } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
+import { AttendanceSummaryCard, TodayClasses, ErrorState, type TodayPeriod } from '../../components/ui';
 import { useAuthStore } from '../../store/auth';
-import { logout } from '../../lib/session';
-import { STATUS_CONFIG } from '../../lib/attendance';
-import type { AttendanceStatus } from '../../lib/attendance';
-import { todayBs, formatBs } from 'bs-calendar';
-import { useThemeColors, headerGradient, deriveOnPrimary } from '../../lib/theme/colors';
 import { useBranding } from '../../lib/theme/provider';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { todayBs, formatBs } from 'bs-calendar';
+import { useThemeColors } from '../../lib/theme/colors';
+import { FONT } from '../../lib/theme/fonts';
 
 function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good Morning 👋';
-  if (hour < 17) return 'Good Afternoon 👋';
-  return 'Good Evening 👋';
+  // Asia/Kathmandu is UTC+5:45 — read the Nepal wall-clock hour regardless of device TZ.
+  const hour = new Date(Date.now() + 345 * 60 * 1000).getUTCHours();
+  if (hour < 12) return 'Good morning 👋';
+  if (hour < 17) return 'Good afternoon 👋';
+  return 'Good evening 👋';
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function AttendanceCard({
-  present,
-  absent,
-  late,
-  leave,
-  percent,
-  totalWorkingDays,
-}: {
-  present: number;
-  absent: number;
-  late: number;
-  leave: number;
-  percent: number;
-  totalWorkingDays: number;
-}) {
-  const chips: { key: AttendanceStatus; count: number }[] = [
-    { key: 'PRESENT', count: present },
-    { key: 'ABSENT', count: absent },
-    { key: 'LATE', count: late },
-    { key: 'LEAVE', count: leave },
-  ];
-
-  // Semantic token className for percent text and fill bar
-  const percentColorClass = percent >= 75 ? 'text-primary' : percent >= 50 ? 'text-warning' : 'text-danger';
-  const progressFillClass = percent >= 75 ? 'bg-primary' : percent >= 50 ? 'bg-warning' : 'bg-danger';
-
-  return (
-    <View style={styles.card} className="bg-surface">
-      <Text style={styles.cardLabel} className="text-muted-foreground">ATTENDANCE THIS YEAR</Text>
-
-      <View style={styles.attendanceRow}>
-        {/* Big percent */}
-        <View style={styles.percentBox}>
-          <Text style={styles.percentText} className={percentColorClass}>{percent}%</Text>
-          <Text style={styles.workingDaysText} className="text-muted-foreground">{totalWorkingDays} working days</Text>
-        </View>
-
-        {/* Stat chips */}
-        <View style={styles.chipsGrid}>
-          {chips.map(({ key, count }) => {
-            const cfg = STATUS_CONFIG[key];
-            return (
-              <View key={key} style={[styles.chip, { backgroundColor: cfg.bg }]}>
-                <Text style={[styles.chipCount, { color: cfg.color }]}>{count}</Text>
-                <Text style={[styles.chipLabel, { color: cfg.color }]}>{cfg.shortCode}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Progress bar */}
-      <View style={styles.progressTrack} className="bg-surface-muted">
-        {/* width must stay as inline style — className can't express dynamic percentages */}
-        <View
-          style={[styles.progressFill, { width: `${Math.min(percent, 100)}%` as `${number}%` }]}
-          className={progressFillClass}
-        />
-      </View>
-    </View>
-  );
+// "Gyan Jyoti Secondary School" -> { head: "Gyan Jyoti", tail: "Secondary School" }
+function splitName(name: string): { head: string; tail: string } {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 2) return { head: name, tail: 'Student portal' };
+  return { head: words.slice(0, 2).join(' '), tail: words.slice(2).join(' ') };
 }
 
-function TimetableCard({
-  isSchoolDay,
-  periods,
-}: {
-  isSchoolDay: boolean;
-  periods: {
-    slotId: string;
-    periodNumber: number;
-    startTime: string;
-    endTime: string;
-    subject: { id: string; name: string; code: string | null };
-    teacher: { id: string; fullName: string };
-    room: string | null;
-  }[];
-}) {
-  const c = useThemeColors();
-  const empty = !isSchoolDay || periods.length === 0;
-
-  return (
-    <View style={[styles.card, { marginBottom: 32 }]} className="bg-surface">
-      <Text style={styles.cardLabel} className="text-muted-foreground">TODAY'S CLASSES</Text>
-
-      {empty ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="moon-outline" size={40} color={c.placeholderIcon} />
-          <Text style={styles.emptyText} className="text-muted-foreground">No classes today</Text>
-        </View>
-      ) : (
-        periods.map((p, idx) => (
-          <View
-            key={p.slotId}
-            style={styles.periodRow}
-            className={idx < periods.length - 1 ? 'border-b border-border' : undefined}
-          >
-            {/* Period number badge */}
-            <View style={styles.periodBadge} className="bg-primary/10">
-              <Text style={styles.periodBadgeText} className="text-primary">{p.periodNumber}</Text>
-            </View>
-
-            <View style={styles.periodInfo}>
-              <View style={styles.periodTopRow}>
-                <NpText style={styles.subjectName} className="text-foreground">{p.subject.name}</NpText>
-                <Text style={styles.timeText} className="text-muted-foreground">
-                  {p.startTime}–{p.endTime}
-                </Text>
-              </View>
-              <NpText style={styles.teacherText} className="text-muted-foreground">
-                {p.teacher.fullName}
-                {p.room ? ` · Room ${p.room}` : ''}
-              </NpText>
-            </View>
-          </View>
-        ))
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
+const QUICK = [
+  { icon: 'calendar-number-outline', label: 'Attendance', route: '/(student)/attendance' },
+  { icon: 'calendar-outline', label: 'Routine', route: '/(student)/timetable' },
+  { icon: 'megaphone-outline', label: 'Notices', route: '/(student)/notices' },
+] as const;
 
 export default function StudentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const tenant = useAuthStore((s) => s.tenant);
-  const c = useThemeColors();
-  const onPrimary = deriveOnPrimary(c.primary);
   const { branding } = useBranding();
+  const c = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   const profile = useMyProfile();
   const timetable = useMyTimetable();
@@ -182,18 +57,11 @@ export default function StudentDashboard() {
     setRefreshing(false);
   };
 
-  const handleLogout = () => {
-    void logout();
-  };
-
-  // -------------------------------------------------------------------------
-  // Loading state
-  // -------------------------------------------------------------------------
   if (isLoading) {
     return (
-      <View style={{ flex: 1 }} className="bg-background">
-        <Skeleton style={{ height: 180 }} className="rounded-none" />
-        <View style={{ paddingHorizontal: 16, marginTop: -48, gap: 12 }}>
+      <View style={[styles.root, { backgroundColor: c.background }]}>
+        <Skeleton style={{ height: 200 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
           <Skeleton style={{ height: 150 }} className="rounded-2xl" />
           <Skeleton style={{ height: 180 }} className="rounded-2xl" />
         </View>
@@ -201,344 +69,176 @@ export default function StudentDashboard() {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Error state
-  // -------------------------------------------------------------------------
   if (isError) {
     return (
-      <View style={styles.centerFill} className="bg-background">
-        <Ionicons name="cloud-offline-outline" size={52} color={c.placeholderIcon} />
-        <Text style={styles.errorTitle} className="text-foreground">Couldn't load your dashboard</Text>
-        <Text style={styles.errorSubtext} className="text-muted-foreground">Check your connection and try again.</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          className="bg-primary"
-          onPress={() => {
-            void profile.refetch();
-            void timetable.refetch();
-            void summary.refetch();
-          }}
-        >
-          <Text style={styles.retryText} className="text-primary-foreground">Try again</Text>
-        </TouchableOpacity>
+      <View style={[styles.centerFill, { backgroundColor: c.background }]}>
+        <ErrorState
+          title="Couldn't load your dashboard"
+          onRetry={() => { void profile.refetch(); void timetable.refetch(); void summary.refetch(); }}
+        />
       </View>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
   const p = profile.data;
   const t = timetable.data;
   const s = summary.data;
 
   const fullName = p ? `${p.firstName} ${p.lastName}` : '';
   const enrollment = p?.currentEnrollment ?? null;
-
   let enrollmentLine = 'Not enrolled';
   if (enrollment) {
-    const parts = [`Class ${enrollment.className}`, `Section ${enrollment.sectionName}`];
+    const parts = [enrollment.className, `Section ${enrollment.sectionName}`];
     if (enrollment.rollNumber !== null) parts.push(`Roll ${enrollment.rollNumber}`);
     enrollmentLine = parts.join(' · ');
   }
 
-  const todayLabel = `Today: ${formatBs(todayBs(), 'en')}`;
+  const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
+  const { head, tail } = splitName(schoolName);
+  const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+
+  const todayPeriods: TodayPeriod[] = (t?.periods ?? []).map((period) => ({
+    slotId: period.slotId,
+    periodNumber: period.periodNumber,
+    startTime: period.startTime,
+    endTime: period.endTime,
+    subjectName: period.subject.name,
+    teacherName: period.teacher.fullName,
+    room: period.room,
+  }));
 
   return (
-    <ScrollView
-      style={styles.root}
-      className="bg-background"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />
-      }
-    >
-      {/* ------------------------------------------------------------------ */}
-      {/* Gradient Header                                                     */}
-      {/* ------------------------------------------------------------------ */}
-      <LinearGradient
-        colors={headerGradient(c.primary) as [string, string, string]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+    <View style={[styles.root, { backgroundColor: c.background }]}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        {/* Top row: logo + logout */}
-        <View style={styles.headerTopRow}>
-          {branding?.logoUrl ? (
-            <View className="bg-surface rounded-xl px-2.5 py-1.5">
-              <Image
-                source={{ uri: branding.logoUrl }}
-                style={{ width: 92, height: 26 }}
-                resizeMode="contain"
-              />
+        {/* Hero band */}
+        <View
+          style={[
+            styles.band,
+            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+          ]}
+        >
+          <View style={styles.bandTop}>
+            <View style={styles.schoolWrap}>
+              {branding?.logoUrl ? (
+                <View style={[styles.logoChip, { backgroundColor: c.surface }]}>
+                  <Image source={{ uri: branding.logoUrl }} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                </View>
+              ) : (
+                <View style={[styles.logoChip, { backgroundColor: c.primary }]}>
+                  <Text style={[styles.logoChipText, { color: c.primaryForeground }]}>{initials}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <NpText numberOfLines={1} style={[styles.schoolHead, { color: c.foreground }]}>{head}</NpText>
+                <NpText numberOfLines={1} style={[styles.schoolTail, { color: c.brandMuted }]}>{tail}</NpText>
+              </View>
             </View>
-          ) : (
-            <Image
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              source={require('../../assets/images/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          )}
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityLabel="Logout">
-            <Ionicons name="log-out-outline" size={18} color={c.primaryForeground} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(student)/notices')}
+              hitSlop={10}
+              accessibilityLabel="Notices"
+            >
+              <Ionicons name="notifications-outline" size={22} color={c.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.todayBs, { color: c.brandMuted }]}>
+            Today · {formatBs(todayBs(), 'en')}
+          </Text>
+          <Text style={[styles.greeting, { color: c.mutedForeground }]}>{getGreeting()}</Text>
+          <NpText style={[styles.name, { color: c.foreground }]}>{fullName}</NpText>
+          <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
         </View>
 
-        {/* BS Date */}
-        {/* onPrimary.bright — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.bsDate, { color: onPrimary.bright }]}>{todayLabel}</Text>
+        <View style={styles.body}>
+          {s && (
+            <AttendanceSummaryCard
+              present={s.present}
+              absent={s.absent}
+              late={s.late}
+              leave={s.leave}
+              percent={s.attendancePercent}
+              totalWorkingDays={s.totalWorkingDays}
+            />
+          )}
 
-        {/* Greeting */}
-        {/* onPrimary.soft — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.greeting, { color: onPrimary.soft }]}>{getGreeting()}</Text>
+          {/* Quick access */}
+          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Quick access</Text>
+          <View style={styles.quickGrid}>
+            {QUICK.map((q) => (
+              <TouchableOpacity
+                key={q.label}
+                style={[styles.quickTile, { backgroundColor: c.surface }]}
+                activeOpacity={0.85}
+                onPress={() => router.push(q.route)}
+              >
+                <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
+                  <Ionicons name={q.icon} size={23} color={c.primary} />
+                </View>
+                <Text style={[styles.quickLabel, { color: c.foreground }]}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Student name */}
-        <NpText style={styles.studentName} className="text-primary-foreground">{fullName}</NpText>
-
-        {/* Enrollment */}
-        {/* onPrimary.pale — documented accent exception: on-primary decorative tint */}
-        <Text style={[styles.enrollmentLine, { color: onPrimary.pale }]}>{enrollmentLine}</Text>
-
-        {/* Tenant name */}
-        {tenant?.name ? (
-          /* onPrimary.soft — documented accent exception: on-primary decorative tint */
-          <NpText style={[styles.tenantName, { color: onPrimary.soft }]}>{tenant.name}</NpText>
-        ) : null}
-      </LinearGradient>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Cards (overlap header)                                              */}
-      {/* ------------------------------------------------------------------ */}
-      <View style={styles.cardsContainer}>
-        {/* Attendance summary */}
-        {s && (
-          <AttendanceCard
-            present={s.present}
-            absent={s.absent}
-            late={s.late}
-            leave={s.leave}
-            percent={s.attendancePercent}
-            totalWorkingDays={s.totalWorkingDays}
+          {/* Today's classes */}
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionLabel, { color: c.foreground, marginTop: 0 }]}>Today&apos;s classes</Text>
+            <TouchableOpacity
+              style={styles.routineLink}
+              onPress={() => router.push('/(student)/timetable')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.routineLinkText, { color: c.primary }]}>Routine</Text>
+              <Ionicons name="chevron-forward" size={15} color={c.primary} />
+            </TouchableOpacity>
+          </View>
+          <TodayClasses
+            periods={todayPeriods}
+            isSchoolDay={t?.isSchoolDay ?? false}
+            style={styles.lastCard}
           />
-        )}
-
-        {/* Timetable */}
-        <TimetableCard
-          isSchoolDay={t?.isSchoolDay ?? false}
-          periods={t?.periods ?? []}
-        />
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles — layout only; colors removed and delegated to className tokens
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  centerFill: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  errorTitle: {
-    fontWeight: '600',
-    marginTop: 12,
-    fontSize: 16,
-  },
-  errorSubtext: {
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 16,
-  },
-  retryText: {
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  root: { flex: 1 },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
-  // Header
-  header: {
-    paddingTop: 56,
-    paddingBottom: 80,
-    paddingHorizontal: 20,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  logo: {
-    width: 120,
-    height: 30,
-  },
-  logoutBtn: {
-    padding: 8,
-  },
-  bsDate: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  greeting: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 6,
-  },
-  studentName: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  enrollmentLine: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  tenantName: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 4,
-  },
+  // Hero band
+  band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
+  bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
+  logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  logoChipText: { fontFamily: FONT.extrabold, fontSize: 12.5, letterSpacing: 0.5 },
+  schoolHead: { fontFamily: FONT.extrabold, fontSize: 12.5, lineHeight: 15 },
+  schoolTail: { fontFamily: FONT.medium, fontSize: 10, marginTop: 1 },
+  todayBs: { fontFamily: FONT.bold, fontSize: 11.5, marginTop: 16, letterSpacing: 0.3 },
+  greeting: { fontFamily: FONT.medium, fontSize: 13, marginTop: 6 },
+  name: { fontFamily: FONT.extrabold, fontSize: 25, marginTop: 1, letterSpacing: -0.4 },
+  enroll: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
 
-  // Cards container — overlaps header
-  cardsContainer: {
-    marginTop: -60,
-    paddingHorizontal: 16,
-  },
+  // Body
+  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 12, marginLeft: 2 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 12 },
+  routineLink: { flexDirection: 'row', alignItems: 'center' },
+  routineLinkText: { fontFamily: FONT.bold, fontSize: 11.5 },
 
-  // Shared card
-  card: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+  // Quick access
+  quickGrid: { flexDirection: 'row', gap: 10 },
+  quickTile: {
+    flex: 1, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8, alignItems: 'center', gap: 8,
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 13, elevation: 2,
   },
-  cardLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 14,
-  },
+  quickIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontFamily: FONT.bold, fontSize: 11, textAlign: 'center' },
 
-  // Attendance card
-  attendanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  percentBox: {
-    flex: 1,
-    marginRight: 12,
-  },
-  percentText: {
-    fontSize: 36,
-    fontWeight: '800',
-  },
-  workingDaysText: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  chipsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-end',
-    flex: 1,
-  },
-  chip: {
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    alignItems: 'center',
-    minWidth: 44,
-  },
-  chipCount: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  chipLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginTop: 1,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 6,
-    borderRadius: 3,
-  },
-
-  // Timetable card
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 10,
-  },
-  periodRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  periodBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  periodBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  periodInfo: {
-    flex: 1,
-  },
-  periodTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  subjectName: {
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 8,
-  },
-  timeText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  teacherText: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
+  lastCard: { marginBottom: 8 },
 });

@@ -22,6 +22,7 @@ import { SubjectService } from '../modules/academic/subject.service';
 import { TimetableService } from '../modules/academic/timetable.service';
 import { StaffService } from '../modules/hr/staff.service';
 import { StudentService } from '../modules/student/student.service';
+import { GuardianService } from '../modules/student/guardian.service';
 import { GradingScaleService } from '../modules/examination/grading-scale.service';
 import { ExamTypeService } from '../modules/examination/exam-type.service';
 import { ExamScheduleService } from '../modules/examination/exam-schedule.service';
@@ -36,6 +37,9 @@ const OWNER_EMAIL      = 'owner@demo.school';
 const OWNER_PASSWORD   = 'Owner@12345';
 const TEACHER_EMAIL    = 'teacher@demo.school';
 const TEACHER_PASSWORD = 'Teacher@123';
+const PARENT_EMAIL     = 'parent@demo.school';
+const PARENT_PASSWORD  = 'Parent@123';
+const PARENT_PHONE     = '9800000000';
 
 // ─── Static roster — deterministic for cross-run idempotency ─────────────────
 
@@ -83,6 +87,7 @@ async function seedDemo(): Promise<void> {
   const timetableSvc     = app.get(TimetableService);
   const staffSvc         = app.get(StaffService);
   const studentSvc       = app.get(StudentService);
+  const guardianSvc      = app.get(GuardianService);
   const gradingScaleSvc  = app.get(GradingScaleService);
   const examTypeSvc      = app.get(ExamTypeService);
   const examScheduleSvc  = app.get(ExamScheduleService);
@@ -425,8 +430,24 @@ async function seedDemo(): Promise<void> {
       }, teacherUserId);
     }
 
+    // ── Parent portal account (provisioned via the real service path) ─────────
+    // Replaces the manual SQL guardian insert used during the 2026-06-21 audit.
+    // Idempotent: re-running creates no duplicate guardian and no duplicate user.
+    // Links parent → studentsA[0] (Section A) so the parent resolves to exactly
+    // their own child and a Section-B fetch stays 403.
+    const parentLink = await guardianSvc.provisionGuardian(studentsA[0].id, {
+      relation:  'Father',
+      firstName: 'Demo',
+      lastName:  'Parent',
+      phone:     PARENT_PHONE,
+      email:     PARENT_EMAIL,
+      password:  PARENT_PASSWORD,
+      isPrimary: true,
+    });
+
     return {
       students: { A: studentsA.length, B: studentsB.length },
+      parent: { childId: studentsA[0].id, ...parentLink },
     };
   });
 
@@ -438,6 +459,7 @@ async function seedDemo(): Promise<void> {
   console.log(` Slug       : ${SLUG}`);
   console.log(` Teacher    : ${TEACHER_EMAIL}  /  ${TEACHER_PASSWORD}`);
   console.log(` Owner      : ${OWNER_EMAIL}  /  ${OWNER_PASSWORD}`);
+  console.log(` Parent     : ${PARENT_EMAIL}  /  ${PARENT_PASSWORD}  (child: Section A roll 1; created=${report.parent.parentAccountCreated})`);
   console.log(` Year       : 2081-82 (current)`);
   console.log(` Class      : Grade 9 — Section A (${report.students.A} students) + Section B (${report.students.B} students)`);
   console.log(` Subjects   : Mathematics (split T60+P40) · Science (single 100)`);

@@ -24,7 +24,9 @@ module.exports = {
         info: 'rgb(var(--info) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['Inter', 'System'],
+        // Base UI font. Weighted text selects an explicit family (FONT.* in lib/theme/fonts)
+        // because RN does not synthesize weights for custom fonts.
+        sans: ['PlusJakartaSans_400Regular', 'System'],
         deva: ['NotoSansDevanagari'],
       },
     },

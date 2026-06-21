@@ -9,20 +9,22 @@ import { useBootSession } from '../lib/session';
 import { ThemeProvider } from '../lib/theme/provider';
 import ThemeSync from '../components/ThemeSync';
 import { useFonts } from 'expo-font';
-import { NotoSansDevanagari_400Regular } from '@expo-google-fonts/noto-sans-devanagari';
+import { APP_FONTS } from '../lib/theme/fonts';
 
 export default function RootLayout() {
   useBootSession();
   const { status, user } = useAuthStore();
-  const [fontsLoaded] = useFonts({ NotoSansDevanagari: NotoSansDevanagari_400Regular });
+  const [fontsLoaded] = useFonts(APP_FONTS);
 
   useEffect(() => {
-    // Wait until boot resolves AND the <Stack> navigator is mounted (fontsLoaded).
-    // Navigating earlier queues the action into an unmounted navigator (the <Stack>
-    // render is also gated on fontsLoaded), which then replays in a passive effect on
-    // mount and loops focus/dispatch → "Maximum update depth exceeded" (seen on Android,
-    // where fonts load async). This effect only runs on auth-state changes — never on
-    // in-state navigation — so pushes like /help-code are left alone.
+    // Drive auth routing imperatively once boot + fonts resolve. We deliberately do
+    // NOT read useRootNavigationState()/useNavigation() here — those touch React
+    // Navigation's state context, which this component sits OUTSIDE of (it renders
+    // the <Stack> navigator below), so calling them throws
+    // "Couldn't find a navigation context" at startup.
+    // router.replace() is safe to call before the navigator is registered: expo-router
+    // enqueues the action (see global-state/routingQueue) and replays it the moment the
+    // navigation container mounts. The <Stack> is rendered unconditionally for this reason.
     if (status === 'booting' || !fontsLoaded) return;
 
     if (status === 'noSchool') {
@@ -43,11 +45,6 @@ export default function RootLayout() {
     }
   }, [status, user?.role, fontsLoaded]);
 
-  // The navigator must be rendered UNCONDITIONALLY — expo-router needs it mounted
-  // to provide navigation context. Swapping it for a loading View leaves router
-  // actions with no navigator to land in ("Couldn't find a navigation context").
-  // Instead, keep <Stack> always mounted and cover it with the loader overlay
-  // until boot + fonts are ready.
   const showLoader = status === 'booting' || !fontsLoaded;
 
   return (
@@ -60,7 +57,7 @@ export default function RootLayout() {
             style={StyleSheet.absoluteFill}
             className="items-center justify-center bg-background"
           >
-            <ActivityIndicator size="large" color="#065f46" />
+            <ActivityIndicator size="large" color="#0B6B43" />
             <Text className="text-muted-foreground mt-4 text-sm">Loading...</Text>
           </View>
         )}

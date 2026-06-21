@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentMeService, todayInNepal } from '../student-me.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { ResultService } from '../../examination/result.service';
 
 // ─── Shared mock data ──────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ const mockTimetableSlot = {
 describe('StudentMeService', () => {
   let service: StudentMeService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let resultService: jest.Mocked<ResultService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -66,12 +68,51 @@ describe('StudentMeService', () => {
             query: jest.fn(),
           },
         },
+        {
+          provide: ResultService,
+          useValue: {
+            getStudentResults: jest.fn(),
+            getReportCard: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(StudentMeService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    resultService = module.get(ResultService) as jest.Mocked<ResultService>;
     jest.clearAllMocks();
+  });
+
+  // ─── Self-results (Task 2) ──────────────────────────────────────────────────
+
+  describe('getMyResults() / getMyReportCard()', () => {
+    it('resolves studentId from the token and delegates to ResultService', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockStudentRow]); // resolveStudent
+      (resultService.getStudentResults as jest.Mock).mockResolvedValueOnce([{ examTypeName: 'First Terminal' }]);
+
+      const result = await service.getMyResults(STUDENT_USER_ID);
+
+      // studentId comes from the resolved record, never from a param
+      expect(resultService.getStudentResults).toHaveBeenCalledWith('student-uuid-1', STUDENT_USER_ID, 'STUDENT');
+      expect(result).toEqual([{ examTypeName: 'First Terminal' }]);
+    });
+
+    it('report-card delegates with the resolved studentId', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockStudentRow]);
+      (resultService.getReportCard as jest.Mock).mockResolvedValueOnce({ student: { id: 'student-uuid-1' } });
+
+      await service.getMyReportCard(STUDENT_USER_ID);
+
+      expect(resultService.getReportCard).toHaveBeenCalledWith('student-uuid-1', STUDENT_USER_ID, 'STUDENT');
+    });
+
+    it('throws ForbiddenException (no delegate) when the account has no linked student', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // no student
+
+      await expect(service.getMyResults('unlinked-user')).rejects.toThrow(ForbiddenException);
+      expect(resultService.getStudentResults).not.toHaveBeenCalled();
+    });
   });
 
   // ─── B.1: getMyProfile() ────────────────────────────────────────────────────

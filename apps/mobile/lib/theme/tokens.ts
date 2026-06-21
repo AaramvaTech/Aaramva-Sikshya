@@ -1,17 +1,17 @@
 // Aaramva platform default. DO NOT change the token key names.
 export const aaramvaTheme = {
-  '--primary': '6 95 70',
+  '--primary': '11 107 67', // #0B6B43 — canonical Aaramva green (matches brand design).
   '--primary-foreground': '255 255 255',
-  '--background': '249 250 251',
+  '--background': '244 246 245', // #F4F6F5
   '--surface': '255 255 255',
-  '--surface-muted': '243 244 246',
-  '--border': '229 231 235',
-  '--foreground': '17 24 39',
-  '--muted-foreground': '107 114 128',
-  '--success': '22 163 74',
-  '--warning': '202 138 4',
-  '--danger': '220 38 38',
-  '--info': '37 99 235',
+  '--surface-muted': '241 244 241', // #F1F4F1
+  '--border': '228 233 229', // #E4E9E5
+  '--foreground': '16 35 26', // #10231A — warm green-black ink
+  '--muted-foreground': '92 112 104', // #5C7068
+  '--success': '14 159 119', // #0E9F77
+  '--warning': '217 137 43', // #D9892B
+  '--danger': '229 72 77', // #E5484D
+  '--info': '91 127 224', // #5B7FE0
 } as const;
 
 // Runtime helper: "#1D4ED8" -> "29 78 216"

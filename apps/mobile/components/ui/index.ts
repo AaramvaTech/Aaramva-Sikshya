@@ -1,0 +1,17 @@
+// Shared, token-driven UI library for the Aaramva mobile app.
+// Every component recolours per school via the theme tokens — no brand hex inside.
+export { Card, CARD_SHADOW, CARD_SHADOW_LG } from './Card';
+export { CardLabel } from './CardLabel';
+export { ScreenHeader } from './ScreenHeader';
+export { EmptyState, ErrorState, LoadingBlock } from './StateViews';
+export { PrimaryButton } from './PrimaryButton';
+export { StatusBadge, HeaderPill, HeaderIconButton } from './Badges';
+export { ChildPicker } from './ChildPicker';
+export { MonthNav } from './MonthNav';
+export { AttendanceSummaryCard } from './AttendanceSummaryCard';
+export { AttendanceCalendar, type CalendarStatusStyle } from './AttendanceCalendar';
+export { TodayClasses, type TodayPeriod } from './TodayClasses';
+export { SubjectSlot, type SlotMeta } from './SubjectSlot';
+export { SelectableRow, SelectChip } from './Selectable';
+export { Legend, type LegendItem } from './Legend';
+export { NoticeFeed, type NoticeFeedItem } from './NoticeFeed';

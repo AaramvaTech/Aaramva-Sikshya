@@ -146,7 +146,7 @@ export class SettingsService {
           await this.publicPrisma.query(
             `UPDATE tenants
              SET "primaryColor" = $1, "primaryForeground" = $2,
-                 "colorSource" = 'auto', "logoPalette" = $3, "updatedAt" = NOW()
+                 "colorSource" = 'auto', "logoPalette" = $3::jsonb, "updatedAt" = NOW()
              WHERE id = $4`,
             result.primaryColor,
             result.primaryForeground,
@@ -179,7 +179,7 @@ export class SettingsService {
     await this.publicPrisma.query(
       `UPDATE tenants
        SET "primaryColor" = $1, "primaryForeground" = $2,
-           "colorSource" = 'auto', "logoPalette" = $3, "updatedAt" = NOW()
+           "colorSource" = 'auto', "logoPalette" = $3::jsonb, "updatedAt" = NOW()
        WHERE id = $4`,
       result.primaryColor,
       result.primaryForeground,

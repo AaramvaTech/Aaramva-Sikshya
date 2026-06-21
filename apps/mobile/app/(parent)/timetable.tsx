@@ -1,14 +1,13 @@
-import {
-  View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, StyleSheet, RefreshControl,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { todayBs, formatBs } from 'bs-calendar';
 
 import { useMyChildren, useChildTimetable } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
+import { useThemeColors } from '../../lib/theme/colors';
+import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, LoadingBlock } from '../../components/ui';
+import NpText from '../../components/NpText';
 import type { SectionTimetableSlot } from '../../types';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -16,20 +15,22 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 export default function ParentTimetable() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number>(() => new Date().getDay());
+  const c = useThemeColors();
 
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
   const childrenQuery = useMyChildren();
   const children = childrenQuery.data ?? [];
   const effectiveChildId: string | null = selectedChildId ?? (children[0]?.id ?? null);
-  if (!selectedChildId && effectiveChildId) setSelectedChildId(effectiveChildId);
+  useEffect(() => {
+    if (!selectedChildId && effectiveChildId) setSelectedChildId(effectiveChildId);
+  }, [selectedChildId, effectiveChildId, setSelectedChildId]);
 
-  const selectedChild = children.find((c) => c.id === effectiveChildId) ?? null;
+  const selectedChild = children.find((ch) => ch.id === effectiveChildId) ?? null;
   const sectionId = selectedChild?.currentEnrollment?.sectionId ?? null;
 
   const timetableQuery = useChildTimetable(sectionId);
   const slots = timetableQuery.data ?? [];
-
   const todayDow = new Date().getDay();
 
   const daySlots: SectionTimetableSlot[] = slots
@@ -44,58 +45,23 @@ export default function ParentTimetable() {
 
   return (
     <ScrollView
-      style={styles.root}
+      className="bg-background"
+      style={styles.fill}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e3a5f" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
-      <LinearGradient
-        colors={['#0f172a', '#1e3a5f', '#1e40af']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ paddingTop: 56, paddingBottom: 72, paddingHorizontal: 20 }}
+      <ScreenHeader
+        eyebrow={selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : 'Timetable'}
+        title="Timetable"
+        subtitle={formatBs(todayBs(), 'en')}
+        overlap
       >
-        <Text style={{ color: '#93c5fd', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-          {selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : 'Timetable'}
-        </Text>
-        <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 4 }}>
-          Timetable
-        </Text>
-        <Text style={{ color: '#bfdbfe', fontSize: 13 }}>
-          {formatBs(todayBs(), 'en')}
-        </Text>
+        <ChildPicker children={children} selectedId={effectiveChildId} onSelect={setSelectedChildId} />
+      </ScreenHeader>
 
-        {/* Child picker */}
-        {children.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
-            {children.map((c) => {
-              const sel = c.id === effectiveChildId;
-              return (
-                <TouchableOpacity
-                  key={c.id}
-                  style={{
-                    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-                    backgroundColor: sel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.12)',
-                    marginRight: 8,
-                  }}
-                  onPress={() => setSelectedChildId(c.id)}
-                >
-                  <Text style={{ color: sel ? '#1e3a5f' : '#bfdbfe', fontSize: 13, fontWeight: '600' }}>
-                    {c.firstName}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
-      </LinearGradient>
-
-      <View style={{ marginTop: -52, paddingHorizontal: 16, paddingBottom: 32 }}>
+      <View style={styles.cards}>
         {/* Day selector */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 12 }}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
           {DAY_NAMES.map((name, dow) => {
             const isSat = dow === 6;
             const isToday = dow === todayDow;
@@ -105,17 +71,22 @@ export default function ParentTimetable() {
                 key={dow}
                 disabled={isSat}
                 onPress={() => setSelectedDay(dow)}
-                style={[
-                  styles.dayChip,
-                  isSelected && styles.dayChipActive,
-                  isSat && { opacity: 0.4 },
-                ]}
+                activeOpacity={0.8}
+                accessibilityState={{ selected: isSelected, disabled: isSat }}
+                className={isSelected ? 'bg-primary' : 'bg-surface'}
+                style={[styles.dayChip, isSat && styles.dayChipDisabled]}
               >
-                <Text style={[styles.dayChipText, isSelected && styles.dayChipTextActive]}>
+                <Text
+                  className={isSelected ? 'text-primary-foreground' : 'text-foreground'}
+                  style={styles.dayChipText}
+                >
                   {name.slice(0, 3)}
                 </Text>
                 {isToday && (
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? '#bfdbfe' : '#1e3a5f', marginTop: 3 }} />
+                  <View
+                    style={styles.todayDot}
+                    className={isSelected ? 'bg-primary-foreground' : 'bg-primary'}
+                  />
                 )}
               </TouchableOpacity>
             );
@@ -123,87 +94,61 @@ export default function ParentTimetable() {
         </ScrollView>
 
         {/* Periods */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>{DAY_NAMES[selectedDay].toUpperCase()} PERIODS</Text>
-
+        <Card padded style={styles.lastCard}>
+          <CardLabel>{`${DAY_NAMES[selectedDay]} Periods`}</CardLabel>
           {timetableQuery.isLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <ActivityIndicator size="small" color="#1e3a5f" />
-            </View>
+            <LoadingBlock />
           ) : selectedDay === 6 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Ionicons name="sunny-outline" size={40} color="#d1d5db" />
-              <Text style={{ color: '#9ca3af', fontSize: 14, fontWeight: '500', marginTop: 10 }}>
-                Saturday — no school
-              </Text>
-            </View>
+            <EmptyState icon="sunny-outline" title="Saturday — no school" />
           ) : daySlots.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Ionicons name="moon-outline" size={40} color="#d1d5db" />
-              <Text style={{ color: '#9ca3af', fontSize: 14, fontWeight: '500', marginTop: 10 }}>
-                No periods
-              </Text>
-            </View>
+            <EmptyState icon="moon-outline" title="No periods" />
           ) : (
             daySlots.map((p, idx) => (
               <View
                 key={p.slotId}
-                style={[
-                  styles.periodRow,
-                  idx < daySlots.length - 1 && styles.periodBorder,
-                ]}
+                style={styles.periodRow}
+                className={idx < daySlots.length - 1 ? 'border-b border-border' : undefined}
               >
-                <View style={styles.periodBadge}>
-                  <Text style={styles.periodBadgeText}>{p.periodNumber}</Text>
+                <View className="bg-primary/10" style={styles.periodBadge}>
+                  <Text className="text-primary" style={styles.periodBadgeText}>{p.periodNumber}</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 }}>
-                      {p.subject.name}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                      {p.startTime}–{p.endTime}
-                    </Text>
+                <View style={styles.periodInfo}>
+                  <View style={styles.periodTop}>
+                    <NpText className="text-foreground" style={styles.subject}>{p.subject.name}</NpText>
+                    <Text className="text-muted-foreground" style={styles.time}>{p.startTime}–{p.endTime}</Text>
                   </View>
-                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>
+                  <NpText className="text-muted-foreground" style={styles.teacher}>
                     {p.teacher.fullName}{p.room ? ` · Room ${p.room}` : ''}
-                  </Text>
+                  </NpText>
                 </View>
               </View>
             ))
           )}
-        </View>
+        </Card>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f9fafb' },
-  card: {
-    backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
-  cardLabel: {
-    fontSize: 11, color: '#6b7280', fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14,
-  },
+  fill: { flex: 1 },
+  cards: { marginTop: -56, paddingHorizontal: 16, gap: 12 },
+  dayRow: { gap: 8, paddingRight: 8 },
   dayChip: {
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
-    backgroundColor: 'white', marginRight: 8, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, alignItems: 'center',
+    minWidth: 52, minHeight: 44, justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
-  dayChipActive: { backgroundColor: '#1e3a5f' },
-  dayChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  dayChipTextActive: { color: 'white' },
+  dayChipDisabled: { opacity: 0.4 },
+  dayChipText: { fontSize: 13, fontWeight: '600' },
+  todayDot: { width: 4, height: 4, borderRadius: 2, marginTop: 3 },
+  lastCard: { marginBottom: 24 },
   periodRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12 },
-  periodBorder: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  periodBadge: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#dbeafe', alignItems: 'center',
-    justifyContent: 'center', marginRight: 12, marginTop: 2,
-  },
-  periodBadgeText: { color: '#1e3a5f', fontSize: 12, fontWeight: '800' },
+  periodBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 },
+  periodBadgeText: { fontSize: 12, fontWeight: '800' },
+  periodInfo: { flex: 1 },
+  periodTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  subject: { fontSize: 14, fontWeight: '700', flex: 1, marginRight: 8 },
+  time: { fontSize: 12, fontWeight: '500' },
+  teacher: { fontSize: 12 },
 });

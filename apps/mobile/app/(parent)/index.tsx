@@ -1,363 +1,248 @@
-import {
-  View, Text, Image, ScrollView, ActivityIndicator,
-  TouchableOpacity, RefreshControl, StyleSheet,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { todayBs, formatBs } from 'bs-calendar';
 
 import { useMyChildren, useChildAttendanceSummary, useChildTimetable } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
-import { logout } from '../../lib/session';
-import { STATUS_CONFIG } from '../../lib/attendance';
-import type { AttendanceStatus } from '../../lib/attendance';
-import type { MyChild } from '../../types';
+import { useBranding } from '../../lib/theme/provider';
+import { useThemeColors } from '../../lib/theme/colors';
+import { FONT } from '../../lib/theme/fonts';
+import {
+  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, LoadingBlock, type TodayPeriod,
+} from '../../components/ui';
+import NpText from '../../components/NpText';
 
-// ─── Child picker ─────────────────────────────────────────────────────────────
+const QUICK = [
+  { icon: 'ribbon-outline', label: 'Results', route: '/(parent)/results' },
+  { icon: 'calendar-number-outline', label: 'Attendance', route: '/(parent)/attendance' },
+  { icon: 'megaphone-outline', label: 'Notices', route: '/(parent)/notices' },
+  { icon: 'card-outline', label: 'Fees', route: '/(parent)/fees' },
+] as const;
 
-function ChildPicker({ children, selectedId, onSelect }: {
-  children: MyChild[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  if (children.length <= 1) return null;
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.childScrollRow}>
-      {children.map((c) => {
-        const selected = c.id === selectedId;
-        return (
-          <TouchableOpacity
-            key={c.id}
-            style={[styles.childChip, selected && styles.childChipActive]}
-            onPress={() => onSelect(c.id)}
-          >
-            <Text style={[styles.childChipText, selected && styles.childChipTextActive]}>
-              {c.firstName} {c.lastName}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
+function splitName(name: string): { head: string; tail: string } {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 2) return { head: name, tail: 'Parent portal' };
+  return { head: words.slice(0, 2).join(' '), tail: 'Parent portal' };
 }
-
-// ─── Attendance card ──────────────────────────────────────────────────────────
-
-function AttendanceCard({ present, absent, late, leave, percent, totalWorkingDays }: {
-  present: number; absent: number; late: number; leave: number;
-  percent: number; totalWorkingDays: number;
-}) {
-  const color = percent >= 75 ? '#1e3a5f' : percent >= 50 ? '#d97706' : '#dc2626';
-  const chips: { key: AttendanceStatus; count: number }[] = [
-    { key: 'PRESENT', count: present },
-    { key: 'ABSENT', count: absent },
-    { key: 'LATE', count: late },
-    { key: 'LEAVE', count: leave },
-  ];
-  return (
-    <View style={styles.card}>
-      <Text style={styles.cardLabel}>ATTENDANCE THIS YEAR</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={[{ fontSize: 36, fontWeight: '800' }, { color }]}>{percent}%</Text>
-          <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '500', marginTop: 2 }}>
-            {totalWorkingDays} working days
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end', flex: 1 }}>
-          {chips.map(({ key, count }) => {
-            const cfg = STATUS_CONFIG[key];
-            return (
-              <View key={key} style={[styles.chip, { backgroundColor: cfg.bg }]}>
-                <Text style={[styles.chipCount, { color: cfg.color }]}>{count}</Text>
-                <Text style={[styles.chipLabel, { color: cfg.color }]}>{cfg.shortCode}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </View>
-      <View style={{ height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
-        <View style={{
-          height: 6, borderRadius: 3,
-          width: `${Math.min(percent, 100)}%` as `${number}%`,
-          backgroundColor: color,
-        }} />
-      </View>
-    </View>
-  );
-}
-
-// ─── Timetable card ───────────────────────────────────────────────────────────
-
-function TimetableCard({ todayDow, slots }: {
-  todayDow: number;
-  slots: { slotId: string; dayOfWeek: number; periodNumber: number; startTime: string; endTime: string; subject: { name: string }; teacher: { fullName: string }; room: string | null }[];
-}) {
-  const todaySlots = slots.filter((s) => s.dayOfWeek === todayDow)
-    .sort((a, b) => a.periodNumber - b.periodNumber);
-
-  return (
-    <View style={[styles.card, { marginBottom: 32 }]}>
-      <Text style={styles.cardLabel}>TODAY'S CLASSES</Text>
-      {todaySlots.length === 0 ? (
-        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-          <Ionicons name="moon-outline" size={40} color="#d1d5db" />
-          <Text style={{ color: '#9ca3af', fontSize: 14, fontWeight: '500', marginTop: 10 }}>
-            No classes today
-          </Text>
-        </View>
-      ) : (
-        todaySlots.map((p, idx) => (
-          <View
-            key={p.slotId}
-            style={[
-              { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12 },
-              idx < todaySlots.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-            ]}
-          >
-            <View style={styles.periodBadge}>
-              <Text style={styles.periodBadgeText}>{p.periodNumber}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 }}>
-                  {p.subject.name}
-                </Text>
-                <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
-                  {p.startTime}–{p.endTime}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 12, color: '#9ca3af' }}>
-                {p.teacher.fullName}{p.room ? ` · Room ${p.room}` : ''}
-              </Text>
-            </View>
-          </View>
-        ))
-      )}
-    </View>
-  );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ParentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
+  const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const tenant = useAuthStore((s) => s.tenant);
+  const { branding } = useBranding();
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
 
   const childrenQuery = useMyChildren();
   const children = childrenQuery.data ?? [];
+  const effectiveChildId: string | null = selectedChildId ?? (children[0]?.id ?? null);
 
-  const effectiveChildId: string | null =
-    selectedChildId ??
-    (children.length > 0 ? children[0].id : null);
+  useEffect(() => {
+    if (!selectedChildId && effectiveChildId) setSelectedChildId(effectiveChildId);
+  }, [selectedChildId, effectiveChildId, setSelectedChildId]);
 
-  // Auto-persist first-child selection into store
-  if (!selectedChildId && effectiveChildId) {
-    setSelectedChildId(effectiveChildId);
-  }
-
-  const selectedChild = children.find((c) => c.id === effectiveChildId) ?? null;
+  const selectedChild = children.find((ch) => ch.id === effectiveChildId) ?? null;
   const sectionId = selectedChild?.currentEnrollment?.sectionId ?? null;
   const academicYearId = selectedChild?.currentEnrollment?.academicYearId ?? null;
 
   const summaryQuery = useChildAttendanceSummary(effectiveChildId ?? '', academicYearId);
   const timetableQuery = useChildTimetable(sectionId);
 
-  const isLoading = childrenQuery.isLoading;
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      childrenQuery.refetch(),
-      summaryQuery.refetch(),
-      timetableQuery.refetch(),
-    ]);
+    await Promise.all([childrenQuery.refetch(), summaryQuery.refetch(), timetableQuery.refetch()]);
     setRefreshing(false);
   };
 
-  const todayDow = new Date().getDay(); // 0 = Sunday
-  // Saturday (6) → no school
-  const isSchoolDay = todayDow !== 6;
-
-  if (isLoading) {
-    return (
-      <View style={styles.centerFill}>
-        <ActivityIndicator size="large" color="#1e3a5f" />
-      </View>
-    );
+  if (childrenQuery.isLoading) {
+    return <View style={[styles.fill, { backgroundColor: c.background }]}><LoadingBlock label="Loading…" /></View>;
   }
-
   if (childrenQuery.isError) {
     return (
-      <View style={styles.centerFill}>
-        <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
-        <Text style={{ color: '#374151', fontWeight: '600', marginTop: 12, fontSize: 16 }}>
-          Failed to load
-        </Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => void childrenQuery.refetch()}>
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+      <View style={[styles.fill, { backgroundColor: c.background }]}>
+        <ErrorState title="Couldn't load" onRetry={() => void childrenQuery.refetch()} />
       </View>
     );
   }
-
   if (children.length === 0) {
     return (
-      <View style={styles.centerFill}>
-        <Ionicons name="people-outline" size={52} color="#d1d5db" />
-        <Text style={{ color: '#374151', fontWeight: '600', marginTop: 12, fontSize: 16 }}>
-          No children linked
-        </Text>
-        <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 32 }}>
-          Ask your school to link your guardian account to your child&apos;s profile.
-        </Text>
+      <View style={[styles.fill, { backgroundColor: c.background, justifyContent: 'center' }]}>
+        <EmptyState
+          icon="people-outline"
+          title="No children linked"
+          subtitle="Ask your school to link your guardian account to your child's profile."
+        />
       </View>
     );
   }
 
   const s = summaryQuery.data;
+  const todayDow = new Date().getDay();
+  const isSchoolDay = todayDow !== 6;
   const slots = timetableQuery.data ?? [];
-  const todayLabel = `Today: ${formatBs(todayBs(), 'en')}`;
+  const todayPeriods: TodayPeriod[] = slots
+    .filter((slot) => slot.dayOfWeek === todayDow)
+    .sort((a, b) => a.periodNumber - b.periodNumber)
+    .map((slot) => ({
+      slotId: slot.slotId,
+      periodNumber: slot.periodNumber,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      subjectName: slot.subject.name,
+      teacherName: slot.teacher.fullName,
+      room: slot.room,
+    }));
+
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
-  const enrollmentLine = selectedChild?.currentEnrollment
-    ? `Class ${selectedChild.currentEnrollment.className} · Section ${selectedChild.currentEnrollment.sectionName}`
+  const enroll = selectedChild?.currentEnrollment;
+  const enrollmentLine = enroll
+    ? `Class ${enroll.className} · Section ${enroll.sectionName}${enroll.rollNumber != null ? ` · Roll ${enroll.rollNumber}` : ''}`
     : 'Not enrolled';
 
+  const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
+  const { head, tail } = splitName(schoolName);
+  const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+
   return (
-    <ScrollView
-      style={styles.root}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e3a5f" />}
-    >
-      <LinearGradient
-        colors={['#0f172a', '#1e3a5f', '#1e40af']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+    <View style={[styles.fill, { backgroundColor: c.background }]}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        <View style={styles.headerTopRow}>
-          <Image
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            source={require('../../assets/images/logo.png')}
-            style={{ width: 120, height: 30 }}
-            resizeMode="contain"
-          />
-          <TouchableOpacity onPress={() => void logout()} style={{ padding: 8 }}>
-            <Ionicons name="log-out-outline" size={18} color="white" />
-          </TouchableOpacity>
+        {/* Hero band */}
+        <View
+          style={[
+            styles.band,
+            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+          ]}
+        >
+          <View style={styles.bandTop}>
+            <View style={styles.schoolWrap}>
+              {branding?.logoUrl ? (
+                <View style={[styles.logoChip, { backgroundColor: c.surface }]}>
+                  <Image source={{ uri: branding.logoUrl }} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                </View>
+              ) : (
+                <View style={[styles.logoChip, { backgroundColor: c.primary }]}>
+                  <Text style={[styles.logoChipText, { color: c.primaryForeground }]}>{initials}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <NpText numberOfLines={1} style={[styles.schoolHead, { color: c.foreground }]}>{head}</NpText>
+                <Text numberOfLines={1} style={[styles.schoolTail, { color: c.brandMuted }]}>{tail}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(parent)/notices')} hitSlop={10} accessibilityLabel="Notices">
+              <Ionicons name="notifications-outline" size={22} color={c.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.todayBs, { color: c.brandMuted }]}>Today · {formatBs(todayBs(), 'en')}</Text>
+          <Text style={[styles.viewing, { color: c.mutedForeground }]}>Viewing child</Text>
+          <NpText style={[styles.name, { color: c.foreground }]}>{childName}</NpText>
+          <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
+
+          {children.length > 1 && (
+            <View style={styles.chips}>
+              {children.map((ch) => {
+                const active = ch.id === effectiveChildId;
+                return (
+                  <TouchableOpacity
+                    key={ch.id}
+                    onPress={() => setSelectedChildId(ch.id)}
+                    activeOpacity={0.85}
+                    style={[
+                      styles.chip,
+                      active
+                        ? { backgroundColor: c.primary, borderColor: c.primary }
+                        : { backgroundColor: c.surface, borderColor: c.brandBorder },
+                    ]}
+                  >
+                    <NpText style={[styles.chipText, { color: active ? c.primaryForeground : c.brandMuted }]}>
+                      {ch.firstName}
+                    </NpText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
-        <Text style={{ color: '#93c5fd', fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
-          {todayLabel}
-        </Text>
+        <View style={styles.body}>
+          {s ? (
+            <AttendanceSummaryCard
+              present={s.present}
+              absent={s.absent}
+              late={s.late}
+              leave={s.leave}
+              percent={s.attendancePercent}
+              totalWorkingDays={s.totalWorkingDays}
+            />
+          ) : summaryQuery.isLoading ? (
+            <LoadingBlock />
+          ) : (
+            <EmptyState compact icon="stats-chart-outline" title="Attendance data unavailable" />
+          )}
 
-        {tenant?.name ? (
-          <Text style={{ color: '#bfdbfe', fontSize: 11, fontWeight: '500', marginBottom: 8 }}>
-            {tenant.name}
-          </Text>
-        ) : null}
-
-        <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 2 }}>
-          {childName}
-        </Text>
-        <Text style={{ color: '#bfdbfe', fontSize: 13, fontWeight: '500' }}>
-          {enrollmentLine}
-        </Text>
-
-        {/* Child picker for multi-child parents */}
-        <ChildPicker
-          children={children}
-          selectedId={effectiveChildId}
-          onSelect={setSelectedChildId}
-        />
-      </LinearGradient>
-
-      <View style={styles.cardsContainer}>
-        {s && (
-          <AttendanceCard
-            present={s.present}
-            absent={s.absent}
-            late={s.late}
-            leave={s.leave}
-            percent={s.attendancePercent}
-            totalWorkingDays={s.totalWorkingDays}
-          />
-        )}
-
-        {!summaryQuery.isLoading && !s && (
-          <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
-            <Ionicons name="stats-chart-outline" size={36} color="#d1d5db" />
-            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>
-              Attendance data unavailable
-            </Text>
+          {/* Quick access (4 tiles) */}
+          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Quick access</Text>
+          <View style={styles.quickGrid}>
+            {QUICK.map((q) => (
+              <TouchableOpacity
+                key={q.label}
+                style={[styles.quickTile, { backgroundColor: c.surface }]}
+                activeOpacity={0.85}
+                onPress={() => router.push(q.route)}
+              >
+                <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
+                  <Ionicons name={q.icon} size={21} color={c.primary} />
+                </View>
+                <Text style={[styles.quickLabel, { color: c.foreground }]}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
 
-        <TimetableCard
-          todayDow={isSchoolDay ? todayDow : -1}
-          slots={slots}
-        />
-      </View>
-    </ScrollView>
+          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
+          <TodayClasses periods={todayPeriods} isSchoolDay={isSchoolDay} style={styles.lastCard} />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f9fafb' },
-  centerFill: {
-    flex: 1, backgroundColor: '#f9fafb',
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  retryBtn: {
-    backgroundColor: '#1e3a5f',
-    paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 14, marginTop: 16,
-  },
-  retryText: { color: 'white', fontWeight: '700', fontSize: 14 },
+  fill: { flex: 1 },
 
-  header: {
-    paddingTop: 56, paddingBottom: 80, paddingHorizontal: 20,
-  },
-  headerTopRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 16,
-  },
+  band: { paddingHorizontal: 20, paddingBottom: 18, borderBottomWidth: 1 },
+  bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
+  logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  logoChipText: { fontFamily: FONT.extrabold, fontSize: 12.5, letterSpacing: 0.5 },
+  schoolHead: { fontFamily: FONT.extrabold, fontSize: 12.5, lineHeight: 15 },
+  schoolTail: { fontFamily: FONT.medium, fontSize: 10, marginTop: 1 },
+  todayBs: { fontFamily: FONT.bold, fontSize: 11.5, marginTop: 16, letterSpacing: 0.3 },
+  viewing: { fontFamily: FONT.medium, fontSize: 13, marginTop: 6 },
+  name: { fontFamily: FONT.extrabold, fontSize: 24, marginTop: 1, letterSpacing: -0.4 },
+  enroll: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
+  chips: { flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' },
+  chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1.5 },
+  chipText: { fontFamily: FONT.bold, fontSize: 12 },
 
-  childScrollRow: { marginTop: 16 },
-  childChip: {
-    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-    backgroundColor: 'rgba(255,255,255,0.12)', marginRight: 8,
-  },
-  childChipActive: { backgroundColor: 'rgba(255,255,255,0.9)' },
-  childChipText: { color: '#bfdbfe', fontSize: 13, fontWeight: '600' },
-  childChipTextActive: { color: '#1e3a5f' },
+  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
 
-  cardsContainer: { marginTop: -60, paddingHorizontal: 16 },
+  quickGrid: { flexDirection: 'row', gap: 9 },
+  quickTile: {
+    flex: 1, borderRadius: 15, paddingVertical: 13, paddingHorizontal: 4, alignItems: 'center', gap: 7,
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 13, elevation: 2,
+  },
+  quickIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontFamily: FONT.bold, fontSize: 10, textAlign: 'center' },
 
-  card: {
-    backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
-  cardLabel: {
-    fontSize: 11, color: '#6b7280', fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14,
-  },
-  chip: {
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-    alignItems: 'center', minWidth: 44,
-  },
-  chipCount: { fontSize: 16, fontWeight: '800' },
-  chipLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', marginTop: 1 },
-  periodBadge: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#dbeafe', alignItems: 'center',
-    justifyContent: 'center', marginRight: 12, marginTop: 2,
-  },
-  periodBadgeText: { color: '#1e3a5f', fontSize: 12, fontWeight: '800' },
+  lastCard: { marginBottom: 8 },
 });

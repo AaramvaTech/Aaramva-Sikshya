@@ -1,306 +1,234 @@
-import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'expo-router';
-import { useMyStaffProfile, useMyTimetable } from '../../hooks/useTeacher';
-import { logout } from '../../lib/session';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { todayBs, formatBs } from 'bs-calendar';
 
+import { useMyStaffProfile, useMyTimetable, useMySections } from '../../hooks/useTeacher';
+import { useAuthStore } from '../../store/auth';
+import { useBranding } from '../../lib/theme/provider';
+import { useThemeColors, headerGradient } from '../../lib/theme/colors';
+import { subjectColor } from '../../lib/subjects';
+import { FONT } from '../../lib/theme/fonts';
+import { EmptyState, LoadingBlock } from '../../components/ui';
+import { CARD_SHADOW } from '../../components/ui/Card';
+import NpText from '../../components/NpText';
+
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const SUBJECT_COLORS = [
-  { bg: '#dbeafe', text: '#1e40af', bar: '#2563eb' },
-  { bg: '#d1fae5', text: '#065f46', bar: '#059669' },
-  { bg: '#ede9fe', text: '#5b21b6', bar: '#7c3aed' },
-  { bg: '#fef3c7', text: '#92400e', bar: '#d97706' },
-  { bg: '#fce7f3', text: '#9d174d', bar: '#db2777' },
-  { bg: '#cffafe', text: '#155e75', bar: '#0891b2' },
-  { bg: '#ffedd5', text: '#9a3412', bar: '#ea580c' },
-  { bg: '#f0fdf4', text: '#14532d', bar: '#16a34a' },
-];
 
-function todayDayOfWeekNepal(): number {
+function nepalNow(): Date {
   const offset = 5 * 60 + 45;
   const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const nepalDate = new Date(utcMs + offset * 60000);
-  return nepalDate.getDay();
+  return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + offset * 60000);
 }
-
+function todayDowNepal(): number { return nepalNow().getDay(); }
 function getGreeting(): string {
-  const offset = 5 * 60 + 45;
-  const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const nepalDate = new Date(utcMs + offset * 60000);
-  const hour = nepalDate.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  const hour = nepalNow().getHours();
+  if (hour < 12) return 'Good morning 👋';
+  if (hour < 17) return 'Good afternoon 👋';
+  return 'Good evening 👋';
+}
+function splitName(name: string): string {
+  const words = name.trim().split(/\s+/);
+  return words.length <= 2 ? name : words.slice(0, 2).join(' ');
 }
 
 export default function TeacherHome() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
+  const c = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const tenant = useAuthStore((s) => s.tenant);
+  const { branding } = useBranding();
 
   const profileResult = useMyStaffProfile();
   const timetableResult = useMyTimetable();
+  const sectionsResult = useMySections();
 
-  const todayDow = todayDayOfWeekNepal();
+  const todayDow = todayDowNepal();
   const isSaturday = todayDow === 6;
 
-  const todaySlots = useMemo(() => {
-    if (!timetableResult.data) return [];
-    return timetableResult.data.schedule[todayDow] ?? [];
-  }, [timetableResult.data, todayDow]);
+  const todaySlots = useMemo(() => timetableResult.data?.schedule[todayDow] ?? [], [timetableResult.data, todayDow]);
+  const weeklyTotal = useMemo(() => {
+    const sch = timetableResult.data?.schedule ?? {};
+    return Object.values(sch).reduce((sum, arr) => sum + (arr?.length ?? 0), 0);
+  }, [timetableResult.data]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([profileResult.refetch(), timetableResult.refetch()]);
+    await Promise.all([profileResult.refetch(), timetableResult.refetch(), sectionsResult.refetch()]);
     setRefreshing(false);
   };
 
-  const teacherName = profileResult.data
-    ? `${profileResult.data.firstName} ${profileResult.data.lastName}`
-    : '...';
+  const p = profileResult.data;
+  const teacherName = p ? `${p.firstName} ${p.lastName}` : '…';
+  const desig = p?.designationTitle ?? p?.role ?? 'Teacher';
+  const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
+  const schoolHead = splitName(schoolName);
+  const initials = schoolHead.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
-  const bsToday = todayBs();
+  const stats = [
+    { num: sectionsResult.data?.length ?? 0, label: 'Classes', color: c.primary },
+    { num: todaySlots.length, label: 'Today', color: '#5B7FE0' },
+    { num: weeklyTotal, label: 'Weekly', color: '#D9892B' },
+  ];
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: '#f9fafb' }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e40af" />
-      }
-    >
-      {/* Header */}
-      <LinearGradient
-        colors={['#1e3a8a', '#1e40af', '#2563eb']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ paddingTop: 56, paddingBottom: 28, paddingHorizontal: 20 }}
+    <View style={[styles.root, { backgroundColor: c.background }]}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        <Text style={{ color: '#bfdbfe', fontSize: 12, fontWeight: '700',
-          textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-          {getGreeting()}
-        </Text>
-        {profileResult.isLoading ? (
-          <ActivityIndicator color="white" style={{ alignSelf: 'flex-start', marginBottom: 6 }} />
-        ) : (
-          <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 4 }}>
-            {teacherName}
-          </Text>
-        )}
-        {profileResult.data?.designationTitle && (
-          <Text style={{ color: '#93c5fd', fontSize: 13, fontWeight: '500', marginBottom: 8 }}>
-            {profileResult.data.designationTitle}
-          </Text>
-        )}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-          <Ionicons name="calendar-outline" size={13} color="#93c5fd" />
-          <Text style={{ color: '#93c5fd', fontSize: 13, marginLeft: 5 }}>
-            {DAY_NAMES[todayDow]} · {formatBs(bsToday, 'en')}
-          </Text>
-        </View>
-      </LinearGradient>
-
-      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, gap: 12 }}>
-
-        {/* Today's classes card */}
-        <View style={{
-          backgroundColor: 'white', borderRadius: 20, padding: 16,
-          shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700',
-              textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Today's Classes
-            </Text>
-            {!isSaturday && todaySlots.length > 0 && (
-              <View style={{
-                backgroundColor: '#eff6ff', borderRadius: 10,
-                paddingHorizontal: 10, paddingVertical: 3,
-              }}>
-                <Text style={{ fontSize: 11, color: '#1e40af', fontWeight: '700' }}>
-                  {todaySlots.length} period{todaySlots.length !== 1 ? 's' : ''}
-                </Text>
+        {/* Hero band */}
+        <View
+          style={[
+            styles.band,
+            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+          ]}
+        >
+          <View style={styles.bandTop}>
+            <View style={styles.schoolWrap}>
+              {branding?.logoUrl ? (
+                <View style={[styles.logoChip, { backgroundColor: c.surface }]}>
+                  <Image source={{ uri: branding.logoUrl }} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                </View>
+              ) : (
+                <View style={[styles.logoChip, { backgroundColor: c.primary }]}>
+                  <Text style={[styles.logoChipText, { color: c.primaryForeground }]}>{initials}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <NpText numberOfLines={1} style={[styles.schoolHead, { color: c.foreground }]}>{schoolHead}</NpText>
+                <Text style={[styles.schoolTail, { color: c.brandMuted }]}>Teacher portal</Text>
               </View>
-            )}
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(teacher)/profile')} hitSlop={10} accessibilityLabel="Profile">
+              <Ionicons name="notifications-outline" size={22} color={c.primary} />
+            </TouchableOpacity>
           </View>
 
+          <Text style={[styles.greeting, { color: c.brandMuted }]}>{getGreeting()}</Text>
+          <NpText style={[styles.name, { color: c.foreground }]}>{teacherName}</NpText>
+          <Text style={[styles.desig, { color: c.mutedForeground }]}>{desig} · {formatBs(todayBs(), 'en')}</Text>
+        </View>
+
+        <View style={styles.body}>
+          {/* Stat cards */}
+          <View style={styles.statRow}>
+            {stats.map((s) => (
+              <View key={s.label} style={[styles.statCard, CARD_SHADOW]}>
+                <Text style={[styles.statNum, { color: s.color }]}>{s.num}</Text>
+                <Text style={[styles.statLabel, { color: c.mutedForeground }]}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Action buttons */}
+          <View style={styles.actions}>
+            <TouchableOpacity style={[styles.actionBtn, { shadowColor: c.primary }]} activeOpacity={0.9} onPress={() => router.push('/(teacher)/attendance')}>
+              <LinearGradient
+                colors={[headerGradient(c.primary)[1], headerGradient(c.primary)[2]]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.actionFill}
+              >
+                <Ionicons name="checkbox-outline" size={23} color="#fff" />
+                <Text style={styles.actionTextSolid}>Mark Attendance</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionSoft, { backgroundColor: c.brandSurface }]}
+              activeOpacity={0.85}
+              onPress={() => router.push('/(teacher)/marks')}
+            >
+              <Ionicons name="create-outline" size={23} color={c.primary} />
+              <Text style={[styles.actionTextSoft, { color: c.primary }]}>Enter Marks</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Today's classes */}
+          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
           {timetableResult.isLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-              <ActivityIndicator size="small" color="#1e40af" />
-            </View>
-          ) : isSaturday ? (
-            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-              <Ionicons name="sunny-outline" size={36} color="#d97706" />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: '#374151', marginTop: 8 }}>
-                Saturday — Rest Day
-              </Text>
-              <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 4 }}>
-                No classes scheduled. Rest and recharge!
-              </Text>
-            </View>
-          ) : todaySlots.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-              <Ionicons name="calendar-clear-outline" size={36} color="#d1d5db" />
-              <Text style={{ fontSize: 14, color: '#9ca3af', marginTop: 8 }}>
-                No classes scheduled for today.
-              </Text>
+            <LoadingBlock />
+          ) : isSaturday || todaySlots.length === 0 ? (
+            <View style={[styles.classCard, CARD_SHADOW, { paddingVertical: 24 }]}>
+              <EmptyState
+                compact
+                icon={isSaturday ? 'sunny-outline' : 'calendar-clear-outline'}
+                title={isSaturday ? 'Saturday — rest day' : 'No classes today'}
+              />
             </View>
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={[styles.classCard, CARD_SHADOW]}>
               {todaySlots.map((slot, idx) => {
-                const color = SUBJECT_COLORS[idx % SUBJECT_COLORS.length];
+                const sc = subjectColor(idx);
+                const last = idx === todaySlots.length - 1;
                 return (
-                  <View
+                  <TouchableOpacity
                     key={slot.slotId}
-                    style={{
-                      flexDirection: 'row', borderRadius: 14,
-                      overflow: 'hidden', backgroundColor: '#f9fafb',
-                      borderWidth: 1, borderColor: '#f3f4f6',
-                    }}
+                    activeOpacity={0.7}
+                    onPress={() => router.push('/(teacher)/attendance')}
+                    style={[styles.classRow, !last && { borderBottomWidth: 1, borderBottomColor: c.border }]}
                   >
-                    <View style={{ width: 4, backgroundColor: color.bar }} />
-                    <View style={{
-                      width: 52, alignItems: 'center', justifyContent: 'center',
-                      borderRightWidth: 1, borderRightColor: '#f3f4f6',
-                      paddingVertical: 10,
-                    }}>
-                      <View style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: color.text }}>
-                          P{slot.periodNumber}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, fontWeight: '600' }}>
-                        {slot.startTime}
+                    <View style={[styles.pBadge, { backgroundColor: sc.bg }]}>
+                      <Text style={[styles.pBadgeNum, { color: sc.text }]}>P{slot.periodNumber}</Text>
+                      <Text style={[styles.pBadgeTime, { color: sc.text }]}>{slot.startTime}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <NpText style={[styles.classSubject, { color: c.foreground }]}>{slot.subject.name}</NpText>
+                      <Text style={[styles.classMeta, { color: c.mutedForeground }]}>
+                        {slot.className} · {slot.section}{slot.room ? ` · Room ${slot.room}` : ''}
                       </Text>
                     </View>
-                    <View style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 12 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 3 }}>
-                        {slot.subject.name}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="people-outline" size={11} color="#9ca3af" />
-                          <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 3 }}>
-                            {slot.className} · {slot.section}
-                          </Text>
-                        </View>
-                        {slot.room && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons name="location-outline" size={11} color="#9ca3af" />
-                            <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 3 }}>
-                              Room {slot.room}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </View>
+                    <Ionicons name="chevron-forward" size={18} color={c.border} />
+                  </TouchableOpacity>
                 );
               })}
             </View>
           )}
+          <View style={{ height: 8 }} />
         </View>
-
-        {/* Quick actions */}
-        <View style={{
-          backgroundColor: 'white', borderRadius: 20, padding: 16,
-          shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-        }}>
-          <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700',
-            textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
-            Quick Actions
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity
-              onPress={() => router.push('/(teacher)/attendance')}
-              style={{
-                flex: 1, backgroundColor: '#1e40af', borderRadius: 14,
-                paddingVertical: 12, alignItems: 'center', gap: 4,
-              }}
-            >
-              <Ionicons name="checkbox-outline" size={20} color="white" />
-              <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>
-                Mark Attendance
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/(teacher)/leave')}
-              style={{
-                flex: 1, backgroundColor: '#eff6ff', borderRadius: 14,
-                paddingVertical: 12, alignItems: 'center', gap: 4,
-              }}
-            >
-              <Ionicons name="document-text-outline" size={20} color="#1e40af" />
-              <Text style={{ color: '#1e40af', fontSize: 12, fontWeight: '700' }}>
-                Apply Leave
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Staff info card */}
-        {profileResult.data && (
-          <View style={{
-            backgroundColor: 'white', borderRadius: 20, padding: 16,
-            shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-          }}>
-            <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '700',
-              textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
-              My Details
-            </Text>
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: '#6b7280' }}>Employee ID</Text>
-                <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600' }}>
-                  {profileResult.data.employeeId}
-                </Text>
-              </View>
-              {profileResult.data.departmentName && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: '#6b7280' }}>Department</Text>
-                  <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600' }}>
-                    {profileResult.data.departmentName}
-                  </Text>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: '#6b7280' }}>Employment</Text>
-                <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600' }}>
-                  {profileResult.data.employmentType}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Logout */}
-        <TouchableOpacity
-          onPress={logout}
-          style={{
-            backgroundColor: 'white', borderRadius: 20, padding: 16,
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-            shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-          }}
-        >
-          <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-          <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '700' }}>Sign Out</Text>
-        </TouchableOpacity>
-
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+
+  band: { paddingHorizontal: 20, paddingBottom: 18, borderBottomWidth: 1 },
+  bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
+  logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  logoChipText: { fontFamily: FONT.extrabold, fontSize: 12.5, letterSpacing: 0.5 },
+  schoolHead: { fontFamily: FONT.extrabold, fontSize: 12.5, lineHeight: 15 },
+  schoolTail: { fontFamily: FONT.medium, fontSize: 10, marginTop: 1 },
+  greeting: { fontFamily: FONT.bold, fontSize: 11.5, marginTop: 16, letterSpacing: 0.3 },
+  name: { fontFamily: FONT.extrabold, fontSize: 24, marginTop: 3, letterSpacing: -0.4 },
+  desig: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
+
+  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  statRow: { flexDirection: 'row', gap: 10 },
+  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 15, paddingVertical: 14, alignItems: 'center' },
+  statNum: { fontFamily: FONT.extrabold, fontSize: 22 },
+  statLabel: { fontFamily: FONT.bold, fontSize: 9.5, textTransform: 'uppercase', marginTop: 2 },
+
+  actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  actionBtn: { flex: 1, borderRadius: 15, overflow: 'hidden' },
+  actionFill: { paddingVertical: 14, alignItems: 'center', gap: 5,
+    shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 5 },
+  actionSoft: { paddingVertical: 14, alignItems: 'center', gap: 5 },
+  actionTextSolid: { fontFamily: FONT.bold, fontSize: 12, color: '#fff' },
+  actionTextSoft: { fontFamily: FONT.bold, fontSize: 12 },
+
+  sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
+  classCard: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingHorizontal: 14 },
+  classRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  pBadge: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pBadgeNum: { fontFamily: FONT.extrabold, fontSize: 12 },
+  pBadgeTime: { fontFamily: FONT.bold, fontSize: 8.5, marginTop: 1 },
+  classSubject: { fontFamily: FONT.bold, fontSize: 13.5 },
+  classMeta: { fontFamily: FONT.regular, fontSize: 11.5, marginTop: 2 },
+});

@@ -5,9 +5,11 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useThemeColors } from '../lib/theme/colors';
+import { useThemeColors, headerGradient } from '../lib/theme/colors';
+import { FONT } from '../lib/theme/fonts';
 
 type BulletItem = {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -30,16 +32,18 @@ export default function HelpCodeScreen() {
       {/* Header strip                                                      */}
       {/* ---------------------------------------------------------------- */}
       <View
-        style={[styles.headerStrip, { paddingTop: insets.top + 8 }]}
-        className="bg-primary"
+        style={[
+          styles.headerStrip,
+          { paddingTop: insets.top + 8, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+        ]}
       >
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backBtn}
           accessibilityLabel="Close"
         >
-          <Ionicons name="chevron-back" size={22} color={c.primaryForeground} />
-          <Text style={styles.backLabel} className="text-primary-foreground">Close</Text>
+          <Ionicons name="chevron-back" size={22} color={c.primary} />
+          <Text style={[styles.backLabel, { color: c.primary }]}>Close</Text>
         </TouchableOpacity>
       </View>
 
@@ -81,11 +85,17 @@ export default function HelpCodeScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
           style={styles.gotItButton}
-          className="bg-primary rounded-xl"
           onPress={() => router.back()}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
         >
-          <Text style={styles.gotItText} className="text-primary-foreground">Got it</Text>
+          <LinearGradient
+            colors={headerGradient(c.primary) as [string, string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gotItFill}
+          >
+            <Text style={[styles.gotItText, { color: c.primaryForeground }]}>Got it</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -105,6 +115,7 @@ const styles = StyleSheet.create({
   headerStrip: {
     paddingHorizontal: 16,
     paddingBottom: 12,
+    borderBottomWidth: 1,
   },
   backBtn: {
     flexDirection: 'row',
@@ -114,8 +125,8 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   backLabel: {
+    fontFamily: FONT.semibold,
     fontSize: 15,
-    fontWeight: '500',
     marginLeft: 2,
   },
 
@@ -126,8 +137,8 @@ const styles = StyleSheet.create({
     paddingTop: 28,
   },
   title: {
+    fontFamily: FONT.extrabold,
     fontSize: 20,
-    fontWeight: '600',
     marginBottom: 24,
     lineHeight: 28,
   },
@@ -151,6 +162,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   bulletText: {
+    fontFamily: FONT.medium,
     fontSize: 15,
     lineHeight: 22,
     flex: 1,
@@ -165,13 +177,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   closingText: {
+    fontFamily: FONT.regular,
     fontSize: 13,
     lineHeight: 20,
     marginLeft: 8,
     flex: 1,
   },
   closingExample: {
-    fontWeight: '600',
+    fontFamily: FONT.bold,
   },
 
   // Footer
@@ -180,14 +193,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   gotItButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
     marginBottom: 8,
   },
+  gotItFill: {
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   gotItText: {
+    fontFamily: FONT.bold,
     fontSize: 15,
-    fontWeight: '600',
   },
 });

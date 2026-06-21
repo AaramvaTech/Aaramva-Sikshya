@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { Role } from '../common/enums/role.enum';
+import { assertSelfOrHrAdmin } from './hr-access.util';
 import {
   PayrollMonthRow,
   SalarySlipRow,
@@ -263,7 +265,15 @@ export class PayrollService {
     );
   }
 
-  async getStaffSalaryHistory(userId: string): Promise<SalarySlipResponseDto[]> {
+  async getStaffSalaryHistory(
+    userId: string,
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<SalarySlipResponseDto[]> {
+    // BUG-2: HR confidentiality — only the staff member themselves, or an
+    // admin/principal, may read salary history. Peers (incl. teachers) rejected.
+    assertSelfOrHrAdmin(userId, callerId, callerRole);
+
     const rows = await this.tenantPrisma.query<SalarySlipRow>(
       `SELECT ss.*, u.first_name, u.last_name, sp.employee_id
          FROM salary_slips ss

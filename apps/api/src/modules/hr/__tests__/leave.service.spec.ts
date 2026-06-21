@@ -161,13 +161,22 @@ describe('LeaveService', () => {
       // Approved days used for this leave type
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ used_days: '5' }]);
 
-      const result = await service.getLeaveBalance('user-1');
+      // Self read (callerId === target) is allowed.
+      const result = await service.getLeaveBalance('user-1', 'user-1');
 
       expect(result).toHaveLength(1);
       expect(result[0].leaveTypeId).toBe('lt-1');
       expect(result[0].entitlement).toBe(12);
       expect(result[0].used).toBe(5);
       expect(result[0].balance).toBe(7);
+    });
+
+    it('rejects a non-admin caller reading another staff balance (BUG-2)', async () => {
+      // Teacher (no privileged role) reading a colleague's balance → Forbidden,
+      // before any DB query runs.
+      await expect(
+        service.getLeaveBalance('user-1', 'teacher-2', 'TEACHER' as any),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

@@ -83,12 +83,55 @@ export function useChildTimetable(sectionId: string | null | undefined) {
   });
 }
 
+// Backend report-card shape (apps/api .../result.service.ts getReportCard).
+// This is the only endpoint that returns subject-level rows, which the
+// results screen renders. /exams/results/student/:id returns a flat per-exam
+// summary with no subjects, so the screen must consume the report card.
+interface ReportCardResponse {
+  student: { id: string };
+  examResults: {
+    examType: { id: string; name: string };
+    percentage: number | null;
+    grade: string | null;
+    gpa: number | null;
+    rankInSection: number | null;
+    subjects: {
+      subjectId: string;
+      subjectName: string;
+      fullMarks: number;
+      marksObtained: number | null;
+      grade: string | null;
+    }[];
+  }[];
+}
+
 export function useChildResults(childId: string) {
   return useQuery<ExamResult[]>({
     queryKey: ['parent', 'child', childId, 'results'],
     queryFn: async () => {
-      const res = await api.get(`/exams/results/student/${childId}`);
-      return res.data.data as ExamResult[];
+      const res = await api.get(`/exams/results/report-card/${childId}`);
+      const report = res.data.data as ReportCardResponse;
+      const studentId = report.student?.id ?? childId;
+      return (report.examResults ?? []).map((er) => ({
+        studentId,
+        examTypeId: er.examType.id,
+        examTypeName: er.examType.name,
+        results: (er.subjects ?? []).map((s) => ({
+          subjectId: s.subjectId,
+          subjectName: s.subjectName,
+          fullMark: s.fullMarks,
+          passmark: 0,
+          marksObtained: s.marksObtained,
+          grade: s.grade,
+          gradePoint: null,
+          remarks: null,
+        })),
+        rank: er.rankInSection,
+        totalMarks: null,
+        percentage: er.percentage,
+        gpa: er.gpa,
+        overallGrade: er.grade,
+      }));
     },
     enabled: !!childId,
   });

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useMemo, useCallback, ReactNode } from 'react';
 import { View } from 'react-native';
 import { vars } from 'nativewind';
-import { hexToRgbChannels } from './tokens';
+import { aaramvaTheme, hexToRgbChannels } from './tokens';
 
 type Branding = {
   primaryColor?: string;
@@ -20,11 +20,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const applySchool = useCallback((b: Branding) => setBranding(b), []);
   const reset = useCallback(() => setBranding(null), []);
 
+  // IMPORTANT: always emit a vars() object — never undefined — even before branding
+  // loads. NativeWind treats "a component that sets a CSS variable" specially: it
+  // UPGRADES the View into a VariableContext.Provider. If `style` goes from undefined
+  // (no vars) on the first render to a vars() object once ThemeSync resolves branding,
+  // NativeWind changes the component TYPE mid-flight and REMOUNTS the whole subtree —
+  // which here contains the <Stack> navigator, producing
+  // "Couldn't find a navigation context" on the remount.
+  // By always returning vars() (Aaramva defaults until a school overrides them) the
+  // component is a Provider from render #1 and only ever updates its value — no remount.
   const style = useMemo(() => {
-    if (!branding?.primaryColor) return undefined;
     return vars({
-      '--primary': hexToRgbChannels(branding.primaryColor),
-      '--primary-foreground': hexToRgbChannels(branding.primaryForeground ?? '#FFFFFF'),
+      '--primary': branding?.primaryColor
+        ? hexToRgbChannels(branding.primaryColor)
+        : aaramvaTheme['--primary'],
+      '--primary-foreground': branding?.primaryForeground
+        ? hexToRgbChannels(branding.primaryForeground)
+        : aaramvaTheme['--primary-foreground'],
     });
   }, [branding]);
 

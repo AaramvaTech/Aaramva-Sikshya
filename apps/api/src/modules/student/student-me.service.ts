@@ -1,5 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { ResultService } from '../examination/result.service';
+import { Role } from '../common/enums/role.enum';
 import { StudentMeAttendanceSummaryDto, StudentMeAttendanceHistoryDto } from './dto/student-me-query.dto';
 
 // ─── Nepal timezone helpers ────────────────────────────────────────────────────
@@ -81,7 +83,10 @@ interface AttendanceHistoryRow {
 
 @Injectable()
 export class StudentMeService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly resultService: ResultService,
+  ) {}
 
   /**
    * Resolves the student record linked to a given userId.
@@ -98,6 +103,22 @@ export class StudentMeService {
       throw new ForbiddenException('No student record linked to this account');
     }
     return rows[0];
+  }
+
+  /**
+   * GET /students/me/results — own exam results. studentId is resolved ONLY from
+   * the token's linked student record; there is no id param, so a student can
+   * never reach another student's results.
+   */
+  async getMyResults(userId: string) {
+    const student = await this.resolveStudent(userId);
+    return this.resultService.getStudentResults(student.id, userId, Role.STUDENT);
+  }
+
+  /** GET /students/me/report-card — own report card (self-scoped, same as above). */
+  async getMyReportCard(userId: string) {
+    const student = await this.resolveStudent(userId);
+    return this.resultService.getReportCard(student.id, userId, Role.STUDENT);
   }
 
   /** GET /students/me — own profile + current enrollment */

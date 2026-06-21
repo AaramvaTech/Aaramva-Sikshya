@@ -18,7 +18,10 @@ export const AARAMVA_COLORS = {
   border: channelsToHex(aaramvaTheme['--border']),
   foreground: channelsToHex(aaramvaTheme['--foreground']),
   mutedForeground: channelsToHex(aaramvaTheme['--muted-foreground']),
+  success: channelsToHex(aaramvaTheme['--success']),
+  warning: channelsToHex(aaramvaTheme['--warning']),
   danger: channelsToHex(aaramvaTheme['--danger']),
+  info: channelsToHex(aaramvaTheme['--info']),
 };
 
 // Non-token neutral used only for large faded placeholder icons (empty/error states).
@@ -39,6 +42,41 @@ export function deriveOnPrimary(primary: string): { bright: string; soft: string
     soft: hslToHex(h, sClamped, 0.80),
     pale: hslToHex(h, sClamped, 0.90),
   };
+}
+
+// Per-school "hero band" tints derived from the resolved primary. These power the
+// light brand-tinted headers/profile bands in the design (e.g. maroon -> #F8ECEE).
+// Hue is preserved, saturation softened, lightness fixed high so the band reads as a
+// faint wash of the brand colour on ANY school primary.
+
+// Pale brand wash for hero/header/profile bands.
+export function brandSurface(primary: string): string {
+  const [h, s] = hexToHsl(primary);
+  return hslToHex(h, Math.min(s, 0.45), 0.955);
+}
+
+// Slightly deeper brand tint for the hairline border under a hero band.
+export function brandBorder(primary: string): string {
+  const [h, s] = hexToHsl(primary);
+  return hslToHex(h, Math.min(s, 0.42), 0.9);
+}
+
+// Muted brand-tinted ink for secondary text on a hero band (e.g. "Secondary School").
+export function brandMuted(primary: string): string {
+  const [h] = hexToHsl(primary);
+  return hslToHex(h, 0.2, 0.51);
+}
+
+// Very faint brand-tinted fill for input fields on a white body (login form).
+export function brandField(primary: string): string {
+  const [h, s] = hexToHsl(primary);
+  return hslToHex(h, Math.min(s, 0.16), 0.965);
+}
+
+// Hairline border for the faint input fields above.
+export function brandFieldBorder(primary: string): string {
+  const [h, s] = hexToHsl(primary);
+  return hslToHex(h, Math.min(s, 0.22), 0.905);
 }
 
 // hex -> {h,s,l} (h 0..360, s/l 0..1)
@@ -93,11 +131,18 @@ export function headerGradient(primary: string): readonly [string, string, strin
 // Resolved colors for JS props. primary/foreground swap per school; neutrals fixed.
 export function useThemeColors() {
   const { branding } = useBranding();
+  const primary = branding?.primaryColor ?? AARAMVA_COLORS.primary;
   return {
     ...AARAMVA_COLORS,
     placeholderIcon: PLACEHOLDER_ICON,
-    primary: branding?.primaryColor ?? AARAMVA_COLORS.primary,
+    primary,
     primaryForeground: branding?.primaryForeground ?? AARAMVA_COLORS.primaryForeground,
     danger: AARAMVA_COLORS.danger,
+    // Per-school hero-band tints (recompute from the resolved primary).
+    brandSurface: brandSurface(primary),
+    brandBorder: brandBorder(primary),
+    brandMuted: brandMuted(primary),
+    brandField: brandField(primary),
+    brandFieldBorder: brandFieldBorder(primary),
   };
 }

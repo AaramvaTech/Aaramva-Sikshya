@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as bcrypt from 'bcrypt';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
+import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
 import { Role } from '../common/enums/role.enum';
 
 interface GuardianRow {
@@ -107,6 +108,127 @@ export class GuardianService {
       }
 
       return { userId, guardianId, email: dto.email, linked: true };
+    });
+  }
+
+  /**
+   * BUG-1 / Option B — provision a relational guardian + a parent-portal login in
+   * one idempotent action. Does all three things the parent app needs:
+   *   1. find-or-create the relational guardian (keyed on student_id + phone),
+   *   2. create-or-reuse the PARENT user (keyed on email; existing PARENT reused),
+   *   3. write the guardians.user_id linkage the hard-scope queries read.
+   * Re-running with the same details creates no duplicate guardian and no
+   * duplicate user. Mirrors the existing email+password credential pattern; no SMS.
+   */
+  async provisionGuardian(studentId: string, dto: ProvisionGuardianDto) {
+    const studentRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+      studentId,
+    );
+    if (!studentRows[0]) throw new NotFoundException('Student not found');
+
+    // Hash before the transaction to keep the DB lock duration short.
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    return this.tenantPrisma.run(async (tx) => {
+      // 1. Find-or-create the relational guardian, idempotent on (student_id, phone).
+      const existingGuardian = await tx.$queryRawUnsafe<GuardianRow[]>(
+        `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
+         FROM guardians
+         WHERE student_id = $1::uuid AND phone = $2
+         ORDER BY created_at ASC
+         LIMIT 1
+         FOR UPDATE`,
+        studentId,
+        dto.phone,
+      );
+
+      let guardian = existingGuardian[0] ?? null;
+      let guardianCreated = false;
+      if (!guardian) {
+        const inserted = await tx.$queryRawUnsafe<GuardianRow[]>(
+          `INSERT INTO guardians (student_id, relation, first_name, last_name, phone, email, is_primary)
+           VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+           RETURNING id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id`,
+          studentId,
+          dto.relation,
+          dto.firstName,
+          dto.lastName ?? null,
+          dto.phone,
+          dto.email,
+          dto.isPrimary ?? false,
+        );
+        guardian = inserted[0];
+        guardianCreated = true;
+      }
+
+      // 2. Already linked? Idempotent no-op — return the existing account.
+      if (guardian.user_id) {
+        return {
+          studentId,
+          guardianId: guardian.id,
+          userId: guardian.user_id,
+          email: guardian.email ?? dto.email,
+          relation: guardian.relation,
+          isPrimary: guardian.is_primary,
+          guardianCreated,
+          parentAccountCreated: false,
+          linked: true as const,
+        };
+      }
+
+      // 3. Create-or-reuse the PARENT user, keyed on email (multi-child reuse).
+      const existingUserRows = await tx.$queryRawUnsafe<UserRow[]>(
+        `SELECT id, email, role, first_name, last_name FROM users WHERE email = $1`,
+        dto.email,
+      );
+      const existingUser = existingUserRows[0] ?? null;
+
+      let userId: string;
+      let parentAccountCreated = false;
+      if (existingUser) {
+        if (existingUser.role !== Role.PARENT) {
+          throw new ConflictException('Email is already used by a non-PARENT account');
+        }
+        userId = existingUser.id;
+      } else {
+        const newUserRows = await tx.$queryRawUnsafe<UserRow[]>(
+          `INSERT INTO users (email, password_hash, role, first_name, last_name, phone)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, email, role, first_name, last_name`,
+          dto.email,
+          passwordHash,
+          Role.PARENT,
+          dto.firstName,
+          dto.lastName ?? null,
+          dto.phone,
+        );
+        userId = newUserRows[0].id;
+        parentAccountCreated = true;
+      }
+
+      // 4. Atomic linkage — only link if still unlinked.
+      const affected = await tx.$executeRawUnsafe(
+        `UPDATE guardians SET user_id = $1::uuid, updated_at = NOW()
+         WHERE id = $2::uuid AND user_id IS NULL`,
+        userId,
+        guardian.id,
+      );
+      if (affected === 0) {
+        throw new ConflictException('Guardian already has a linked account');
+      }
+
+      return {
+        studentId,
+        guardianId: guardian.id,
+        userId,
+        email: dto.email,
+        relation: guardian.relation,
+        isPrimary: guardian.is_primary,
+        guardianCreated,
+        parentAccountCreated,
+        linked: true as const,
+      };
     });
   }
 

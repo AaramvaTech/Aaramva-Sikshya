@@ -13,8 +13,8 @@ export default function BsDate({ isoDate, lang = 'en' }: Props) {
 
   return (
     <View className="items-center">
-      <Text className="text-base font-medium text-indigo-700">{formatted}</Text>
-      <Text className="text-xs text-gray-400">{adDate.toLocaleDateString()}</Text>
+      <Text className="text-base font-medium text-primary">{formatted}</Text>
+      <Text className="text-xs text-muted-foreground">{adDate.toLocaleDateString()}</Text>
     </View>
   );
 }

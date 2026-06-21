@@ -1,53 +1,57 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, type ColorValue } from 'react-native';
+import { useThemeColors } from '../../lib/theme/colors';
+import { FONT } from '../../lib/theme/fonts';
 
 function TabIcon({ name, color, focused }: {
   name: keyof typeof Ionicons.glyphMap;
   color: ColorValue;
   focused: boolean;
 }) {
+  const c = useThemeColors();
   return (
     <View style={{ alignItems: 'center' }}>
       {focused && (
         <View style={{
           width: 4, height: 4, borderRadius: 2,
-          backgroundColor: '#1e3a5f', marginBottom: 2,
+          backgroundColor: c.primary, marginBottom: 2,
         }} />
       )}
-      <Ionicons name={name} size={24} color={color} />
+      <Ionicons name={name} size={23} color={color} />
     </View>
   );
 }
 
 export default function ParentLayout() {
+  const c = useThemeColors();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1e3a5f',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: c.primary,
+        tabBarInactiveTintColor: c.mutedForeground,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#eff6ff',
+          backgroundColor: c.surface,
+          borderTopColor: c.border,
           borderTopWidth: 1,
           paddingBottom: 8,
-          paddingTop: 4,
-          height: 64,
+          paddingTop: 6,
+          height: 66,
           elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
+          shadowColor: '#10231A',
+          shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.06,
-          shadowRadius: 8,
+          shadowRadius: 10,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+        tabBarLabelStyle: { fontFamily: FONT.bold, fontSize: 9.5, marginTop: 2 },
         tabBarShowLabel: true,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
           ),
@@ -58,16 +62,7 @@ export default function ParentLayout() {
         options={{
           title: 'Attendance',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'stats-chart' : 'stats-chart-outline'} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="timetable"
-        options={{
-          title: 'Timetable',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'calendar-number' : 'calendar-number-outline'} color={color} focused={focused} />
           ),
         }}
       />
@@ -81,15 +76,26 @@ export default function ParentLayout() {
         }}
       />
       <Tabs.Screen
-        name="fees"
+        name="notices"
         options={{
-          title: 'Fees',
+          title: 'Notices',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'card' : 'card-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'megaphone' : 'megaphone-outline'} color={color} focused={focused} />
           ),
         }}
       />
-      {/* Placeholder from session 20 — hidden from tab bar */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
+          ),
+        }}
+      />
+      {/* Reachable via quick-access / kept routes, hidden from the tab bar */}
+      <Tabs.Screen name="fees" options={{ href: null }} />
+      <Tabs.Screen name="timetable" options={{ href: null }} />
       <Tabs.Screen name="home" options={{ href: null }} />
     </Tabs>
   );

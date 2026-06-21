@@ -225,7 +225,22 @@ The `guardians` table has a nullable `user_id UUID REFERENCES users(id)`. Most g
 
 **Session 21 needs:** When adding a new screen under a role group, create `app/(student)/newscreen.tsx` (or parent/teacher). Update `app/(student)/_layout.tsx` Stack if a new route needs header config. The root layout's useEffect in `_layout.tsx` controls auth routing — don't add `router.replace()` in individual screens to avoid race conditions.
 
-**Canonical brand color (mobile):** Aaramva primary is `#065f46` (`--primary: 6 95 70`), single source of truth in `apps/mobile/lib/theme/tokens.ts`. Auth + student screens read it only via the `--primary` token / `useThemeColors()` — never a second green literal. Per-school themes override `--primary` at runtime (ThemeSync → applySchool). (Web's `#1a8055` reconciliation is out of scope.)
+**Canonical brand color (mobile):** Aaramva primary is `#0B6B43` (`--primary: 11 107 67`), single source of truth in `apps/mobile/lib/theme/tokens.ts` (updated from `#065f46` to match the brand design). Auth + student screens read it only via the `--primary` token / `useThemeColors()` — never a second green literal. **Exception:** the pre-school onboarding flow (`app/index.tsx`) uses an exact-design literal palette (`OB` constant: `#0B6B43`/`#064E33` gradient, `#E9F4EE` band, etc.) plus the design logo assets `assets/images/aaramva-mark.png` + `aaramva-wordmark.png` (rendered untinted) — a documented exception, since onboarding is Aaramva-branded and must match the design pixel-for-pixel. Per-school themes override `--primary` at runtime (ThemeSync → applySchool). (Web's `#1a8055` reconciliation is out of scope.)
+
+## Mobile shared UI library (added Session: UI/UX top-level pass)
+
+**All role apps (student/parent/teacher) are now token-driven and per-school-branded — no hardcoded brand hex.** Previously parent (navy `#1e3a5f`) and teacher (blue `#1e40af`) screens were on a hardcoded palette that ignored school branding; they were migrated to the same token system the student/auth screens already used. The single brand decision: **every role unifies on the per-school `--primary`** (no per-role accent colors).
+
+**`apps/mobile/components/ui/`** — shared, token-only primitives (barrel export in `index.ts`). Build screens from these; do not re-implement headers/cards/states inline:
+- `ScreenHeader` — the one branded gradient header (`headerGradient(c.primary)`), safe-area aware (`useSafeAreaInsets`), with `eyebrow`/`title`/`subtitle`/`right`/`children`/`overlap`/`npTitle` props.
+- `Card` + `CARD_SHADOW`/`CARD_SHADOW_LG` (elevation scale), `CardLabel` (uppercase muted section label).
+- `EmptyState`, `ErrorState` (cloud-offline + Try again), `LoadingBlock` — consistent boundary states.
+- `PrimaryButton` (solid/`soft`, loading, ≥52pt), `StatusBadge`, `HeaderPill`, `HeaderIconButton`.
+- `AttendanceSummaryCard` (percent + chips + progress, student & parent), `TodayClasses` (dashboard timetable card), `AttendanceCalendar` (generic BS-month grid taking a `statusConfig` map — student/parent/teacher), `SubjectSlot` (colour-accented period card, student & teacher timetables), `ChildPicker`, `MonthNav` (`card`/`header` variants), `SelectableRow`/`SelectChip` (teacher pickers), `Legend`.
+
+**Decorative palettes (documented exceptions to "tokens only", like `SATURDAY_HIGHLIGHT`):** subject hues in `lib/subjects.ts` (`subjectColor(i)`); semantic status palettes (PRESENT green / ABSENT red / LATE amber / LEAVE blue) stay as literals and match the canonical `STATUS_CONFIG` in `lib/attendance.ts`. These are NOT brand-coupled — never replace them with `--primary`.
+
+**Rule for new mobile screens:** brand colour only via `useThemeColors()` / NativeWind tokens (`bg-primary`, `text-foreground`, `bg-surface`, `text-muted-foreground`, …). Tab bars read `c.primary`/`c.surface`/`c.border` (see any `(role)/_layout.tsx`). Verify with `npx tsc --noEmit` (exits 0).
 
 ---
 

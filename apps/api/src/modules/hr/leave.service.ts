@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { Role } from '../common/enums/role.enum';
+import { assertSelfOrHrAdmin } from './hr-access.util';
 import {
   LeaveTypeRow,
   StaffLeaveRequestRow,
@@ -205,7 +207,15 @@ export class LeaveService {
     );
   }
 
-  async getLeaveBalance(userId: string): Promise<LeaveBalanceDto[]> {
+  async getLeaveBalance(
+    userId: string,
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<LeaveBalanceDto[]> {
+    // BUG-2: HR confidentiality — only the staff member themselves, or an
+    // admin/principal, may read a leave balance. Teacher peers are rejected.
+    assertSelfOrHrAdmin(userId, callerId, callerRole);
+
     // Nepali fiscal year: 1 Shrawan ≈ July 16 in AD
     const now = new Date();
     const fiscalYearStart = now.getMonth() >= 6

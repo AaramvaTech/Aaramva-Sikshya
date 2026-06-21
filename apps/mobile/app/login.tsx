@@ -22,8 +22,9 @@ import { persistLoginSession } from '../lib/session';
 import { deleteSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 import NpText from '../components/NpText';
-import { useThemeColors, headerGradient, deriveOnPrimary } from '../lib/theme/colors';
+import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { useBranding } from '../lib/theme/provider';
+import { FONT } from '../lib/theme/fonts';
 
 type LoginResponse = {
   accessToken: string;
@@ -50,6 +51,15 @@ async function registerPushToken(): Promise<void> {
   }
 }
 
+function initialsOf(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,7 +70,11 @@ export default function LoginScreen() {
   const { branding } = useBranding();
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
-  const onPrimary = deriveOnPrimary(c.primary);
+
+  const schoolName = branding?.name ?? slug ?? 'Aaramva Shikshya';
+  // Design's Sign-In button darkens left→right; reuse the derived ramp's mid+dark stops.
+  const ramp = headerGradient(c.primary);
+  const buttonGradient: [string, string] = [ramp[1], ramp[2]];
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -108,77 +122,53 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex1}
-      className="bg-background"
+      style={[styles.flex1, { backgroundColor: '#FFFFFF' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={{ flexGrow: 1, backgroundColor: '#FFFFFF' }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* ---------------------------------------------------------------- */}
-        {/* Gradient header                                                   */}
+        {/* School brand band (light wash of the school's primary)           */}
         {/* ---------------------------------------------------------------- */}
-        <LinearGradient
-          colors={headerGradient(c.primary) as [string, string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.header, { paddingTop: insets.top + 24 }]}
+        <View
+          style={[
+            styles.band,
+            { paddingTop: insets.top + 26, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+          ]}
         >
-          {/* School logo chip — light backing so it reads on ANY school color */}
           {branding?.logoUrl ? (
-            <View style={styles.logoChip} className="bg-surface">
-              <Image
-                source={{ uri: branding.logoUrl }}
-                style={{ width: 44, height: 44 }}
-                resizeMode="contain"
-              />
+            <View style={[styles.logoChip, { backgroundColor: c.surface, shadowColor: c.primary }]}>
+              <Image source={{ uri: branding.logoUrl }} style={{ width: 44, height: 44 }} resizeMode="contain" />
             </View>
           ) : (
-            <View style={styles.iconChip}>
-              <Image
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                source={require('../assets/images/brand-icon.png')}
-                style={{ width: 36, height: 36 }}
-                tintColor="#FFFFFF"
-                resizeMode="contain"
-              />
+            <View style={[styles.avatar, { backgroundColor: c.primary, shadowColor: c.primary }]}>
+              <Text style={[styles.avatarText, { color: c.primaryForeground }]}>
+                {initialsOf(schoolName)}
+              </Text>
             </View>
           )}
 
-          {/* School name */}
-          <NpText style={[styles.schoolName, { color: c.primaryForeground }]}>
-            {branding?.name ?? slug ?? 'Aaramva Shikshya'}
-          </NpText>
-
-          {/* Subtitle */}
-          <Text style={[styles.subtitle, { color: onPrimary.pale }]}>
-            Sign in to your account
-          </Text>
-        </LinearGradient>
+          <NpText style={[styles.schoolName, { color: c.foreground }]}>{schoolName}</NpText>
+          <Text style={[styles.bandSub, { color: c.brandMuted }]}>Sign in to your account</Text>
+        </View>
 
         {/* ---------------------------------------------------------------- */}
         {/* Body                                                              */}
         {/* ---------------------------------------------------------------- */}
-        <View style={styles.body} className="bg-background">
-          <Text style={styles.heading} className="text-foreground">Welcome back</Text>
+        <View style={styles.body}>
+          <Text style={[styles.heading, { color: c.foreground }]}>Welcome back</Text>
 
-          {/* Email label */}
-          <Text style={styles.fieldLabel} className="text-muted-foreground">
-            Email Address
-          </Text>
-          {/* Email input row */}
-          <View
-            style={styles.inputRow}
-            className="bg-surface-muted border border-border rounded-xl"
-          >
-            <Ionicons name="mail-outline" size={18} color={c.mutedForeground} />
+          {/* Email */}
+          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Email address</Text>
+          <View style={[styles.inputRow, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
+            <Ionicons name="mail-outline" size={18} color={c.brandMuted} />
             <TextInput
-              style={styles.textInput}
-              className="text-foreground"
-              placeholder="you@school.com"
+              style={[styles.textInput, { color: c.foreground }]}
+              placeholder="you@school.edu.np"
               placeholderTextColor={c.mutedForeground}
               value={email}
               onChangeText={setEmail}
@@ -189,19 +179,12 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Password label */}
-          <Text style={styles.fieldLabel} className="text-muted-foreground">
-            Password
-          </Text>
-          {/* Password input row */}
-          <View
-            style={[styles.inputRow, styles.inputRowLast]}
-            className="bg-surface-muted border border-border rounded-xl"
-          >
-            <Ionicons name="lock-closed-outline" size={18} color={c.mutedForeground} />
+          {/* Password */}
+          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Password</Text>
+          <View style={[styles.inputRow, styles.inputRowLast, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
+            <Ionicons name="lock-closed-outline" size={18} color={c.brandMuted} />
             <TextInput
-              style={styles.textInput}
-              className="text-foreground"
+              style={[styles.textInput, { color: c.foreground }]}
               placeholder="••••••••"
               placeholderTextColor={c.mutedForeground}
               value={password}
@@ -211,92 +194,55 @@ export default function LoginScreen() {
               onSubmitEditing={handleLogin}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeToggle}>
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={18}
-                color={c.mutedForeground}
-              />
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={c.brandMuted} />
             </TouchableOpacity>
           </View>
 
-          {/* Error row */}
+          {/* Error */}
           {error !== null && (
-            <View
-              style={[
-                styles.errorRow,
-                // bg-danger/10: danger bg at 10% opacity — inline because
-                // NativeWind v4 opacity-fraction utilities are not reliable for bg
-                { backgroundColor: `${c.danger}1A` },
-              ]}
-              className="border border-danger rounded-xl"
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={16}
-                color={c.danger}
-                style={{ marginTop: 1 }}
-              />
-              <Text style={styles.errorText} className="text-danger">{error}</Text>
+            <View style={[styles.errorRow, { backgroundColor: `${c.danger}1A`, borderColor: c.danger }]}>
+              <Ionicons name="alert-circle-outline" size={16} color={c.danger} style={{ marginTop: 1 }} />
+              <Text style={[styles.errorText, { color: c.danger }]}>{error}</Text>
             </View>
           )}
 
-          {/* Sign In button */}
+          {/* Sign In */}
           <TouchableOpacity
-            style={[styles.ctaButton, loading && styles.ctaDisabled]}
-            className="bg-primary rounded-xl"
+            style={[styles.cta, { shadowColor: c.primary }, loading && styles.ctaDisabled]}
             onPress={handleLogin}
             disabled={loading}
-            activeOpacity={0.85}
+            activeOpacity={0.9}
           >
-            {loading ? (
-              <ActivityIndicator color={c.primaryForeground} />
-            ) : (
-              <>
-                <Text style={styles.ctaText} className="text-primary-foreground">Sign In</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color={c.primaryForeground}
-                  style={{ marginLeft: 8 }}
-                />
-              </>
-            )}
+            <LinearGradient
+              colors={buttonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.ctaFill}
+            >
+              {loading ? (
+                <ActivityIndicator color={c.primaryForeground} />
+              ) : (
+                <>
+                  <Text style={[styles.ctaText, { color: c.primaryForeground, marginRight: 8 }]}>Sign In</Text>
+                  <Ionicons name="arrow-forward" size={19} color={c.primaryForeground} />
+                </>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
 
-          {/* Not your school? reset affordance */}
-          <TouchableOpacity
-            style={styles.resetLink}
-            onPress={handleReset}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={15}
-              color={c.mutedForeground}
-              style={{ marginRight: 5 }}
-            />
-            <Text style={styles.resetText} className="text-muted-foreground">
-              Not your school?
-            </Text>
+          {/* Switch school */}
+          <TouchableOpacity style={styles.switchLink} onPress={handleReset} activeOpacity={0.7}>
+            <Ionicons name="swap-horizontal-outline" size={15} color={c.brandMuted} style={{ marginRight: 6 }} />
+            <Text style={[styles.switchText, { color: c.brandMuted }]}>Switch school</Text>
           </TouchableOpacity>
         </View>
 
         {/* ---------------------------------------------------------------- */}
         {/* Trust footer                                                      */}
         {/* ---------------------------------------------------------------- */}
-        <View
-          style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}
-          className="bg-background"
-        >
-          {/* Faded brand mark — no hardcoded color; low opacity lets asset read naturally */}
-          <Image
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            source={require('../assets/images/brand-icon.png')}
-            style={{ width: 14, height: 14, opacity: 0.2, marginRight: 6 }}
-            resizeMode="contain"
-          />
-          <Ionicons name="lock-closed" size={12} color={c.mutedForeground} style={{ marginRight: 4 }} />
-          <Text style={styles.footerText} className="text-muted-foreground">
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <Ionicons name="lock-closed" size={12} color={c.mutedForeground} style={{ marginRight: 5 }} />
+          <Text style={[styles.footerText, { color: c.mutedForeground }]}>
             Private to your school. Secured by Aaramva Shikshya.
           </Text>
         </View>
@@ -305,93 +251,79 @@ export default function LoginScreen() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles — layout only; colors delegated to className tokens / c.* JS props
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
-  flex1: {
-    flex: 1,
-  },
+  flex1: { flex: 1 },
 
-  // Header
-  header: {
-    paddingBottom: 40,
-    paddingHorizontal: 24,
+  // Brand band
+  band: {
+    paddingHorizontal: 26,
+    paddingBottom: 28,
     alignItems: 'center',
+    borderBottomWidth: 1,
   },
-  // Light backing chip — reads on any school color; bg set via bg-surface className
   logoChip: {
     width: 64,
     height: 64,
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  iconChip: {
+  avatar: {
     width: 64,
     height: 64,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 5,
   },
-  schoolName: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 14,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontWeight: '400',
-    marginTop: 6,
-    textAlign: 'center',
-  },
+  avatarText: { fontFamily: FONT.extrabold, fontSize: 23, letterSpacing: 0.5 },
+  schoolName: { fontFamily: FONT.extrabold, fontSize: 17, textAlign: 'center', marginTop: 14 },
+  bandSub: { fontFamily: FONT.semibold, fontSize: 12.5, marginTop: 5, textAlign: 'center' },
 
   // Body
   body: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingTop: 24,
     paddingBottom: 8,
   },
-  heading: {
-    fontSize: 19,
-    fontWeight: '500',
-    marginBottom: 20,
-  },
+  heading: { fontFamily: FONT.extrabold, fontSize: 19, marginBottom: 18, letterSpacing: -0.3 },
 
-  // Field label
   fieldLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: FONT.bold,
+    fontSize: 10.5,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 6,
-    marginLeft: 2,
+    marginBottom: 7,
+    marginLeft: 1,
   },
 
   // Input
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+    height: 50,
     paddingHorizontal: 14,
-    marginBottom: 14,
-  },
-  inputRowLast: {
     marginBottom: 16,
+    borderWidth: 1.5,
+    borderRadius: 14,
   },
+  inputRowLast: { marginBottom: 20 },
   textInput: {
     flex: 1,
-    height: 48,
+    height: 50,
     paddingHorizontal: 10,
-    fontSize: 15,
+    fontFamily: FONT.medium,
+    fontSize: 14.5,
   },
-  eyeToggle: {
-    padding: 4,
-  },
+  eyeToggle: { padding: 4 },
 
   // Error
   errorRow: {
@@ -399,43 +331,38 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 14,
-  },
-  errorText: {
-    fontSize: 13,
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 18,
-  },
-
-  // CTA button
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
+    marginBottom: 16,
+    borderWidth: 1,
     borderRadius: 12,
-    marginBottom: 14,
   },
-  ctaDisabled: {
-    opacity: 0.6,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  errorText: { fontFamily: FONT.medium, fontSize: 13, marginLeft: 8, flex: 1, lineHeight: 18 },
 
-  // "Not your school?" reset link
-  resetLink: {
+  // CTA
+  cta: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  ctaFill: {
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    marginBottom: 8,
   },
-  resetText: {
-    fontSize: 13,
+  ctaDisabled: { opacity: 0.6 },
+  ctaText: { fontFamily: FONT.bold, fontSize: 15 },
+
+  // Switch school
+  switchLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
   },
+  switchText: { fontFamily: FONT.semibold, fontSize: 13.5 },
 
   // Footer
   footer: {
@@ -445,7 +372,5 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 24,
   },
-  footerText: {
-    fontSize: 11,
-  },
+  footerText: { fontFamily: FONT.regular, fontSize: 11 },
 });

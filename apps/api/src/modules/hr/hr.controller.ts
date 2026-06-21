@@ -237,8 +237,11 @@ export class HrController {
 
   @Get('leave/balance/:userId')
   @Roles(...TEACHER_AND_ABOVE)
-  getLeaveBalance(@Param('userId', ParseUUIDPipe) userId: string) {
-    return this.leaveService.getLeaveBalance(userId);
+  getLeaveBalance(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.leaveService.getLeaveBalance(userId, user.userId, user.role);
   }
 
   // ─── Payroll ───────────────────────────────────────────────────────────────
@@ -302,9 +305,16 @@ export class HrController {
     return this.payrollService.getSlip(slipId);
   }
 
+  // BUG-2: any staff member may reach this route to read their OWN history; the
+  // service-level self-or-admin check (assertSelfOrHrAdmin) restricts to own /
+  // admin / principal. Widened from ACCOUNTANT_AND_ABOVE so a teacher can read
+  // their own salary history (route guard previously blocked them outright).
   @Get('payroll/staff/:userId/history')
-  @Roles(...ACCOUNTANT_AND_ABOVE)
-  getStaffSalaryHistory(@Param('userId', ParseUUIDPipe) userId: string) {
-    return this.payrollService.getStaffSalaryHistory(userId);
+  @Roles(...TEACHER_AND_ABOVE)
+  getStaffSalaryHistory(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.payrollService.getStaffSalaryHistory(userId, user.userId, user.role);
   }
 }
