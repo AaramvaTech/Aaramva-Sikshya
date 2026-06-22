@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { ResultService } from '../examination/result.service';
+import { toTimeString } from '../academic/entities/academic.entity';
 import { Role } from '../common/enums/role.enum';
 import { StudentMeAttendanceSummaryDto, StudentMeAttendanceHistoryDto } from './dto/student-me-query.dto';
 
@@ -209,8 +210,8 @@ export class StudentMeService {
     const periods = slots.map((s) => ({
       slotId: s.slot_id,
       periodNumber: Number(s.period_number),
-      startTime: typeof s.start_time === 'string' ? s.start_time.substring(0, 5) : String(s.start_time),
-      endTime: typeof s.end_time === 'string' ? s.end_time.substring(0, 5) : String(s.end_time),
+      startTime: toTimeString(s.start_time),
+      endTime: toTimeString(s.end_time),
       subject: { id: s.subject_id, name: s.subject_name, code: s.subject_code },
       teacher: { id: s.teacher_id, fullName: s.teacher_full_name },
       room: s.room,

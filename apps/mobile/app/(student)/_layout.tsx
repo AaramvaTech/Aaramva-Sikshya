@@ -93,6 +93,8 @@ export default function StudentLayout() {
           ),
         }}
       />
+      {/* Reachable from Home → Quick access, hidden from the tab bar */}
+      <Tabs.Screen name="results" options={{ href: null }} />
     </Tabs>
   );
 }

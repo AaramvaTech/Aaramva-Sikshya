@@ -3,15 +3,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { adToBs, formatBs } from 'bs-calendar';
 
-import { useMyChildren, useChildFees, useChildLedger } from '../../hooks/useParentChild';
+import { useMyChildren, useChildLedger } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import {
   ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, LoadingBlock,
 } from '../../components/ui';
-import type { FeeAssignment } from '../../types';
+import type { Invoice } from '../../types';
 
-// Semantic fee-status palette (not brand-coupled).
+// Semantic fee-status palette (not brand-coupled). Mirrors the backend invoice
+// status values: UNPAID / PARTIAL / PAID / OVERDUE.
 const FEE_STATUS: Record<string, { bg: string; text: string; label: string }> = {
   PAID:    { bg: '#d1fae5', text: '#065f46', label: 'Paid' },
   PARTIAL: { bg: '#fef3c7', text: '#92400e', label: 'Partial' },
@@ -22,15 +23,24 @@ const FEE_STATUS: Record<string, { bg: string; text: string; label: string }> = 
 const feeStatus = (status: string) => FEE_STATUS[status?.toUpperCase()] ?? FEE_STATUS.UNPAID;
 const formatNPR = (amount: number) => `NPR ${amount.toLocaleString('en-IN')}`;
 
-function FeeCard({ fee }: { fee: FeeAssignment }) {
+// An invoice may bundle several fee categories; show the categories when known,
+// else fall back to the invoice number.
+function invoiceTitle(inv: Invoice): string {
+  const items = inv.items ?? [];
+  if (items.length === 1) return items[0].feeCategoryName;
+  if (items.length > 1) return `${items[0].feeCategoryName} +${items.length - 1} more`;
+  return inv.invoiceNumber;
+}
+
+function InvoiceCard({ inv }: { inv: Invoice }) {
   const c = useThemeColors();
-  const cfg = feeStatus(fee.status);
-  const bsDue = fee.dueDate ? formatBs(adToBs(new Date(fee.dueDate)), 'en') : null;
+  const cfg = feeStatus(inv.status);
+  const bsDue = inv.dueDate?.ad ? formatBs(adToBs(new Date(inv.dueDate.ad)), 'en') : null;
   return (
     <Card padded style={styles.feeCard}>
       <View style={styles.feeTop}>
         <View style={styles.feeInfo}>
-          <Text className="text-foreground" style={styles.feeName}>{fee.feeCategoryName}</Text>
+          <Text className="text-foreground" style={styles.feeName}>{invoiceTitle(inv)}</Text>
           {bsDue && (
             <View style={styles.dueRow}>
               <Ionicons name="time-outline" size={12} color={c.mutedForeground} />
@@ -40,12 +50,12 @@ function FeeCard({ fee }: { fee: FeeAssignment }) {
         </View>
         <View style={styles.feeRight}>
           <StatusBadge label={cfg.label} bg={cfg.bg} color={cfg.text} />
-          <Text className="text-foreground" style={styles.amount}>{formatNPR(fee.amount)}</Text>
-          {fee.paidAmount > 0 && fee.paidAmount < fee.amount && (
-            <Text className="text-muted-foreground" style={styles.subAmount}>Paid: {formatNPR(fee.paidAmount)}</Text>
+          <Text className="text-foreground" style={styles.amount}>{formatNPR(inv.totalAmount)}</Text>
+          {inv.paidAmount > 0 && inv.paidAmount < inv.totalAmount && (
+            <Text className="text-muted-foreground" style={styles.subAmount}>Paid: {formatNPR(inv.paidAmount)}</Text>
           )}
-          {fee.balance > 0 && (
-            <Text className="text-danger" style={styles.balance}>Due: {formatNPR(fee.balance)}</Text>
+          {inv.balance > 0 && (
+            <Text className="text-danger" style={styles.balance}>Due: {formatNPR(inv.balance)}</Text>
           )}
         </View>
       </View>
@@ -68,18 +78,17 @@ export default function ParentFees() {
   const selectedChild = children.find((ch) => ch.id === effectiveChildId) ?? null;
   const academicYearId = selectedChild?.currentEnrollment?.academicYearId ?? null;
 
-  const feesQuery = useChildFees(effectiveChildId ?? '', academicYearId);
   const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
 
-  const fees = feesQuery.data ?? [];
   const ledger = ledgerQuery.data;
-  const outstanding = ledger?.outstanding ?? fees.reduce((sum, f) => sum + f.balance, 0);
-  const totalFees = ledger?.totalFees ?? fees.reduce((sum, f) => sum + f.amount, 0);
-  const totalPaid = ledger?.totalPaid ?? fees.reduce((sum, f) => sum + f.paidAmount, 0);
+  const invoices = ledger?.invoices ?? [];
+  const totalFees = ledger?.summary.totalInvoiced ?? 0;
+  const totalPaid = ledger?.summary.totalPaid ?? 0;
+  const outstanding = ledger?.summary.totalBalance ?? 0;
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([feesQuery.refetch(), ledgerQuery.refetch()]);
+    await ledgerQuery.refetch();
     setRefreshing(false);
   };
 
@@ -99,7 +108,7 @@ export default function ParentFees() {
       </ScreenHeader>
 
       <View style={styles.cards}>
-        {(feesQuery.data || ledger) && (
+        {ledger && (
           <Card elevated padded={false} style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
@@ -120,14 +129,14 @@ export default function ParentFees() {
           </Card>
         )}
 
-        {feesQuery.isLoading ? (
+        {ledgerQuery.isLoading ? (
           <Card><LoadingBlock /></Card>
-        ) : feesQuery.isError ? (
-          <Card><ErrorState compact title="Failed to load fees" onRetry={() => void feesQuery.refetch()} /></Card>
-        ) : fees.length === 0 ? (
-          <Card><EmptyState icon="card-outline" title="No fee records" /></Card>
+        ) : ledgerQuery.isError ? (
+          <Card><ErrorState compact title="Failed to load fees" onRetry={() => void ledgerQuery.refetch()} /></Card>
+        ) : invoices.length === 0 ? (
+          <Card><EmptyState icon="card-outline" title="No fee records" subtitle="Invoices will appear here once raised by the school." /></Card>
         ) : (
-          fees.map((fee) => <FeeCard key={fee.id} fee={fee} />)
+          invoices.map((inv) => <InvoiceCard key={inv.id} inv={inv} />)
         )}
         <View style={styles.bottomSpace} />
       </View>

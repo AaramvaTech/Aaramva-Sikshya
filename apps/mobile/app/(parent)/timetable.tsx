@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, LoadingBlock } from '../../components/ui';
 import NpText from '../../components/NpText';
+import { formatPeriodRange } from '../../lib/time';
 import type { SectionTimetableSlot } from '../../types';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -115,10 +116,10 @@ export default function ParentTimetable() {
                 <View style={styles.periodInfo}>
                   <View style={styles.periodTop}>
                     <NpText className="text-foreground" style={styles.subject}>{p.subject.name}</NpText>
-                    <Text className="text-muted-foreground" style={styles.time}>{p.startTime}–{p.endTime}</Text>
+                    <Text className="text-muted-foreground" style={styles.time}>{formatPeriodRange(p.startTime, p.endTime)}</Text>
                   </View>
                   <NpText className="text-muted-foreground" style={styles.teacher}>
-                    {p.teacher.fullName}{p.room ? ` · Room ${p.room}` : ''}
+                    {p.teacher.fullName}{p.room ? ` · ${p.room}` : ''}
                   </NpText>
                 </View>
               </View>

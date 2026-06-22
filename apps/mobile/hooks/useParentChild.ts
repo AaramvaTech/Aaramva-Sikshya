@@ -7,7 +7,6 @@ import type {
   SectionTimetableSlot,
   ExamResult,
   ReportCard,
-  FeeAssignment,
   StudentLedger,
 } from '../types';
 
@@ -61,13 +60,35 @@ export function useChildAttendanceHistory({
       const res = await api.get(`/attendance/students/${childId}/history`, {
         params: { fromDate, toDate, page, limit },
       });
-      return res.data.data as {
-        data: AttendanceHistoryItem[];
+      // The parent history endpoint returns each row with a BS/AD pair
+      // (`date: { ad, bs }`), unlike the student `/me` endpoint's flat `dateAd`.
+      // Normalise to the shared AttendanceHistoryItem shape the calendar reads.
+      const payload = res.data.data as {
+        data: Array<{ date?: { ad: string; bs: string }; dateAd?: string; status: string; remarks: string | null }>;
         meta: { page: number; limit: number; total: number };
+      };
+      return {
+        data: (payload.data ?? []).map((it) => ({
+          dateAd: it.date?.ad ?? it.dateAd ?? '',
+          status: it.status,
+          remarks: it.remarks ?? null,
+        })),
+        meta: payload.meta,
       };
     },
     enabled: !!childId && !!fromDate && !!toDate,
   });
+}
+
+// Slot rows as the backend returns them (no dayOfWeek — the day is the map key).
+interface RawSlot {
+  slotId: string;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  subject: { id: string; name: string; code: string | null };
+  teacher: { id: string; fullName: string };
+  room: string | null;
 }
 
 export function useChildTimetable(sectionId: string | null | undefined) {
@@ -75,8 +96,18 @@ export function useChildTimetable(sectionId: string | null | undefined) {
     queryKey: ['parent', 'section', sectionId, 'timetable'],
     queryFn: async () => {
       const res = await api.get(`/timetable/section/${sectionId}`);
-      const raw = res.data.data as SectionTimetableSlot[] | { slots: SectionTimetableSlot[] };
-      return Array.isArray(raw) ? raw : (raw.slots ?? []);
+      // Backend returns { sectionId, sectionName, className, schedule } where
+      // `schedule` is a day-keyed map (0=Sun … 6=Sat) of slot arrays. Flatten to
+      // a flat SectionTimetableSlot[] and inject dayOfWeek from the key, which is
+      // what the dashboard + timetable screens filter on.
+      const raw = res.data.data as { schedule?: Record<string, RawSlot[]> } | SectionTimetableSlot[];
+      if (Array.isArray(raw)) return raw;
+      const schedule = raw?.schedule ?? {};
+      const slots: SectionTimetableSlot[] = [];
+      for (const [dow, daySlots] of Object.entries(schedule)) {
+        for (const s of daySlots) slots.push({ ...s, dayOfWeek: Number(dow) });
+      }
+      return slots;
     },
     enabled: !!sectionId,
     staleTime: 5 * 60 * 1000,
@@ -148,22 +179,10 @@ export function useChildReportCard(childId: string) {
   });
 }
 
-export function useChildFees(
-  childId: string,
-  academicYearId: string | null | undefined,
-) {
-  return useQuery<FeeAssignment[]>({
-    queryKey: ['parent', 'child', childId, 'fees', academicYearId],
-    queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (academicYearId) params.academicYearId = academicYearId;
-      const res = await api.get(`/finance/students/${childId}/fee-assignments`, { params });
-      return res.data.data as FeeAssignment[];
-    },
-    enabled: !!childId,
-  });
-}
-
+// Fee billing for a child. The ledger is the single source of payment status:
+// it returns the child's invoices (each with status / amount / paid / balance /
+// dueDate) plus a roll-up summary. `academicYearId` is required by the endpoint
+// (omitting it 404s on the year lookup), so the query stays disabled until known.
 export function useChildLedger(
   childId: string,
   academicYearId: string | null | undefined,
@@ -171,11 +190,11 @@ export function useChildLedger(
   return useQuery<StudentLedger>({
     queryKey: ['parent', 'child', childId, 'ledger', academicYearId],
     queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (academicYearId) params.academicYearId = academicYearId;
-      const res = await api.get(`/finance/reports/student-ledger/${childId}`, { params });
+      const res = await api.get(`/finance/reports/student/${childId}`, {
+        params: { academicYearId },
+      });
       return res.data.data as StudentLedger;
     },
-    enabled: !!childId,
+    enabled: !!childId && !!academicYearId,
   });
 }

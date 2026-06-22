@@ -1,12 +1,13 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyChildren, useChildAttendanceSummary, useChildAttendanceHistory } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState, PrimaryButton } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { FONT } from '../../lib/theme/fonts';
 import NpText from '../../components/NpText';
@@ -105,6 +106,14 @@ export default function ParentAttendance() {
         </View>
 
         <View style={styles.body}>
+          <PrimaryButton
+            label="Request leave"
+            icon="add-circle-outline"
+            variant="soft"
+            onPress={() => router.push('/(parent)/request-leave')}
+            style={styles.requestLeaveBtn}
+          />
+
           <View style={[styles.card, CARD_SHADOW]}>
             <MonthNav
               label={monthLabel}
@@ -143,6 +152,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
   headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+  requestLeaveBtn: { marginBottom: 14 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16 },
   legendWrap: { marginTop: 14, alignItems: 'center' },
 });

@@ -10,6 +10,7 @@
  */
 
 import { NestFactory } from '@nestjs/core';
+import * as bcrypt from 'bcrypt';
 import { AppModule } from '../app.module';
 import { PrismaService } from './prisma.service';
 import { TenantContextService } from '../modules/tenant/tenant-context.service';
@@ -40,6 +41,15 @@ const TEACHER_PASSWORD = 'Teacher@123';
 const PARENT_EMAIL     = 'parent@demo.school';
 const PARENT_PASSWORD  = 'Parent@123';
 const PARENT_PHONE     = '9800000000';
+const STUDENT_EMAIL    = 'student@demo.school';
+const STUDENT_PASSWORD = 'Student@123';
+
+// Current academic year (Nepali FY starts Shrawan 1 ≈ Jul 16). As of BS 2083
+// Ashadh (mid-2026, before Shrawan) the running year is 2082-83.
+const ACADEMIC_YEAR    = '2082-83';
+const ACADEMIC_YEAR_BS = 2082;
+const ACADEMIC_START   = '2025-07-16'; // Shrawan 1, 2082 BS
+const ACADEMIC_END     = '2026-07-15'; // Ashadh end, 2083 BS
 
 // ─── Static roster — deterministic for cross-run idempotency ─────────────────
 
@@ -124,9 +134,12 @@ async function seedDemo(): Promise<void> {
     );
     const ownerId = ownerRows[0].id;
 
-    // ── Academic year 2081-82 (create + set current) ──────────────────────────
+    // ── Academic year (create + set current) ──────────────────────────────────
+    // Idempotent + self-healing: always (re)assert the current year so a reseed
+    // promotes the right one even if a stale year is currently flagged.
     const ayRows = await tenantPrisma.query<{ id: string; is_current: boolean }>(
-      `SELECT id, is_current FROM academic_years WHERE name = '2081-82' AND deleted_at IS NULL`,
+      `SELECT id, is_current FROM academic_years WHERE name = $1 AND deleted_at IS NULL`,
+      ACADEMIC_YEAR,
     );
     let academicYearId: string;
     if (ayRows[0]) {
@@ -136,10 +149,10 @@ async function seedDemo(): Promise<void> {
       }
     } else {
       const ay = await academicYearSvc.create({
-        name:      '2081-82',
-        yearBs:    2081,
-        startDate: '2024-07-16',
-        endDate:   '2025-07-15',
+        name:      ACADEMIC_YEAR,
+        yearBs:    ACADEMIC_YEAR_BS,
+        startDate: ACADEMIC_START,
+        endDate:   ACADEMIC_END,
       });
       academicYearId = ay.id;
       await academicYearSvc.setCurrentYear(academicYearId);
@@ -236,12 +249,14 @@ async function seedDemo(): Promise<void> {
       { sectionId: sectionBId, subjectId: scienceId, day: 4, period: 2, start: '11:00', end: '11:45' },
     ];
     for (const s of slotDefs) {
+      // Idempotent across academic-year changes: key on teacher/section/day/period
+      // (not the year) so a reseed under a new current year does not duplicate slots.
       const existing = await tenantPrisma.query<{ id: string }>(
         `SELECT id FROM timetable_slots
          WHERE teacher_id = $1::uuid AND section_id = $2::uuid
-           AND academic_year_id = $3::uuid AND day_of_week = $4 AND period_number = $5
+           AND day_of_week = $3 AND period_number = $4
            AND deleted_at IS NULL`,
-        teacherUserId, s.sectionId, academicYearId, s.day, s.period,
+        teacherUserId, s.sectionId, s.day, s.period,
       );
       if (!existing[0]) {
         await timetableSvc.createSlot({
@@ -445,9 +460,54 @@ async function seedDemo(): Promise<void> {
       isPrimary: true,
     });
 
+    // ── R2 Task 3: second child for the same parent (exercise the child-switcher).
+    // Idempotent: provisionGuardian is keyed on (student_id, phone) and reuses the
+    // existing PARENT user by email, so a reseed adds no duplicate.
+    const parentLink2 = await guardianSvc.provisionGuardian(studentsA[1].id, {
+      relation:  'Father',
+      firstName: 'Demo',
+      lastName:  'Parent',
+      phone:     PARENT_PHONE,
+      email:     PARENT_EMAIL,
+      password:  PARENT_PASSWORD,
+      isPrimary: false,
+    });
+
+    // ── R2 Task 2: student portal account (idempotent) ────────────────────────
+    // Linked to the parent's first child so the demo has a working STUDENT login.
+    const studentLoginRows = await tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL`,
+      STUDENT_EMAIL,
+    );
+    let studentAccountCreated = false;
+    if (!studentLoginRows[0]) {
+      await studentSvc.createStudentAccount(studentsA[0].id, {
+        email:    STUDENT_EMAIL,
+        password: STUDENT_PASSWORD,
+      });
+      studentAccountCreated = true;
+    }
+
+    // ── R2 Task 2: deterministic credentials on reseed ────────────────────────
+    // Force the documented password for every demo role to take effect even when
+    // the user already exists (the service paths only set a password on INSERT).
+    const ensurePassword = async (email: string, password: string): Promise<void> => {
+      const hash = await bcrypt.hash(password, 10);
+      await tenantPrisma.execute(
+        `UPDATE users SET password_hash = $1 WHERE email = $2 AND deleted_at IS NULL`,
+        hash, email,
+      );
+    };
+    await ensurePassword(OWNER_EMAIL, OWNER_PASSWORD);
+    await ensurePassword(TEACHER_EMAIL, TEACHER_PASSWORD);
+    await ensurePassword(PARENT_EMAIL, PARENT_PASSWORD);
+    await ensurePassword(STUDENT_EMAIL, STUDENT_PASSWORD);
+
     return {
       students: { A: studentsA.length, B: studentsB.length },
-      parent: { childId: studentsA[0].id, ...parentLink },
+      parent: { child1Id: studentsA[0].id, child2Id: studentsA[1].id, ...parentLink },
+      parentChild2Linked: parentLink2.linked,
+      studentAccountCreated,
     };
   });
 
@@ -459,8 +519,9 @@ async function seedDemo(): Promise<void> {
   console.log(` Slug       : ${SLUG}`);
   console.log(` Teacher    : ${TEACHER_EMAIL}  /  ${TEACHER_PASSWORD}`);
   console.log(` Owner      : ${OWNER_EMAIL}  /  ${OWNER_PASSWORD}`);
-  console.log(` Parent     : ${PARENT_EMAIL}  /  ${PARENT_PASSWORD}  (child: Section A roll 1; created=${report.parent.parentAccountCreated})`);
-  console.log(` Year       : 2081-82 (current)`);
+  console.log(` Parent     : ${PARENT_EMAIL}  /  ${PARENT_PASSWORD}  (2 children, Section A; 2nd linked=${report.parentChild2Linked})`);
+  console.log(` Student    : ${STUDENT_EMAIL}  /  ${STUDENT_PASSWORD}  (Section A child; created=${report.studentAccountCreated})`);
+  console.log(` Year       : ${ACADEMIC_YEAR} (current)`);
   console.log(` Class      : Grade 9 — Section A (${report.students.A} students) + Section B (${report.students.B} students)`);
   console.log(` Subjects   : Mathematics (split T60+P40) · Science (single 100)`);
   console.log(` Timetable  : 4 slots — Mon+Wed Sec-A, Tue+Thu Sec-B`);

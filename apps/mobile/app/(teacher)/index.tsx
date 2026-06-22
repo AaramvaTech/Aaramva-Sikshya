@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
+import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
 import { EmptyState, LoadingBlock } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
@@ -174,12 +175,12 @@ export default function TeacherHome() {
                   >
                     <View style={[styles.pBadge, { backgroundColor: sc.bg }]}>
                       <Text style={[styles.pBadgeNum, { color: sc.text }]}>P{slot.periodNumber}</Text>
-                      <Text style={[styles.pBadgeTime, { color: sc.text }]}>{slot.startTime}</Text>
+                      <Text style={[styles.pBadgeTime, { color: sc.text }]}>{formatPeriodTime(slot.startTime)}</Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <NpText style={[styles.classSubject, { color: c.foreground }]}>{slot.subject.name}</NpText>
                       <Text style={[styles.classMeta, { color: c.mutedForeground }]}>
-                        {slot.className} · {slot.section}{slot.room ? ` · Room ${slot.room}` : ''}
+                        {slot.className} · {slot.section}{slot.room ? ` · ${slot.room}` : ''}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={c.border} />

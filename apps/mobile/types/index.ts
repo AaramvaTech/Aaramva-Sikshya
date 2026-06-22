@@ -121,33 +121,85 @@ export interface ReportCard {
   annualGrade: string | null;
 }
 
-export interface FeeAssignment {
-  id: string;
-  feeCategoryId: string;
-  feeCategoryName: string;
-  amount: number;
-  dueDate: string;
-  status: string;
-  paidAmount: number;
-  balance: number;
+// ─── Student results / report-card (SESSION-M6) ───────────────────────────────
+// Shape mirrors the report-card endpoint → { student, examResults[], annualResult }
+// (confirmed via the parent report-card in M4). Built to this contract so the M6.1
+// wiring session is a clean swap — only the hook's queryFn changes, not this shape.
+export interface ResultSubject {
+  name: string;
+  /** Theory marks. Always present for theory-bearing subjects. */
+  theory: number | null;
+  /** Practical marks. `null` for theory-only subjects — render total only. */
+  practical: number | null;
+  total: number;
+  grade: string;
 }
 
-export interface LedgerEntry {
-  date: string;
-  description: string;
-  debit: number;
-  credit: number;
+export interface ExamTermResult {
+  examName: string;
+  gpa: number;
+  grade: string;
+  rank: number;
+  subjects: ResultSubject[];
+}
+
+export interface AnnualResult {
+  gpa: number;
+  grade: string;
+}
+
+export interface StudentResults {
+  student: {
+    name: string;
+    /** Class label as the API returns it (e.g. "Grade 9"); deduped at display. */
+    grade: string;
+    section: string;
+    roll: number;
+    admissionNo: string;
+  };
+  examResults: ExamTermResult[];
+  /** Aggregate annual result — `null` until the school year is closed. */
+  annualResult: AnnualResult | null;
+}
+
+// Fee config rows (GET /finance/students/:id/assignments) — fee-structure
+// definitions with per-student overrides. NOTE: these carry NO payment status
+// (no paid/balance/dueDate). Billing status lives on invoices in the ledger,
+// which is what the Fees screen renders. Kept for completeness only.
+export interface FeeAssignment {
+  feeStructureItemId: string;
+  feeCategoryName: string;
+  originalAmount: number;
+  customAmount: number | null;
+  discountPercent: number;
+  discountReason: string | null;
+  isWaived: boolean;
+  effectiveAmount: number;
+}
+
+// GET /finance/reports/student/:id?academicYearId= — mirrors the backend
+// InvoiceResponseDto. dueDate is a BS/AD pair already computed server-side.
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  studentId: string;
+  academicYearId: string;
+  dueDate: { ad: string; bs: string };
+  status: string; // UNPAID | PARTIAL | PAID | OVERDUE
+  subtotal: number;
+  discountAmount: number;
+  fineAmount: number;
+  totalAmount: number;
+  paidAmount: number;
   balance: number;
-  referenceId: string | null;
-  type: 'invoice' | 'payment';
+  items?: { id: string; feeCategoryName: string; originalAmount: number; discountedAmount: number }[];
 }
 
 export interface StudentLedger {
-  studentId: string;
-  entries: LedgerEntry[];
-  totalFees: number;
-  totalPaid: number;
-  outstanding: number;
+  student: { id: string; admissionNumber: string; fullName: string; className: string };
+  academicYear: { id: string; name: string };
+  invoices: Invoice[];
+  summary: { totalInvoiced: number; totalPaid: number; totalBalance: number };
 }
 
 export interface SectionTimetableSlot {

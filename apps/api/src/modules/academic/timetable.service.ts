@@ -9,6 +9,7 @@ import {
   SlotItemDto,
   TeacherSlotItemDto,
   toTimetableSlotResponse,
+  toTimeString,
 } from './entities/academic.entity';
 import { CreateTimetableSlotDto, BulkTimetableDto } from './dto/timetable.dto';
 
@@ -92,8 +93,8 @@ export class TimetableService {
       schedule[Number(row.day_of_week)].push({
         slotId: row.id,
         periodNumber: Number(row.period_number),
-        startTime: typeof row.start_time === 'string' ? row.start_time.substring(0, 5) : String(row.start_time),
-        endTime: typeof row.end_time === 'string' ? row.end_time.substring(0, 5) : String(row.end_time),
+        startTime: toTimeString(row.start_time),
+        endTime: toTimeString(row.end_time),
         subject: { id: row.subject_id, name: row.subject_name, code: row.subject_code },
         teacher: { id: row.teacher_id, fullName: row.teacher_full_name },
         room: row.room,
@@ -141,8 +142,8 @@ export class TimetableService {
       schedule[Number(row.day_of_week)].push({
         slotId: row.id,
         periodNumber: Number(row.period_number),
-        startTime: typeof row.start_time === 'string' ? row.start_time.substring(0, 5) : String(row.start_time),
-        endTime: typeof row.end_time === 'string' ? row.end_time.substring(0, 5) : String(row.end_time),
+        startTime: toTimeString(row.start_time),
+        endTime: toTimeString(row.end_time),
         subject: { id: row.subject_id, name: row.subject_name, code: row.subject_code },
         section: row.section_name,
         className: row.class_name,

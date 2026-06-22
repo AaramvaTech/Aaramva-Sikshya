@@ -39,16 +39,21 @@ export default function TeacherProfile() {
     );
   }
 
-  const fullName = `${p.firstName} ${p.lastName}`;
-  const initials = `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`.toUpperCase();
+  // Defensive: the API payload may omit name fields for some staff records;
+  // never index into a possibly-undefined string (it crashes the whole tab layout).
+  const fullName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || p.email || 'Teacher';
+  const initials = `${p.firstName?.[0] ?? ''}${p.lastName?.[0] ?? ''}`.toUpperCase()
+    || (p.email?.[0] ?? 'T').toUpperCase();
   const desig = p.designationTitle ?? p.role ?? 'Teacher';
-  let joined = p.joinDate;
-  try { joined = `${formatBs(adToBs(new Date(p.joinDate)), 'en')} BS`; } catch { /* keep raw */ }
+  let joined = p.joinDate ?? '—';
+  if (p.joinDate) {
+    try { joined = `${formatBs(adToBs(new Date(p.joinDate)), 'en')} BS`; } catch { /* keep raw */ }
+  }
 
   const info: { k: string; v: string }[] = [
-    { k: 'Employee ID', v: p.employeeId },
+    { k: 'Employee ID', v: p.employeeId ?? '—' },
     { k: 'Department', v: p.departmentName ?? '—' },
-    { k: 'Employment', v: p.employmentType },
+    { k: 'Employment', v: p.employmentType ?? '—' },
     { k: 'Joined', v: joined },
   ];
 

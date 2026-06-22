@@ -16,7 +16,8 @@ export class MarksService {
   async bulkEnterMarks(dto: BulkEnterMarksDto, enteredById: string): Promise<MarksResponseDto[]> {
     return this.tenantPrisma.run(async (tx) => {
       const schedules = await tx.$queryRawUnsafe<ExamScheduleRow[]>(
-        `SELECT id, full_marks, pass_marks FROM exam_schedules WHERE id = $1::uuid AND deleted_at IS NULL`,
+        `SELECT id, full_marks, pass_marks, theory_marks, practical_marks
+         FROM exam_schedules WHERE id = $1::uuid AND deleted_at IS NULL`,
         dto.examScheduleId,
       );
       if (!schedules[0]) {
@@ -24,12 +25,27 @@ export class MarksService {
       }
       const schedule = schedules[0];
       const fullMarks = toNum(schedule.full_marks);
+      // A "split" exam carries both theory and practical components.
+      const isSplitExam = schedule.theory_marks !== null && schedule.practical_marks !== null;
 
       for (const entry of dto.marks) {
         if (entry.isAbsent && entry.marksObtained !== undefined && entry.marksObtained !== null) {
           throw new BadRequestException(
             `Student ${entry.studentId}: cannot have marksObtained when isAbsent=true`,
           );
+        }
+        // R2 Task 1: server-side XOR guard. For a split exam, a present student
+        // must have BOTH theory and practical (or be marked absent). Rejecting a
+        // one-sided split here closes the data-integrity hole M5.1 proved live
+        // (the client guard was bypassable, persisting marks_obtained = NULL).
+        if (isSplitExam && !entry.isAbsent) {
+          const theoryProvided = entry.theoryMarks !== undefined && entry.theoryMarks !== null;
+          const practicalProvided = entry.practicalMarks !== undefined && entry.practicalMarks !== null;
+          if (theoryProvided !== practicalProvided) {
+            throw new BadRequestException(
+              `Student ${entry.studentId}: a split exam requires both theory and practical marks (or mark the student absent)`,
+            );
+          }
         }
         if (entry.marksObtained !== undefined && entry.marksObtained !== null) {
           if (entry.marksObtained > fullMarks) {

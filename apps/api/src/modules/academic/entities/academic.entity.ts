@@ -209,6 +209,24 @@ export function toBsString(d: Date | string): string {
   return `${bs.year}-${String(bs.month).padStart(2, '0')}-${String(bs.day).padStart(2, '0')}`;
 }
 
+/**
+ * Postgres `time` columns come back through Prisma's raw driver as a JS Date
+ * (which stringifies to "Thu Jan 01 1970 15:30:00 GMT+0530 …") or, in some
+ * paths, as a plain "HH:MM:SS" string. Always emit a plain "HH:MM" wall-clock
+ * string at the API boundary, reading UTC components for the Date case so no
+ * device/server offset is ever applied (mirrors examination.entity.toTimeField
+ * and mobile lib/time.ts).
+ */
+export function toTimeString(t: Date | string | null | undefined): string {
+  if (t === null || t === undefined || t === '') return '';
+  if (t instanceof Date) {
+    return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+  }
+  const s = String(t);
+  if (s.includes('T')) return s.split('T')[1].substring(0, 5); // ISO datetime
+  return s.substring(0, 5); // "HH:MM:SS" or "HH:MM"
+}
+
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
 export function toAcademicYearResponse(row: AcademicYearRow): AcademicYearResponseDto {
@@ -277,12 +295,8 @@ export function toTimetableSlotResponse(row: TimetableSlotRow): TimetableSlotRes
     academicYearId: row.academic_year_id,
     dayOfWeek: Number(row.day_of_week),
     periodNumber: Number(row.period_number),
-    startTime: typeof row.start_time === 'string'
-      ? row.start_time.substring(0, 5)
-      : String(row.start_time),
-    endTime: typeof row.end_time === 'string'
-      ? row.end_time.substring(0, 5)
-      : String(row.end_time),
+    startTime: toTimeString(row.start_time),
+    endTime: toTimeString(row.end_time),
     room: row.room,
   };
 }

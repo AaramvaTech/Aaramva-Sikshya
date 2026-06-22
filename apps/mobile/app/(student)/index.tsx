@@ -34,6 +34,7 @@ function splitName(name: string): { head: string; tail: string } {
 const QUICK = [
   { icon: 'calendar-number-outline', label: 'Attendance', route: '/(student)/attendance' },
   { icon: 'calendar-outline', label: 'Routine', route: '/(student)/timetable' },
+  { icon: 'ribbon-outline', label: 'Results', route: '/(student)/results' },
   { icon: 'megaphone-outline', label: 'Notices', route: '/(student)/notices' },
 ] as const;
 
