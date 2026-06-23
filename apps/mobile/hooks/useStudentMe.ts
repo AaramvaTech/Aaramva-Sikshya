@@ -145,6 +145,7 @@ function mapReportCard(rc: LiveReportCard): StudentResults {
         name: s.subjectName,
         theory: s.theoryMarks,
         practical: s.practicalMarks,
+        fullMarks: s.fullMarks,
         total: s.marksObtained ?? 0,
         grade: s.grade ?? '—',
       })),

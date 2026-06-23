@@ -131,6 +131,8 @@ export interface ResultSubject {
   theory: number | null;
   /** Practical marks. `null` for theory-only subjects — render total only. */
   practical: number | null;
+  /** Full mark allocation for the subject (NOT marks obtained). */
+  fullMarks: number;
   total: number;
   grade: string;
 }

@@ -40,7 +40,7 @@ function gradeColors(grade: string): { bg: string; fg: string } {
 function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boolean }) {
   const c = useThemeColors();
   const gc = gradeColors(subject.grade);
-  const fullMarks = (subject.theory ?? 0) + (subject.practical ?? 0);
+  const fullMarks = subject.fullMarks;
 
   return (
     <View style={[styles.subjectRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}>
