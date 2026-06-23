@@ -78,8 +78,9 @@ export default function TeacherProfile() {
             <TouchableOpacity
               style={[styles.gearBtn, { backgroundColor: c.surface }]}
               accessibilityRole="button"
-              accessibilityLabel="Settings"
+              accessibilityLabel="Profile details"
               activeOpacity={0.8}
+              onPress={() => router.push('/(teacher)/profile-details')}
             >
               <Ionicons name="settings-outline" size={19} color={c.primary} />
             </TouchableOpacity>

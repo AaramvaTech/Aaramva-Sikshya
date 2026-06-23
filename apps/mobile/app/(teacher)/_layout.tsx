@@ -97,6 +97,7 @@ export default function TeacherLayout() {
       <Tabs.Screen name="my-attendance" options={{ href: null }} />
       <Tabs.Screen name="leave" options={{ href: null }} />
       <Tabs.Screen name="home" options={{ href: null }} />
+      <Tabs.Screen name="profile-details" options={{ href: null }} />
     </Tabs>
   );
 }
