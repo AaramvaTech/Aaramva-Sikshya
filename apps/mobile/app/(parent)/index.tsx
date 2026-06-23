@@ -190,7 +190,7 @@ export default function ParentDashboard() {
           )}
 
           {/* Quick access (4 tiles) */}
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Quick access</Text>
+          <Text style={[styles.sectionLabel, styles.sectionLabelFirst, { color: c.foreground }]}>Quick access</Text>
           <View style={styles.quickGrid}>
             {QUICK.map((q) => (
               <TouchableOpacity
@@ -235,6 +235,8 @@ const styles = StyleSheet.create({
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
+  // "Quick access" sits 20px below the card (comp: margin-top 20px), vs 22px for "Today's classes"
+  sectionLabelFirst: { marginTop: 20 },
 
   quickGrid: { flexDirection: 'row', gap: 9 },
   quickTile: {
