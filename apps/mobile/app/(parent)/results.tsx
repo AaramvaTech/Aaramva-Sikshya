@@ -6,8 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
-import { EmptyState, ErrorState, LoadingBlock, PrimaryButton } from '../../components/ui';
-import { useReportCardDownload } from '../../hooks/useReportCardDownload';
+import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { FONT } from '../../lib/theme/fonts';
 import NpText from '../../components/NpText';
@@ -105,7 +104,6 @@ export default function ParentResults() {
   };
 
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
-  const { download, downloading } = useReportCardDownload(effectiveChildId ?? undefined);
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -137,13 +135,6 @@ export default function ParentResults() {
             </View>
           ) : (
             <>
-              <PrimaryButton
-                label="Download report card"
-                icon="download-outline"
-                loading={downloading}
-                onPress={download}
-                style={{ marginBottom: 16 }}
-              />
               {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
             </>
           )}
