@@ -9,6 +9,8 @@ import {
 import { adToBs, formatBs } from 'bs-calendar';
 import type { ExamSchedule, MySection, StudentProfile, ExamMark, BulkMarkEntry } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
+import { FONT } from '../../lib/theme/fonts';
+import { STATUS_CONFIG } from '../../lib/attendance';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock,
 } from '../../components/ui';
@@ -63,7 +65,7 @@ function StudentMarkRow({
     paddingHorizontal: 10,
     paddingVertical: 9,
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontFamily: FONT.semibold,
     color: disabled ? c.mutedForeground : c.foreground,
     backgroundColor: disabled ? c.surfaceMuted : c.surface,
     textAlign: 'center' as const,
@@ -361,7 +363,7 @@ export default function TeacherMarks() {
         {rosterReady && students.length > 0 && !rosterLoading && (
           submitted ? (
             <View style={styles.savedBanner}>
-              <Ionicons name="checkmark-circle" size={22} color="#065f46" />
+              <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
               <Text style={styles.savedText}>Marks saved successfully</Text>
             </View>
           ) : (
@@ -390,26 +392,26 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13 },
   pickerList: { gap: 8 },
   fullMarksCol: { alignItems: 'flex-end', marginLeft: 8 },
-  fullMarksNum: { fontSize: 13, fontWeight: '700' },
+  fullMarksNum: { fontSize: 13, fontFamily: FONT.bold },
   fullMarksLabel: { fontSize: 10 },
   listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 12 },
   splitPill: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 12 },
-  splitPillText: { fontSize: 11, fontWeight: '700' },
+  splitPillText: { fontSize: 11, fontFamily: FONT.bold },
   // mark row
   markRow: { paddingVertical: 12, paddingHorizontal: 14 },
   markNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  roll: { fontSize: 12, width: 28, fontWeight: '600' },
-  studentName: { fontSize: 14, fontWeight: '600' },
+  roll: { fontSize: 12, width: 28, fontFamily: FONT.semibold },
+  studentName: { fontSize: 14, fontFamily: FONT.semibold },
   admission: { fontSize: 11 },
   absentToggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  absentLabel: { fontSize: 11, fontWeight: '600' },
+  absentLabel: { fontSize: 11, fontFamily: FONT.semibold },
   inputsRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
   inputCol: { alignItems: 'center', flex: 1 },
   totalCol: { alignItems: 'center' },
-  inputLabel: { fontSize: 10, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
+  inputLabel: { fontSize: 10, fontFamily: FONT.bold, marginBottom: 4, textTransform: 'uppercase' },
   totalBox: { minWidth: 64, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
-  totalText: { fontSize: 14, fontWeight: '700' },
-  validationError: { fontSize: 11, marginTop: 6, fontWeight: '600' },
-  savedBanner: { backgroundColor: '#d1fae5', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  savedText: { color: '#065f46', fontSize: 15, fontWeight: '700' },
+  totalText: { fontSize: 14, fontFamily: FONT.bold },
+  validationError: { fontSize: 11, marginTop: 6, fontFamily: FONT.semibold },
+  savedBanner: { backgroundColor: STATUS_CONFIG.PRESENT.bg, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  savedText: { color: STATUS_CONFIG.PRESENT.color, fontSize: 15, fontFamily: FONT.bold },
 });

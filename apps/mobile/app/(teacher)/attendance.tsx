@@ -11,19 +11,13 @@ import type { BsDate } from 'bs-calendar';
 import type { StudentProfile, SectionAttendanceRecord } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
+import { STATUS_CONFIG } from '../../lib/attendance';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock,
 } from '../../components/ui';
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
 const STATUS_OPTIONS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
-
-// Semantic P/A/L palette (not brand-coupled).
-const STATUS_STYLE: Record<AttendanceStatus, { bg: string; text: string; label: string }> = {
-  PRESENT: { bg: '#d1fae5', text: '#065f46', label: 'P' },
-  ABSENT:  { bg: '#fee2e2', text: '#991b1b', label: 'A' },
-  LATE:    { bg: '#fef3c7', text: '#92400e', label: 'L' },
-};
 
 function adStringFromBs(bs: BsDate): string {
   return bsToAd(bs).toISOString().split('T')[0];
@@ -84,7 +78,7 @@ function DateSelector({ selectedBs, onSelect }: { selectedBs: BsDate; onSelect: 
 // ── Student toggle row ────────────────────────────────────────────────────────
 
 function StudentRow({ student, status, onCycle }: { student: StudentProfile; status: AttendanceStatus; onCycle: () => void }) {
-  const cfg = STATUS_STYLE[status];
+  const cfg = STATUS_CONFIG[status];
   const roll = student.currentEnrollment?.rollNumber;
   return (
     <View className="border-b border-border" style={styles.studentRow}>
@@ -100,7 +94,7 @@ function StudentRow({ student, status, onCycle }: { student: StudentProfile; sta
         style={[styles.statusToggle, { backgroundColor: cfg.bg }]}
         accessibilityLabel={`Toggle attendance, current ${status}`}
       >
-        <Text style={[styles.statusToggleText, { color: cfg.text }]}>{cfg.label}</Text>
+        <Text style={[styles.statusToggleText, { color: cfg.color }]}>{cfg.shortCode}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -280,13 +274,13 @@ export default function TeacherAttendance() {
             {students.length > 0 && (
               <View className="border-t border-border" style={styles.legend}>
                 {STATUS_OPTIONS.map((s) => {
-                  const cfg = STATUS_STYLE[s];
+                  const cfg = STATUS_CONFIG[s];
                   return (
                     <View key={s} style={styles.legendItem}>
                       <View style={[styles.legendSwatch, { backgroundColor: cfg.bg }]}>
-                        <Text style={[styles.legendCode, { color: cfg.text }]}>{cfg.label}</Text>
+                        <Text style={[styles.legendCode, { color: cfg.color }]}>{cfg.shortCode}</Text>
                       </View>
-                      <Text className="text-muted-foreground" style={styles.legendLabel}>{s}</Text>
+                      <Text className="text-muted-foreground" style={styles.legendLabel}>{cfg.label}</Text>
                     </View>
                   );
                 })}
@@ -299,7 +293,7 @@ export default function TeacherAttendance() {
         {selectedSection && students.length > 0 && (
           submitted ? (
             <View style={styles.savedBanner}>
-              <Ionicons name="checkmark-circle" size={22} color="#065f46" />
+              <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
               <Text style={styles.savedText}>Attendance saved successfully</Text>
             </View>
           ) : (
@@ -326,33 +320,33 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13 },
   pickerList: { gap: 8 },
   toggleRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24 },
-  toggleText: { fontSize: 12, fontWeight: '600' },
+  toggleText: { fontSize: 12, fontFamily: FONT.semibold },
   // date
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  monthLabel: { fontSize: 15, fontWeight: '700' },
+  monthLabel: { fontSize: 15, fontFamily: FONT.bold },
   dayStrip: { gap: 6 },
   dayBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  dayBtnText: { fontSize: 14, fontWeight: '700' },
+  dayBtnText: { fontSize: 14, fontFamily: FONT.bold },
   adLine: { fontSize: 11, marginTop: 8 },
   // student list
   listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 12 },
-  allPresentBtn: { backgroundColor: '#d1fae5', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 12 },
-  allPresentText: { fontSize: 11, color: '#065f46', fontWeight: '700' },
+  allPresentBtn: { backgroundColor: STATUS_CONFIG.PRESENT.bg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 12 },
+  allPresentText: { fontSize: 11, color: STATUS_CONFIG.PRESENT.color, fontFamily: FONT.bold },
   studentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
-  roll: { fontSize: 12, width: 28, fontWeight: '600' },
+  roll: { fontSize: 12, width: 28, fontFamily: FONT.semibold },
   studentInfo: { flex: 1 },
-  studentName: { fontSize: 14, fontWeight: '600' },
+  studentName: { fontSize: 14, fontFamily: FONT.semibold },
   admission: { fontSize: 11 },
   statusToggle: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  statusToggleText: { fontSize: 15, fontWeight: '800' },
+  statusToggleText: { fontSize: 15, fontFamily: FONT.extrabold },
   legend: { flexDirection: 'row', gap: 12, padding: 14 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendSwatch: { width: 16, height: 16, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
-  legendCode: { fontSize: 9, fontWeight: '800' },
+  legendCode: { fontSize: 9, fontFamily: FONT.extrabold },
   legendLabel: { fontSize: 11 },
   savedBanner: {
-    backgroundColor: '#d1fae5', borderRadius: 16, padding: 16,
+    backgroundColor: STATUS_CONFIG.PRESENT.bg, borderRadius: 16, padding: 16,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  savedText: { color: '#065f46', fontSize: 15, fontWeight: '700' },
+  savedText: { color: STATUS_CONFIG.PRESENT.color, fontSize: 15, fontFamily: FONT.bold },
 });
