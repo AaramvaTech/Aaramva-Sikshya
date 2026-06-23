@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&amp;display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  *::-webkit-scrollbar{width:0;height:0;display:none}
+  html,body{margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;scrollbar-width:none}
+  .ms{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;white-space:nowrap;direction:ltr;display:inline-block}
+</style>
+</helmet>
+
+<div style="min-width:100%;min-height:100vh;width:max-content;box-sizing:border-box;padding:40px 48px 64px;background:#EAEDE9;background-image:radial-gradient(circle at 1px 1px, rgba(11,107,67,0.06) 1px, transparent 0);background-size:22px 22px">
+
+  <!-- ============ TOOLBAR ============ -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:32px;margin-bottom:34px;max-width:1380px">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div style="width:52px;height:52px;border-radius:15px;background:#fff;border:1px solid #DCE3DD;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px -8px rgba(11,107,67,0.25)">
+        <img src="assets/logo-mark.png" alt="Aaramva" style="width:30px;height:30px;object-fit:contain">
+      </div>
+      <div>
+        <div style="font-size:21px;font-weight:800;color:#10231A;letter-spacing:-0.4px">Aaramva Shikshya — Mobile App</div>
+        <div style="font-size:13px;font-weight:500;color:#5C7068;margin-top:2px">Aaramva green onboarding · per-school brand theming · student · parent · teacher</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A8B82;text-transform:uppercase">Device</span>
+        <div style="display:flex;background:#fff;border:1px solid #D6DED7;border-radius:11px;padding:3px;gap:2px">
+          <button onClick="{{ setDeviceIOS }}" style="border:none;cursor:pointer;border-radius:8px;padding:7px 16px;font-family:inherit;font-size:13px;font-weight:700;background:{{ iosBtnBg }};color:{{ iosBtnFg }}">iOS</button>
+          <button onClick="{{ setDeviceAndroid }}" style="border:none;cursor:pointer;border-radius:8px;padding:7px 16px;font-family:inherit;font-size:13px;font-weight:700;background:{{ androidBtnBg }};color:{{ androidBtnFg }}">Android</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A8B82;text-transform:uppercase">View</span>
+        <div style="display:flex;background:#fff;border:1px solid #D6DED7;border-radius:11px;padding:3px;gap:2px">
+          <sc-for list="{{ filterTabs }}" as="ft" hint-placeholder-count="5">
+            <button onClick="{{ ft.onPress }}" style="border:none;cursor:pointer;border-radius:8px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:700;background:{{ ft.bg }};color:{{ ft.fg }}">{{ ft.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PHONES ROW ============ -->
+  <div style="display:flex;align-items:flex-start;gap:46px">
+
+    <!-- ======================= AUTH FRAME ======================= -->
+    <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:7px;height:7px;border-radius:50%;background:#0B6B43"></span>
+        <span style="font-size:13px;font-weight:700;color:#3F554B;letter-spacing:0.3px">Onboarding &amp; Sign In</span>
+      </div>
+      <div style="width:318px;padding:11px;border-radius:46px;background:linear-gradient(160deg,#20242C,#0B0D11);box-shadow:0 28px 60px -18px rgba(16,35,26,0.5), inset 0 0 0 1.5px #34383F">
+        <div style="width:296px;height:642px;border-radius:36px;overflow:hidden;background:#FFFFFF;display:flex;flex-direction:column;position:relative">
+          <!-- status bar (light) -->
+          <div style="flex:none;height:44px;background:#FFFFFF;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:relative;z-index:6">
+            <span style="font-size:13px;font-weight:700;color:#10231A">9:41</span>
+            <sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:90px;height:25px;background:#000;border-radius:13px"></div></sc-if>
+            <sc-if value="{{ isAndroid }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%"></div></sc-if>
+            <div style="display:flex;align-items:center;gap:5px">
+              <span class="ms" style="font-size:15px;color:#10231A">signal_cellular_alt</span>
+              <span class="ms" style="font-size:14px;color:#10231A">wifi</span>
+              <span class="ms" style="font-size:17px;color:#10231A">battery_full</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;background:#FFFFFF">
+
+            <!-- STEP: school code (Aaramva green) -->
+            <sc-if value="{{ authIsCode }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#E9F4EE;padding:30px 26px 32px;text-align:center;border-bottom:1px solid #D5E8DD">
+              
+              <img src="assets/logo-wordmark.png" style="width:178px;height:auto;margin-top:16px;display:block;margin-left:auto;margin-right:auto">
+              
+            </div>
+            <div style="padding:26px 24px 24px">
+              <div style="font-size:19px;font-weight:800;color:#10231A;letter-spacing:-0.3px">Find your school</div>
+              <div style="font-size:13.5px;color:#6B7C74;margin-top:5px;line-height:1.5">Enter the school code provided by your institution to continue.</div>
+              <div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;margin-top:20px;background:#F3F7F4;border:1.5px solid #DCE6DF;border-radius:14px">
+                <span class="ms" style="font-size:19px;color:#0B6B43">school</span>
+                <input value="gyanjyoti" readonly="" style="flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:15px;font-weight:600;color:#10231A">
+                <span class="ms" style="font-size:18px;color:#A6B4AC">cancel</span>
+              </div>
+              <button onClick="{{ authToFound }}" style="width:100%;height:50px;margin-top:14px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#0B6B43,#064E33);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -8px rgba(11,107,67,0.55)">
+                <span class="ms" style="font-size:19px">search</span> Find school
+              </button>
+              <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:18px">
+                <span class="ms" style="font-size:16px;color:#94A49B">help</span>
+                <span style="font-size:13px;font-weight:600;color:#7A8B82">Don't know your code?</span>
+              </div>
+            </div>
+            <div style="margin:6px 24px 24px;padding:14px;background:#F3F7F4;border-radius:14px;display:flex;align-items:center;gap:10px">
+              <span class="ms" style="font-size:18px;color:#0B6B43">lock</span>
+              <span style="font-size:11.5px;color:#6B7C74;line-height:1.5">Private to your school. Secured by Aaramva Shikshya.</span>
+            </div>
+            </sc-if>
+
+            <!-- STEP: school found -->
+            <sc-if value="{{ authIsFound }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#E9F4EE;padding:30px 26px 28px;text-align:center;border-bottom:1px solid #D5E8DD">
+              <img src="assets/logo-wordmark.png" style="width:158px;height:auto;display:block;margin:0 auto">
+              <div style="font-size:12px;font-weight:600;color:#5E7A6B;margin-top:10px">We found your school</div>
+            </div>
+            <div style="padding:24px">
+              <div style="font-size:13.5px;color:#6B7C74;line-height:1.5">Confirm this is the correct school. You'll then sign in under your school's branding.</div>
+              <div style="margin-top:18px;padding:18px;background:#fff;border:1.5px solid #E4E9E5;border-radius:18px;box-shadow:0 6px 18px -10px rgba(16,35,26,0.16);display:flex;align-items:center;gap:14px">
+                <div style="width:54px;height:54px;border-radius:14px;background:#98293B;display:flex;align-items:center;justify-content:center;flex:none;font-size:19px;font-weight:800;color:#fff;letter-spacing:0.5px">GJ</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15.5px;font-weight:800;color:#10231A;line-height:1.25">Gyan Jyoti Secondary School</div>
+                  <div style="font-size:12.5px;color:#6B7C74;margin-top:3px">Lalitpur · Bagmati</div>
+                  <div style="display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:3px 9px;background:#F3F7F4;border-radius:7px">
+                    <span class="ms" style="font-size:13px;color:#0B6B43">tag</span>
+                    <span style="font-size:11px;font-weight:700;color:#0B6B43">gyanjyoti</span>
+                  </div>
+                </div>
+                <span class="ms" style="font-size:24px;color:#16A37C">check_circle</span>
+              </div>
+              <button onClick="{{ authToLogin }}" style="width:100%;height:50px;margin-top:18px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#0B6B43,#064E33);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -8px rgba(11,107,67,0.55)">
+                Continue to login <span class="ms" style="font-size:19px">arrow_forward</span>
+              </button>
+              <button onClick="{{ authToCode }}" style="width:100%;height:44px;margin-top:8px;border:none;cursor:pointer;background:transparent;color:#7A8B82;font-family:inherit;font-size:13.5px;font-weight:600">Not your school?</button>
+            </div>
+            </sc-if>
+
+            <!-- STEP: login (school maroon brand) -->
+            <sc-if value="{{ authIsLogin }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:30px 26px 28px;text-align:center;border-bottom:1px solid #EFD9DD">
+              <div style="width:64px;height:64px;border-radius:18px;background:#98293B;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:23px;font-weight:800;color:#fff;letter-spacing:0.5px;box-shadow:0 10px 22px -8px rgba(152,41,59,0.5)">GJ</div>
+              <div style="font-size:17px;font-weight:800;color:#10231A;margin-top:14px">Gyan Jyoti Secondary School</div>
+              <div style="font-size:12.5px;color:#9A6A72;margin-top:5px;font-weight:600">Sign in to your account</div>
+            </div>
+            <div style="padding:24px">
+              <div style="font-size:19px;font-weight:800;color:#10231A;margin-bottom:18px;letter-spacing:-0.3px">Welcome back</div>
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8A998F;text-transform:uppercase;margin-bottom:7px">Email address</div>
+              <div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;background:#F7F4F4;border:1.5px solid #E7DEDF;border-radius:14px;margin-bottom:16px">
+                <span class="ms" style="font-size:18px;color:#A89499">mail</span>
+                <input value="aayush@gyanjyoti.edu.np" readonly="" style="flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:14px;font-weight:500;color:#10231A">
+              </div>
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8A998F;text-transform:uppercase;margin-bottom:7px">Password</div>
+              <div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;background:#F7F4F4;border:1.5px solid #E7DEDF;border-radius:14px;margin-bottom:20px">
+                <span class="ms" style="font-size:18px;color:#A89499">lock</span>
+                <input value="••••••••••" type="password" readonly="" style="flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:15px;font-weight:600;color:#10231A">
+                <span class="ms" style="font-size:18px;color:#A89499">visibility_off</span>
+              </div>
+              <button onClick="{{ authToDone }}" style="width:100%;height:50px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -8px rgba(152,41,59,0.5)">
+                Sign In <span class="ms" style="font-size:19px">arrow_forward</span>
+              </button>
+              <button onClick="{{ authToCode }}" style="width:100%;height:44px;margin-top:8px;border:none;cursor:pointer;background:transparent;color:#9A6A72;font-family:inherit;font-size:13.5px;font-weight:600">Switch school</button>
+            </div>
+            </sc-if>
+
+            <!-- STEP: done -->
+            <sc-if value="{{ authIsDone }}" hint-placeholder-val="{{ true }}">
+            <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px;text-align:center">
+              <div style="width:88px;height:88px;border-radius:50%;background:#E9F4EE;display:flex;align-items:center;justify-content:center">
+                <span class="ms" style="font-size:50px;color:#16A37C;font-variation-settings:'FILL' 1">check_circle</span>
+              </div>
+              <div style="font-size:20px;font-weight:800;color:#10231A;margin-top:22px">You're signed in</div>
+              <div style="font-size:13.5px;color:#6B7C74;margin-top:8px;line-height:1.55">Your dashboard now appears in <b style="color:#98293B">Gyan Jyoti's</b> brand colours. Each role — student, parent, teacher — opens in the frames to the right.</div>
+              <button onClick="{{ authToCode }}" style="margin-top:26px;height:46px;padding:0 24px;border:none;cursor:pointer;border-radius:13px;background:#E9F4EE;color:#0B6B43;font-family:inherit;font-size:14px;font-weight:700">Restart flow</button>
+            </div>
+            </sc-if>
+
+          </div>
+          <div style="flex:none;height:22px;background:#fff;display:flex;align-items:center;justify-content:center">
+            <div style="width:118px;height:5px;border-radius:3px;background:#10231A;opacity:0.8"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ======================= STUDENT FRAME ======================= -->
+    <sc-if value="{{ showStudent }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:7px;height:7px;border-radius:50%;background:#98293B"></span>
+        <span style="font-size:13px;font-weight:700;color:#3F554B;letter-spacing:0.3px">Student app · school-themed</span>
+      </div>
+      <div style="width:318px;padding:11px;border-radius:46px;background:linear-gradient(160deg,#20242C,#0B0D11);box-shadow:0 28px 60px -18px rgba(16,35,26,0.5), inset 0 0 0 1.5px #34383F">
+        <div style="width:296px;height:642px;border-radius:36px;overflow:hidden;background:#F4F6F5;display:flex;flex-direction:column;position:relative">
+          <div style="flex:none;height:44px;background:#FFFFFF;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:relative;z-index:6">
+            <span style="font-size:13px;font-weight:700;color:#10231A">9:41</span>
+            <sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:90px;height:25px;background:#000;border-radius:13px"></div></sc-if>
+            <sc-if value="{{ isAndroid }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%"></div></sc-if>
+            <div style="display:flex;align-items:center;gap:5px">
+              <span class="ms" style="font-size:15px;color:#10231A">signal_cellular_alt</span>
+              <span class="ms" style="font-size:14px;color:#10231A">wifi</span>
+              <span class="ms" style="font-size:17px;color:#10231A">battery_full</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;background:#F4F6F5">
+
+            <!-- HOME -->
+            <sc-if value="{{ sHome }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 22px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <div style="width:34px;height:34px;border-radius:10px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:#fff;letter-spacing:0.5px">GJ</div>
+                  <div><div style="font-size:12.5px;font-weight:800;color:#10231A;line-height:1.1">Gyan Jyoti</div><div style="font-size:10px;color:#9A6A72;margin-top:1px">Secondary School</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="position:relative"><span class="ms" style="font-size:22px;color:#98293B">notifications</span><span style="position:absolute;top:-1px;right:0px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:1.5px solid #F8ECEE"></span></div>
+                  <div style="width:38px;height:38px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;border:2px solid #fff;box-shadow:0 2px 8px -3px rgba(152,41,59,0.5)">AS</div>
+                </div>
+              </div>
+              <div style="font-size:11.5px;font-weight:700;color:#9A6A72;margin-top:16px;letter-spacing:0.3px">Today · {{ todayBs }}</div>
+              <div style="font-size:13px;font-weight:500;color:#6B7C74;margin-top:6px">{{ greeting }}</div>
+              <div style="font-size:25px;font-weight:800;color:#10231A;margin-top:1px;letter-spacing:-0.4px">{{ student.name }}</div>
+              <div style="font-size:12.5px;font-weight:500;color:#7A8B82;margin-top:3px">Class {{ student.cls }} · Section {{ student.sec }} · Roll {{ student.roll }}</div>
+            </div>
+            <div style="padding:16px">
+              <!-- attendance card -->
+              <div style="background:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px -16px rgba(16,35,26,0.26)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <span style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8A998F;text-transform:uppercase">Attendance this year</span>
+                  <span style="font-size:11px;font-weight:700;color:#98293B">{{ att.working }} days</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:16px">
+                  <div style="flex:none">
+                    <div style="font-size:34px;font-weight:800;color:#98293B;line-height:1">{{ att.percent }}%</div>
+                    <div style="font-size:11px;font-weight:600;color:#94A49B;margin-top:3px">Present rate</div>
+                  </div>
+                  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+                    <div style="background:#E4F6F1;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#0E9F77">{{ att.present }}</div><div style="font-size:9px;font-weight:700;color:#0E9F77;text-transform:uppercase">Present</div></div>
+                    <div style="background:#FCE9E9;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#E5484D">{{ att.absent }}</div><div style="font-size:9px;font-weight:700;color:#E5484D;text-transform:uppercase">Absent</div></div>
+                    <div style="background:#FEF3E2;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#D9892B">{{ att.late }}</div><div style="font-size:9px;font-weight:700;color:#D9892B;text-transform:uppercase">Late</div></div>
+                    <div style="background:#EAF0FE;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#5B7FE0">{{ att.leave }}</div><div style="font-size:9px;font-weight:700;color:#5B7FE0;text-transform:uppercase">Leave</div></div>
+                  </div>
+                </div>
+                <div style="height:7px;border-radius:4px;background:#F0EBEC;margin-top:14px;overflow:hidden"><div style="height:7px;border-radius:4px;width:94%;background:#98293B"></div></div>
+              </div>
+
+              <!-- feature grid -->
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:20px 2px 12px;letter-spacing:0.2px">Quick access</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <sc-for list="{{ studentFeatures }}" as="f" hint-placeholder-count="6">
+                  <button onClick="{{ f.onPress }}" style="border:none;cursor:pointer;background:#fff;border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                    <span style="width:42px;height:42px;border-radius:13px;background:{{ f.bg }};display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:23px;color:{{ f.fg }}">{{ f.icon }}</span></span>
+                    <span style="font-size:11px;font-weight:700;color:#33463E;text-align:center;line-height:1.2">{{ f.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- today's classes -->
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:22px 2px 12px">
+                <span style="font-size:12px;font-weight:800;color:#3F554B">Today's classes</span>
+                <button onClick="{{ goRoutine }}" style="border:none;cursor:pointer;background:transparent;font-family:inherit;font-size:11.5px;font-weight:700;color:#98293B;display:flex;align-items:center;gap:2px">Routine <span class="ms" style="font-size:15px">chevron_right</span></button>
+              </div>
+              <div style="background:#fff;border-radius:18px;padding:6px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);margin-bottom:8px">
+                <sc-for list="{{ periodsToday }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ p.border }}">
+                    <div style="width:38px;height:38px;border-radius:11px;background:{{ p.tintBg }};display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none"><span style="font-size:13px;font-weight:800;color:{{ p.c }}">P{{ p.p }}</span></div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:700;color:#10231A">{{ p.sub }}</div>
+                      <div style="font-size:11.5px;color:#8A998F;margin-top:2px">{{ p.tr }} · Room {{ p.room }}</div>
+                    </div>
+                    <div style="font-size:11px;font-weight:700;color:#5C7068;flex:none">{{ p.t }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- ATTENDANCE (calendar) -->
+            <sc-if value="{{ sAttendance }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 18px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:17px;font-weight:800;color:#10231A">Attendance</div>
+                  <div style="font-size:11.5px;color:#9A6A72;margin-top:2px;font-weight:600">Class {{ student.cls }}{{ student.sec }} · This academic year</div>
+                  <div style="display:flex;gap:7px;margin-top:12px">
+                    <div style="background: #fff; border-radius: 10px; padding: 6px 11px; text-align: center; width: 100%"><div style="font-size:14px;font-weight:800;color:#0E9F77">{{ att.present }}</div><div style="font-size:8.5px;font-weight:700;color:#0E9F77;text-transform:uppercase">Present</div></div>
+                    <div style="background: #fff; border-radius: 10px; padding: 6px 11px; text-align: center; width: 100%"><div style="font-size:14px;font-weight:800;color:#E5484D">{{ att.absent }}</div><div style="font-size:8.5px;font-weight:700;color:#E5484D;text-transform:uppercase">Absent</div></div>
+                    <div style="background: #fff; border-radius: 10px; padding: 6px 11px; text-align: center; width: 100%"><div style="font-size:14px;font-weight:800;color:#D9892B">{{ att.late }}</div><div style="font-size:8.5px;font-weight:700;color:#D9892B;text-transform:uppercase">Late</div></div>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 8px 22px -16px rgba(16,35,26,0.24)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <span class="ms" style="font-size:20px;color:#A6B4AC">chevron_left</span>
+                  <span style="font-size:14px;font-weight:800;color:#10231A">{{ att.month }}</span>
+                  <span class="ms" style="font-size:20px;color:#A6B4AC">chevron_right</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+                  <sc-for list="{{ dowLabels }}" as="d" hint-placeholder-count="7">
+                    <div style="text-align:center;font-size:9.5px;font-weight:700;color:#A6B4AC">{{ d }}</div>
+                  </sc-for>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+                  <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+                    <div style="aspect-ratio:1;border-radius:10px;background:{{ c.bg }};display:flex;align-items:center;justify-content:center;border:{{ c.ring }}">
+                      <span style="font-size:11.5px;font-weight:700;color:{{ c.fg }}">{{ c.day }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:9px 12px;margin-top:15px;padding-top:14px;border-top:1px solid #F0F3F0;justify-content:center">
+                  <sc-for list="{{ attLegend }}" as="l" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:4px;background:{{ l.color }}"></span><span style="font-size:10.5px;font-weight:600;color:#5C7068">{{ l.label }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:20px 2px 11px">Recent activity</div>
+              <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ attRecent }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ r.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:{{ r.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:19px;color:{{ r.dot }}">{{ r.icon }}</span></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.date }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ r.dow }}</div></div>
+                    <span style="font-size:11px;font-weight:800;color:{{ r.dot }}">{{ r.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- ROUTINE -->
+            <sc-if value="{{ sRoutine }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 16px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div>
+                  <div style="font-size:17px;font-weight:800;color:#10231A">Class routine</div>
+                  <div style="font-size:11.5px;color:#9A6A72;margin-top:2px;font-weight:600">Class {{ student.cls }}{{ student.sec }} · {{ routineSummary }}</div>
+                </div>
+                <div style="width:38px;height:38px;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -6px rgba(16,35,26,0.2)"><span class="ms" style="font-size:20px;color:#98293B">calendar_month</span></div>
+              </div>
+              <!-- DAY-OF-WEEK FILTER -->
+              <div style="display:flex;gap:7px;margin-top:14px">
+                <sc-for list="{{ routineDays }}" as="d" hint-placeholder-count="6">
+                  <button onClick="{{ d.onPress }}" style="flex:1;border:{{ d.pillBorder }};cursor:pointer;background:{{ d.pillBg }};border-radius:13px;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative">
+                    <span style="font-size:9.5px;font-weight:800;letter-spacing:0.5px;color:{{ d.labelColor }}">{{ d.label }}</span>
+                    <span style="font-size:15px;font-weight:800;color:{{ d.dateColor }}">{{ d.date }}</span>
+                    <sc-if value="{{ d.isToday }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:{{ d.dateColor }}"></span></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="padding:18px 16px 16px">
+              <sc-for list="{{ routinePeriods }}" as="p" hint-placeholder-count="6">
+                <sc-if value="{{ p.isBreak }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:10px;margin:2px 0 12px;padding-left:4px">
+                    <div style="width:52px;text-align:center;font-size:10px;font-weight:700;color:#A0AEA6">{{ p.start }}</div>
+                    <div style="flex:1;display:flex;align-items:center;gap:8px;border-top:1.5px dashed #DCE3DD;padding-top:0"><span class="ms" style="font-size:16px;color:#B0BCB4">restaurant</span><span style="font-size:11.5px;font-weight:700;color:#9AA8A0;letter-spacing:0.3px">Lunch break · {{ p.start }}–{{ p.end }}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ p.isPeriod }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:10px;margin-bottom:12px">
+                    <div style="width:52px;flex:none;text-align:center;padding-top:4px">
+                      <div style="font-size:13px;font-weight:800;color:#10231A">{{ p.start }}</div>
+                      <div style="font-size:10px;font-weight:600;color:#A0AEA6;margin-top:1px">{{ p.end }}</div>
+                    </div>
+                    <div style="flex:1;min-width:0;background:{{ p.nowBg }};border:{{ p.cardBorder }};border-radius:16px;padding:13px 14px;box-shadow:0 6px 16px -14px rgba(16,35,26,0.3);display:flex;align-items:center;gap:12px">
+                      <div style="width:44px;height:44px;border-radius:13px;background:{{ p.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:23px;color:{{ p.c }}">{{ p.icon }}</span></div>
+                      <div style="flex:1;min-width:0">
+                        <div style="display:flex;align-items:center;gap:7px">
+                          <span style="font-size:13.5px;font-weight:800;color:#10231A">{{ p.name }}</span>
+                          <sc-if value="{{ p.isNow }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px;font-weight:800;color:#fff;background:#98293B;padding:2px 6px;border-radius:5px;letter-spacing:0.4px">NOW</span></sc-if>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:5px">
+                          <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:#7A8B82;font-weight:600"><span class="ms" style="font-size:14px;color:#A0AEA6">person</span>{{ p.teacher }}</span>
+                          <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:#7A8B82;font-weight:600"><span class="ms" style="font-size:14px;color:#A0AEA6">meeting_room</span>{{ p.room }}</span>
+                        </div>
+                      </div>
+                      <div style="font-size:10px;font-weight:800;color:{{ p.c }};background:{{ p.tint }};padding:4px 8px;border-radius:7px;flex:none">{{ p.p }}</div>
+                    </div>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <!-- NOTICES -->
+            <sc-if value="{{ sNotices }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="font-size:17px;font-weight:800;color:#10231A">Notices</div>
+              <div style="font-size:12px;color:#7A8B82;margin-top:3px">Announcements from your school</div>
+            </div>
+            <div style="padding:16px">
+              <sc-for list="{{ notices }}" as="n" hint-placeholder-count="4">
+                <div style="background:#fff;border-radius:16px;padding:15px;margin-bottom:11px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);border-left:3px solid {{ n.accent }}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+                    <span style="font-size:10px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:{{ n.accent }};background:{{ n.tint }};padding:3px 8px;border-radius:6px">{{ n.tag }}</span>
+                    <span style="font-size:10.5px;font-weight:600;color:#A6B4AC">{{ n.date }}</span>
+                  </div>
+                  <div style="font-size:13.5px;font-weight:800;color:#10231A;line-height:1.3">{{ n.title }}</div>
+                  <div style="font-size:12px;color:#6B7C74;margin-top:5px;line-height:1.5">{{ n.body }}</div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <!-- PROFILE -->
+            <sc-if value="{{ sProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:20px;text-align:center;border-bottom:1px solid #EFD9DD;position:relative">
+              <button onClick="{{ goSettingsStudent }}" style="position: absolute; top: 5px; border: none; cursor: pointer; background: #fff; border-radius: 11px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px -6px rgba(16,35,26,0.25); left: 259px; width: 34px; height: 34px"><span class="ms" style="font-size:19px;color:#98293B">settings</span></button>
+              
+              <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px">
+                <div style="width:26px;height:26px;border-radius:8px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">GJ</div>
+                <span style="font-size:12px;font-weight:700;color:#9A6A72">Gyan Jyoti<br>&nbsp;Secondary School</span>
+              </div><div style="width:78px;height:78px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:27px;font-weight:800;color:#fff">AS</div>
+              <div style="font-size:19px;font-weight:800;color:#10231A;margin-top:12px">{{ student.name }}</div>
+              <div style="font-size:12px;color:#7A8B82;margin-top:3px">{{ student.adm }} · Class {{ student.cls }}{{ student.sec }}</div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);margin-bottom:16px">
+                <sc-for list="{{ studentInfo }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:{{ r.border }}"><span style="font-size:12.5px;color:#7A8B82">{{ r.k }}</span><span style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.v }}</span></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ settingsRows }}" as="s" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:{{ s.border }}"><span class="ms" style="font-size:20px;color:#98293B">{{ s.icon }}</span><span style="flex:1;font-size:13px;font-weight:600;color:#33463E">{{ s.label }}</span><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:16px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+            </div>
+            </sc-if>
+
+            <!-- SUB: RESULTS -->
+            <sc-if value="{{ sResults }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backStudent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div><div style="font-size:16px;font-weight:800;color:#10231A">Exam results</div><div style="font-size:11.5px;color:#7A8B82;margin-top:1px">Second Terminal Exam</div></div></div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:linear-gradient(135deg,#98293B,#76202F);border-radius:18px;padding:18px;color:#fff;box-shadow:0 12px 26px -16px rgba(152,41,59,0.6)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div><div style="font-size:11px;font-weight:700;color:#F0CBD1;text-transform:uppercase;letter-spacing:0.6px">GPA</div><div style="font-size:32px;font-weight:800;line-height:1.1;margin-top:2px">{{ result.gpa }}</div></div>
+                  <div style="text-align:right"><div style="font-size:11px;font-weight:700;color:#F0CBD1;text-transform:uppercase;letter-spacing:0.6px">Grade · Rank</div><div style="font-size:24px;font-weight:800;margin-top:2px">{{ result.grade }} · #{{ result.rank }}</div></div>
+                </div>
+              </div>
+              <div style="background:#fff;border-radius:16px;padding:4px 14px;margin-top:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ resultRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:{{ r.border }}">
+                    <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#10231A">{{ r.sub }}</div><div style="font-size:10.5px;color:#94A49B;margin-top:1px">Full marks {{ r.fm }}</div></div>
+                    <div style="font-size:13.5px;font-weight:800;color:#33463E">{{ r.obt }}</div>
+                    <div style="width:38px;text-align:center"><span style="font-size:11px;font-weight:800;color:{{ r.gc }};background:{{ r.gbg }};padding:3px 8px;border-radius:7px">{{ r.grade }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- SUB: HOMEWORK -->
+            <sc-if value="{{ sHomework }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backStudent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div><div style="font-size:16px;font-weight:800;color:#10231A">Homework</div><div style="font-size:11.5px;color:#7A8B82;margin-top:1px">2 pending · 1 submitted</div></div></div>
+            </div>
+            <div style="padding:16px">
+              <sc-for list="{{ homework }}" as="h" hint-placeholder-count="3">
+                <div style="background:#fff;border-radius:16px;padding:15px;margin-bottom:11px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);display:flex;gap:13px">
+                  <div style="width:42px;height:42px;border-radius:12px;background:{{ h.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:22px;color:{{ h.c }}">menu_book</span></div>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:11px;font-weight:800;color:{{ h.c }};text-transform:uppercase;letter-spacing:0.4px">{{ h.sub }}</span><span style="font-size:9.5px;font-weight:800;color:{{ h.sc }};background:{{ h.sbg }};padding:3px 8px;border-radius:6px;text-transform:uppercase">{{ h.status }}</span></div>
+                    <div style="font-size:13px;font-weight:700;color:#10231A;margin-top:5px;line-height:1.3">{{ h.title }}</div>
+                    <div style="font-size:11px;font-weight:600;color:#94A49B;margin-top:5px">{{ h.due }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <!-- SUB: REPORT CARD -->
+            <sc-if value="{{ sReport }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backStudent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div><div style="font-size:16px;font-weight:800;color:#10231A">Report card</div><div style="font-size:11.5px;color:#7A8B82;margin-top:1px">Academic year 2081–82</div></div></div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:18px;padding:18px;box-shadow:0 8px 22px -16px rgba(16,35,26,0.24);text-align:center">
+                <div style="font-size:11px;font-weight:700;color:#8A998F;text-transform:uppercase;letter-spacing:0.6px">Annual result</div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:24px;margin-top:12px">
+                  <div><div style="font-size:28px;font-weight:800;color:#98293B;line-height:1">{{ result.gpa }}</div><div style="font-size:10px;font-weight:700;color:#94A49B;margin-top:2px;text-transform:uppercase">GPA</div></div>
+                  <div style="width:1px;height:34px;background:#E4E9E5"></div>
+                  <div><div style="font-size:28px;font-weight:800;color:#16A37C;line-height:1">{{ result.grade }}</div><div style="font-size:10px;font-weight:700;color:#94A49B;margin-top:2px;text-transform:uppercase">Grade</div></div>
+                  <div style="width:1px;height:34px;background:#E4E9E5"></div>
+                  <div><div style="font-size:28px;font-weight:800;color:#D9892B;line-height:1">#{{ result.rank }}</div><div style="font-size:10px;font-weight:700;color:#94A49B;margin-top:2px;text-transform:uppercase">Rank</div></div>
+                </div>
+              </div>
+              <div style="background:#fff;border-radius:16px;padding:4px 14px;margin-top:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ resultRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:{{ r.border }}">
+                    <div style="flex:1;font-size:13px;font-weight:700;color:#10231A">{{ r.sub }}</div>
+                    <div style="font-size:12px;font-weight:600;color:#7A8B82">{{ r.obt }}/{{ r.fm }}</div>
+                    <div style="width:38px;text-align:center"><span style="font-size:11px;font-weight:800;color:{{ r.gc }};background:{{ r.gbg }};padding:3px 8px;border-radius:7px">{{ r.grade }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:14px;border:none;cursor:pointer;border-radius:14px;background:#F8ECEE;color:#98293B;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">download</span> Download PDF</button>
+            </div>
+            </sc-if>
+
+            <!-- SUB: EDIT PROFILE -->
+            <sc-if value="{{ sEditProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backStudent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Edit profile</div></div>
+            </div>
+            <div style="padding:18px 16px 16px">
+              <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:6px">
+                <div style="position:relative">
+                  <div style="width:84px;height:84px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#fff">AS</div>
+                  <div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid #ECEFEC;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px -3px rgba(16,35,26,0.3)"><span class="ms" style="font-size:16px;color:#98293B">photo_camera</span></div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:#98293B;margin-top:10px">Change photo</div>
+              </div>
+              <sc-for list="{{ studentEditFields }}" as="f" hint-placeholder-count="6">
+                <div style="margin-top:14px">
+                  <div style="font-size:10.5px;font-weight:700;letter-spacing:0.6px;color:#8A998F;text-transform:uppercase;margin-bottom:6px">{{ f.label }}</div>
+                  <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 13px;background:{{ f.fieldBg }};border:{{ f.fieldBorder }};border-radius:13px">
+                    <span class="ms" style="font-size:18px;color:#98293B">{{ f.icon }}</span>
+                    <input value="{{ f.value }}" readonly="" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-family:inherit;font-size:13.5px;font-weight:600;color:#10231A">
+                    <sc-if value="{{ f.lockIcon }}" hint-placeholder-val="{{ false }}"><span class="ms" style="font-size:16px;color:#B5C0B8">lock</span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:50px;margin-top:20px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -10px rgba(152,41,59,0.55)"><span class="ms" style="font-size:19px">check</span> Save changes</button>
+              <button onClick="{{ backStudent }}" style="width:100%;height:46px;margin-top:8px;border:none;cursor:pointer;background:transparent;color:#7A8B82;font-family:inherit;font-size:13.5px;font-weight:600">Cancel</button>
+              <div style="font-size:10.5px;color:#A0AEA6;text-align:center;margin-top:10px;line-height:1.5">Locked fields are managed by your school.<br>Contact the office to update them.</div>
+            </div>
+            </sc-if>
+
+            <!-- SUB: SETTINGS -->
+            <sc-if value="{{ sSettings }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backStudent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Settings</div></div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:18px;padding:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);display:flex;align-items:center;gap:13px">
+                <div style="width:48px;height:48px;border-radius:14px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex:none">AS</div>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:800;color:#10231A">{{ student.name }}</div><div style="font-size:11.5px;color:#7A8B82;margin-top:2px">Student · Class {{ student.cls }}{{ student.sec }}</div></div>
+                <button onClick="{{ goEditStudent }}" style="border:none;cursor:pointer;background:transparent;font-family:inherit;display:flex;align-items:center;gap:3px;color:#98293B"><span style="font-size:11.5px;font-weight:700">Edit</span><span class="ms" style="font-size:17px">chevron_right</span></button>
+              </div>
+              <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="5">
+                <div style="font-size:11px;font-weight:800;color:#8A998F;text-transform:uppercase;letter-spacing:0.6px;margin:18px 2px 9px">{{ g.title }}</div>
+                <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ r.border }}">
+                      <span class="ms" style="font-size:20px;color:#98293B">{{ r.icon }}</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#33463E">{{ r.label }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ r.sub }}</div></div>
+                      <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ r.onPress }}" style="border:none;cursor:pointer;padding:0;width:42px;height:24px;border-radius:13px;background:{{ r.trackBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ r.knobLeft }};width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span></button>
+                      </sc-if>
+                      <sc-if value="{{ r.isNav }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:5px;flex:none"><span style="font-size:12px;font-weight:600;color:#9AA8A0">{{ r.value }}</span><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:48px;margin-top:18px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+              <div style="text-align:center;font-size:10.5px;color:#A0AEA6;margin-top:14px">Aaramva Shikshya · v1.0.0</div>
+            </div>
+            </sc-if>
+
+          </div>
+          <!-- student tab bar -->
+          <div style="flex:none;background:#fff;border-top:1px solid #ECEFEC;display:flex;padding:7px 4px 0;box-shadow:0 -4px 16px -10px rgba(16,35,26,0.14)">
+            <sc-for list="{{ studentTabs }}" as="tab" hint-placeholder-count="5">
+              <button onClick="{{ tab.onPress }}" style="flex:1;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 0">
+                <span style="display:flex;align-items:center;justify-content:center;padding:3px 16px;border-radius:11px;background:{{ tab.pillBg }}"><span class="ms" style="font-size:22px;color:{{ tab.color }};font-variation-settings:'FILL' {{ tab.fill }}">{{ tab.icon }}</span></span>
+                <span style="font-size:9.5px;font-weight:700;color:{{ tab.color }}">{{ tab.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:none;height:20px;background:#fff;display:flex;align-items:center;justify-content:center"><div style="width:118px;height:5px;border-radius:3px;background:#10231A;opacity:0.8"></div></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ======================= PARENT FRAME ======================= -->
+    <sc-if value="{{ showParent }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:7px;height:7px;border-radius:50%;background:#98293B"></span>
+        <span style="font-size:13px;font-weight:700;color:#3F554B;letter-spacing:0.3px">Parent app · school-themed</span>
+      </div>
+      <div style="width:318px;padding:11px;border-radius:46px;background:linear-gradient(160deg,#20242C,#0B0D11);box-shadow:0 28px 60px -18px rgba(16,35,26,0.5), inset 0 0 0 1.5px #34383F">
+        <div style="width:296px;height:642px;border-radius:36px;overflow:hidden;background:#F4F6F5;display:flex;flex-direction:column;position:relative">
+          <div style="flex:none;height:44px;background:#FFFFFF;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:relative;z-index:6">
+            <span style="font-size:13px;font-weight:700;color:#10231A">9:41</span>
+            <sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:90px;height:25px;background:#000;border-radius:13px"></div></sc-if>
+            <sc-if value="{{ isAndroid }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%"></div></sc-if>
+            <div style="display:flex;align-items:center;gap:5px">
+              <span class="ms" style="font-size:15px;color:#10231A">signal_cellular_alt</span>
+              <span class="ms" style="font-size:14px;color:#10231A">wifi</span>
+              <span class="ms" style="font-size:17px;color:#10231A">battery_full</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;background:#F4F6F5">
+
+            <!-- PARENT HOME -->
+            <sc-if value="{{ pHome }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 20px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <div style="width:34px;height:34px;border-radius:10px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:#fff;letter-spacing:0.5px">GJ</div>
+                  <div><div style="font-size:12.5px;font-weight:800;color:#10231A;line-height:1.1">Gyan Jyoti</div><div style="font-size:10px;color:#9A6A72;margin-top:1px">Parent portal</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="position:relative"><span class="ms" style="font-size:22px;color:#98293B">notifications</span><span style="position:absolute;top:-1px;right:0px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:1.5px solid #F8ECEE"></span></div>
+                  <div style="width:38px;height:38px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;border:2px solid #fff;box-shadow:0 2px 8px -3px rgba(152,41,59,0.5)">{{ guardian.init }}</div>
+                </div>
+              </div>
+              <div style="font-size:11.5px;font-weight:700;color:#9A6A72;margin-top:16px;letter-spacing:0.3px">Today · {{ todayBs }}</div>
+              <div style="font-size:13px;font-weight:500;color:#6B7C74;margin-top:6px">Viewing child</div>
+              <div style="font-size:24px;font-weight:800;color:#10231A;margin-top:1px;letter-spacing:-0.4px">{{ child.name }}</div>
+              <div style="font-size:12.5px;font-weight:500;color:#7A8B82;margin-top:3px">{{ childEnroll }}</div>
+              <sc-if value="{{ multiChild }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:8px;margin-top:14px">
+                <sc-for list="{{ childChips }}" as="cc" hint-placeholder-count="2">
+                  <button onClick="{{ cc.onPress }}" style="border:{{ cc.border }};cursor:pointer;border-radius:11px;padding:7px 14px;font-family:inherit;font-size:12px;font-weight:700;background:{{ cc.bg }};color:{{ cc.fg }}">{{ cc.name }}</button>
+                </sc-for>
+              </div>
+              </sc-if>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px -16px rgba(16,35,26,0.26)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <span style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;color:#8A998F;text-transform:uppercase">Attendance this year</span>
+                  <span style="font-size:11px;font-weight:700;color:#98293B">{{ childAtt.working }} days</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:16px">
+                  <div style="flex:none"><div style="font-size:34px;font-weight:800;color:#98293B;line-height:1">{{ childAtt.percent }}%</div><div style="font-size:11px;font-weight:600;color:#94A49B;margin-top:3px">Present rate</div></div>
+                  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+                    <div style="background:#E4F6F1;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#0E9F77">{{ childAtt.present }}</div><div style="font-size:9px;font-weight:700;color:#0E9F77;text-transform:uppercase">Present</div></div>
+                    <div style="background:#FCE9E9;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#E5484D">{{ childAtt.absent }}</div><div style="font-size:9px;font-weight:700;color:#E5484D;text-transform:uppercase">Absent</div></div>
+                    <div style="background:#FEF3E2;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#D9892B">{{ childAtt.late }}</div><div style="font-size:9px;font-weight:700;color:#D9892B;text-transform:uppercase">Late</div></div>
+                    <div style="background:#EAF0FE;border-radius:10px;padding:6px 9px"><div style="font-size:15px;font-weight:800;color:#5B7FE0">{{ childAtt.leave }}</div><div style="font-size:9px;font-weight:700;color:#5B7FE0;text-transform:uppercase">Leave</div></div>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:20px 2px 12px">Quick access</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:9px">
+                <sc-for list="{{ parentFeatures }}" as="f" hint-placeholder-count="4">
+                  <button onClick="{{ f.onPress }}" style="border:none;cursor:pointer;background:#fff;border-radius:15px;padding:13px 4px;display:flex;flex-direction:column;align-items:center;gap:7px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                    <span style="width:38px;height:38px;border-radius:12px;background:{{ f.bg }};display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:21px;color:{{ f.fg }}">{{ f.icon }}</span></span>
+                    <span style="font-size:10px;font-weight:700;color:#33463E;text-align:center">{{ f.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:22px 2px 12px"><span style="font-size:12px;font-weight:800;color:#3F554B">Today's classes</span></div>
+              <div style="background:#fff;border-radius:18px;padding:6px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);margin-bottom:8px">
+                <sc-for list="{{ periodsToday }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ p.border }}">
+                    <div style="width:38px;height:38px;border-radius:11px;background:{{ p.tintBg }};display:flex;align-items:center;justify-content:center;flex:none"><span style="font-size:13px;font-weight:800;color:{{ p.c }}">P{{ p.p }}</span></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;color:#10231A">{{ p.sub }}</div><div style="font-size:11.5px;color:#8A998F;margin-top:2px">{{ p.tr }} · Room {{ p.room }}</div></div>
+                    <div style="font-size:11px;font-weight:700;color:#5C7068;flex:none">{{ p.t }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- PARENT ATTENDANCE -->
+            <sc-if value="{{ pAttendance }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 18px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:17px;font-weight:800;color:#10231A">Attendance</div>
+                  <div style="font-size:11.5px;color:#9A6A72;margin-top:2px;font-weight:600">{{ child.name }} · This academic year</div>
+                  <div style="display:flex;gap:7px;margin-top:12px">
+                    <div style="background:#fff;border-radius:10px;padding:6px 11px;text-align:center"><div style="font-size:14px;font-weight:800;color:#0E9F77">{{ childAtt.present }}</div><div style="font-size:8.5px;font-weight:700;color:#0E9F77;text-transform:uppercase">Present</div></div>
+                    <div style="background:#fff;border-radius:10px;padding:6px 11px;text-align:center"><div style="font-size:14px;font-weight:800;color:#E5484D">{{ childAtt.absent }}</div><div style="font-size:8.5px;font-weight:700;color:#E5484D;text-transform:uppercase">Absent</div></div>
+                    <div style="background:#fff;border-radius:10px;padding:6px 11px;text-align:center"><div style="font-size:14px;font-weight:800;color:#D9892B">{{ childAtt.late }}</div><div style="font-size:8.5px;font-weight:700;color:#D9892B;text-transform:uppercase">Late</div></div>
+                  </div>
+                </div>
+                <div style="width:78px;height:78px;border-radius:50%;background:{{ childAttRingBg }};display:flex;align-items:center;justify-content:center;flex:none;margin-left:12px">
+                  <div style="width:60px;height:60px;border-radius:50%;background:#F8ECEE;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font-size:19px;font-weight:800;color:#10231A;line-height:1">{{ childAtt.percent }}%</span><span style="font-size:8px;font-weight:700;color:#9A6A72;text-transform:uppercase">Present</span></div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 8px 22px -16px rgba(16,35,26,0.24)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span class="ms" style="font-size:20px;color:#A6B4AC">chevron_left</span><span style="font-size:14px;font-weight:800;color:#10231A">{{ childAtt.month }}</span><span class="ms" style="font-size:20px;color:#A6B4AC">chevron_right</span></div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px"><sc-for list="{{ dowLabels }}" as="d" hint-placeholder-count="7"><div style="text-align:center;font-size:9.5px;font-weight:700;color:#A6B4AC">{{ d }}</div></sc-for></div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px"><sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35"><div style="aspect-ratio:1;border-radius:10px;background:{{ c.bg }};display:flex;align-items:center;justify-content:center;border:{{ c.ring }}"><span style="font-size:11.5px;font-weight:700;color:{{ c.fg }}">{{ c.day }}</span></div></sc-for></div>
+                <div style="display:flex;flex-wrap:wrap;gap:9px 12px;margin-top:15px;padding-top:14px;border-top:1px solid #F0F3F0;justify-content:center"><sc-for list="{{ attLegend }}" as="l" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:4px;background:{{ l.color }}"></span><span style="font-size:10.5px;font-weight:600;color:#5C7068">{{ l.label }}</span></div></sc-for></div>
+              </div>
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:20px 2px 11px">Recent activity</div>
+              <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ attRecent }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ r.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:{{ r.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:19px;color:{{ r.dot }}">{{ r.icon }}</span></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.date }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ r.dow }}</div></div>
+                    <span style="font-size:11px;font-weight:800;color:{{ r.dot }}">{{ r.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- PARENT RESULTS -->
+            <sc-if value="{{ pResults }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="font-size:17px;font-weight:800;color:#10231A">Exam results</div>
+              <div style="font-size:12px;color:#7A8B82;margin-top:3px">{{ child.name }} · Second Terminal</div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:linear-gradient(135deg,#98293B,#76202F);border-radius:18px;padding:18px;color:#fff;box-shadow:0 12px 26px -16px rgba(152,41,59,0.6)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div><div style="font-size:11px;font-weight:700;color:#F0CBD1;text-transform:uppercase;letter-spacing:0.6px">GPA</div><div style="font-size:32px;font-weight:800;line-height:1.1;margin-top:2px">{{ result.gpa }}</div></div>
+                  <div style="text-align:right"><div style="font-size:11px;font-weight:700;color:#F0CBD1;text-transform:uppercase;letter-spacing:0.6px">Grade · Rank</div><div style="font-size:24px;font-weight:800;margin-top:2px">{{ result.grade }} · #{{ result.rank }}</div></div>
+                </div>
+              </div>
+              <div style="background:#fff;border-radius:16px;padding:4px 14px;margin-top:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ resultRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:{{ r.border }}">
+                    <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#10231A">{{ r.sub }}</div><div style="font-size:10.5px;color:#94A49B;margin-top:1px">Full marks {{ r.fm }}</div></div>
+                    <div style="font-size:13.5px;font-weight:800;color:#33463E">{{ r.obt }}</div>
+                    <div style="width:38px;text-align:center"><span style="font-size:11px;font-weight:800;color:{{ r.gc }};background:{{ r.gbg }};padding:3px 8px;border-radius:7px">{{ r.grade }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- PARENT NOTICES -->
+            <sc-if value="{{ pNotices }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE"><div style="font-size:17px;font-weight:800;color:#10231A">Notices</div><div style="font-size:12px;color:#7A8B82;margin-top:3px">Announcements from your school</div></div>
+            <div style="padding:16px">
+              <sc-for list="{{ notices }}" as="n" hint-placeholder-count="4">
+                <div style="background:#fff;border-radius:16px;padding:15px;margin-bottom:11px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);border-left:3px solid {{ n.accent }}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="font-size:10px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:{{ n.accent }};background:{{ n.tint }};padding:3px 8px;border-radius:6px">{{ n.tag }}</span><span style="font-size:10.5px;font-weight:600;color:#A6B4AC">{{ n.date }}</span></div>
+                  <div style="font-size:13.5px;font-weight:800;color:#10231A;line-height:1.3">{{ n.title }}</div>
+                  <div style="font-size:12px;color:#6B7C74;margin-top:5px;line-height:1.5">{{ n.body }}</div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <!-- PARENT PROFILE -->
+            <sc-if value="{{ pProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:20px;text-align:center;border-bottom:1px solid #EFD9DD;position:relative">
+              <button onClick="{{ goSettingsParent }}" style="position:absolute;top:14px;right:16px;border:none;cursor:pointer;background:#fff;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -6px rgba(16,35,26,0.25)"><span class="ms" style="font-size:19px;color:#98293B">settings</span></button>
+              <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px">
+                <div style="width:26px;height:26px;border-radius:8px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">GJ</div>
+                <span style="font-size:12px;font-weight:700;color:#9A6A72">Gyan Jyoti Secondary School</span>
+              </div>
+              <div style="width:78px;height:78px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:26px;font-weight:800;color:#fff">{{ guardian.init }}</div>
+              <div style="font-size:19px;font-weight:800;color:#10231A;margin-top:12px">{{ guardian.name }}</div>
+              <div style="font-size:12px;color:#7A8B82;margin-top:3px">{{ guardian.relation }}</div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);margin-bottom:16px">
+                <sc-for list="{{ guardianInfo }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:{{ r.border }}"><span style="font-size:12.5px;color:#7A8B82">{{ r.k }}</span><span style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.v }}</span></div></sc-for>
+              </div>
+              <div style="font-size:11px;font-weight:800;color:#8A998F;text-transform:uppercase;letter-spacing:0.6px;margin:0 2px 10px">My children</div>
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ childrenList }}" as="c" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:{{ c.border }}"><div style="width:38px;height:38px;border-radius:11px;background:#F8ECEE;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#98293B">{{ c.init }}</div><div style="flex:1"><div style="font-size:13px;font-weight:700;color:#10231A">{{ c.name }}</div><div style="font-size:11px;color:#8A998F;margin-top:1px">{{ c.sub }}</div></div><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:16px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+            </div>
+            </sc-if>
+
+            <!-- PARENT FEES -->
+            <sc-if value="{{ pFees }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#98293B;padding:14px 20px 20px">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backParent }}" style="border:none;cursor:pointer;background:rgba(255,255,255,0.16);width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#fff">arrow_back</span></button><div><div style="font-size:16px;font-weight:800;color:#fff">Fees &amp; payment</div><div style="font-size:11.5px;color:#F0CBD1;margin-top:1px">{{ child.name }} · Jestha 2082</div></div></div>
+              <div style="margin-top:16px;text-align:center">
+                <div style="font-size:11px;font-weight:700;color:#F0CBD1;text-transform:uppercase;letter-spacing:0.6px">Total outstanding</div>
+                <div style="font-size:34px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:-0.5px">{{ feeTotal }}</div>
+                <div style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;background:rgba(255,255,255,0.16);padding:4px 11px;border-radius:8px"><span class="ms" style="font-size:14px;color:#fff">event</span><span style="font-size:11px;font-weight:700;color:#fff">Due by {{ feeDueDate }}</span></div>
+              </div>
+            </div>
+            <div style="padding:16px">
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:0 2px 11px">Invoice breakdown</div>
+              <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ feeItems }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ f.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:#F8ECEE;display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:19px;color:#98293B">{{ f.icon }}</span></div>
+                    <span style="flex:1;font-size:13px;font-weight:600;color:#33463E">{{ f.label }}</span>
+                    <span style="font-size:13px;font-weight:800;color:#10231A">{{ f.amount }}</span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-top:1.5px solid #EEF1ED;margin-top:2px"><span style="font-size:13px;font-weight:800;color:#10231A">Total due</span><span style="font-size:16px;font-weight:800;color:#98293B">{{ feeTotal }}</span></div>
+              </div>
+
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:20px 2px 11px">Payment method</div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <sc-for list="{{ payMethods }}" as="m" hint-placeholder-count="3">
+                  <button onClick="{{ m.onPress }}" style="border:{{ m.cardBorder }};cursor:pointer;background:{{ m.cardBg }};border-radius:14px;padding:13px 14px;display:flex;align-items:center;gap:12px;font-family:inherit">
+                    <div style="width:38px;height:38px;border-radius:11px;background:{{ m.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:21px;color:{{ m.c }}">{{ m.icon }}</span></div>
+                    <span style="flex:1;text-align:left;font-size:13.5px;font-weight:700;color:#10231A">{{ m.label }}</span>
+                    <span class="ms" style="font-size:21px;color:{{ m.check }};font-variation-settings:'FILL' 1">{{ m.radio }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:52px;margin-top:18px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 12px 26px -12px rgba(152,41,59,0.6)"><span class="ms" style="font-size:20px">lock</span> Pay {{ feeTotal }}</button>
+
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:22px 2px 11px">Payment history</div>
+              <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ feeHistory }}" as="h" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ h.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:#E4F6F1;display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:18px;color:#0E9F77;font-variation-settings:'FILL' 1">check_circle</span></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#10231A">{{ h.month }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ h.via }} · {{ h.on }}</div></div>
+                    <span style="font-size:12.5px;font-weight:800;color:#33463E">{{ h.amount }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- PARENT EDIT PROFILE -->
+            <sc-if value="{{ pEditProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backParent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Edit profile</div></div>
+            </div>
+            <div style="padding:18px 16px 16px">
+              <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:6px">
+                <div style="position:relative">
+                  <div style="width:84px;height:84px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#fff">{{ guardian.init }}</div>
+                  <div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid #ECEFEC;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px -3px rgba(16,35,26,0.3)"><span class="ms" style="font-size:16px;color:#98293B">photo_camera</span></div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:#98293B;margin-top:10px">Change photo</div>
+              </div>
+              <sc-for list="{{ parentEditFields }}" as="f" hint-placeholder-count="5">
+                <div style="margin-top:14px">
+                  <div style="font-size:10.5px;font-weight:700;letter-spacing:0.6px;color:#8A998F;text-transform:uppercase;margin-bottom:6px">{{ f.label }}</div>
+                  <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 13px;background:{{ f.fieldBg }};border:{{ f.fieldBorder }};border-radius:13px">
+                    <span class="ms" style="font-size:18px;color:#98293B">{{ f.icon }}</span>
+                    <input value="{{ f.value }}" readonly="" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-family:inherit;font-size:13.5px;font-weight:600;color:#10231A">
+                    <sc-if value="{{ f.lockIcon }}" hint-placeholder-val="{{ false }}"><span class="ms" style="font-size:16px;color:#B5C0B8">lock</span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:50px;margin-top:20px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -10px rgba(152,41,59,0.55)"><span class="ms" style="font-size:19px">check</span> Save changes</button>
+              <button onClick="{{ backParent }}" style="width:100%;height:46px;margin-top:8px;border:none;cursor:pointer;background:transparent;color:#7A8B82;font-family:inherit;font-size:13.5px;font-weight:600">Cancel</button>
+              <div style="font-size:10.5px;color:#A0AEA6;text-align:center;margin-top:10px;line-height:1.5">Locked fields are managed by your school.<br>Contact the office to update them.</div>
+            </div>
+            </sc-if>
+
+            <!-- PARENT SETTINGS -->
+            <sc-if value="{{ pSettings }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backParent }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Settings</div></div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:18px;padding:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);display:flex;align-items:center;gap:13px">
+                <div style="width:48px;height:48px;border-radius:14px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex:none">{{ guardian.init }}</div>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:800;color:#10231A">{{ guardian.name }}</div><div style="font-size:11.5px;color:#7A8B82;margin-top:2px">{{ guardian.relation }}</div></div>
+                <button onClick="{{ goEditParent }}" style="border:none;cursor:pointer;background:transparent;font-family:inherit;display:flex;align-items:center;gap:3px;color:#98293B"><span style="font-size:11.5px;font-weight:700">Edit</span><span class="ms" style="font-size:17px">chevron_right</span></button>
+              </div>
+              <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="5">
+                <div style="font-size:11px;font-weight:800;color:#8A998F;text-transform:uppercase;letter-spacing:0.6px;margin:18px 2px 9px">{{ g.title }}</div>
+                <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ r.border }}">
+                      <span class="ms" style="font-size:20px;color:#98293B">{{ r.icon }}</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#33463E">{{ r.label }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ r.sub }}</div></div>
+                      <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ r.onPress }}" style="border:none;cursor:pointer;padding:0;width:42px;height:24px;border-radius:13px;background:{{ r.trackBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ r.knobLeft }};width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span></button>
+                      </sc-if>
+                      <sc-if value="{{ r.isNav }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:5px;flex:none"><span style="font-size:12px;font-weight:600;color:#9AA8A0">{{ r.value }}</span><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:48px;margin-top:18px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+              <div style="text-align:center;font-size:10.5px;color:#A0AEA6;margin-top:14px">Aaramva Shikshya · v1.0.0</div>
+            </div>
+            </sc-if>
+
+          </div>
+          <div style="flex:none;background:#fff;border-top:1px solid #ECEFEC;display:flex;padding:7px 4px 0;box-shadow:0 -4px 16px -10px rgba(16,35,26,0.14)">
+            <sc-for list="{{ parentTabs }}" as="tab" hint-placeholder-count="5">
+              <button onClick="{{ tab.onPress }}" style="flex:1;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 0"><span style="display:flex;align-items:center;justify-content:center;padding:3px 16px;border-radius:11px;background:{{ tab.pillBg }}"><span class="ms" style="font-size:22px;color:{{ tab.color }};font-variation-settings:'FILL' {{ tab.fill }}">{{ tab.icon }}</span></span><span style="font-size:9.5px;font-weight:700;color:{{ tab.color }}">{{ tab.label }}</span></button>
+            </sc-for>
+          </div>
+          <div style="flex:none;height:20px;background:#fff;display:flex;align-items:center;justify-content:center"><div style="width:118px;height:5px;border-radius:3px;background:#10231A;opacity:0.8"></div></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ======================= TEACHER FRAME ======================= -->
+    <sc-if value="{{ showTeacher }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:7px;height:7px;border-radius:50%;background:#98293B"></span>
+        <span style="font-size:13px;font-weight:700;color:#3F554B;letter-spacing:0.3px">Teacher (Guru) app · school-themed</span>
+      </div>
+      <div style="width:318px;padding:11px;border-radius:46px;background:linear-gradient(160deg,#20242C,#0B0D11);box-shadow:0 28px 60px -18px rgba(16,35,26,0.5), inset 0 0 0 1.5px #34383F">
+        <div style="width:296px;height:642px;border-radius:36px;overflow:hidden;background:#F4F6F5;display:flex;flex-direction:column;position:relative">
+          <div style="flex:none;height:44px;background:#FFFFFF;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:relative;z-index:6">
+            <span style="font-size:13px;font-weight:700;color:#10231A">9:41</span>
+            <sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:90px;height:25px;background:#000;border-radius:13px"></div></sc-if>
+            <sc-if value="{{ isAndroid }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%"></div></sc-if>
+            <div style="display:flex;align-items:center;gap:5px"><span class="ms" style="font-size:15px;color:#10231A">signal_cellular_alt</span><span class="ms" style="font-size:14px;color:#10231A">wifi</span><span class="ms" style="font-size:17px;color:#10231A">battery_full</span></div>
+          </div>
+          <div style="flex:1;overflow-y:auto;background:#F4F6F5">
+
+            <!-- TEACHER HOME -->
+            <sc-if value="{{ tHome }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 20px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <div style="width:34px;height:34px;border-radius:10px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:#fff;letter-spacing:0.5px">GJ</div>
+                  <div><div style="font-size:12.5px;font-weight:800;color:#10231A;line-height:1.1">Gyan Jyoti</div><div style="font-size:10px;color:#9A6A72;margin-top:1px">Teacher portal</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="position:relative"><span class="ms" style="font-size:22px;color:#98293B">notifications</span><span style="position:absolute;top:-1px;right:0px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:1.5px solid #F8ECEE"></span></div>
+                  <div style="width:38px;height:38px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;border:2px solid #fff;box-shadow:0 2px 8px -3px rgba(152,41,59,0.5)">{{ teacher.init }}</div>
+                </div>
+              </div>
+              <div style="font-size:11.5px;font-weight:700;color:#9A6A72;margin-top:16px;letter-spacing:0.3px">{{ greeting }}</div>
+              <div style="font-size:24px;font-weight:800;color:#10231A;margin-top:3px;letter-spacing:-0.4px">{{ teacher.name }}</div>
+              <div style="font-size:12.5px;font-weight:500;color:#7A8B82;margin-top:3px">{{ teacher.desig }} · {{ todayBs }}</div>
+            </div>
+            <div style="padding:16px">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div style="background:#fff;border-radius:15px;padding:14px 10px;text-align:center;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)"><div style="font-size:22px;font-weight:800;color:#98293B">3</div><div style="font-size:9.5px;font-weight:700;color:#8A998F;text-transform:uppercase;margin-top:2px">Classes</div></div>
+                <div style="background:#fff;border-radius:15px;padding:14px 10px;text-align:center;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)"><div style="font-size:22px;font-weight:800;color:#5B7FE0">132</div><div style="font-size:9.5px;font-weight:700;color:#8A998F;text-transform:uppercase;margin-top:2px">Students</div></div>
+                <div style="background:#fff;border-radius:15px;padding:14px 10px;text-align:center;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)"><div style="font-size:22px;font-weight:800;color:#D9892B">2</div><div style="font-size:9.5px;font-weight:700;color:#8A998F;text-transform:uppercase;margin-top:2px">Pending</div></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:14px">
+                <button onClick="{{ tGoMark }}" style="flex:1;border:none;cursor:pointer;border-radius:15px;padding:14px 8px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 10px 22px -12px rgba(152,41,59,0.6)"><span class="ms" style="font-size:23px">how_to_reg</span><span style="font-family:inherit;font-size:12px;font-weight:700">Mark Attendance</span></button>
+                <button onClick="{{ tGoMarks }}" style="flex:1;border:none;cursor:pointer;border-radius:15px;padding:14px 8px;background:#F8ECEE;color:#98293B;display:flex;flex-direction:column;align-items:center;gap:5px"><span class="ms" style="font-size:23px">edit_note</span><span style="font-family:inherit;font-size:12px;font-weight:700">Enter Marks</span></button>
+              </div>
+              <div style="font-size:12px;font-weight:800;color:#3F554B;margin:22px 2px 12px">Today's classes</div>
+              <div style="background:#fff;border-radius:18px;padding:6px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ teacherClasses }}" as="p" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ p.border }}">
+                    <div style="width:42px;height:42px;border-radius:12px;background:{{ p.tintBg }};display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none"><span style="font-size:12px;font-weight:800;color:{{ p.c }}">P{{ p.p }}</span><span style="font-size:8.5px;font-weight:700;color:{{ p.c }};margin-top:1px">{{ p.t }}</span></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;color:#10231A">{{ p.sub }}</div><div style="font-size:11.5px;color:#8A998F;margin-top:2px">{{ p.cls }} · Room {{ p.room }}</div></div>
+                    <span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER ROUTINE -->
+            <sc-if value="{{ tRoutine }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:14px 20px 16px;border-radius:0 0 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div>
+                  <div style="font-size:17px;font-weight:800;color:#10231A">My routine</div>
+                  <div style="font-size:11.5px;color:#9A6A72;margin-top:2px;font-weight:600">{{ teacher.desig }} · {{ teacherRoutineSummary }}</div>
+                </div>
+                <div style="width:38px;height:38px;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -6px rgba(16,35,26,0.2)"><span class="ms" style="font-size:20px;color:#98293B">calendar_month</span></div>
+              </div>
+              <div style="display:flex;gap:7px;margin-top:14px">
+                <sc-for list="{{ teacherRoutineDays }}" as="d" hint-placeholder-count="6">
+                  <button onClick="{{ d.onPress }}" style="flex:1;border:{{ d.pillBorder }};cursor:pointer;background:{{ d.pillBg }};border-radius:13px;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative">
+                    <span style="font-size:9.5px;font-weight:800;letter-spacing:0.5px;color:{{ d.labelColor }}">{{ d.label }}</span>
+                    <span style="font-size:15px;font-weight:800;color:{{ d.dateColor }}">{{ d.date }}</span>
+                    <sc-if value="{{ d.isToday }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:{{ d.dateColor }}"></span></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="padding:18px 16px 16px">
+              <sc-for list="{{ teacherRoutine }}" as="p" hint-placeholder-count="6">
+                <sc-if value="{{ p.isBreak }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:10px;margin:2px 0 12px;padding-left:4px">
+                    <div style="width:52px;text-align:center;font-size:10px;font-weight:700;color:#A0AEA6">{{ p.start }}</div>
+                    <div style="flex:1;display:flex;align-items:center;gap:8px;border-top:1.5px dashed #DCE3DD"><span class="ms" style="font-size:16px;color:#B0BCB4">restaurant</span><span style="font-size:11.5px;font-weight:700;color:#9AA8A0;letter-spacing:0.3px">Lunch break · {{ p.start }}–{{ p.end }}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ p.isPeriod }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:10px;margin-bottom:12px">
+                    <div style="width:52px;flex:none;text-align:center;padding-top:4px">
+                      <div style="font-size:13px;font-weight:800;color:#10231A">{{ p.start }}</div>
+                      <div style="font-size:10px;font-weight:600;color:#A0AEA6;margin-top:1px">{{ p.end }}</div>
+                    </div>
+                    <sc-if value="{{ p.isFree }}" hint-placeholder-val="{{ false }}">
+                      <div style="flex:1;background:#F7FAF8;border:1.5px dashed #DDE4DE;border-radius:16px;padding:13px 14px;display:flex;align-items:center;gap:12px">
+                        <div style="width:44px;height:44px;border-radius:13px;background:#EEF2EE;display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:22px;color:#A8B5AC">free_breakfast</span></div>
+                        <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#7A8B82">Free period</div><div style="font-size:11px;color:#A0AEA6;margin-top:3px">No class scheduled</div></div>
+                        <div style="font-size:10px;font-weight:800;color:#A0AEA6;background:#EEF2EE;padding:4px 8px;border-radius:7px;flex:none">{{ p.p }}</div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ p.isClass }}" hint-placeholder-val="{{ true }}">
+                      <div style="flex:1;min-width:0;background:{{ p.nowBg }};border:{{ p.cardBorder }};border-radius:16px;padding:13px 14px;box-shadow:0 6px 16px -14px rgba(16,35,26,0.3);display:flex;align-items:center;gap:12px">
+                        <div style="width:44px;height:44px;border-radius:13px;background:{{ p.tint }};display:flex;align-items:center;justify-content:center;flex:none"><span class="ms" style="font-size:23px;color:{{ p.c }}">groups</span></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="display:flex;align-items:center;gap:7px">
+                            <span style="font-size:13.5px;font-weight:800;color:#10231A">{{ p.cls }}</span>
+                            <sc-if value="{{ p.isNow }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px;font-weight:800;color:#fff;background:#98293B;padding:2px 6px;border-radius:5px;letter-spacing:0.4px">NOW</span></sc-if>
+                          </div>
+                          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:5px">
+                            <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:#7A8B82;font-weight:600"><span class="ms" style="font-size:14px;color:#A0AEA6">calculate</span>Mathematics</span>
+                            <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:#7A8B82;font-weight:600"><span class="ms" style="font-size:14px;color:#A0AEA6">meeting_room</span>{{ p.room }}</span>
+                          </div>
+                        </div>
+                        <div style="font-size:10px;font-weight:800;color:{{ p.c }};background:{{ p.tint }};padding:4px 8px;border-radius:7px;flex:none">{{ p.p }}</div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER MARK ATTENDANCE -->
+            <sc-if value="{{ tMark }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#98293B;padding:14px 20px 16px">
+              <div style="font-size:17px;font-weight:800;color:#fff">Mark attendance</div>
+              <div style="font-size:12px;color:#F0CBD1;margin-top:3px">Class 8 · A — Mathematics · {{ todayBs }}</div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <div style="flex:1;background:rgba(255,255,255,0.16);border-radius:11px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#fff">{{ presentCount }}</div><div style="font-size:9px;font-weight:700;color:#F0CBD1;text-transform:uppercase">Present</div></div>
+                <div style="flex:1;background:rgba(255,255,255,0.16);border-radius:11px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#fff">{{ absentCount }}</div><div style="font-size:9px;font-weight:700;color:#F0CBD1;text-transform:uppercase">Absent</div></div>
+                <div style="flex:1;background:rgba(255,255,255,0.16);border-radius:11px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#fff">{{ rosterTotal }}</div><div style="font-size:9px;font-weight:700;color:#F0CBD1;text-transform:uppercase">Total</div></div>
+              </div>
+            </div>
+            <div style="padding:14px 16px 16px">
+              <div style="background:#fff;border-radius:18px;padding:4px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ rosterRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:{{ r.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:#F1F4F1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#5C7068;flex:none">{{ r.initials }}</div>
+                    <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.name }}</div><div style="font-size:10px;color:#94A49B;margin-top:1px">Roll {{ r.roll }}</div></div>
+                    <div style="display:flex;gap:4px">
+                      <button onClick="{{ r.setP }}" style="border:none;cursor:pointer;width:26px;height:26px;border-radius:8px;font-family:inherit;font-size:11px;font-weight:800;background:{{ r.pBg }};color:{{ r.pFg }}">P</button>
+                      <button onClick="{{ r.setA }}" style="border:none;cursor:pointer;width:26px;height:26px;border-radius:8px;font-family:inherit;font-size:11px;font-weight:800;background:{{ r.aBg }};color:{{ r.aFg }}">A</button>
+                      <button onClick="{{ r.setL }}" style="border:none;cursor:pointer;width:26px;height:26px;border-radius:8px;font-family:inherit;font-size:11px;font-weight:800;background:{{ r.lBg }};color:{{ r.lFg }}">L</button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:14px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -12px rgba(152,41,59,0.6)"><span class="ms" style="font-size:19px">check</span> Submit attendance</button>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER MARKS -->
+            <sc-if value="{{ tMarks }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE"><div style="font-size:17px;font-weight:800;color:#10231A">Enter marks</div><div style="font-size:12px;color:#7A8B82;margin-top:3px">Class 8 · A — Mathematics · Full marks 100</div></div>
+            <div style="padding:14px 16px 16px">
+              <div style="background:#fff;border-radius:18px;padding:4px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ marksRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:{{ r.border }}">
+                    <div style="width:34px;height:34px;border-radius:10px;background:#F1F4F1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#5C7068;flex:none">{{ r.initials }}</div>
+                    <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.name }}</div><div style="font-size:10px;color:#94A49B;margin-top:1px">Roll {{ r.roll }}</div></div>
+                    <div style="width:54px;height:34px;border:1.5px solid #E4E9E5;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F8FAF9"><span style="font-size:14px;font-weight:800;color:#10231A">{{ r.mark }}</span></div>
+                    <div style="width:34px;text-align:center"><span style="font-size:11px;font-weight:800;color:{{ r.gc }};background:{{ r.gbg }};padding:3px 7px;border-radius:7px">{{ r.grade }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:14px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -12px rgba(152,41,59,0.6)"><span class="ms" style="font-size:19px">save</span> Save marks</button>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER PROFILE -->
+            <sc-if value="{{ tProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#F8ECEE;padding:20px;text-align:center;border-bottom:1px solid #EFD9DD;position:relative">
+              <button onClick="{{ goSettingsTeacher }}" style="position:absolute;top:14px;right:16px;border:none;cursor:pointer;background:#fff;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -6px rgba(16,35,26,0.25)"><span class="ms" style="font-size:19px;color:#98293B">settings</span></button>
+              <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px">
+                <div style="width:26px;height:26px;border-radius:8px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">GJ</div>
+                <span style="font-size:12px;font-weight:700;color:#9A6A72">Gyan Jyoti Secondary School</span>
+              </div>
+              <div style="width:78px;height:78px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:26px;font-weight:800;color:#fff">{{ teacher.init }}</div>
+              <div style="font-size:19px;font-weight:800;color:#10231A;margin-top:12px">{{ teacher.name }}</div>
+              <div style="font-size:12px;color:#7A8B82;margin-top:3px">{{ teacher.desig }}</div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);margin-bottom:16px">
+                <sc-for list="{{ teacherInfo }}" as="r" hint-placeholder-count="4"><div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:{{ r.border }}"><span style="font-size:12.5px;color:#7A8B82">{{ r.k }}</span><span style="font-size:12.5px;font-weight:700;color:#10231A">{{ r.v }}</span></div></sc-for>
+              </div>
+              <div style="background:#fff;border-radius:16px;padding:4px 16px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                <sc-for list="{{ settingsRows }}" as="s" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:{{ s.border }}"><span class="ms" style="font-size:20px;color:#98293B">{{ s.icon }}</span><span style="flex:1;font-size:13px;font-weight:600;color:#33463E">{{ s.label }}</span><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div></sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:16px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER EDIT PROFILE -->
+            <sc-if value="{{ tEditProfile }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backTeacher }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Edit profile</div></div>
+            </div>
+            <div style="padding:18px 16px 16px">
+              <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:6px">
+                <div style="position:relative">
+                  <div style="width:84px;height:84px;border-radius:50%;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#fff">{{ teacher.init }}</div>
+                  <div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid #ECEFEC;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px -3px rgba(16,35,26,0.3)"><span class="ms" style="font-size:16px;color:#98293B">photo_camera</span></div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:#98293B;margin-top:10px">Change photo</div>
+              </div>
+              <sc-for list="{{ teacherEditFields }}" as="f" hint-placeholder-count="5">
+                <div style="margin-top:14px">
+                  <div style="font-size:10.5px;font-weight:700;letter-spacing:0.6px;color:#8A998F;text-transform:uppercase;margin-bottom:6px">{{ f.label }}</div>
+                  <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 13px;background:{{ f.fieldBg }};border:{{ f.fieldBorder }};border-radius:13px">
+                    <span class="ms" style="font-size:18px;color:#98293B">{{ f.icon }}</span>
+                    <input value="{{ f.value }}" readonly="" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-family:inherit;font-size:13.5px;font-weight:600;color:#10231A">
+                    <sc-if value="{{ f.lockIcon }}" hint-placeholder-val="{{ false }}"><span class="ms" style="font-size:16px;color:#B5C0B8">lock</span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:50px;margin-top:20px;border:none;cursor:pointer;border-radius:14px;background:linear-gradient(135deg,#98293B,#76202F);color:#fff;font-family:inherit;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 22px -10px rgba(152,41,59,0.55)"><span class="ms" style="font-size:19px">check</span> Save changes</button>
+              <button onClick="{{ backTeacher }}" style="width:100%;height:46px;margin-top:8px;border:none;cursor:pointer;background:transparent;color:#7A8B82;font-family:inherit;font-size:13.5px;font-weight:600">Cancel</button>
+              <div style="font-size:10.5px;color:#A0AEA6;text-align:center;margin-top:10px;line-height:1.5">Locked fields are managed by your school.<br>Contact the office to update them.</div>
+            </div>
+            </sc-if>
+
+            <!-- TEACHER SETTINGS -->
+            <sc-if value="{{ tSettings }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;padding:14px 20px 16px;border-bottom:1px solid #EEF0EE">
+              <div style="display:flex;align-items:center;gap:12px"><button onClick="{{ backTeacher }}" style="border:none;cursor:pointer;background:#F4F0F1;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center"><span class="ms" style="font-size:20px;color:#98293B">arrow_back</span></button><div style="font-size:16px;font-weight:800;color:#10231A">Settings</div></div>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#fff;border-radius:18px;padding:14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3);display:flex;align-items:center;gap:13px">
+                <div style="width:48px;height:48px;border-radius:14px;background:#98293B;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex:none">{{ teacher.init }}</div>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:800;color:#10231A">{{ teacher.name }}</div><div style="font-size:11.5px;color:#7A8B82;margin-top:2px">{{ teacher.desig }}</div></div>
+                <button onClick="{{ goEditTeacher }}" style="border:none;cursor:pointer;background:transparent;font-family:inherit;display:flex;align-items:center;gap:3px;color:#98293B"><span style="font-size:11.5px;font-weight:700">Edit</span><span class="ms" style="font-size:17px">chevron_right</span></button>
+              </div>
+              <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="5">
+                <div style="font-size:11px;font-weight:800;color:#8A998F;text-transform:uppercase;letter-spacing:0.6px;margin:18px 2px 9px">{{ g.title }}</div>
+                <div style="background:#fff;border-radius:16px;padding:2px 14px;box-shadow:0 6px 16px -13px rgba(16,35,26,0.3)">
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:{{ r.border }}">
+                      <span class="ms" style="font-size:20px;color:#98293B">{{ r.icon }}</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#33463E">{{ r.label }}</div><div style="font-size:10.5px;color:#A0AEA6;margin-top:1px">{{ r.sub }}</div></div>
+                      <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ r.onPress }}" style="border:none;cursor:pointer;padding:0;width:42px;height:24px;border-radius:13px;background:{{ r.trackBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ r.knobLeft }};width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span></button>
+                      </sc-if>
+                      <sc-if value="{{ r.isNav }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:5px;flex:none"><span style="font-size:12px;font-weight:600;color:#9AA8A0">{{ r.value }}</span><span class="ms" style="font-size:18px;color:#C2CCC6">chevron_right</span></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <button style="width:100%;height:48px;margin-top:18px;border:1.5px solid #F3D4D4;cursor:pointer;border-radius:14px;background:#FDF1F1;color:#E5484D;font-family:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span class="ms" style="font-size:19px">logout</span> Sign out</button>
+              <div style="text-align:center;font-size:10.5px;color:#A0AEA6;margin-top:14px">Aaramva Shikshya · v1.0.0</div>
+            </div>
+            </sc-if>
+
+          </div>
+          <div style="flex:none;background:#fff;border-top:1px solid #ECEFEC;display:flex;padding:7px 4px 0;box-shadow:0 -4px 16px -10px rgba(16,35,26,0.14)">
+            <sc-for list="{{ teacherTabs }}" as="tab" hint-placeholder-count="5">
+              <button onClick="{{ tab.onPress }}" style="flex:1;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 0"><span style="display:flex;align-items:center;justify-content:center;padding:3px 16px;border-radius:11px;background:{{ tab.pillBg }}"><span class="ms" style="font-size:22px;color:{{ tab.color }};font-variation-settings:'FILL' {{ tab.fill }}">{{ tab.icon }}</span></span><span style="font-size:9.5px;font-weight:700;color:{{ tab.color }}">{{ tab.label }}</span></button>
+            </sc-for>
+          </div>
+          <div style="flex:none;height:20px;background:#fff;display:flex;align-items:center;justify-content:center"><div style="width:118px;height:5px;border-radius:3px;background:#10231A;opacity:0.8"></div></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1480,&quot;height&quot;:880},&quot;defaultDevice&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;android&quot;],&quot;default&quot;:&quot;android&quot;,&quot;tsType&quot;:&quot;'ios'|'android'&quot;},&quot;defaultRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;all&quot;,&quot;auth&quot;,&quot;student&quot;,&quot;parent&quot;,&quot;teacher&quot;],&quot;default&quot;:&quot;all&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      device: (props && props.defaultDevice) || 'ios',
+      filter: (props && props.defaultRole) || 'all',
+      authStep: 'code',
+      studentTab: 'home', studentSub: null, routineDay: 2,
+      parentTab: 'home', parentSub: null, parentChild: 0, parentPayMethod: 'esewa',
+      teacherTab: 'home', teacherSub: null, teacherRoutineDay: 2,
+      att: {},
+      toggles: { push: true, sms: false, email: true, biometric: true, summary: true },
+    };
+    this.student = { name: 'Aayush Shrestha', cls: '8', sec: 'A', roll: 14, adm: 'GJ-2079-014' };
+    this.school = { name: 'Gyan Jyoti Secondary School', slug: 'gyanjyoti', color: '#98293B' };
+    this.attData = { percent: 94, present: 142, absent: 6, late: 4, leave: 3, working: 155, month: 'Jestha 2082' };
+    this.result = { gpa: '3.53', grade: 'A', rank: 3 };
+    this.children = [
+      { name: 'Aayush Shrestha', cls: '8', sec: 'A', roll: 14, init: 'AS', adm: 'GJ-2079-014', percent: 94, present: 142, absent: 6, late: 4, leave: 3 },
+      { name: 'Aastha Shrestha', cls: '4', sec: 'B', roll: 9, init: 'AS', adm: 'GJ-2081-040', percent: 97, present: 151, absent: 2, late: 1, leave: 1 },
+    ];
+    this.guardian = { name: 'Ramesh Shrestha', relation: 'Father / Guardian', phone: '+977 98••••1234', email: 'ramesh.shrestha@gmail.com', init: 'RS' };
+    this.teacher = { name: 'Sunita Karki', desig: 'Mathematics Teacher', emp: 'EMP-2080-0042', dept: 'Science & Mathematics', init: 'SK' };
+    this.roster = ['Anish Gautam', 'Bibek Rai', 'Diya Maharjan', 'Kritika Bohara', 'Manish Lama', 'Sneha Tamang'];
+  }
+
+  STATUS = {
+    PRESENT: { bg: '#E4F6F1', fg: '#0E9F77', label: 'Present' },
+    ABSENT: { bg: '#FCE9E9', fg: '#E5484D', label: 'Absent' },
+    LATE: { bg: '#FEF3E2', fg: '#D9892B', label: 'Late' },
+    LEAVE: { bg: '#EAF0FE', fg: '#5B7FE0', label: 'Leave' },
+    HOLIDAY: { bg: '#EEF1EE', fg: '#AEBAB2', label: 'Holiday' },
+  };
+
+  gradeColor(g) {
+    if (g === 'A+' || g === 'A') return { gc: '#0E9F77', gbg: '#E4F6F1' };
+    if (g === 'B+' || g === 'B') return { gc: '#5B7FE0', gbg: '#EAF0FE' };
+    return { gc: '#D9892B', gbg: '#FEF3E2' };
+  }
+
+  makeTabs(activeKey, sub, patch, defs) {
+    return defs.map((d) => {
+      const active = activeKey === d.key && !sub;
+      return { key: d.key, icon: d.icon, label: d.label, active, fill: active ? 1 : 0,
+        color: active ? '#98293B' : '#9AA8A0',
+        pillBg: active ? '#F8ECEE' : 'transparent',
+        onPress: () => this.setState(patch(d.key)) };
+    });
+  }
+
+  buildCalendar() {
+    const status = {};
+    for (let d = 1; d <= 31; d++) status[d] = (d % 7 === 0) ? 'HOLIDAY' : 'PRESENT';
+    status[3] = 'LATE'; status[11] = 'ABSENT'; status[18] = 'LEAVE'; status[24] = 'LATE'; status[29] = 'ABSENT';
+    const today = 6;
+    const cells = [];
+    for (let d = 1; d <= 31; d++) {
+      const st = this.STATUS[status[d]];
+      cells.push({ day: String(d), bg: st.bg, fg: st.fg, ring: d === today ? '2px solid #98293B' : '0px solid transparent' });
+    }
+    while (cells.length % 7 !== 0) cells.push({ day: '', bg: 'transparent', fg: 'transparent', ring: '0px solid transparent' });
+    return cells;
+  }
+
+  buildSettings() {
+    const t = this.state.toggles;
+    const border = '1px solid #F0F3F0';
+    const tog = (key, icon, label, sub) => ({
+      isToggle: true, icon, label, sub: sub || '', on: t[key],
+      trackBg: t[key] ? '#98293B' : '#DADFDB', knobLeft: t[key] ? '20px' : '2px',
+      onPress: () => this.setState((s) => ({ toggles: { ...s.toggles, [key]: !s.toggles[key] } })),
+    });
+    const nav = (icon, label, value) => ({ isToggle: false, isNav: true, icon, label, sub: '', value: value || '' });
+    const groups = [
+      { title: 'Notifications', rows: [
+        tog('push', 'notifications', 'Push notifications', 'Alerts on this device'),
+        tog('sms', 'sms', 'SMS alerts', 'Charges may apply'),
+        tog('email', 'mail', 'Email updates', ''),
+        tog('summary', 'summarize', 'Weekly summary', 'Every Friday'),
+      ]},
+      { title: 'Preferences', rows: [
+        nav('translate', 'Language', 'English'),
+        nav('event', 'Calendar', 'Bikram Sambat'),
+        nav('palette', 'Appearance', 'Light'),
+      ]},
+      { title: 'Security', rows: [
+        tog('biometric', 'fingerprint', 'Biometric login', 'Face / fingerprint'),
+        nav('key', 'Change password', ''),
+        nav('devices', 'Linked devices', '2'),
+      ]},
+      { title: 'Support', rows: [
+        nav('help', 'Help centre', ''),
+        nav('flag', 'Report a problem', ''),
+        nav('description', 'Terms & privacy', ''),
+      ]},
+      { title: 'About', rows: [
+        nav('info', 'App version', '1.0.0'),
+        nav('star', 'Rate Aaramva Shikshya', ''),
+      ]},
+    ];
+    return groups.map((g) => ({
+      title: g.title,
+      rows: g.rows.map((r, i) => ({ ...r, border: i < g.rows.length - 1 ? border : '0px solid transparent' })),
+    }));
+  }
+
+  buildEditFields(role) {
+    const border = '1px solid #F0F3F0';
+    const defs = {
+      student: [
+        ['Full name', 'Aayush Shrestha', 'badge', false],
+        ['Email', 'aayush@gyanjyoti.edu.np', 'mail', false],
+        ['Phone', '+977 98•••• 5521', 'call', true],
+        ['Date of birth', '2068-02-14 BS', 'cake', false],
+        ['Address', 'Patan, Lalitpur', 'home', true],
+        ['Guardian', 'Ramesh Shrestha', 'family_restroom', false],
+      ],
+      parent: [
+        ['Full name', 'Ramesh Shrestha', 'badge', true],
+        ['Relation', 'Father / Guardian', 'family_restroom', false],
+        ['Phone', '+977 98•••• 1234', 'call', true],
+        ['Email', 'ramesh.shrestha@gmail.com', 'mail', true],
+        ['Address', 'Patan, Lalitpur', 'home', true],
+      ],
+      teacher: [
+        ['Full name', 'Sunita Karki', 'badge', true],
+        ['Email', 'sunita.karki@gyanjyoti.edu.np', 'mail', true],
+        ['Phone', '+977 98•••• 7788', 'call', true],
+        ['Department', 'Science & Mathematics', 'school', false],
+        ['Address', 'Kupondole, Lalitpur', 'home', true],
+      ],
+    };
+    return defs[role].map(([label, value, icon, editable], i, a) => ({
+      label, value, icon, editable,
+      lockIcon: editable ? '' : 'lock',
+      fieldBg: editable ? '#fff' : '#F4F6F5',
+      fieldBorder: editable ? '1.5px solid #E2E9E4' : '1.5px solid #EDF0ED',
+      border: i < a.length - 1 ? border : '0px solid transparent',
+    }));
+  }
+
+  greetingText() {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning 👋';
+    if (h < 17) return 'Good afternoon 👋';
+    return 'Good evening 👋';
+  }
+
+  renderVals() {
+    const s = this.state;
+    const GREEN = '#0B6B43';
+    const SCHOOL = '#98293B';
+
+    const filterDefs = [['all', 'All'], ['auth', 'Auth'], ['student', 'Student'], ['parent', 'Parent'], ['teacher', 'Teacher']];
+    const filterTabs = filterDefs.map(([key, label]) => ({
+      key, label,
+      bg: s.filter === key ? GREEN : 'transparent',
+      fg: s.filter === key ? '#fff' : '#5C7068',
+      onPress: () => this.setState({ filter: key }),
+    }));
+
+    const border = '1px solid #F0F3F0';
+    const periodMeta = [
+      { p: 1, t: '10:00', sub: 'Mathematics', tr: 'Sunita Karki', room: '204', c: '#0E9F77', tintBg: '#E4F6F1' },
+      { p: 2, t: '10:45', sub: 'Science', tr: 'Bikash Thapa', room: 'Lab 2', c: '#5B7FE0', tintBg: '#EAF0FE' },
+      { p: 3, t: '11:30', sub: 'English', tr: 'Rina Gurung', room: '108', c: '#D9892B', tintBg: '#FEF3E2' },
+      { p: 4, t: '12:50', sub: 'Nepali', tr: 'Hari Adhikari', room: '108', c: '#98293B', tintBg: '#F8ECEE' },
+    ];
+    const periodsToday = periodMeta.map((p, i) => ({ ...p, border: i < periodMeta.length - 1 ? border : '0px solid transparent' }));
+
+    const routineDefs = [
+      ['SUN', ['Math', 'Science', 'English', 'Nepali', 'Social']],
+      ['MON', ['English', 'Math', 'Computer', 'Science', 'H.P.E.']],
+      ['TUE', ['Nepali', 'Math', 'Science', 'English', 'Optional']],
+      ['WED', ['Science', 'Social', 'Math', 'English', 'Nepali']],
+      ['THU', ['Math', 'English', 'Computer', 'Science', 'Social']],
+      ['FRI', ['Nepali', 'Math', 'Science', 'English', 'Library']],
+    ];
+    // ---- rich day-filtered routine ----
+    const SUBJECT = {
+      Math:     { name: 'Mathematics',    teacher: 'Sunita Karki',  room: '204',     c: '#0E9F77', tint: '#E4F6F1', icon: 'calculate' },
+      Science:  { name: 'Science',        teacher: 'Bikash Thapa',  room: 'Lab 2',   c: '#5B7FE0', tint: '#EAF0FE', icon: 'science' },
+      English:  { name: 'English',        teacher: 'Rina Gurung',   room: '108',     c: '#D9892B', tint: '#FEF3E2', icon: 'menu_book' },
+      Nepali:   { name: 'Nepali',         teacher: 'Hari Adhikari', room: '110',     c: '#98293B', tint: '#F8ECEE', icon: 'translate' },
+      Social:   { name: 'Social Studies', teacher: 'Gita Sharma',   room: '106',     c: '#7C6BE0', tint: '#EDEAFB', icon: 'public' },
+      Computer: { name: 'Computer Sci.',  teacher: 'Niraj Joshi',   room: 'Lab 1',   c: '#0EA5B5', tint: '#E2F5F7', icon: 'computer' },
+      'H.P.E.': { name: 'Health & P.E.',  teacher: 'Ramesh Oli',    room: 'Ground',  c: '#E0734F', tint: '#FCEDE7', icon: 'sports_soccer' },
+      Optional: { name: 'Optional Math',  teacher: 'Sunita Karki',  room: '109',     c: '#6B8A7A', tint: '#EAF1ED', icon: 'functions' },
+      Library:  { name: 'Library / Self', teacher: 'Supervised',    room: 'Library', c: '#6B8A7A', tint: '#EAF1ED', icon: 'auto_stories' },
+    };
+    const SLOTS = ['10:00', '10:45', '11:30', '12:50', '13:35'];
+    const SLOT_END = ['10:45', '11:30', '12:15', '13:35', '14:20'];
+    const routineDay = s.routineDay;
+    const routineDays = routineDefs.map(([d], i) => ({
+      key: i, label: d, date: String(4 + i), isToday: i === 2, active: i === routineDay,
+      pillBg: i === routineDay ? '#98293B' : '#fff',
+      pillBorder: i === routineDay ? 'none' : '1px solid #E7ECE8',
+      labelColor: i === routineDay ? '#F3C9CF' : '#9AA8A0',
+      dateColor: i === routineDay ? '#fff' : '#33463E',
+      onPress: () => this.setState({ routineDay: i }),
+    }));
+    const daySubjects = routineDefs[routineDay][1];
+    const routinePeriods = [];
+    daySubjects.forEach((key, i) => {
+      const m = SUBJECT[key];
+      const now = routineDay === 2 && i === 1;
+      routinePeriods.push({
+        isBreak: false, isPeriod: true, p: 'P' + (i + 1), start: SLOTS[i], end: SLOT_END[i],
+        name: m.name, teacher: m.teacher, room: m.room, c: m.c, tint: m.tint, icon: m.icon,
+        isNow: now,
+        cardBorder: now ? '1.5px solid #ECCED4' : '1px solid #EEF1ED',
+        nowBg: now ? '#FCF5F6' : '#fff',
+      });
+      if (i === 2) routinePeriods.push({ isBreak: true, isPeriod: false, start: '12:15', end: '12:50' });
+    });
+    const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const routineSummary = daySubjects.length + ' periods · ' + (routineDay === 2 ? 'Today' : DAY_FULL[routineDay]);
+
+    const noticeDefs = [
+      ['Examination', 'Second Terminal Exam routine published', 'The exam begins from Jestha 20. Check subject-wise dates in the Routine tab.', 'Jestha 4, 2082', '#E5484D', '#FCE9E9'],
+      ['Event', 'Inter-house football tournament', 'Matches start Friday on the main ground. All four houses participate.', 'Jestha 2, 2082', '#0E9F77', '#E4F6F1'],
+      ['Holiday', 'School closed — Buddha Jayanti', 'School remains closed on Jestha 9 on the occasion of Buddha Jayanti.', 'Jestha 1, 2082', '#5B7FE0', '#EAF0FE'],
+      ['Notice', 'Monthly fee reminder', 'Please clear dues for Baishakh by Jestha 10 to avoid late charges.', 'Baishakh 30, 2081', '#D9892B', '#FEF3E2'],
+    ];
+    const notices = noticeDefs.map(([tag, title, body, date, accent, tint]) => ({ tag, title, body, date, accent, tint }));
+
+    const homeworkDefs = [
+      ['Mathematics', 'Exercise 7.2 — all questions', 'Due Jestha 7', 'Pending', '#98293B', '#F8ECEE'],
+      ['Science', 'Lab report: Photosynthesis', 'Due Jestha 8', 'Pending', '#5B7FE0', '#EAF0FE'],
+      ['English', 'Essay — My Country (300 words)', 'Submitted Jestha 3', 'Done', '#D9892B', '#FEF3E2'],
+    ];
+    const homework = homeworkDefs.map(([sub, title, due, st, c, tint]) => ({
+      sub, title, due, status: st, c, tint,
+      sc: st === 'Done' ? '#0E9F77' : '#D9892B', sbg: st === 'Done' ? '#E4F6F1' : '#FEF3E2',
+    }));
+
+    const resultDefs = [
+      ['Mathematics', 100, 88, 'A'], ['Science', 100, 79, 'A'], ['English', 100, 72, 'B+'],
+      ['Nepali', 100, 84, 'A'], ['Social Studies', 100, 69, 'B+'], ['Computer', 100, 91, 'A+'],
+    ];
+    const resultRows = resultDefs.map(([sub, fm, obt, grade], i) => ({
+      sub, fm, obt, grade, ...this.gradeColor(grade),
+      border: i < resultDefs.length - 1 ? border : '0px solid transparent',
+    }));
+
+    const studentInfo = [
+      ['Admission no.', this.student.adm], ['Class / Section', 'Class ' + this.student.cls + ' · ' + this.student.sec],
+      ['Roll number', String(this.student.roll)], ['Academic year', '2081–82'],
+    ].map(([k, v], i, a) => ({ k, v, border: i < a.length - 1 ? border : '0px solid transparent' }));
+
+    const settingsDefs = [
+      ['notifications', 'Notifications'], ['translate', 'Language · English'], ['lock', 'Privacy & security'], ['help', 'Help & support'],
+    ];
+    const settingsRows = settingsDefs.map(([icon, label], i, a) => ({ icon, label, border: i < a.length - 1 ? border : '0px solid transparent' }));
+
+    const studentFeatures = [
+      { icon: 'grading', label: 'Results', onPress: () => this.setState({ studentSub: 'results' }) },
+      { icon: 'menu_book', label: 'Homework', onPress: () => this.setState({ studentSub: 'homework' }) },
+      { icon: 'description', label: 'Report Card', onPress: () => this.setState({ studentSub: 'report' }) },
+      { icon: 'calendar_month', label: 'Routine', onPress: () => this.setState({ studentTab: 'routine', studentSub: null }) },
+      { icon: 'campaign', label: 'Notices', onPress: () => this.setState({ studentTab: 'notices', studentSub: null }) },
+      { icon: 'event_available', label: 'Attendance', onPress: () => this.setState({ studentTab: 'attendance', studentSub: null }) },
+    ].map((f) => ({ ...f, bg: '#F8ECEE', fg: SCHOOL }));
+
+    const studentTabs = this.makeTabs(s.studentTab, s.studentSub, (k) => ({ studentTab: k, studentSub: null }),
+      [{ key: 'home', icon: 'home', label: 'Home' }, { key: 'attendance', icon: 'event_available', label: 'Attendance' },
+       { key: 'routine', icon: 'calendar_month', label: 'Routine' }, { key: 'notices', icon: 'campaign', label: 'Notices' },
+       { key: 'profile', icon: 'person', label: 'Profile' }]);
+
+    // ---- PARENT ----
+    const child = this.children[s.parentChild] || this.children[0];
+    const childChips = this.children.map((c, i) => ({
+      name: c.name.split(' ')[0], active: i === s.parentChild,
+      bg: i === s.parentChild ? '#98293B' : '#fff',
+      fg: i === s.parentChild ? '#fff' : '#9A6A72',
+      border: i === s.parentChild ? 'none' : '1.5px solid #ECCED4',
+      onPress: () => this.setState({ parentChild: i }),
+    }));
+    const childAtt = { percent: child.percent, present: child.present, absent: child.absent, late: child.late, leave: child.leave, working: 155, month: 'Jestha 2082' };
+    const childAttRingBg = 'conic-gradient(#16A37C ' + (child.percent * 3.6) + 'deg, #EFE2E4 0)';
+    // ---- fees ----
+    const feeItemDefs = [
+      ['Tuition fee', 'receipt_long', 4500], ['Transport', 'directions_bus', 1200],
+      ['Exam fee', 'edit_document', 800], ['Lab & library', 'science', 500],
+    ];
+    const feeItems = feeItemDefs.map(([label, icon, amt], i, a) => ({
+      label, icon, amount: 'Rs. ' + amt.toLocaleString('en-IN'),
+      border: i < a.length - 1 ? '1px solid #F0F3F0' : '0px solid transparent',
+    }));
+    const feeTotalNum = feeItemDefs.reduce((s2, x) => s2 + x[2], 0);
+    const feeTotal = 'Rs. ' + feeTotalNum.toLocaleString('en-IN');
+    const payDefs = [
+      ['esewa', 'eSewa', 'account_balance_wallet', '#5AAA1E', '#EAF5E0'],
+      ['khalti', 'Khalti', 'account_balance_wallet', '#5C2D91', '#EDE6F5'],
+      ['bank', 'Bank transfer', 'account_balance', '#0E7C86', '#E2F2F3'],
+    ];
+    const payMethods = payDefs.map(([key, label, icon, c, tint]) => {
+      const sel = s.parentPayMethod === key;
+      return { key, label, icon, c, tint, selected: sel,
+        cardBg: sel ? tint : '#fff', cardBorder: sel ? ('1.5px solid ' + c) : '1.5px solid #ECEFEC',
+        check: sel ? c : '#D5DCD7', radio: sel ? 'radio_button_checked' : 'radio_button_unchecked',
+        onPress: () => this.setState({ parentPayMethod: key }) };
+    });
+    const feeHistory = [
+      ['Baishakh 2081', 'Rs. 7,000', 'eSewa', 'Baishakh 8'],
+      ['Chaitra 2081', 'Rs. 6,500', 'Khalti', 'Chaitra 7'],
+      ['Falgun 2081', 'Rs. 7,000', 'Bank', 'Falgun 9'],
+    ].map(([month, amt, via, on], i, a) => ({
+      month, amount: amt, via, on,
+      border: i < a.length - 1 ? '1px solid #F0F3F0' : '0px solid transparent',
+    }));
+    const parentFeatures = [
+      { icon: 'grading', label: 'Results', onPress: () => this.setState({ parentTab: 'results', parentSub: null }) },
+      { icon: 'event_available', label: 'Attendance', onPress: () => this.setState({ parentTab: 'attendance', parentSub: null }) },
+      { icon: 'campaign', label: 'Notices', onPress: () => this.setState({ parentTab: 'notices', parentSub: null }) },
+      { icon: 'payments', label: 'Fees', onPress: () => this.setState({ parentSub: 'fees' }) },
+    ].map((f) => ({ ...f, bg: '#F8ECEE', fg: SCHOOL }));
+    const parentTabs = this.makeTabs(s.parentTab, s.parentSub, (k) => ({ parentTab: k, parentSub: null }),
+      [{ key: 'home', icon: 'home', label: 'Home' }, { key: 'attendance', icon: 'event_available', label: 'Attendance' },
+       { key: 'results', icon: 'grading', label: 'Results' }, { key: 'notices', icon: 'campaign', label: 'Notices' },
+       { key: 'profile', icon: 'person', label: 'Profile' }]);
+    const guardianInfo = [
+      ['Relation', this.guardian.relation], ['Phone', this.guardian.phone], ['Email', this.guardian.email],
+    ].map(([k, v], i, a) => ({ k, v, border: i < a.length - 1 ? border : '0px solid transparent' }));
+    const childrenList = this.children.map((c, i, a) => ({
+      name: c.name, sub: 'Class ' + c.cls + c.sec + ' · Roll ' + c.roll, init: c.init,
+      border: i < a.length - 1 ? border : '0px solid transparent',
+    }));
+
+    // ---- TEACHER ----
+    const teacherClasses = [
+      { p: 1, t: '10:00', sub: 'Mathematics', cls: 'Class 8 · A', room: '204', c: '#0E9F77', tintBg: '#E4F6F1' },
+      { p: 3, t: '11:30', sub: 'Mathematics', cls: 'Class 9 · B', room: '301', c: '#5B7FE0', tintBg: '#EAF0FE' },
+      { p: 5, t: '13:35', sub: 'Mathematics', cls: 'Class 7 · A', room: '202', c: '#98293B', tintBg: '#F8ECEE' },
+    ].map((p, i, a) => ({ ...p, border: i < a.length - 1 ? border : '0px solid transparent' }));
+    const tWeekDefs = [
+      ['SUN', ['P1 · 8A', 'P3 · 9B', 'P5 · 7A']], ['MON', ['P2 · 8A', 'P4 · 9B']],
+      ['TUE', ['P1 · 7A', 'P3 · 8A', 'P6 · 9B']], ['WED', ['P2 · 9B', 'P4 · 8A']],
+      ['THU', ['P1 · 8A', 'P5 · 7A']], ['FRI', ['P3 · 9B', 'P4 · 8A']],
+    ];
+    // ---- teacher day-filtered routine ----
+    const CLASSMETA = {
+      '8A': { c: '#0E9F77', tint: '#E4F6F1', room: '204' },
+      '9B': { c: '#5B7FE0', tint: '#EAF0FE', room: '301' },
+      '7A': { c: '#D9892B', tint: '#FEF3E2', room: '202' },
+    };
+    const teachDays = [
+      { 1: '8A', 3: '9B', 5: '7A' },
+      { 2: '8A', 4: '9B' },
+      { 1: '7A', 3: '8A' },
+      { 2: '9B', 4: '8A' },
+      { 1: '8A', 5: '7A' },
+      { 3: '9B', 4: '8A' },
+    ];
+    const tRoutineDay = s.teacherRoutineDay;
+    const tDayLabels = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI'];
+    const teacherRoutineDays = tDayLabels.map((d, i) => ({
+      key: i, label: d, date: String(4 + i), isToday: i === 2, active: i === tRoutineDay,
+      pillBg: i === tRoutineDay ? '#98293B' : '#fff',
+      pillBorder: i === tRoutineDay ? 'none' : '1px solid #E7ECE8',
+      labelColor: i === tRoutineDay ? '#F3C9CF' : '#9AA8A0',
+      dateColor: i === tRoutineDay ? '#fff' : '#33463E',
+      onPress: () => this.setState({ teacherRoutineDay: i }),
+    }));
+    const tMap = teachDays[tRoutineDay];
+    const firstTeach = Object.keys(tMap).map(Number).sort((a, b) => a - b)[0];
+    const teacherRoutine = [];
+    for (let i = 0; i < 5; i++) {
+      const slot = i + 1;
+      const cls = tMap[slot];
+      if (cls) {
+        const m = CLASSMETA[cls];
+        const now = tRoutineDay === 2 && slot === firstTeach;
+        teacherRoutine.push({
+          isPeriod: true, isFree: false, isClass: true, p: 'P' + slot, start: SLOTS[i], end: SLOT_END[i],
+          cls: 'Class ' + cls.slice(0, -1) + ' · ' + cls.slice(-1), room: m.room, c: m.c, tint: m.tint,
+          isNow: now, cardBorder: now ? '1.5px solid #ECCED4' : '1px solid #EEF1ED', nowBg: now ? '#FCF5F6' : '#fff',
+        });
+      } else {
+        teacherRoutine.push({ isPeriod: true, isFree: true, isClass: false, p: 'P' + slot, start: SLOTS[i], end: SLOT_END[i] });
+      }
+      if (i === 2) teacherRoutine.push({ isPeriod: false, isBreak: true, start: '12:15', end: '12:50' });
+    }
+    const teachingCount = Object.keys(tMap).length;
+    const teacherRoutineSummary = teachingCount + ' classes · ' + (tRoutineDay === 2 ? 'Today' : DAY_FULL[tRoutineDay]);
+    const pillStyle = (active, on) => ({ bg: active ? on.bg : '#F1F4F1', fg: active ? on.fg : '#AEBAB2' });
+    const rosterRows = this.roster.map((name, i) => {
+      const roll = i + 1; const st = s.att[roll] || 'PRESENT';
+      const pP = pillStyle(st === 'PRESENT', { bg: '#0E9F77', fg: '#fff' });
+      const aP = pillStyle(st === 'ABSENT', { bg: '#E5484D', fg: '#fff' });
+      const lP = pillStyle(st === 'LATE', { bg: '#D9892B', fg: '#fff' });
+      return {
+        roll, name, initials: name.split(' ').map((x) => x[0]).join(''),
+        border: i < this.roster.length - 1 ? border : '0px solid transparent',
+        pBg: pP.bg, pFg: pP.fg, aBg: aP.bg, aFg: aP.fg, lBg: lP.bg, lFg: lP.fg,
+        setP: () => this.setState((p) => ({ att: { ...p.att, [roll]: 'PRESENT' } })),
+        setA: () => this.setState((p) => ({ att: { ...p.att, [roll]: 'ABSENT' } })),
+        setL: () => this.setState((p) => ({ att: { ...p.att, [roll]: 'LATE' } })),
+      };
+    });
+    const presentCount = this.roster.filter((n, i) => (s.att[i + 1] || 'PRESENT') === 'PRESENT').length;
+    const marksRows = this.roster.map((name, i) => {
+      const mark = [88, 76, 91, 69, 82, 73][i];
+      const grade = mark >= 90 ? 'A+' : mark >= 80 ? 'A' : mark >= 70 ? 'B+' : 'B';
+      return { roll: i + 1, name, initials: name.split(' ').map((x) => x[0]).join(''), mark: String(mark), grade,
+        ...this.gradeColor(grade), border: i < this.roster.length - 1 ? border : '0px solid transparent' };
+    });
+    const teacherInfo = [
+      ['Employee ID', this.teacher.emp], ['Department', this.teacher.dept], ['Employment', 'Full-time'], ['Joined', '2080-04-12 BS'],
+    ].map(([k, v], i, a) => ({ k, v, border: i < a.length - 1 ? border : '0px solid transparent' }));
+    const teacherTabs = this.makeTabs(s.teacherTab, s.teacherSub, (k) => ({ teacherTab: k, teacherSub: null }),
+      [{ key: 'home', icon: 'home', label: 'Home' }, { key: 'routine', icon: 'calendar_month', label: 'Routine' },
+       { key: 'mark', icon: 'how_to_reg', label: 'Attendance' }, { key: 'marks', icon: 'edit_note', label: 'Marks' },
+       { key: 'profile', icon: 'person', label: 'Profile' }]);
+
+    return {
+      isIOS: s.device === 'ios', isAndroid: s.device === 'android',
+      setDeviceIOS: () => this.setState({ device: 'ios' }),
+      setDeviceAndroid: () => this.setState({ device: 'android' }),
+      iosBtnBg: s.device === 'ios' ? GREEN : 'transparent', iosBtnFg: s.device === 'ios' ? '#fff' : '#5C7068',
+      androidBtnBg: s.device === 'android' ? GREEN : 'transparent', androidBtnFg: s.device === 'android' ? '#fff' : '#5C7068',
+      filterTabs,
+      showAuth: s.filter === 'all' || s.filter === 'auth',
+      showStudent: s.filter === 'all' || s.filter === 'student',
+      showParent: s.filter === 'all' || s.filter === 'parent',
+      showTeacher: s.filter === 'all' || s.filter === 'teacher',
+
+      authIsCode: s.authStep === 'code', authIsFound: s.authStep === 'found',
+      authIsLogin: s.authStep === 'login', authIsDone: s.authStep === 'done',
+      authToFound: () => this.setState({ authStep: 'found' }),
+      authToLogin: () => this.setState({ authStep: 'login' }),
+      authToDone: () => this.setState({ authStep: 'done' }),
+      authToCode: () => this.setState({ authStep: 'code' }),
+
+      student: this.student, att: this.attData, result: this.result,
+      attRingBg: 'conic-gradient(#16A37C ' + (this.attData.percent * 3.6) + 'deg, #EFE2E4 0)',
+      attRecent: [
+        ['Jestha 6, 2082', 'Tuesday', 'PRESENT'],
+        ['Jestha 5, 2082', 'Monday', 'PRESENT'],
+        ['Jestha 3, 2082', 'Saturday', 'LATE'],
+        ['Jestha 2, 2082', 'Friday', 'PRESENT'],
+        ['Baishakh 30, 2081', 'Thursday', 'ABSENT'],
+      ].map(([date, dow, st], i, a) => ({
+        date, dow, label: this.STATUS[st].label, dot: this.STATUS[st].fg, tint: this.STATUS[st].bg,
+        icon: st === 'PRESENT' ? 'check_circle' : st === 'ABSENT' ? 'cancel' : st === 'LATE' ? 'schedule' : 'event_busy',
+        border: i < a.length - 1 ? '1px solid #F0F3F0' : '0px solid transparent',
+      })),
+      todayBs: 'Jestha 6, 2082', greeting: this.greetingText(),
+      dowLabels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      calCells: this.buildCalendar(),
+      attLegend: ['PRESENT', 'ABSENT', 'LATE', 'LEAVE', 'HOLIDAY'].map((k) => ({ label: this.STATUS[k].label, color: this.STATUS[k].fg })),
+      periodsToday, routineDays, routinePeriods, routineSummary, notices, homework, resultRows, studentInfo, settingsRows, studentFeatures, studentTabs,
+      sHome: s.studentTab === 'home' && !s.studentSub,
+      sAttendance: s.studentTab === 'attendance' && !s.studentSub,
+      sRoutine: s.studentTab === 'routine' && !s.studentSub,
+      sNotices: s.studentTab === 'notices' && !s.studentSub,
+      sProfile: s.studentTab === 'profile' && !s.studentSub,
+      sResults: s.studentSub === 'results', sHomework: s.studentSub === 'homework', sReport: s.studentSub === 'report',
+      goRoutine: () => this.setState({ studentTab: 'routine', studentSub: null }),
+      backStudent: () => this.setState({ studentSub: null }),
+      settingsGroups: this.buildSettings(),
+      studentEditFields: this.buildEditFields('student'),
+      parentEditFields: this.buildEditFields('parent'),
+      teacherEditFields: this.buildEditFields('teacher'),
+      sEditProfile: s.studentSub === 'editprofile',
+      pEditProfile: s.parentSub === 'editprofile',
+      tEditProfile: s.teacherSub === 'editprofile',
+      goEditStudent: () => this.setState({ studentSub: 'editprofile' }),
+      goEditParent: () => this.setState({ parentSub: 'editprofile' }),
+      goEditTeacher: () => this.setState({ teacherSub: 'editprofile' }),
+      sSettings: s.studentSub === 'settings',
+      pSettings: s.parentSub === 'settings',
+      tSettings: s.teacherSub === 'settings',
+      goSettingsStudent: () => this.setState({ studentSub: 'settings' }),
+      goSettingsParent: () => this.setState({ parentSub: 'settings' }),
+      goSettingsTeacher: () => this.setState({ teacherSub: 'settings' }),
+      backParent: () => this.setState({ parentSub: null }),
+      backTeacher: () => this.setState({ teacherSub: null }),
+
+      child, childChips, childAtt, childAttRingBg, parentFeatures, parentTabs, guardian: this.guardian, guardianInfo, childrenList,
+      feeItems, feeTotal, payMethods, feeHistory, feeDueDate: 'Jestha 10, 2082',
+      pFees: s.parentSub === 'fees',
+      childEnroll: 'Class ' + child.cls + ' · Section ' + child.sec + ' · Roll ' + child.roll,
+      multiChild: this.children.length > 1,
+      pHome: s.parentTab === 'home' && !s.parentSub,
+      pAttendance: s.parentTab === 'attendance' && !s.parentSub,
+      pResults: s.parentTab === 'results' && !s.parentSub,
+      pNotices: s.parentTab === 'notices' && !s.parentSub,
+      pProfile: s.parentTab === 'profile' && !s.parentSub,
+
+      teacher: this.teacher, teacherClasses, teacherRoutineDays, teacherRoutine, teacherRoutineSummary, rosterRows, marksRows, teacherInfo, teacherTabs,
+      presentCount, absentCount: this.roster.length - presentCount, rosterTotal: this.roster.length,
+      tHome: s.teacherTab === 'home' && !s.teacherSub,
+      tRoutine: s.teacherTab === 'routine' && !s.teacherSub,
+      tMark: s.teacherTab === 'mark' && !s.teacherSub,
+      tMarks: s.teacherTab === 'marks' && !s.teacherSub,
+      tProfile: s.teacherTab === 'profile' && !s.teacherSub,
+      tGoMark: () => this.setState({ teacherTab: 'mark', teacherSub: null }),
+      tGoMarks: () => this.setState({ teacherTab: 'marks', teacherSub: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>
