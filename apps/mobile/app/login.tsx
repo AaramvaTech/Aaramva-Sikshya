@@ -184,7 +184,7 @@ export default function LoginScreen() {
           <View style={[styles.inputRow, styles.inputRowLast, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
             <Ionicons name="lock-closed-outline" size={18} color={c.brandMuted} />
             <TextInput
-              style={[styles.textInput, { color: c.foreground }]}
+              style={[styles.textInput, styles.textInputPassword, { color: c.foreground }]}
               placeholder="••••••••"
               placeholderTextColor={c.mutedForeground}
               value={password}
@@ -232,7 +232,6 @@ export default function LoginScreen() {
 
           {/* Switch school */}
           <TouchableOpacity style={styles.switchLink} onPress={handleReset} activeOpacity={0.7}>
-            <Ionicons name="swap-horizontal-outline" size={15} color={c.brandMuted} style={{ marginRight: 6 }} />
             <Text style={[styles.switchText, { color: c.brandMuted }]}>Switch school</Text>
           </TouchableOpacity>
         </View>
@@ -321,7 +320,11 @@ const styles = StyleSheet.create({
     height: 50,
     paddingHorizontal: 10,
     fontFamily: FONT.medium,
-    fontSize: 14.5,
+    fontSize: 14,
+  },
+  textInputPassword: {
+    fontFamily: FONT.semibold,
+    fontSize: 15,
   },
   eyeToggle: { padding: 4 },
 
@@ -360,7 +363,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    height: 44,
+    marginTop: 8,
   },
   switchText: { fontFamily: FONT.semibold, fontSize: 13.5 },
 
