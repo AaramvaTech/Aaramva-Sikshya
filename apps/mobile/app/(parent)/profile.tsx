@@ -1,5 +1,6 @@
 import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyChildren } from '../../hooks/useParentChild';
@@ -89,6 +90,17 @@ export default function ParentProfile() {
             ))}
           </View>
 
+          {/* View details shortcut */}
+          <TouchableOpacity
+            style={[styles.detailsRow, CARD_SHADOW, { backgroundColor: c.surface }]}
+            onPress={() => router.push('/(parent)/profile-details')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-circle-outline" size={18} color={c.primary} />
+            <Text style={[styles.detailsRowLabel, { color: c.foreground }]}>View profile details</Text>
+            <Ionicons name="chevron-forward" size={16} color={c.mutedForeground} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+
           {/* My children */}
           <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>My children</Text>
           {childrenQuery.isLoading ? (
@@ -157,6 +169,11 @@ const styles = StyleSheet.create({
   childInit: { fontFamily: FONT.extrabold, fontSize: 13 },
   childName: { fontFamily: FONT.bold, fontSize: 13 },
   childSub: { fontFamily: FONT.regular, fontSize: 11, marginTop: 1 },
+  detailsRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    height: 48, marginTop: 10, borderRadius: 14, paddingHorizontal: 14,
+  },
+  detailsRowLabel: { fontFamily: FONT.bold, fontSize: 13 },
   signOut: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     height: 48, marginTop: 16, borderRadius: 14, borderWidth: 1.5,

@@ -98,6 +98,7 @@ export default function ParentLayout() {
       <Tabs.Screen name="timetable" options={{ href: null }} />
       <Tabs.Screen name="request-leave" options={{ href: null }} />
       <Tabs.Screen name="home" options={{ href: null }} />
+      <Tabs.Screen name="profile-details" options={{ href: null }} />
     </Tabs>
   );
 }
