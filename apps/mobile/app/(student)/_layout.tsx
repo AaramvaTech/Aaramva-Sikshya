@@ -95,6 +95,8 @@ export default function StudentLayout() {
       />
       {/* Reachable from Home → Quick access, hidden from the tab bar */}
       <Tabs.Screen name="results" options={{ href: null }} />
+      {/* Read-only profile details — opened from the Profile gear button, not a tab */}
+      <Tabs.Screen name="profile-details" options={{ href: null }} />
     </Tabs>
   );
 }

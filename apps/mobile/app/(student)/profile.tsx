@@ -1,5 +1,6 @@
 import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyProfile } from '../../hooks/useStudentMe';
@@ -81,12 +82,14 @@ export default function StudentProfile() {
             { paddingTop: insets.top + 18, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
           ]}
         >
-          {/* Settings gear — top-right of hero band (comp sProfile line 408) */}
+          {/* Settings gear — top-right of hero band (comp sProfile line 408).
+              Navigates to the read-only profile-details screen. */}
           <View style={styles.gearWrap}>
             <TouchableOpacity
               style={[styles.gearBtn, { backgroundColor: c.surface }]}
+              onPress={() => router.push('/(student)/profile-details')}
               accessibilityRole="button"
-              accessibilityLabel="Settings"
+              accessibilityLabel="View profile details"
               activeOpacity={0.8}
             >
               <Ionicons name="settings-outline" size={19} color={c.primary} />
