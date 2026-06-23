@@ -28,11 +28,22 @@ function splitName(name: string): { head: string; tail: string } {
   return { head: words.slice(0, 2).join(' '), tail: 'Parent portal' };
 }
 
+// "ramesh.shrestha@gmail.com" -> "Ramesh Shrestha" (same derivation as (parent)/profile.tsx)
+function nameFromEmail(email: string): string {
+  const local = email.split('@')[0] ?? email;
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 export default function ParentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const tenant = useAuthStore((s) => s.tenant);
+  const user = useAuthStore((s) => s.user);
   const { branding } = useBranding();
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -107,6 +118,11 @@ export default function ParentDashboard() {
   const { head, tail } = splitName(schoolName);
   const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
+  // Guardian avatar initials — derived from the login email (same pattern as (parent)/profile.tsx).
+  const guardianEmail = user?.email ?? '';
+  const guardianName = guardianEmail ? nameFromEmail(guardianEmail) : 'Parent';
+  const guardianInitials = guardianName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+
   return (
     <View style={[styles.fill, { backgroundColor: c.background }]}>
       <StatusBar barStyle="dark-content" />
@@ -137,9 +153,22 @@ export default function ParentDashboard() {
                 <Text numberOfLines={1} style={[styles.schoolTail, { color: c.brandMuted }]}>{tail}</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={() => router.push('/(parent)/notices')} hitSlop={10} accessibilityLabel="Notices">
-              <Ionicons name="notifications-outline" size={22} color={c.primary} />
-            </TouchableOpacity>
+            <View style={styles.bandActions}>
+              <TouchableOpacity
+                onPress={() => router.push('/(parent)/notices')}
+                hitSlop={10}
+                accessibilityLabel="Notices"
+                style={styles.bellWrap}
+              >
+                <Ionicons name="notifications-outline" size={22} color={c.primary} />
+                <View style={[styles.badge, { backgroundColor: c.danger, borderColor: c.brandSurface }]} />
+              </TouchableOpacity>
+              {guardianInitials ? (
+                <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: c.surface }]}>
+                  <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{guardianInitials}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
 
           <Text style={[styles.todayBs, { color: c.brandMuted }]}>Today · {formatBs(todayBs(), 'en')}</Text>
@@ -232,6 +261,14 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' },
   chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1.5 },
   chipText: { fontFamily: FONT.bold, fontSize: 12 },
+
+  // Right side of band top: notification bell (with static badge dot) + guardian avatar.
+  // Mirrors the student home treatment for cross-screen parity (comp lines 612–613).
+  bandActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bellWrap: { position: 'relative' },
+  badge: { position: 'absolute', top: -1, right: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  avatarText: { fontFamily: FONT.extrabold, fontSize: 14 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
