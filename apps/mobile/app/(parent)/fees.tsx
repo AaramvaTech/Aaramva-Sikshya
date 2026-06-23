@@ -117,11 +117,11 @@ export default function ParentFees() {
               </View>
               <View className="border-l border-border" style={styles.summaryItem}>
                 <Text className="text-muted-foreground" style={styles.summaryLabel}>Paid</Text>
-                <Text style={[styles.summaryValue, { color: '#065f46' }]}>{formatNPR(totalPaid)}</Text>
+                <Text style={[styles.summaryValue, { color: c.success }]}>{formatNPR(totalPaid)}</Text>
               </View>
               <View className="border-l border-border" style={styles.summaryItem}>
                 <Text className="text-muted-foreground" style={styles.summaryLabel}>Outstanding</Text>
-                <Text style={[styles.summaryValue, { color: outstanding > 0 ? '#dc2626' : '#065f46' }]}>
+                <Text style={[styles.summaryValue, { color: outstanding > 0 ? c.danger : c.success }]}>
                   {formatNPR(outstanding)}
                 </Text>
               </View>

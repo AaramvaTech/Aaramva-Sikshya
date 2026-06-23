@@ -77,7 +77,7 @@ export default function ParentProfile() {
 
         <View style={styles.body}>
           {/* Guardian info */}
-          <View style={[styles.card, CARD_SHADOW]}>
+          <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
             {info.map((r, idx) => (
               <View
                 key={r.k}
@@ -94,7 +94,7 @@ export default function ParentProfile() {
           {childrenQuery.isLoading ? (
             <LoadingBlock />
           ) : (
-            <View style={[styles.card, CARD_SHADOW]}>
+            <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
               {children.map((ch, idx) => {
                 const e = ch.currentEnrollment;
                 const sub = e ? `Class ${e.className}${e.sectionName}${e.rollNumber != null ? ` · Roll ${e.rollNumber}` : ''}` : 'Not enrolled';
@@ -111,6 +111,7 @@ export default function ParentProfile() {
                       <NpText style={[styles.childName, { color: c.foreground }]}>{ch.firstName} {ch.lastName}</NpText>
                       <Text style={[styles.childSub, { color: c.mutedForeground }]}>{sub}</Text>
                     </View>
+                    <Ionicons name="chevron-forward" size={18} color={c.border} />
                   </View>
                 );
               })}
@@ -146,7 +147,7 @@ const styles = StyleSheet.create({
   sub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16 },
+  card: { borderRadius: 16, paddingHorizontal: 16 },
   sectionLabel: { fontFamily: FONT.bold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 10, marginLeft: 2 },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, gap: 12 },
   infoKey: { fontFamily: FONT.regular, fontSize: 12.5 },
