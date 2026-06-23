@@ -4,6 +4,7 @@ import { todayBs, daysInBsMonth, bsToAd } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
 import { localDateKey } from '../../lib/time';
+import { FONT } from '../../lib/theme/fonts';
 import Skeleton from '../Skeleton';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -102,8 +103,12 @@ export function AttendanceCalendar({ viewMonth, recordMap, statusConfig, isLoadi
             return (
               <View
                 key={day}
-                style={[styles.cell, { backgroundColor: cellBg }]}
-                className={isToday ? 'border-2 border-primary' : undefined}
+                style={[
+                  styles.cell,
+                  { backgroundColor: cellBg },
+                  isToday && styles.todayCell,
+                  isToday && { borderColor: c.primary },
+                ]}
               >
                 <Text style={[styles.cellNum, { color: numColor }]}>{day}</Text>
                 {cfg ? <Text style={[styles.cellCode, { color: cfg.color }]}>{cfg.shortCode}</Text> : null}
@@ -119,15 +124,16 @@ export function AttendanceCalendar({ viewMonth, recordMap, statusConfig, isLoadi
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', marginBottom: 4 },
   dayHeader: { width: CELL_SIZE, height: 28, alignItems: 'center', justifyContent: 'center' },
-  dayHeaderText: { fontSize: 11, fontWeight: '700' },
+  dayHeaderText: { fontFamily: FONT.bold, fontSize: 9.5 },
   cell: {
     width: CELL_SIZE,
     height: CELL_SIZE,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 1,
   },
-  cellNum: { fontSize: 12, fontWeight: '700', lineHeight: 14 },
-  cellCode: { fontSize: 9, fontWeight: '800', lineHeight: 11, marginTop: 1 },
+  todayCell: { borderWidth: 1.5 },
+  cellNum: { fontFamily: FONT.bold, fontSize: 11.5, lineHeight: 14 },
+  cellCode: { fontFamily: FONT.extrabold, fontSize: 9, lineHeight: 11, marginTop: 1 },
 });

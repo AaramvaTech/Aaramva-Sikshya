@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../lib/theme/colors';
+import { FONT } from '../../lib/theme/fonts';
 
 interface MonthNavProps {
   label: string;
@@ -15,7 +16,7 @@ interface MonthNavProps {
 export function MonthNav({ label, onPrev, onNext, nextDisabled = false, variant = 'card' }: MonthNavProps) {
   const c = useThemeColors();
   const onHeader = variant === 'header';
-  const chevronColor = onHeader ? c.primaryForeground : c.primary;
+  const chevronColor = onHeader ? c.primaryForeground : c.mutedForeground;
 
   return (
     <View
@@ -25,12 +26,11 @@ export function MonthNav({ label, onPrev, onNext, nextDisabled = false, variant 
       <TouchableOpacity
         onPress={onPrev}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        style={[styles.btn, !onHeader && { backgroundColor: undefined }]}
-        className={onHeader ? undefined : 'bg-primary/10'}
+        style={styles.btn}
         accessibilityRole="button"
         accessibilityLabel="Previous month"
       >
-        <Ionicons name="chevron-back" size={18} color={chevronColor} />
+        <Ionicons name="chevron-back" size={20} color={chevronColor} />
       </TouchableOpacity>
 
       <Text
@@ -44,12 +44,11 @@ export function MonthNav({ label, onPrev, onNext, nextDisabled = false, variant 
         disabled={nextDisabled}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={[styles.btn, nextDisabled && styles.disabled]}
-        className={onHeader ? undefined : 'bg-primary/10'}
         accessibilityRole="button"
         accessibilityLabel="Next month"
         accessibilityState={{ disabled: nextDisabled }}
       >
-        <Ionicons name="chevron-forward" size={18} color={chevronColor} />
+        <Ionicons name="chevron-forward" size={20} color={chevronColor} />
       </TouchableOpacity>
     </View>
   );
@@ -69,11 +68,10 @@ const styles = StyleSheet.create({
   btn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   disabled: { opacity: 0.4 },
-  label: { fontSize: 16, fontWeight: '800' },
-  headerLabel: { fontSize: 18, letterSpacing: 0.3 },
+  label: { fontFamily: FONT.extrabold, fontSize: 14 },
+  headerLabel: { fontFamily: FONT.extrabold, fontSize: 18, letterSpacing: 0.3 },
 });

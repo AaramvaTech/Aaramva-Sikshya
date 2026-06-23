@@ -1,16 +1,17 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import NpText from '../../components/NpText';
-import { useAttendanceHistory, useMyAttendanceSummary } from '../../hooks/useStudentMe';
+import { useAttendanceHistory, useMyAttendanceSummary, useMyProfile } from '../../hooks/useStudentMe';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
-import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { localDateKey } from '../../lib/time';
-import { SATURDAY_HIGHLIGHT, useThemeColors } from '../../lib/theme/colors';
+import { SATURDAY_HIGHLIGHT, useThemeColors, brandSurface, brandMuted } from '../../lib/theme/colors';
 import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
-import { CARD_SHADOW } from '../../components/ui/Card';
 import { FONT } from '../../lib/theme/fonts';
+import type { AttendanceHistoryItem } from '../../types';
 
 function prevMonthOf(curr: BsDate): BsDate {
   if (curr.month === 1) return { year: curr.year - 1, month: 12, day: 1 };
@@ -23,6 +24,7 @@ function nextMonthOf(curr: BsDate): BsDate {
 
 const STATUS_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
 const STAT_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function StudentAttendance() {
   const [refreshing, setRefreshing] = useState(false);
@@ -33,6 +35,7 @@ export default function StudentAttendance() {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
 
+  const profileResult = useMyProfile();
   const summaryResult = useMyAttendanceSummary();
 
   const { fromDate, toDate, daysInMonth } = useMemo(() => {
@@ -51,7 +54,7 @@ export default function StudentAttendance() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([summaryResult.refetch(), historyResult.refetch()]);
+    await Promise.all([profileResult.refetch(), summaryResult.refetch(), historyResult.refetch()]);
     setRefreshing(false);
   };
 
@@ -59,12 +62,26 @@ export default function StudentAttendance() {
   const isCurrentMonth = viewMonth.year === t.year && viewMonth.month === t.month;
   const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
   const summary = summaryResult.data;
-  const annualPercent = summary?.attendancePercent ?? null;
+  const profile = profileResult.data;
+  const enrollment = profile?.currentEnrollment;
+
+  // Derived brand-tinted header colours (no raw hex — all derived from school primary)
+  const bandBg = brandSurface(c.primary);
+  const subtitleColor = brandMuted(c.primary);
 
   const legendItems = [
     ...STATUS_KEYS.map((k) => ({ label: STATUS_CONFIG[k].label, bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
     { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
   ];
+
+  // Recent activity: last 5 records from current month data, sorted newest-first
+  const recentActivity = useMemo<AttendanceHistoryItem[]>(() => {
+    if (!records.length) return [];
+    return [...records]
+      .filter((r) => r.status !== undefined)
+      .sort((a, b) => (a.dateAd > b.dateAd ? -1 : 1))
+      .slice(0, 5);
+  }, [records]);
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -73,24 +90,39 @@ export default function StudentAttendance() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        {/* Plain header */}
+        {/* Brand-tinted header band */}
         <View
           style={[
-            styles.header,
-            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
+            styles.headerBand,
+            { paddingTop: insets.top + 14, backgroundColor: bandBg },
           ]}
         >
           <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
-          {annualPercent !== null && (
-            <Text style={[styles.headerSub, { color: c.mutedForeground }]}>
-              {annualPercent}% present this year
-            </Text>
+          <NpText style={[styles.headerSub, { color: subtitleColor }]}>
+            {enrollment ? `Class ${enrollment.className}${enrollment.sectionName} · ` : ''}
+            {summary?.academicYearName ?? 'This academic year'}
+          </NpText>
+
+          {/* 3 stat tiles */}
+          {summary && (
+            <View style={styles.statRow}>
+              {STAT_KEYS.map((key) => {
+                const cfg = STATUS_CONFIG[key];
+                const val = key === 'PRESENT' ? summary.present : key === 'ABSENT' ? summary.absent : summary.late;
+                return (
+                  <View key={key} style={styles.statTile}>
+                    <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
+                    <Text style={[styles.statLabel, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                  </View>
+                );
+              })}
+            </View>
           )}
         </View>
 
         <View style={styles.body}>
-          {/* Calendar card (month nav inside) */}
-          <View style={[styles.card, CARD_SHADOW]}>
+          {/* Calendar card (month nav + grid + legend inside) */}
+          <View style={[styles.card, styles.cardShadow]}>
             <MonthNav
               label={monthLabel}
               variant="card"
@@ -111,27 +143,44 @@ export default function StudentAttendance() {
                 <ErrorState compact title="Couldn't load this month." subtitle="" onRetry={() => historyResult.refetch()} />
               </View>
             )}
-          </View>
-
-          {/* Legend */}
-          <View style={styles.legendWrap}>
-            <Legend items={legendItems} />
-          </View>
-
-          {/* Annual stats */}
-          {summary && (
-            <View style={styles.statRow}>
-              {STAT_KEYS.map((key) => {
-                const cfg = STATUS_CONFIG[key];
-                const val = key === 'PRESENT' ? summary.present : key === 'ABSENT' ? summary.absent : summary.late;
-                return (
-                  <View key={key} style={[styles.statCard, CARD_SHADOW]}>
-                    <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
-                    <Text style={[styles.statLabel, { color: c.mutedForeground }]}>{cfg.label}</Text>
-                  </View>
-                );
-              })}
+            {/* Legend inside card with top separator */}
+            <View style={styles.legendSep} />
+            <View style={styles.legendWrap}>
+              <Legend items={legendItems} />
             </View>
+          </View>
+
+          {/* Recent activity */}
+          {recentActivity.length > 0 && (
+            <>
+              <Text style={[styles.recentLabel, { color: c.mutedForeground }]}>Recent activity</Text>
+              <View style={[styles.recentCard, styles.recentShadow]}>
+                {recentActivity.map((item, idx) => {
+                  const cfg = STATUS_CONFIG[item.status as AttendanceStatus];
+                  if (!cfg) return null;
+                  const adDate = new Date(item.dateAd + 'T00:00:00');
+                  const bsDate = adToBs(adDate);
+                  const bsLabel = `${BS_MONTH_NAMES_EN[bsDate.month - 1]} ${bsDate.day}, ${bsDate.year}`;
+                  const dowLabel = DOW_SHORT[adDate.getDay()];
+                  const isLast = idx === recentActivity.length - 1;
+                  return (
+                    <View
+                      key={item.dateAd}
+                      style={[styles.activityRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}
+                    >
+                      <View style={[styles.activityIcon, { backgroundColor: cfg.bg }]}>
+                        <Ionicons name={cfg.icon as any} size={19} color={cfg.dot} />
+                      </View>
+                      <View style={styles.activityText}>
+                        <Text style={[styles.activityDate, { color: c.foreground }]}>{bsLabel}</Text>
+                        <Text style={[styles.activityDow, { color: c.mutedForeground }]}>{dowLabel}</Text>
+                      </View>
+                      <Text style={[styles.activityStatus, { color: cfg.dot }]}>{cfg.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
           )}
 
           {summary && (
@@ -147,19 +196,62 @@ export default function StudentAttendance() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+
+  // Header band — brand-tinted, rounds the bottom corners per comp
+  headerBand: {
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
-  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
+  headerSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },
+
+  // Stat tiles in the header
+  statRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  statTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    alignItems: 'center',
+  },
+  statNum: { fontFamily: FONT.extrabold, fontSize: 14 },
+  statLabel: { fontFamily: FONT.bold, fontSize: 8.5, marginTop: 1 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+
+  // Calendar card
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16 },
+  cardShadow: {
+    shadowColor: '#10231A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 4,
+  },
 
-  legendWrap: { marginTop: 14, alignItems: 'center' },
+  // Legend inside card
+  legendSep: { height: 1, backgroundColor: '#F0F3F0', marginTop: 15, marginBottom: 14 },
+  legendWrap: { alignItems: 'center' },
 
-  statRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  statNum: { fontFamily: FONT.extrabold, fontSize: 20 },
-  statLabel: { fontFamily: FONT.bold, fontSize: 10, textTransform: 'uppercase', marginTop: 2 },
+  // Recent activity
+  recentLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 11, marginHorizontal: 2 },
+  recentCard: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 2 },
+  recentShadow: {
+    shadowColor: '#10231A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  activityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  activityIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  activityText: { flex: 1 },
+  activityDate: { fontFamily: FONT.bold, fontSize: 12.5 },
+  activityDow: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
+  activityStatus: { fontFamily: FONT.extrabold, fontSize: 11 },
 
   working: { fontFamily: FONT.regular, fontSize: 12, textAlign: 'center', marginTop: 14 },
 });
