@@ -1,13 +1,17 @@
-import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMyTimetable } from '../../hooks/useTeacher';
-import Skeleton from '../../components/Skeleton';
+import { useMyTimetable, useMyStaffProfile } from '../../hooks/useTeacher';
 import { EmptyState, ErrorState } from '../../components/ui';
-import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
+import { subjectColor } from '../../lib/subjects';
+import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
+import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 
+// Sun–Sat abbreviated labels
 const DAY_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 function nepalNow(): Date {
@@ -19,19 +23,33 @@ function nepalNow(): Date {
 export default function TeacherRoutine() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyTimetable();
+  const profileResult = useMyStaffProfile();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const todayDow = nepalNow().getDay();
+  const [selectedDay, setSelectedDay] = useState<number>(todayDow);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), profileResult.refetch()]);
     setRefreshing(false);
   };
 
-  // Render Sun–Fri always; add Saturday only if it has slots.
   const schedule = data?.schedule ?? {};
+
+  // Render Sun–Fri always; add Saturday only if it has slots.
   const days = [0, 1, 2, 3, 4, 5].concat((schedule[6]?.length ?? 0) > 0 ? [6] : []);
+
+  const slots = (schedule[selectedDay] ?? [])
+    .slice()
+    .sort((a, b) => a.periodNumber - b.periodNumber);
+
+  const p = profileResult.data;
+  const desig = p?.designationTitle ?? p?.role ?? 'Teacher';
+
+  // Summary: "X classes this week"
+  const weeklyTotal = Object.values(schedule).reduce((sum, arr) => sum + (arr?.length ?? 0), 0);
+  const routineSummary = weeklyTotal === 1 ? '1 class this week' : `${weeklyTotal} classes this week`;
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -40,68 +58,141 @@ export default function TeacherRoutine() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
+        {/* ── Hero band ────────────────────────────────────────────── */}
         <View
           style={[
-            styles.header,
-            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
+            styles.band,
+            { paddingTop: insets.top + 14, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
           ]}
         >
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>My routine</Text>
-          <Text style={[styles.headerSub, { color: c.mutedForeground }]}>Weekly teaching schedule</Text>
+          <View style={styles.bandTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.bandTitle, { color: c.foreground }]}>My routine</Text>
+              <Text style={[styles.bandSub, { color: c.brandMuted }]}>
+                {desig} · {routineSummary}
+              </Text>
+            </View>
+            {/* Calendar icon button — decorative; no week endpoint yet */}
+            <View style={[styles.calBtn, { backgroundColor: c.surface }]}>
+              <Ionicons name="calendar-outline" size={20} color={c.primary} />
+            </View>
+          </View>
+
+          {/* Day picker pills */}
+          <View style={styles.pillRow}>
+            {days.map((dow) => {
+              const isToday = dow === todayDow;
+              const isSelected = dow === selectedDay;
+              return (
+                <TouchableOpacity
+                  key={dow}
+                  onPress={() => setSelectedDay(dow)}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.pill,
+                    isSelected
+                      ? { backgroundColor: c.primary, borderColor: c.primary }
+                      : isToday
+                        ? { backgroundColor: c.brandSurface, borderColor: c.brandBorder }
+                        : { backgroundColor: 'transparent', borderColor: c.brandBorder },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pillLabel,
+                      { color: isSelected ? c.primaryForeground : isToday ? c.primary : c.brandMuted },
+                    ]}
+                  >
+                    {DAY_SHORT[dow]}
+                  </Text>
+                  {isToday && (
+                    <View
+                      style={[
+                        styles.pillDot,
+                        { backgroundColor: isSelected ? c.primaryForeground : c.primary },
+                      ]}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
+        {/* ── Content area ─────────────────────────────────────────── */}
         <View style={styles.body}>
           {isLoading ? (
-            <View style={{ gap: 10 }}>
-              {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} style={{ height: 76 }} className="rounded-2xl" />)}
+            <View style={{ gap: 12 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} style={{ height: 76 }} className="rounded-2xl" />
+              ))}
             </View>
           ) : isError ? (
             <View style={{ paddingTop: 24 }}>
               <ErrorState title="Couldn't load your routine" onRetry={() => refetch()} />
             </View>
-          ) : days.every((d) => (schedule[d]?.length ?? 0) === 0) ? (
+          ) : slots.length === 0 ? (
             <View style={{ paddingTop: 24 }}>
-              <EmptyState icon="calendar-clear-outline" title="No periods scheduled" subtitle="Your weekly routine will appear here." />
+              <EmptyState
+                icon={selectedDay === 6 ? 'sunny-outline' : 'calendar-clear-outline'}
+                title={selectedDay === 6 ? 'Saturday — rest day' : 'No classes on this day'}
+                subtitle="Your schedule will appear here."
+              />
             </View>
           ) : (
-            days.map((dow) => {
-              const slots = (schedule[dow] ?? []).slice().sort((a, b) => a.periodNumber - b.periodNumber);
-              const isToday = dow === todayDow;
+            slots.map((slot, idx) => {
+              const sc = subjectColor(idx);
               return (
-                <View
-                  key={dow}
-                  style={[
-                    styles.dayCard,
-                    CARD_SHADOW,
-                    isToday
-                      ? { backgroundColor: c.brandSurface, borderColor: c.brandBorder, borderWidth: 1.5 }
-                      : { backgroundColor: c.surface, borderColor: c.border, borderWidth: 1 },
-                  ]}
-                >
-                  <View style={styles.dayHead}>
-                    <Text style={[styles.dayLabel, { color: isToday ? c.primary : c.mutedForeground }]}>{DAY_SHORT[dow]}</Text>
-                    {isToday && (
-                      <View style={[styles.todayBadge, { backgroundColor: c.primary }]}>
-                        <Text style={[styles.todayBadgeText, { color: c.primaryForeground }]}>TODAY</Text>
-                      </View>
-                    )}
+                <View key={slot.slotId} style={styles.slotRow}>
+                  {/* Time gutter */}
+                  <View style={styles.gutter}>
+                    <Text style={[styles.gutterStart, { color: c.foreground }]}>
+                      {formatPeriodTime(slot.startTime)}
+                    </Text>
+                    <Text style={[styles.gutterEnd, { color: c.mutedForeground }]}>
+                      {formatPeriodTime(slot.endTime)}
+                    </Text>
                   </View>
-                  {slots.length === 0 ? (
-                    <Text style={[styles.noClass, { color: c.mutedForeground }]}>No classes</Text>
-                  ) : (
-                    <View style={styles.chips}>
-                      {slots.map((s) => (
-                        <View
-                          key={s.slotId}
-                          style={[styles.chip, { backgroundColor: c.surface, borderColor: isToday ? c.brandBorder : c.border }]}
-                        >
-                          <Text style={[styles.chipText, { color: isToday ? c.primary : c.foreground }]}>
-                            P{s.periodNumber} · {s.className}{s.section}
-                          </Text>
-                        </View>
-                      ))}
+
+                  {/* Slot card */}
+                  <View style={[styles.slotCard, { backgroundColor: c.surface }]}>
+                    {/* Period pill — top-right */}
+                    <View style={[styles.periodPill, { backgroundColor: sc.bg }]}>
+                      <Text style={[styles.periodPillText, { color: sc.text }]}>P{slot.periodNumber}</Text>
                     </View>
-                  )}
+
+                    <View style={styles.slotBody}>
+                      {/* Tinted icon square */}
+                      <View style={[styles.iconSquare, { backgroundColor: sc.bg }]}>
+                        <Ionicons name="people-outline" size={23} color={sc.text} />
+                      </View>
+
+                      {/* Info column */}
+                      <View style={styles.info}>
+                        <NpText style={[styles.className, { color: c.foreground }]}>
+                          {slot.className}{slot.section}
+                        </NpText>
+                        <View style={styles.metaRow}>
+                          {/* Subject */}
+                          <View style={styles.metaItem}>
+                            <Ionicons name="calculator-outline" size={13} color={c.mutedForeground} />
+                            <Text style={[styles.metaText, { color: c.mutedForeground }]}>
+                              {slot.subject.name}
+                            </Text>
+                          </View>
+                          {/* Room */}
+                          {slot.room ? (
+                            <View style={styles.metaItem}>
+                              <Ionicons name="business-outline" size={13} color={c.mutedForeground} />
+                              <Text style={[styles.metaText, { color: c.mutedForeground }]}>
+                                {slot.room}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                  </View>
                 </View>
               );
             })
@@ -114,18 +205,60 @@ export default function TeacherRoutine() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
-  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
-  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  dayCard: { borderRadius: 16, padding: 13, marginBottom: 10 },
-  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 9 },
-  dayLabel: { fontFamily: FONT.extrabold, fontSize: 12, letterSpacing: 0.5 },
-  todayBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  todayBadgeText: { fontFamily: FONT.extrabold, fontSize: 9, letterSpacing: 0.5 },
-  noClass: { fontFamily: FONT.medium, fontSize: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  chipText: { fontFamily: FONT.bold, fontSize: 11 },
+  // Hero band
+  band: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  bandTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  bandTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
+  bandSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },
+  calBtn: {
+    width: 38, height: 38, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 12, elevation: 3,
+  },
+
+  // Day pills
+  pillRow: { flexDirection: 'row', gap: 7, marginTop: 14 },
+  pill: {
+    flex: 1, borderRadius: 13, paddingVertical: 9,
+    alignItems: 'center', borderWidth: 1.5,
+    position: 'relative',
+  },
+  pillLabel: { fontFamily: FONT.extrabold, fontSize: 9.5, letterSpacing: 0.5 },
+  pillDot: {
+    position: 'absolute', bottom: 5,
+    width: 4, height: 4, borderRadius: 2,
+  },
+
+  // Body
+  body: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 32 },
+
+  // Slot row: gutter + card
+  slotRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'center' },
+
+  // Time gutter
+  gutter: { width: 52, flexShrink: 0, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  gutterStart: { fontFamily: FONT.extrabold, fontSize: 13, textAlign: 'center' },
+  gutterEnd: { fontFamily: FONT.regular, fontSize: 10, marginTop: 1, textAlign: 'center' },
+
+  // Slot card
+  slotCard: {
+    flex: 1, borderRadius: 16, padding: 13, paddingRight: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06, shadowRadius: 16, elevation: 3,
+    overflow: 'visible',
+  },
+  periodPill: {
+    position: 'absolute', top: 10, right: 10,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, zIndex: 1,
+  },
+  periodPillText: { fontFamily: FONT.extrabold, fontSize: 10 },
+  slotBody: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 36 },
+  iconSquare: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  info: { flex: 1, minWidth: 0 },
+  className: { fontFamily: FONT.extrabold, fontSize: 13.5 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontFamily: FONT.semibold, fontSize: 11 },
 });

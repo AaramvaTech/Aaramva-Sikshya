@@ -120,7 +120,7 @@ export default function TeacherHome() {
           {/* Stat cards */}
           <View style={styles.statRow}>
             {stats.map((s) => (
-              <View key={s.label} style={[styles.statCard, CARD_SHADOW]}>
+              <View key={s.label} style={[styles.statCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
                 <Text style={[styles.statNum, { color: s.color }]}>{s.num}</Text>
                 <Text style={[styles.statLabel, { color: c.mutedForeground }]}>{s.label}</Text>
               </View>
@@ -154,7 +154,7 @@ export default function TeacherHome() {
           {timetableResult.isLoading ? (
             <LoadingBlock />
           ) : isSaturday || todaySlots.length === 0 ? (
-            <View style={[styles.classCard, CARD_SHADOW, { paddingVertical: 24 }]}>
+            <View style={[styles.classCard, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 24 }]}>
               <EmptyState
                 compact
                 icon={isSaturday ? 'sunny-outline' : 'calendar-clear-outline'}
@@ -162,7 +162,7 @@ export default function TeacherHome() {
               />
             </View>
           ) : (
-            <View style={[styles.classCard, CARD_SHADOW]}>
+            <View style={[styles.classCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
               {todaySlots.map((slot, idx) => {
                 const sc = subjectColor(idx);
                 const last = idx === todaySlots.length - 1;
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   statRow: { flexDirection: 'row', gap: 10 },
-  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 15, paddingVertical: 14, alignItems: 'center' },
+  statCard: { flex: 1, borderRadius: 15, paddingVertical: 14, alignItems: 'center' },
   statNum: { fontFamily: FONT.extrabold, fontSize: 22 },
   statLabel: { fontFamily: FONT.bold, fontSize: 9.5, textTransform: 'uppercase', marginTop: 2 },
 
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   actionTextSoft: { fontFamily: FONT.bold, fontSize: 12 },
 
   sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
-  classCard: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingHorizontal: 14 },
+  classCard: { borderRadius: 18, paddingHorizontal: 14 },
   classRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   pBadge: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   pBadgeNum: { fontFamily: FONT.extrabold, fontSize: 12 },
