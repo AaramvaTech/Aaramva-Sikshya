@@ -6,18 +6,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
-import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui';
+import { EmptyState, ErrorState, LoadingBlock, PrimaryButton } from '../../components/ui';
+import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { FONT } from '../../lib/theme/fonts';
 import NpText from '../../components/NpText';
 import type { ExamResult } from '../../types';
 
+// Semantic grade palette — matches student results screen exactly.
+// Documented exception on par with attendance STATUS_CONFIG (not brand-coupled).
 function gradeColors(g: string | null): { fg: string; bg: string } {
-  if (!g) return { fg: '#7A8B82', bg: '#F1F4F1' };
-  const u = g.toUpperCase();
-  if (u === 'A+' || u === 'A') return { fg: '#0E9F77', bg: '#E4F6F1' };
-  if (u === 'B+' || u === 'B') return { fg: '#5B7FE0', bg: '#EAF0FE' };
-  return { fg: '#D9892B', bg: '#FEF3E2' };
+  if (!g) return { fg: '#475569', bg: '#eef2f6' };
+  const u = g.trim().toUpperCase();
+  if (u.startsWith('A')) return { fg: '#065f46', bg: '#d1fae5' };
+  if (u.startsWith('B')) return { fg: '#1e40af', bg: '#dbeafe' };
+  if (u.startsWith('C')) return { fg: '#92400e', bg: '#fef3c7' };
+  if (u.startsWith('D') || u.startsWith('E') || u.startsWith('F')) return { fg: '#991b1b', bg: '#fee2e2' };
+  return { fg: '#475569', bg: '#eef2f6' };
 }
 
 function ResultBlock({ result }: { result: ExamResult }) {
@@ -32,7 +37,7 @@ function ResultBlock({ result }: { result: ExamResult }) {
 
       {/* GPA summary (brand gradient) */}
       <LinearGradient
-        colors={[ramp[1], ramp[2]]}
+        colors={[ramp[0], ramp[1]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.gpaCard, { shadowColor: c.primary }]}
@@ -50,7 +55,7 @@ function ResultBlock({ result }: { result: ExamResult }) {
       </LinearGradient>
 
       {/* Subject rows */}
-      <View style={[styles.rowsCard, CARD_SHADOW]}>
+      <View style={[styles.rowsCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
         {rows.map((r, idx) => {
           const gc = gradeColors(r.grade);
           const last = idx === rows.length - 1;
@@ -100,6 +105,7 @@ export default function ParentResults() {
   };
 
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
+  const { download, downloading } = useReportCardDownload(effectiveChildId ?? undefined);
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -130,7 +136,16 @@ export default function ParentResults() {
               <EmptyState icon="ribbon-outline" title="No results yet" subtitle="Exam results will appear here once published." />
             </View>
           ) : (
-            results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)
+            <>
+              <PrimaryButton
+                label="Download report card"
+                icon="download-outline"
+                loading={downloading}
+                onPress={download}
+                style={{ marginBottom: 16 }}
+              />
+              {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
+            </>
           )}
         </View>
       </ScrollView>
@@ -155,7 +170,7 @@ const styles = StyleSheet.create({
   gpaValue: { fontFamily: FONT.extrabold, fontSize: 32, color: '#FFFFFF', marginTop: 2 },
   gpaGrade: { fontFamily: FONT.extrabold, fontSize: 24, color: '#FFFFFF', marginTop: 2 },
 
-  rowsCard: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 14, marginTop: 14 },
+  rowsCard: { borderRadius: 16, paddingHorizontal: 14, marginTop: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   subject: { fontFamily: FONT.bold, fontSize: 13 },
   fullMark: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
