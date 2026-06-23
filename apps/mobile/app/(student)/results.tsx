@@ -14,6 +14,7 @@ import { Card, EmptyState, ErrorState } from '../../components/ui';
 import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
+import { gradeColors } from '../../lib/gradeColors';
 import type { ExamTermResult, ResultSubject } from '../../types';
 
 // Deduped "Grade N · Section X" — the API class label may arrive as "Grade 9",
@@ -23,17 +24,6 @@ function gradeSectionLine(grade: string, section: string): string {
   const g = grade.trim();
   const normalized = /^(grade|class)\b/i.test(g) ? g.replace(/^class\b/i, 'Grade') : `Grade ${g}`;
   return `${normalized} · Section ${section}`;
-}
-
-// Semantic grade palette — legible dark ink on a soft tint (NOT brand-coupled, a
-// documented exception on par with the attendance STATUS_CONFIG / subject hues).
-function gradeColors(grade: string): { bg: string; fg: string } {
-  const g = grade.trim().toUpperCase();
-  if (g.startsWith('A')) return { bg: '#d1fae5', fg: '#065f46' };
-  if (g.startsWith('B')) return { bg: '#dbeafe', fg: '#1e40af' };
-  if (g.startsWith('C')) return { bg: '#fef3c7', fg: '#92400e' };
-  if (g.startsWith('D') || g.startsWith('E') || g.startsWith('F')) return { bg: '#fee2e2', fg: '#991b1b' };
-  return { bg: '#eef2f6', fg: '#475569' };
 }
 
 // Subject row — matches comp sResults rows (subject name, "Full marks X", obtained, grade chip).

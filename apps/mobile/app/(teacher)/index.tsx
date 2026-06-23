@@ -72,8 +72,8 @@ export default function TeacherHome() {
 
   const stats = [
     { num: sectionsResult.data?.length ?? 0, label: 'Classes', color: c.primary },
-    { num: todaySlots.length, label: 'Today', color: '#5B7FE0' },
-    { num: weeklyTotal, label: 'Weekly', color: '#D9892B' },
+    { num: todaySlots.length, label: 'Today', color: c.info },
+    { num: weeklyTotal, label: 'Weekly', color: c.warning },
   ];
 
   return (

@@ -110,7 +110,7 @@ export default function StudentAttendance() {
                 const cfg = STATUS_CONFIG[key];
                 const val = key === 'PRESENT' ? summary.present : key === 'ABSENT' ? summary.absent : summary.late;
                 return (
-                  <View key={key} style={styles.statTile}>
+                  <View key={key} style={[styles.statTile, { backgroundColor: c.surface }]}>
                     <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
                     <Text style={[styles.statLabel, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
                   </View>
@@ -122,7 +122,7 @@ export default function StudentAttendance() {
 
         <View style={styles.body}>
           {/* Calendar card (month nav + grid + legend inside) */}
-          <View style={[styles.card, styles.cardShadow]}>
+          <View style={[styles.card, styles.cardShadow, { backgroundColor: c.surface }]}>
             <MonthNav
               label={monthLabel}
               variant="card"
@@ -154,7 +154,7 @@ export default function StudentAttendance() {
           {recentActivity.length > 0 && (
             <>
               <Text style={[styles.recentLabel, { color: c.mutedForeground }]}>Recent activity</Text>
-              <View style={[styles.recentCard, styles.recentShadow]}>
+              <View style={[styles.recentCard, styles.recentShadow, { backgroundColor: c.surface }]}>
                 {recentActivity.map((item, idx) => {
                   const cfg = STATUS_CONFIG[item.status as AttendanceStatus];
                   if (!cfg) return null;
@@ -211,7 +211,6 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
   statTile: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 11,
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
 
   // Calendar card
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16 },
+  card: { borderRadius: 20, padding: 16 },
   cardShadow: {
     shadowColor: '#10231A',
     shadowOffset: { width: 0, height: 8 },
@@ -238,7 +237,7 @@ const styles = StyleSheet.create({
 
   // Recent activity
   recentLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 11, marginHorizontal: 2 },
-  recentCard: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 2 },
+  recentCard: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 2 },
   recentShadow: {
     shadowColor: '#10231A',
     shadowOffset: { width: 0, height: 6 },

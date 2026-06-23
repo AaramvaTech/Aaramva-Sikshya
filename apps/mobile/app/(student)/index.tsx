@@ -150,10 +150,10 @@ export default function StudentDashboard() {
                 style={styles.bellWrap}
               >
                 <Ionicons name="notifications-outline" size={22} color={c.primary} />
-                <View style={[styles.badge, { backgroundColor: '#E5484D', borderColor: c.brandSurface }]} />
+                <View style={[styles.badge, { backgroundColor: c.danger, borderColor: c.brandSurface }]} />
               </TouchableOpacity>
               {studentInitials ? (
-                <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: '#fff' }]}>
+                <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: c.surface }]}>
                   <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{studentInitials}</Text>
                 </View>
               ) : null}

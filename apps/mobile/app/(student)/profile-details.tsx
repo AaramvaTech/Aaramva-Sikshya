@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyProfile } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { Card, CardLabel, EmptyState, ErrorState, LoadingBlock } from '../../components/ui';
+import { CardLabel, ErrorState } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';

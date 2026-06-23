@@ -124,7 +124,7 @@ export default function StudentProfile() {
 
         <View style={styles.body}>
           {/* Info rows */}
-          <View style={[styles.card, CARD_SHADOW]}>
+          <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
             {info.map((r, idx) => (
               <View
                 key={r.k}
@@ -137,7 +137,7 @@ export default function StudentProfile() {
           </View>
 
           {/* Settings rows */}
-          <View style={[styles.card, CARD_SHADOW, { marginTop: 16 }]}>
+          <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface, marginTop: 16 }]}>
             {SETTINGS.map((s, idx) => (
               <View
                 key={s.label}
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   sub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16 },
+  card: { borderRadius: 16, paddingHorizontal: 16 },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13 },
   infoKey: { fontFamily: FONT.regular, fontSize: 12.5 },
   infoVal: { fontFamily: FONT.bold, fontSize: 12.5 },

@@ -140,7 +140,6 @@ export default function StudentTimetable() {
                   subjectName={period.subject.name}
                   subjectCode={period.subject.code ?? 'SUB'}
                   banner={isCurrent ? 'NOW' : undefined}
-                  tag={isUpcoming ? 'UPCOMING' : undefined}
                   meta={[
                     { icon: 'person', text: period.teacher.fullName },
                     ...(period.room ? [{ icon: 'enter-outline' as const, text: period.room }] : []),

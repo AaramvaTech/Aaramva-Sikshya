@@ -26,8 +26,6 @@ interface SubjectSlotProps {
    * primary background). Pass any non-empty string — "HAPPENING NOW" / "NOW" / etc.
    */
   banner?: string;
-  /** @deprecated tag prop kept for API compat; currently unused by student timetable. */
-  tag?: string;
   /** Card-level style override (highlight / dim for current/past periods). */
   style?: ViewStyle;
 }
@@ -94,7 +92,7 @@ export function SubjectSlot({
               </NpText>
               {isNow && (
                 <View style={[styles.nowBadge, { backgroundColor: c.primary }]}>
-                  <Text style={[styles.nowText, { fontFamily: FONT.extrabold }]}>NOW</Text>
+                  <Text style={[styles.nowText, { fontFamily: FONT.extrabold }]}>{banner}</Text>
                 </View>
               )}
             </View>
