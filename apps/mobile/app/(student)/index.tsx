@@ -36,6 +36,7 @@ const QUICK = [
   { icon: 'calendar-outline', label: 'Routine', route: '/(student)/timetable' },
   { icon: 'ribbon-outline', label: 'Results', route: '/(student)/results' },
   { icon: 'megaphone-outline', label: 'Notices', route: '/(student)/notices' },
+  { icon: 'person-outline', label: 'Profile', route: '/(student)/profile' },
 ] as const;
 
 export default function StudentDashboard() {
@@ -86,6 +87,9 @@ export default function StudentDashboard() {
   const s = summary.data;
 
   const fullName = p ? `${p.firstName} ${p.lastName}` : '';
+  const studentInitials = p
+    ? [p.firstName, p.lastName].filter(Boolean).map((n) => n[0]?.toUpperCase() ?? '').join('')
+    : '';
   const enrollment = p?.currentEnrollment ?? null;
   let enrollmentLine = 'Not enrolled';
   if (enrollment) {
@@ -138,13 +142,22 @@ export default function StudentDashboard() {
                 <NpText numberOfLines={1} style={[styles.schoolTail, { color: c.brandMuted }]}>{tail}</NpText>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => router.push('/(student)/notices')}
-              hitSlop={10}
-              accessibilityLabel="Notices"
-            >
-              <Ionicons name="notifications-outline" size={22} color={c.primary} />
-            </TouchableOpacity>
+            <View style={styles.bandActions}>
+              <TouchableOpacity
+                onPress={() => router.push('/(student)/notices')}
+                hitSlop={10}
+                accessibilityLabel="Notices"
+                style={styles.bellWrap}
+              >
+                <Ionicons name="notifications-outline" size={22} color={c.primary} />
+                <View style={[styles.badge, { backgroundColor: '#E5484D', borderColor: c.brandSurface }]} />
+              </TouchableOpacity>
+              {studentInitials ? (
+                <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: '#fff' }]}>
+                  <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{studentInitials}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
 
           <Text style={[styles.todayBs, { color: c.brandMuted }]}>
@@ -224,18 +237,24 @@ const styles = StyleSheet.create({
   greeting: { fontFamily: FONT.medium, fontSize: 13, marginTop: 6 },
   name: { fontFamily: FONT.extrabold, fontSize: 25, marginTop: 1, letterSpacing: -0.4 },
   enroll: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
+  // Right side of band top: bell + avatar
+  bandActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bellWrap: { position: 'relative' },
+  badge: { position: 'absolute', top: -1, right: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  avatarText: { fontFamily: FONT.extrabold, fontSize: 14 },
 
   // Body
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 12, marginLeft: 2 },
+  sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 12, marginLeft: 2, letterSpacing: 0.2 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 12 },
   routineLink: { flexDirection: 'row', alignItems: 'center' },
   routineLinkText: { fontFamily: FONT.bold, fontSize: 11.5 },
 
-  // Quick access
-  quickGrid: { flexDirection: 'row', gap: 10 },
+  // Quick access — 3-column grid (matches comp). width≈30.3% so 3 tiles + 2 gaps of 10 fill the row.
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   quickTile: {
-    flex: 1, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8, alignItems: 'center', gap: 8,
+    width: '30.3%', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8, alignItems: 'center', gap: 8,
     shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 13, elevation: 2,
   },
   quickIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
