@@ -1,18 +1,18 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
-import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useMyChildren, useChildAttendanceSummary, useChildAttendanceHistory } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
-import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState, PrimaryButton } from '../../components/ui';
-import { CARD_SHADOW } from '../../components/ui/Card';
+import { useThemeColors, SATURDAY_HIGHLIGHT, brandSurface, brandMuted } from '../../lib/theme/colors';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
 import NpText from '../../components/NpText';
-import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { todayBs, daysInBsMonth, bsToAd, adToBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
+import type { AttendanceHistoryItem } from '../../types';
 
 function prevMonthOf(curr: BsDate): BsDate {
   if (curr.month === 1) return { year: curr.year - 1, month: 12, day: 1 };
@@ -24,6 +24,8 @@ function nextMonthOf(curr: BsDate): BsDate {
 }
 
 const STATUS_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
+const STAT_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ParentAttendance() {
   const [refreshing, setRefreshing] = useState(false);
@@ -81,10 +83,24 @@ export default function ParentAttendance() {
   const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
 
+  // Derived brand-tinted header colours (no raw hex — all derived from school primary)
+  const bandBg = brandSurface(c.primary);
+  const subtitleColor = brandMuted(c.primary);
+
   const legendItems = [
     ...STATUS_KEYS.map((k) => ({ label: STATUS_CONFIG[k].label, bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
     { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
   ];
+
+  // Recent activity: last 5 records from current month data, sorted newest-first
+  const records = historyQuery.data?.data ?? [];
+  const recentActivity = useMemo<AttendanceHistoryItem[]>(() => {
+    if (!records.length) return [];
+    return [...records]
+      .filter((r) => r.status !== undefined)
+      .sort((a, b) => (a.dateAd > b.dateAd ? -1 : 1))
+      .slice(0, 5);
+  }, [records]);
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -93,28 +109,51 @@ export default function ParentAttendance() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
+        {/* Brand-tinted header band with rounded bottom corners */}
         <View
           style={[
-            styles.header,
-            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
+            styles.headerBand,
+            { paddingTop: insets.top + 14, backgroundColor: bandBg },
           ]}
         >
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
-          <NpText style={[styles.headerSub, { color: c.mutedForeground }]}>
-            {childName}{s ? ` · ${s.attendancePercent}% present` : ''}
-          </NpText>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
+              <NpText style={[styles.headerSub, { color: subtitleColor }]}>
+                {childName ? `${childName} · ` : ''}{s?.academicYearName ?? 'This academic year'}
+              </NpText>
+
+              {/* 3 stat tiles */}
+              {s && (
+                <View style={styles.statRow}>
+                  {STAT_KEYS.map((key) => {
+                    const cfg = STATUS_CONFIG[key];
+                    const val = key === 'PRESENT' ? s.present : key === 'ABSENT' ? s.absent : s.late;
+                    return (
+                      <View key={key} style={styles.statTile}>
+                        <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
+                        <Text style={[styles.statLabel, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* Percentage ring */}
+            {s && (
+              <View style={[styles.ringOuter, { backgroundColor: STATUS_CONFIG.PRESENT.dot + '33' }]}>
+                <View style={[styles.ringInner, { backgroundColor: bandBg }]}>
+                  <Text style={[styles.ringPercent, { color: c.foreground }]}>{s.attendancePercent}%</Text>
+                  <Text style={[styles.ringLabel, { color: subtitleColor }]}>PRESENT</Text>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.body}>
-          <PrimaryButton
-            label="Request leave"
-            icon="add-circle-outline"
-            variant="soft"
-            onPress={() => router.push('/(parent)/request-leave')}
-            style={styles.requestLeaveBtn}
-          />
-
-          <View style={[styles.card, CARD_SHADOW]}>
+          <View style={[styles.card, styles.cardShadow]}>
             <MonthNav
               label={monthLabel}
               variant="card"
@@ -135,11 +174,45 @@ export default function ParentAttendance() {
                 <ErrorState compact title="Couldn't load this month." subtitle="" onRetry={() => historyQuery.refetch()} />
               </View>
             )}
+            {/* Legend inside card with top separator */}
+            <View style={styles.legendSep} />
+            <View style={styles.legendWrap}>
+              <Legend items={legendItems} />
+            </View>
           </View>
 
-          <View style={styles.legendWrap}>
-            <Legend items={legendItems} />
-          </View>
+          {/* Recent activity */}
+          {recentActivity.length > 0 && (
+            <>
+              <Text style={[styles.recentLabel, { color: c.mutedForeground }]}>Recent activity</Text>
+              <View style={[styles.recentCard, styles.recentShadow]}>
+                {recentActivity.map((item, idx) => {
+                  const cfg = STATUS_CONFIG[item.status as AttendanceStatus];
+                  if (!cfg) return null;
+                  const adDate = new Date(item.dateAd + 'T00:00:00');
+                  const bsDate = adToBs(adDate);
+                  const bsLabel = `${BS_MONTH_NAMES_EN[bsDate.month - 1]} ${bsDate.day}, ${bsDate.year}`;
+                  const dowLabel = DOW_SHORT[adDate.getDay()];
+                  const isLast = idx === recentActivity.length - 1;
+                  return (
+                    <View
+                      key={item.dateAd}
+                      style={[styles.activityRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}
+                    >
+                      <View style={[styles.activityIcon, { backgroundColor: cfg.bg }]}>
+                        <Ionicons name={cfg.icon as any} size={19} color={cfg.dot} />
+                      </View>
+                      <View style={styles.activityText}>
+                        <Text style={[styles.activityDate, { color: c.foreground }]}>{bsLabel}</Text>
+                        <Text style={[styles.activityDow, { color: c.mutedForeground }]}>{dowLabel}</Text>
+                      </View>
+                      <Text style={[styles.activityStatus, { color: cfg.dot }]}>{cfg.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -148,11 +221,81 @@ export default function ParentAttendance() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+
+  // Header band — brand-tinted, rounds the bottom corners per comp
+  headerBand: {
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerLeft: { flex: 1, minWidth: 0 },
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
-  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
+  headerSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },
+
+  // Stat tiles in the header
+  statRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  statTile: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    alignItems: 'center',
+  },
+  statNum: { fontFamily: FONT.extrabold, fontSize: 14 },
+  statLabel: { fontFamily: FONT.bold, fontSize: 8.5, marginTop: 1 },
+
+  // Percentage ring
+  ringOuter: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+    flexShrink: 0,
+  },
+  ringInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringPercent: { fontFamily: FONT.extrabold, fontSize: 19, lineHeight: 22 },
+  ringLabel: { fontFamily: FONT.bold, fontSize: 8, marginTop: 1 },
+
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
-  requestLeaveBtn: { marginBottom: 14 },
+
+  // Calendar card
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16 },
-  legendWrap: { marginTop: 14, alignItems: 'center' },
+  cardShadow: {
+    shadowColor: '#10231A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+
+  // Legend inside card
+  legendSep: { height: 1, backgroundColor: '#F0F3F0', marginTop: 15, marginBottom: 14 },
+  legendWrap: { alignItems: 'center' },
+
+  // Recent activity
+  recentLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 11, marginHorizontal: 2 },
+  recentCard: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 2 },
+  recentShadow: {
+    shadowColor: '#10231A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  activityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  activityIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  activityText: { flex: 1 },
+  activityDate: { fontFamily: FONT.bold, fontSize: 12.5 },
+  activityDow: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
+  activityStatus: { fontFamily: FONT.extrabold, fontSize: 11 },
 });
