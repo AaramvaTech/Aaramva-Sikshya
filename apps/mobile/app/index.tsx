@@ -148,13 +148,16 @@ export default function SchoolEntryScreen() {
         {/* ---------------------------------------------------------------- */}
         {/* Aaramva brand band                                                */}
         {/* ---------------------------------------------------------------- */}
-        <View style={[styles.band, { paddingTop: insets.top + 26 }]}>
+        <View style={[styles.band, { paddingTop: insets.top + 26, paddingBottom: tenant !== null ? 28 : 32 }]}>
           <Image
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             source={require('../assets/images/aaramva-wordmark.png')}
             style={tenant ? styles.wordmarkSm : styles.wordmark}
             resizeMode="contain"
           />
+          {tenant !== null && (
+            <Text style={styles.foundEyebrow}>We found your school</Text>
+          )}
         </View>
 
         {/* ---------------------------------------------------------------- */}
@@ -225,7 +228,7 @@ export default function SchoolEntryScreen() {
 
             {/* Don't know your code? */}
             <TouchableOpacity
-              style={styles.helpLink}
+              style={styles.helpHint}
               onPress={() => router.push('/help-code')}
               activeOpacity={0.7}
             >
@@ -272,7 +275,7 @@ export default function SchoolEntryScreen() {
             </View>
 
             {/* Continue to login */}
-            <TouchableOpacity style={[styles.cta, styles.ctaShadow]} onPress={handleConfirm} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.cta, styles.ctaShadow, styles.ctaFound]} onPress={handleConfirm} activeOpacity={0.9}>
               <LinearGradient
                 colors={[OB.green, OB.greenDark]}
                 start={{ x: 0, y: 0 }}
@@ -285,11 +288,11 @@ export default function SchoolEntryScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.helpLink}
+              style={styles.notMySchool}
               onPress={() => { setTenant(null); setError(null); }}
               activeOpacity={0.7}
             >
-              <Text style={styles.helpText}>Not your school?</Text>
+              <Text style={styles.notMySchoolText}>Not your school?</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -301,10 +304,9 @@ export default function SchoolEntryScreen() {
 const styles = StyleSheet.create({
   flex1: { flex: 1 },
 
-  // Brand band
+  // Brand band — paddingBottom set dynamically (32 for code entry, 28 for found state)
   band: {
     paddingHorizontal: 26,
-    paddingBottom: 32,
     alignItems: 'center',
     backgroundColor: OB.bandBg,
     borderBottomWidth: 1,
@@ -376,10 +378,11 @@ const styles = StyleSheet.create({
 
   // CTA
   cta: { marginTop: 14, borderRadius: 14, overflow: 'hidden' },
+  ctaFound: { marginTop: 18 },
   ctaShadow: {
     shadowColor: OB.green,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.55,
     shadowRadius: 14,
     elevation: 5,
   },
@@ -392,14 +395,25 @@ const styles = StyleSheet.create({
   ctaDisabled: { opacity: 0.5 },
   ctaText: { fontFamily: FONT.bold, fontSize: 15, color: '#FFFFFF' },
 
-  // Help link
-  helpLink: {
+  // Help hint ("Don't know your code?") — margin-top matches comp line 98
+  helpHint: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    marginTop: 18,
   },
+  // "Not your school?" ghost button — comp line 132: height 44px, margin-top 8px
+  notMySchool: {
+    height: 44,
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // "Don't know your code?" text — comp line 100: 13px, semibold, #7A8B82
   helpText: { fontFamily: FONT.semibold, fontSize: 13, color: OB.muted },
+  // "Not your school?" text — comp line 132: 13.5px, semibold, #7A8B82
+  notMySchoolText: { fontFamily: FONT.semibold, fontSize: 13.5, color: OB.muted },
 
   // Trust note
   trust: {
