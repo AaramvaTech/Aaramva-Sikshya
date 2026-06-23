@@ -1,7 +1,8 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMyTimetable } from '../../hooks/useStudentMe';
+import { Ionicons } from '@expo/vector-icons';
+import { useMyTimetable, useMyProfile } from '../../hooks/useStudentMe';
 import Skeleton from '../../components/Skeleton';
 import { Card, EmptyState, ErrorState, SubjectSlot } from '../../components/ui';
 import { subjectColor } from '../../lib/subjects';
@@ -29,6 +30,7 @@ function isUpcomingPeriod(period: TimetablePeriod): boolean {
 export default function StudentTimetable() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyTimetable();
+  const { data: profile } = useMyProfile();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
 
@@ -58,7 +60,16 @@ export default function StudentTimetable() {
   }
 
   const totalPeriods = data.periods.length;
-  const subtitle = `${DAY_NAMES[data.dayOfWeek]} · ${formatBs(adToBs(new Date(`${data.dateAd}T12:00:00.000Z`)), 'en')}`;
+  const dayName = DAY_NAMES[data.dayOfWeek];
+  const bsDate = formatBs(adToBs(new Date(`${data.dateAd}T12:00:00.000Z`)), 'en');
+  // Routine summary: "X periods · Mon, 2081 Ashadh 15"
+  const routineSummary = totalPeriods > 0 ? `${totalPeriods} period${totalPeriods !== 1 ? 's' : ''} · ${dayName}` : dayName;
+
+  // Class label from profile enrollment
+  const enrollment = profile?.currentEnrollment;
+  const classLabel = enrollment
+    ? `${enrollment.className}${enrollment.sectionName}`
+    : '';
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -67,15 +78,36 @@ export default function StudentTimetable() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        {/* Plain header */}
+        {/* ── Brand-tinted header band ─────────────────────── */}
         <View
           style={[
             styles.header,
-            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
+            {
+              paddingTop: insets.top + 14,
+              backgroundColor: c.brandSurface,
+            },
           ]}
         >
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>Class routine</Text>
-          <Text style={[styles.headerSub, { color: c.mutedForeground }]}>{subtitle}</Text>
+          <View style={styles.headerTop}>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerTitle, { color: c.foreground, fontFamily: FONT.extrabold }]}>
+                Class routine
+              </Text>
+              <Text style={[styles.headerSub, { color: c.brandMuted, fontFamily: FONT.semibold }]}>
+                {classLabel ? `${classLabel} · ` : ''}{routineSummary}
+              </Text>
+            </View>
+            {/* Calendar icon chip */}
+            <View style={[styles.calendarChip, { backgroundColor: c.surface, shadowColor: c.foreground }]}>
+              <Ionicons name="calendar-outline" size={20} color={c.primary} />
+            </View>
+          </View>
+          {/* Today's date chip */}
+          <View style={[styles.datePill, { backgroundColor: c.surface }]}>
+            <Text style={[styles.datePillText, { color: c.foreground, fontFamily: FONT.bold }]}>
+              {bsDate}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.body}>
@@ -107,11 +139,11 @@ export default function StudentTimetable() {
                   periodNumber={period.periodNumber}
                   subjectName={period.subject.name}
                   subjectCode={period.subject.code ?? 'SUB'}
-                  banner={isCurrent ? 'HAPPENING NOW' : undefined}
+                  banner={isCurrent ? 'NOW' : undefined}
                   tag={isUpcoming ? 'UPCOMING' : undefined}
                   meta={[
-                    { icon: 'person-outline', text: period.teacher.fullName },
-                    ...(period.room ? [{ icon: 'location-outline' as const, text: period.room }] : []),
+                    { icon: 'person', text: period.teacher.fullName },
+                    ...(period.room ? [{ icon: 'enter-outline' as const, text: period.room }] : []),
                   ]}
                   style={
                     isCurrent
@@ -140,8 +172,38 @@ export default function StudentTimetable() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
-  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
-  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 0 },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerText: { flex: 1 },
+  headerTitle: { fontSize: 17 },
+  headerSub: { fontSize: 11.5, marginTop: 2 },
+  calendarChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  datePill: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  datePillText: { fontSize: 12 },
+  body: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 32 },
 });

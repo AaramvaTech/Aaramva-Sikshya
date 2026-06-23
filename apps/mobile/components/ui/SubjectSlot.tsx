@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import NpText from '../NpText';
 import { useThemeColors } from '../../lib/theme/colors';
 import { formatPeriodTime } from '../../lib/time';
+import { FONT } from '../../lib/theme/fonts';
 import type { SubjectColor } from '../../lib/subjects';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -20,72 +21,98 @@ interface SubjectSlotProps {
   subjectName: string;
   subjectCode?: string | null;
   meta?: SlotMeta[];
-  /** Optional coloured banner across the top (e.g. "HAPPENING NOW"). */
+  /**
+   * When truthy the card highlights this period as NOW (small inline pill, brand
+   * primary background). Pass any non-empty string — "HAPPENING NOW" / "NOW" / etc.
+   */
   banner?: string;
-  /** Right-aligned badge next to the code (e.g. "UPCOMING"). */
+  /** @deprecated tag prop kept for API compat; currently unused by student timetable. */
   tag?: string;
   /** Card-level style override (highlight / dim for current/past periods). */
   style?: ViewStyle;
 }
 
 /**
- * One timetable period rendered as a colour-accented card: a time column with a
- * period badge on the left and subject + meta on the right. Subject hue comes from
- * the shared SUBJECT_PALETTE; all neutrals are token-driven.
+ * One timetable period rendered as a colour-accented card.
+ *
+ * Layout: time gutter (start / period-badge / end) on the left, then a card with
+ * a tinted subject-icon square, subject name + optional NOW pill, teacher/room
+ * meta, and a period-number pill pinned to the top-right corner.
+ *
+ * Subject hue comes from lib/subjects.ts (SUBJECT_PALETTE). All neutrals are
+ * token-driven via useThemeColors(). The NOW badge uses c.primary so it recolours
+ * per school — never a hardcoded brand hex.
  */
 export function SubjectSlot({
-  color, startTime, endTime, periodNumber, subjectName, subjectCode, meta = [], banner, tag, style,
+  color, startTime, endTime, periodNumber, subjectName, meta = [], banner, style,
 }: SubjectSlotProps) {
   const c = useThemeColors();
+  const isNow = Boolean(banner);
+
   return (
-    <View style={[styles.card, { backgroundColor: c.surface }, style]}>
-      {banner ? (
-        <View style={[styles.banner, { backgroundColor: color.bar }]}>
-          <View style={[styles.bannerDot, { backgroundColor: '#FFFFFF' }]} />
-          <Text style={[styles.bannerText, { color: '#FFFFFF' }]}>{banner}</Text>
+    <View style={styles.row}>
+      {/* ── Left time gutter ─────────────────────────────────── */}
+      <View style={styles.gutter}>
+        <Text style={[styles.gutterTimeStart, { color: c.foreground, fontFamily: FONT.extrabold }]}>
+          {formatPeriodTime(startTime)}
+        </Text>
+        <Text style={[styles.gutterTimeEnd, { color: c.mutedForeground, fontFamily: FONT.semibold }]}>
+          {formatPeriodTime(endTime)}
+        </Text>
+      </View>
+
+      {/* ── Period card ───────────────────────────────────────── */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: c.surface },
+          style,
+        ]}
+      >
+        {/* Period-number pill — top-right corner */}
+        <View style={[styles.cornerPill, { backgroundColor: color.bg }]}>
+          <Text style={[styles.cornerPillText, { color: color.text, fontFamily: FONT.extrabold }]}>
+            P{periodNumber}
+          </Text>
         </View>
-      ) : null}
 
-      <View style={styles.body}>
-        {/* Left color accent */}
-        <View style={{ width: 5, backgroundColor: color.bar }} />
-
-        {/* Time column */}
-        <View style={[styles.timeCol, { borderRightWidth: 1, borderRightColor: c.border }]}>
-          <Text style={[styles.time, { color: c.mutedForeground }]}>{formatPeriodTime(startTime)}</Text>
-          <View style={[styles.periodBadge, { backgroundColor: color.bg }]}>
-            <Text style={[styles.periodText, { color: color.text }]}>P{periodNumber}</Text>
-          </View>
-          <Text style={[styles.time, { color: c.mutedForeground }]}>{formatPeriodTime(endTime)}</Text>
-        </View>
-
-        {/* Info */}
-        <View style={styles.info}>
-          <View style={styles.codeRow}>
-            {subjectCode ? (
-              <View style={[styles.codeBadge, { backgroundColor: color.bg }]}>
-                <Text style={[styles.codeText, { color: color.text }]}>{subjectCode}</Text>
-              </View>
-            ) : null}
-            {tag ? (
-              <View style={[styles.tag, { backgroundColor: `${c.primary}1A` }]}>
-                <Text style={[styles.tagText, { color: c.primary }]}>{tag}</Text>
-              </View>
-            ) : null}
+        <View style={styles.cardBody}>
+          {/* Tinted icon square */}
+          <View style={[styles.iconSquare, { backgroundColor: color.bg }]}>
+            <Ionicons name="book-outline" size={22} color={color.text} />
           </View>
 
-          <NpText style={[styles.subject, { color: c.foreground }]}>{subjectName}</NpText>
-
-          {meta.length > 0 && (
-            <View style={styles.metaRow}>
-              {meta.map((m, i) => (
-                <View key={i} style={styles.metaItem}>
-                  <Ionicons name={m.icon} size={12} color={c.mutedForeground} />
-                  <NpText style={[styles.metaText, { color: c.mutedForeground }]}>{m.text}</NpText>
+          {/* Subject info */}
+          <View style={styles.info}>
+            {/* Subject name + NOW badge */}
+            <View style={styles.nameRow}>
+              <NpText
+                style={[styles.subjectName, { color: c.foreground, fontFamily: FONT.extrabold }]}
+                numberOfLines={1}
+              >
+                {subjectName}
+              </NpText>
+              {isNow && (
+                <View style={[styles.nowBadge, { backgroundColor: c.primary }]}>
+                  <Text style={[styles.nowText, { fontFamily: FONT.extrabold }]}>NOW</Text>
                 </View>
-              ))}
+              )}
             </View>
-          )}
+
+            {/* Meta row (teacher / room) */}
+            {meta.length > 0 && (
+              <View style={styles.metaRow}>
+                {meta.map((m, i) => (
+                  <View key={i} style={styles.metaItem}>
+                    <Ionicons name={m.icon} size={13} color={c.mutedForeground} />
+                    <NpText style={[styles.metaText, { color: c.mutedForeground, fontFamily: FONT.semibold }]}>
+                      {m.text}
+                    </NpText>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -93,32 +120,113 @@ export function SubjectSlot({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 20,
-    marginBottom: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+  /* Outer row: time gutter + card side-by-side */
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+    alignItems: 'center',
   },
-  banner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6 },
-  bannerDot: { width: 7, height: 7, borderRadius: 4, marginRight: 7 },
-  bannerText: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  body: { flexDirection: 'row' },
-  timeCol: { width: 62, alignItems: 'center', justifyContent: 'center', paddingVertical: 16, marginRight: 14 },
-  time: { fontSize: 11, fontWeight: '600' },
-  periodBadge: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginVertical: 6 },
-  periodText: { fontSize: 11, fontWeight: '800' },
-  info: { flex: 1, paddingVertical: 14, paddingRight: 12 },
-  codeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
-  codeBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  codeText: { fontSize: 11, fontWeight: '700' },
-  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  tagText: { fontSize: 10, fontWeight: '700' },
-  subject: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metaItem: { flexDirection: 'row', alignItems: 'center' },
-  metaText: { fontSize: 12, marginLeft: 4 },
+
+  /* Time gutter ─────────────────────── */
+  gutter: {
+    width: 52,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  gutterTimeStart: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  gutterTimeEnd: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+
+  /* Card ────────────────────────────── */
+  card: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 13,
+    paddingRight: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
+    overflow: 'visible',
+  },
+  cornerPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+    zIndex: 1,
+  },
+  cornerPillText: {
+    fontSize: 10,
+  },
+  cardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingRight: 36, // leave room for corner pill
+  },
+
+  /* Tinted icon square */
+  iconSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+
+  /* Info column */
+  info: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flexWrap: 'wrap',
+  },
+  subjectName: {
+    fontSize: 13.5,
+    flexShrink: 1,
+  },
+  nowBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  nowText: {
+    fontSize: 8.5,
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
+  },
+
+  /* Meta */
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 5,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 11,
+  },
 });
