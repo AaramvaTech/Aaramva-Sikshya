@@ -1,5 +1,6 @@
-import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -181,6 +182,17 @@ export default function ParentAttendance() {
             </View>
           </View>
 
+          {/* Request leave — slim outline entry point to the leave-filing screen
+              (the comp omits this, but the route is otherwise unreachable). */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/(parent)/request-leave')}
+            style={[styles.leaveBtn, { borderColor: c.primary }]}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={c.primary} />
+            <Text style={[styles.leaveBtnText, { color: c.primary }]}>Request leave</Text>
+          </TouchableOpacity>
+
           {/* Recent activity */}
           {recentActivity.length > 0 && (
             <>
@@ -281,6 +293,19 @@ const styles = StyleSheet.create({
   // Legend inside card
   legendSep: { height: 1, backgroundColor: '#F0F3F0', marginTop: 15, marginBottom: 14 },
   legendWrap: { alignItems: 'center' },
+
+  // Slim outline entry to the request-leave screen
+  leaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  leaveBtnText: { fontFamily: FONT.bold, fontSize: 13 },
 
   // Recent activity
   recentLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 20, marginBottom: 11, marginHorizontal: 2 },
