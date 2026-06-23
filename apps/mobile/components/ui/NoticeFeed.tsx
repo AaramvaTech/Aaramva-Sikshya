@@ -46,13 +46,13 @@ function NoticeCard({ notice }: { notice: NoticeFeedItem }) {
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => setExpanded(!expanded)}
-      style={[styles.card, CARD_SHADOW, { borderLeftColor: cfg.accent }]}
+      style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface, borderLeftColor: cfg.accent }]}
     >
       <View style={styles.cardTop}>
         <View style={[styles.tag, { backgroundColor: cfg.tint }]}>
           <Text style={[styles.tagText, { color: cfg.accent }]}>{cfg.label}</Text>
         </View>
-        <Text style={[styles.date, { color: c.mutedForeground }]}>{bsDateLabel(date)}</Text>
+        <Text style={styles.date}>{bsDateLabel(date)}</Text>
       </View>
       <NpText style={[styles.title, { color: c.foreground }]}>{notice.title}</NpText>
       <NpText numberOfLines={expanded ? undefined : 3} style={[styles.body, { color: c.mutedForeground }]}>
@@ -100,12 +100,17 @@ export function NoticeFeed({ notices, isLoading, isError, onRetry }: NoticeFeedP
   return <>{notices.map((n) => <NoticeCard key={n.id} notice={n} />)}</>;
 }
 
+// Timestamp caption color (comp: #A6B4AC). Lighter than mutedForeground — de-emphasised
+// relative to body text to create visual hierarchy (date < body < title). Neutral, not
+// brand-coupled. Documented decorative literal (same pattern as SATURDAY_HIGHLIGHT).
+const DATE_COLOR = '#A6B4AC';
+
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 15, marginBottom: 11, borderLeftWidth: 3 },
+  card: { borderRadius: 16, padding: 15, marginBottom: 11, borderLeftWidth: 3 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
   tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   tagText: { fontFamily: FONT.extrabold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
-  date: { fontFamily: FONT.semibold, fontSize: 10.5 },
+  date: { fontFamily: FONT.semibold, fontSize: 10.5, color: DATE_COLOR },
   title: { fontFamily: FONT.extrabold, fontSize: 13.5, lineHeight: 18 },
   body: { fontFamily: FONT.regular, fontSize: 12, lineHeight: 18, marginTop: 5 },
 });
