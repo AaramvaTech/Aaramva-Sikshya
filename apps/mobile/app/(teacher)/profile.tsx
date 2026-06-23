@@ -73,6 +73,18 @@ export default function TeacherProfile() {
             { paddingTop: insets.top + 18, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
           ]}
         >
+          {/* Settings gear — top-right of hero band (comp tProfile line 1061) */}
+          <View style={styles.gearWrap}>
+            <TouchableOpacity
+              style={[styles.gearBtn, { backgroundColor: c.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="settings-outline" size={19} color={c.primary} />
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.schoolRow}>
             {branding?.logoUrl ? (
               <View style={[styles.schoolChip, { backgroundColor: c.surface }]}>
@@ -101,7 +113,7 @@ export default function TeacherProfile() {
 
         <View style={styles.body}>
           {/* Info rows */}
-          <View style={[styles.card, CARD_SHADOW]}>
+          <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
             {info.map((r, idx) => (
               <View
                 key={r.k}
@@ -114,7 +126,7 @@ export default function TeacherProfile() {
           </View>
 
           {/* Action rows */}
-          <View style={[styles.card, CARD_SHADOW, { marginTop: 16 }]}>
+          <View style={[styles.card, CARD_SHADOW, { marginTop: 16, backgroundColor: c.surface }]}>
             {actions.map((a, idx) => (
               <TouchableOpacity
                 key={a.label}
@@ -159,7 +171,12 @@ const styles = StyleSheet.create({
   sub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16 },
+  card: { borderRadius: 16, paddingHorizontal: 16 },
+  gearWrap: { position: 'absolute', top: 10, right: 16, zIndex: 1 },
+  gearBtn: {
+    width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, gap: 12 },
   infoKey: { fontFamily: FONT.regular, fontSize: 12.5 },
   infoVal: { fontFamily: FONT.bold, fontSize: 12.5, flexShrink: 1, textAlign: 'right' },
