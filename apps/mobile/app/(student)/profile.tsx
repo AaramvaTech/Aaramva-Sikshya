@@ -81,6 +81,18 @@ export default function StudentProfile() {
             { paddingTop: insets.top + 18, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
           ]}
         >
+          {/* Settings gear — top-right of hero band (comp sProfile line 408) */}
+          <View style={styles.gearWrap}>
+            <TouchableOpacity
+              style={[styles.gearBtn, { backgroundColor: c.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="settings-outline" size={19} color={c.primary} />
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.schoolRow}>
             {branding?.logoUrl ? (
               <View style={[styles.schoolChip, { backgroundColor: c.surface }]}>
@@ -154,6 +166,12 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, alignItems: 'center' },
+  // Gear button positioned absolutely in the top-right of the hero band (comp sProfile line 408).
+  gearWrap: { position: 'absolute', top: 10, right: 16, zIndex: 1 },
+  gearBtn: {
+    width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
   schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
   schoolChip: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   schoolChipText: { fontFamily: FONT.extrabold, fontSize: 10 },

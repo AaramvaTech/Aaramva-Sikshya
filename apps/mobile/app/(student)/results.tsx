@@ -1,5 +1,5 @@
 import {
-  View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,11 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyResults } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { Card, CardLabel, EmptyState, ErrorState } from '../../components/ui';
-import { useAuthStore } from '../../store/auth';
-import { useBranding } from '../../lib/theme/provider';
+import { Card, EmptyState, ErrorState } from '../../components/ui';
+import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
-import { subjectColor } from '../../lib/subjects';
 import { FONT } from '../../lib/theme/fonts';
 import type { ExamTermResult, ResultSubject } from '../../types';
 
@@ -25,13 +23,6 @@ function gradeSectionLine(grade: string, section: string): string {
   const g = grade.trim();
   const normalized = /^(grade|class)\b/i.test(g) ? g.replace(/^class\b/i, 'Grade') : `Grade ${g}`;
   return `${normalized} · Section ${section}`;
-}
-
-// "Gyan Jyoti Secondary School" -> { head, tail } (mirrors the Home hero band).
-function splitName(name: string): { head: string; tail: string } {
-  const words = name.trim().split(/\s+/);
-  if (words.length <= 2) return { head: name, tail: 'Student portal' };
-  return { head: words.slice(0, 2).join(' '), tail: words.slice(2).join(' ') };
 }
 
 // Semantic grade palette — legible dark ink on a soft tint (NOT brand-coupled, a
@@ -45,29 +36,21 @@ function gradeColors(grade: string): { bg: string; fg: string } {
   return { bg: '#eef2f6', fg: '#475569' };
 }
 
-function SubjectRow({ subject, index, isLast }: { subject: ResultSubject; index: number; isLast: boolean }) {
+// Subject row — matches comp sResults rows (subject name, "Full marks X", obtained, grade chip).
+function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boolean }) {
   const c = useThemeColors();
-  const hue = subjectColor(index);
   const gc = gradeColors(subject.grade);
-  const hasPractical = subject.practical !== null;
+  const fullMarks = (subject.theory ?? 0) + (subject.practical ?? 0);
 
   return (
     <View style={[styles.subjectRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}>
-      <View style={[styles.subjectDot, { backgroundColor: hue.bar }]} />
       <View style={styles.subjectInfo}>
         <NpText style={[styles.subjectName, { color: c.foreground }]}>{subject.name}</NpText>
-        {hasPractical ? (
-          <Text style={[styles.subjectBreakdown, { color: c.mutedForeground }]}>
-            Theory {subject.theory ?? '—'} · Practical {subject.practical}
-          </Text>
-        ) : (
-          <Text style={[styles.subjectBreakdown, { color: c.mutedForeground }]}>Theory only</Text>
-        )}
+        <Text style={[styles.subjectFullMarks, { color: c.mutedForeground }]}>
+          Full marks {fullMarks > 0 ? fullMarks : '—'}
+        </Text>
       </View>
-      <View style={styles.subjectMarks}>
-        <Text style={[styles.totalValue, { color: c.foreground }]}>{subject.total}</Text>
-        <Text style={[styles.totalLabel, { color: c.mutedForeground }]}>Total</Text>
-      </View>
+      <Text style={[styles.totalValue, { color: c.foreground }]}>{subject.total}</Text>
       <View style={[styles.gradeChip, { backgroundColor: gc.bg }]}>
         <Text style={[styles.gradeChipText, { color: gc.fg }]}>{subject.grade}</Text>
       </View>
@@ -75,30 +58,25 @@ function SubjectRow({ subject, index, isLast }: { subject: ResultSubject; index:
   );
 }
 
+// GPA gradient card — brand-primary gradient (NOT a literal maroon).
+// Layout mirrors comp sResults: GPA on the left, Grade · Rank on the right.
 function SummaryCard({ term }: { term: ExamTermResult }) {
   const c = useThemeColors();
   const ramp = headerGradient(c.primary);
   return (
     <LinearGradient
-      colors={[ramp[1], ramp[2]]}
+      colors={[ramp[0], ramp[1]]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.summaryCard, { shadowColor: c.primary }]}
     >
-      <View style={styles.summaryGpa}>
-        <Text style={styles.summaryGpaLabel}>GPA</Text>
+      <View style={styles.summaryLeft}>
+        <Text style={styles.summaryLabel}>GPA</Text>
         <Text style={styles.summaryGpaValue}>{term.gpa.toFixed(2)}</Text>
       </View>
-      <View style={styles.summaryDivider} />
-      <View style={styles.summaryMeta}>
-        <View style={styles.summaryMetaItem}>
-          <Text style={styles.summaryMetaLabel}>Grade</Text>
-          <Text style={styles.summaryMetaValue}>{term.grade}</Text>
-        </View>
-        <View style={styles.summaryMetaItem}>
-          <Text style={styles.summaryMetaLabel}>Rank</Text>
-          <Text style={styles.summaryMetaValue}>#{term.rank}</Text>
-        </View>
+      <View style={styles.summaryRight}>
+        <Text style={styles.summaryLabel}>Grade · Rank</Text>
+        <Text style={styles.summaryGradeRank}>{term.grade} · #{term.rank}</Text>
       </View>
     </LinearGradient>
   );
@@ -107,12 +85,11 @@ function SummaryCard({ term }: { term: ExamTermResult }) {
 export default function StudentResults() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const tenant = useAuthStore((s) => s.tenant);
-  const { branding } = useBranding();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
 
   const { data, isLoading, isError, refetch } = useMyResults();
+  const { download, downloading } = useReportCardDownload();
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -120,41 +97,29 @@ export default function StudentResults() {
     setRefreshing(false);
   };
 
-  const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
-  const { head } = splitName(schoolName);
-  const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
-
-  // Shared branded header — present in every state so the screen never flashes blank.
-  const Header = ({ subtitle }: { subtitle?: string }) => (
+  // Simple white header — comp sResults style (back button + title block).
+  const Header = ({ examName }: { examName?: string }) => (
     <View
       style={[
-        styles.band,
-        { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
+        styles.header,
+        { paddingTop: insets.top + 14, backgroundColor: c.surface, borderBottomColor: c.border },
       ]}
     >
-      <View style={styles.bandTop}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={10}
-          style={[styles.backBtn, { backgroundColor: c.surface }]}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={20} color={c.primary} />
-        </TouchableOpacity>
-        {branding?.logoUrl ? (
-          <View style={[styles.logoChip, { backgroundColor: c.surface }]}>
-            <Image source={{ uri: branding.logoUrl }} style={{ width: 24, height: 24 }} resizeMode="contain" />
-          </View>
-        ) : (
-          <View style={[styles.logoChip, { backgroundColor: c.primary }]}>
-            <Text style={[styles.logoChipText, { color: c.primaryForeground }]}>{initials}</Text>
-          </View>
-        )}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        hitSlop={10}
+        style={[styles.backBtn, { backgroundColor: c.background }]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Ionicons name="chevron-back" size={20} color={c.primary} />
+      </TouchableOpacity>
+      <View style={styles.headerTitles}>
+        <Text style={[styles.headerTitle, { color: c.foreground }]}>Exam results</Text>
+        {examName ? (
+          <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>{examName}</Text>
+        ) : null}
       </View>
-
-      <Text style={[styles.title, { color: c.foreground }]}>Results</Text>
-      {subtitle ? <NpText style={[styles.subtitle, { color: c.brandMuted }]}>{subtitle}</NpText> : null}
     </View>
   );
 
@@ -162,7 +127,7 @@ export default function StudentResults() {
     return (
       <View style={[styles.root, { backgroundColor: c.background }]}>
         <StatusBar barStyle="dark-content" />
-        <Header subtitle="Loading report card…" />
+        <Header />
         <View style={styles.body}>
           <Skeleton style={{ height: 36, marginBottom: 16 }} className="rounded-full" />
           <Skeleton style={{ height: 110, marginBottom: 14 }} className="rounded-3xl" />
@@ -185,7 +150,7 @@ export default function StudentResults() {
   }
 
   const { student, examResults, annualResult } = data;
-  const subtitle = `${student.name} · ${gradeSectionLine(student.grade, student.section)}`;
+  const studentLine = `${student.name} · ${gradeSectionLine(student.grade, student.section)}`;
 
   // Default to the most recent term; clamp if the selection falls out of range.
   const activeIndex =
@@ -201,7 +166,7 @@ export default function StudentResults() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        <Header subtitle={subtitle} />
+        <Header examName={activeTerm?.examName} />
 
         <View style={styles.body}>
           {examResults.length === 0 ? (
@@ -246,40 +211,53 @@ export default function StudentResults() {
               )}
 
               {/* Headline summary for the selected term */}
-              <Text style={[styles.examHeading, { color: c.foreground }]}>{activeTerm.examName}</Text>
               <SummaryCard term={activeTerm} />
 
               {/* Per-subject marks */}
-              <Card padded style={{ marginTop: 14 }}>
-                <CardLabel>Subjects</CardLabel>
-                <View>
-                  {activeTerm.subjects.map((subject, idx) => (
-                    <SubjectRow
-                      key={subject.name}
-                      subject={subject}
-                      index={idx}
-                      isLast={idx === activeTerm.subjects.length - 1}
-                    />
-                  ))}
-                </View>
-              </Card>
+              <View style={[styles.subjectCard, { backgroundColor: c.surface }]}>
+                {activeTerm.subjects.map((subject, idx) => (
+                  <SubjectRow
+                    key={subject.name}
+                    subject={subject}
+                    isLast={idx === activeTerm.subjects.length - 1}
+                  />
+                ))}
+              </View>
 
-              {/* Annual aggregate — only once the year is closed */}
+              {/* Annual aggregate — comp sReport style; only once the year is closed */}
               {annualResult && (
-                <Card padded style={[styles.annualCard, { borderColor: c.brandBorder }]}>
-                  <CardLabel>Annual Result</CardLabel>
-                  <View style={styles.annualRow}>
-                    <View style={styles.annualItem}>
-                      <Text style={[styles.annualValue, { color: c.primary }]}>{annualResult.gpa.toFixed(2)}</Text>
-                      <Text style={[styles.annualLabel, { color: c.mutedForeground }]}>Annual GPA</Text>
+                <View style={[styles.annualCard, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.annualEyebrow, { color: c.mutedForeground }]}>Annual result</Text>
+                  <View style={styles.annualStats}>
+                    <View style={styles.annualStat}>
+                      <Text style={[styles.annualStatValue, { color: c.primary }]}>
+                        {annualResult.gpa.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.annualStatLabel, { color: c.mutedForeground }]}>GPA</Text>
                     </View>
-                    <View style={[styles.annualItem, { borderLeftWidth: 1, borderLeftColor: c.border }]}>
-                      <Text style={[styles.annualValue, { color: c.primary }]}>{annualResult.grade}</Text>
-                      <Text style={[styles.annualLabel, { color: c.mutedForeground }]}>Overall Grade</Text>
+                    <View style={[styles.annualDivider, { backgroundColor: c.border }]} />
+                    <View style={styles.annualStat}>
+                      <Text style={[styles.annualStatValue, { color: c.primary }]}>
+                        {annualResult.grade}
+                      </Text>
+                      <Text style={[styles.annualStatLabel, { color: c.mutedForeground }]}>Grade</Text>
                     </View>
                   </View>
-                </Card>
+                </View>
               )}
+
+              {/* Download report card PDF — below annual block (comp sReport line 500) */}
+              <TouchableOpacity
+                onPress={download}
+                disabled={downloading}
+                activeOpacity={0.85}
+                style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+              >
+                <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
+                <Text style={[styles.downloadBtnText, { color: c.primary }]}>
+                  {downloading ? 'Downloading…' : 'Download report card PDF'}
+                </Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -291,58 +269,75 @@ export default function StudentResults() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Hero band
-  band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
-  bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backBtn: {
-    width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#10231A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2,
+  // Simple white header — comp sResults style
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1,
   },
-  logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  logoChipText: { fontFamily: FONT.extrabold, fontSize: 12.5, letterSpacing: 0.5 },
-  title: { fontFamily: FONT.extrabold, fontSize: 25, marginTop: 16, letterSpacing: -0.4 },
-  subtitle: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
+  backBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitles: { flex: 1 },
+  headerTitle: { fontFamily: FONT.extrabold, fontSize: 16 },
+  headerSubtitle: { fontFamily: FONT.regular, fontSize: 11.5, marginTop: 1 },
 
   // Body
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 36 },
 
   // Term selector
-  termRow: { gap: 8, paddingVertical: 2, paddingRight: 4 },
+  termRow: { gap: 8, paddingVertical: 2, paddingRight: 4, marginBottom: 14 },
   termPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   termPillText: { fontFamily: FONT.bold, fontSize: 12 },
 
-  examHeading: { fontFamily: FONT.extrabold, fontSize: 14, marginTop: 18, marginBottom: 10, marginLeft: 2 },
-
-  // Summary card
+  // Summary card — brand gradient, horizontal GPA | Grade·Rank layout (comp lines 438-443)
   summaryCard: {
-    borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center',
-    shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.28, shadowRadius: 20, elevation: 5,
+    borderRadius: 18, padding: 18, flexDirection: 'row',
+    justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14,
+    shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 5,
   },
-  summaryGpa: { flex: 1 },
-  summaryGpaLabel: { fontFamily: FONT.bold, fontSize: 11, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 0.8 },
-  summaryGpaValue: { fontFamily: FONT.extrabold, fontSize: 40, color: '#FFFFFF', marginTop: 2, letterSpacing: -1 },
-  summaryDivider: { width: 1, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 18 },
-  summaryMeta: { gap: 14 },
-  summaryMetaItem: { alignItems: 'flex-end' },
-  summaryMetaLabel: { fontFamily: FONT.bold, fontSize: 10.5, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: 0.6 },
-  summaryMetaValue: { fontFamily: FONT.extrabold, fontSize: 22, color: '#FFFFFF', marginTop: 1 },
+  summaryLeft: {},
+  summaryRight: { alignItems: 'flex-end' },
+  summaryLabel: {
+    fontFamily: FONT.bold, fontSize: 11, color: 'rgba(255,255,255,0.8)',
+    textTransform: 'uppercase', letterSpacing: 0.6,
+  },
+  summaryGpaValue: { fontFamily: FONT.extrabold, fontSize: 32, color: '#FFFFFF', marginTop: 2, lineHeight: 36 },
+  summaryGradeRank: { fontFamily: FONT.extrabold, fontSize: 24, color: '#FFFFFF', marginTop: 2 },
 
-  // Subject rows
-  subjectRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
-  subjectDot: { width: 9, height: 9, borderRadius: 5 },
+  // Subject rows — comp sResults style (name + full marks, obtained, grade chip)
+  subjectCard: {
+    borderRadius: 16, paddingHorizontal: 14, marginBottom: 14,
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07, shadowRadius: 13, elevation: 2,
+  },
+  subjectRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   subjectInfo: { flex: 1, minWidth: 0 },
-  subjectName: { fontFamily: FONT.bold, fontSize: 14 },
-  subjectBreakdown: { fontFamily: FONT.regular, fontSize: 11, marginTop: 2 },
-  subjectMarks: { alignItems: 'center', minWidth: 44 },
-  totalValue: { fontFamily: FONT.extrabold, fontSize: 16 },
-  totalLabel: { fontFamily: FONT.medium, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 1 },
-  gradeChip: { minWidth: 40, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  gradeChipText: { fontFamily: FONT.extrabold, fontSize: 12 },
+  subjectName: { fontFamily: FONT.bold, fontSize: 13 },
+  subjectFullMarks: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
+  totalValue: { fontFamily: FONT.extrabold, fontSize: 13.5 },
+  gradeChip: { width: 38, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7 },
+  gradeChipText: { fontFamily: FONT.extrabold, fontSize: 11 },
 
-  // Annual
-  annualCard: { marginTop: 14, borderWidth: 1 },
-  annualRow: { flexDirection: 'row' },
-  annualItem: { flex: 1, alignItems: 'center', paddingVertical: 2 },
-  annualValue: { fontFamily: FONT.extrabold, fontSize: 26 },
-  annualLabel: { fontFamily: FONT.medium, fontSize: 11, marginTop: 2 },
+  // Annual result — comp sReport stat panel (lines 481-489)
+  annualCard: {
+    borderRadius: 18, padding: 18, marginBottom: 14, alignItems: 'center',
+    shadowColor: '#10231A', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.09, shadowRadius: 18, elevation: 2,
+  },
+  annualEyebrow: {
+    fontFamily: FONT.bold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12,
+  },
+  annualStats: { flexDirection: 'row', alignItems: 'center', gap: 24 },
+  annualStat: { alignItems: 'center' },
+  annualStatValue: { fontFamily: FONT.extrabold, fontSize: 28, lineHeight: 32 },
+  annualStatLabel: { fontFamily: FONT.bold, fontSize: 10, textTransform: 'uppercase', marginTop: 2 },
+  annualDivider: { width: 1, height: 34 },
+
+  // Download PDF button — comp sReport line 500 style (tinted, branded)
+  downloadBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: 14, borderWidth: 1.5,
+  },
+  downloadBtnText: { fontFamily: FONT.bold, fontSize: 14 },
 });
