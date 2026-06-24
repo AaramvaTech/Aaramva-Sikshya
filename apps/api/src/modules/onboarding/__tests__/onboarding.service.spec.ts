@@ -29,13 +29,23 @@ describe('OnboardingService', () => {
     jest.clearAllMocks();
   });
 
-  // counts are queried in order: currentYears, classes, sections, classSubjects
-  function mockCounts(year: number, classes: number, sections: number, classSubjects: number) {
+  // counts are queried in order: currentYears, classes, sections, classSubjects,
+  // students, staff (OB3 added students + staff for the recommended steps).
+  function mockCounts(
+    year: number,
+    classes: number,
+    sections: number,
+    classSubjects: number,
+    students = 0,
+    staff = 0,
+  ) {
     tenantPrisma.query
       .mockResolvedValueOnce([{ n: String(year) }])
       .mockResolvedValueOnce([{ n: String(classes) }])
       .mockResolvedValueOnce([{ n: String(sections) }])
-      .mockResolvedValueOnce([{ n: String(classSubjects) }]);
+      .mockResolvedValueOnce([{ n: String(classSubjects) }])
+      .mockResolvedValueOnce([{ n: String(students) }])
+      .mockResolvedValueOnce([{ n: String(staff) }]);
   }
 
   it('empty school → step 1, nothing done, not completed', async () => {
@@ -44,7 +54,10 @@ describe('OnboardingService', () => {
 
     const s = await service.getStatus();
 
-    expect(s.steps).toEqual({ year: false, classes: false, sections: false, subjects: false });
+    expect(s.steps).toEqual({
+      year: false, classes: false, sections: false, subjects: false,
+      students: false, staff: false, branding: false,
+    });
     expect(s.currentStep).toBe(1);
     expect(s.academicComplete).toBe(false);
     expect(s.completed).toBe(false);
@@ -56,22 +69,35 @@ describe('OnboardingService', () => {
 
     const s = await service.getStatus();
 
-    expect(s.steps).toEqual({ year: true, classes: true, sections: false, subjects: false });
+    expect(s.steps).toEqual({
+      year: true, classes: true, sections: false, subjects: false,
+      students: false, staff: false, branding: false,
+    });
     expect(s.currentStep).toBe(3); // first incomplete = sections
     expect(s.academicComplete).toBe(false);
   });
 
-  it('all steps satisfied → academicComplete, currentStep 5; completed reflects the flag', async () => {
-    prisma.tenant.findUnique.mockResolvedValue({ onboardingCompletedAt: new Date() });
-    mockCounts(1, 3, 5, 8);
+  it('all academic + recommended steps satisfied → academicComplete, currentStep 5; completed/branding reflect state', async () => {
+    // logoUrl present → branding done; students/staff counts > 0 → those steps done.
+    prisma.tenant.findUnique.mockResolvedValue({
+      onboardingCompletedAt: new Date(),
+      logoUrl: 'data:image/png;base64,AAAA',
+      colorSource: 'auto',
+    });
+    mockCounts(1, 3, 5, 8, 2, 1);
 
     const s = await service.getStatus();
 
-    expect(s.steps).toEqual({ year: true, classes: true, sections: true, subjects: true });
+    expect(s.steps).toEqual({
+      year: true, classes: true, sections: true, subjects: true,
+      students: true, staff: true, branding: true,
+    });
     expect(s.academicComplete).toBe(true);
     expect(s.currentStep).toBe(5);
     expect(s.completed).toBe(true);
-    expect(s.counts).toEqual({ hasCurrentYear: true, classes: 3, sections: 5, classSubjects: 8 });
+    expect(s.counts).toEqual({
+      hasCurrentYear: true, classes: 3, sections: 5, classSubjects: 8, students: 2, staff: 1,
+    });
   });
 
   it('complete() sets the flag then returns fresh status', async () => {

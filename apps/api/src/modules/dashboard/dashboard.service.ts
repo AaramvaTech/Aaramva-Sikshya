@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { getCurrentFiscalYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { toTimeString } from '../academic/entities/academic.entity';
 import {
   BsAdDate,
   toDateField,
@@ -312,8 +313,10 @@ export class DashboardService {
       subjectName: r.subject_name,
       className: r.class_name,
       examDate: toDateField(r.exam_date),
-      startTime: r.start_time,
-      endTime: r.end_time,
+      // Wrap with the shared time helper (R2 fix) so TIME columns returned as
+      // Date objects don't leak "1970-01-01T…" strings — emit clean "HH:MM".
+      startTime: toTimeString(r.start_time),
+      endTime: toTimeString(r.end_time),
     }));
 
     return { exams };
