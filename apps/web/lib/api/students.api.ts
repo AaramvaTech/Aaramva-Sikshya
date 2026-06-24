@@ -9,11 +9,21 @@ import type {
   Enrollment,
   CreateStudentData,
   EnrollStudentData,
+  ImportPreviewResult,
+  ImportCommitResult,
 } from '@/types/api.types';
 
 export const studentsApi = {
   getStats: () =>
     api.get<ApiResponse<StudentStats>>('/students/stats'),
+
+  // ── CSV import (OB2) ──────────────────────────────────────────────────────
+  importTemplate: () =>
+    api.get<string>('/students/import/template', { responseType: 'text' }),
+  importPreview: (csv: string) =>
+    api.post<ApiResponse<ImportPreviewResult>>('/students/import/preview', { csv }),
+  importCommit: (csv: string) =>
+    api.post<ApiResponse<ImportCommitResult>>('/students/import/commit', { csv }),
 
   list: (params: {
     page?: number;

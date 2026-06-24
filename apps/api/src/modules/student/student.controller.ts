@@ -3,14 +3,17 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -118,6 +121,15 @@ export class StudentController {
   @Roles(Role.STUDENT)
   getMyReportCard(@CurrentUser() user: AuthUser) {
     return this.studentMeService.getMyReportCard(user.userId);
+  }
+
+  @Get('me/report-card/pdf')
+  @Roles(Role.STUDENT)
+  @Header('Content-Type', 'application/pdf')
+  async getMyReportCardPdf(@CurrentUser() user: AuthUser, @Res() res: Response) {
+    const { buffer, fileName } = await this.studentMeService.getMyReportCardPdf(user.userId);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
   }
 
   // ─── Parameterised routes ─────────────────────────────────────────────────────

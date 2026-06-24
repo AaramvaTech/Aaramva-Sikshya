@@ -20,6 +20,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { LibraryModule } from './modules/library/library.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 
 const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
   !!(process.env.REDIS_URL || process.env.REDIS_HOST);
@@ -44,6 +45,7 @@ const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
     LibraryModule,
     SuperAdminModule,
     SettingsModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

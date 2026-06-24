@@ -1,4 +1,6 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../store/auth';
 import {
   getSecureItem,
@@ -8,9 +10,45 @@ import {
   saveMsSessions,
 } from './secureStore';
 
-// 10.0.2.2 is the Android emulator's alias for the host machine's localhost.
-// For a real device or iOS simulator, set EXPO_PUBLIC_API_URL to the dev machine's LAN IP.
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3001/api/v1';
+const API_PORT = 3001;
+const API_PATH = '/api/v1';
+
+/**
+ * Resolve the dev API base URL WITHOUT hardcoding a LAN IP.
+ *
+ * Priority:
+ *  1. EXPO_PUBLIC_API_URL — explicit override (staging/prod or unusual setups).
+ *  2. Derived from how Expo served this bundle — i.e. the dev machine's CURRENT
+ *     host. This tracks DHCP/Wi-Fi IP changes automatically, so it no longer
+ *     breaks every day when the machine gets a new 192.168.x.x address.
+ *
+ * - Web runs in a browser on the dev machine → use its hostname (localhost).
+ * - Native (device/emulator) → the host that served the JS bundle (`hostUri`,
+ *   e.g. "192.168.1.137:8081"), which Metro already reaches, with the API port.
+ */
+function resolveApiBaseUrl(): string {
+  const explicit = process.env.EXPO_PUBLIC_API_URL;
+  if (explicit) return explicit;
+
+  if (Platform.OS === 'web') {
+    const host =
+      typeof window !== 'undefined' && window.location?.hostname
+        ? window.location.hostname
+        : 'localhost';
+    return `http://${host}:${API_PORT}${API_PATH}`;
+  }
+
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as unknown as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost;
+  const host = hostUri?.split(':')[0];
+  if (host) return `http://${host}:${API_PORT}${API_PATH}`;
+
+  // Last resort: Android emulator's alias for the host machine's loopback.
+  return `http://10.0.2.2:${API_PORT}${API_PATH}`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 /** Interceptor-free instance used exclusively for token refresh to prevent infinite loops. */
 export const rawApi = axios.create({ baseURL: API_BASE_URL });

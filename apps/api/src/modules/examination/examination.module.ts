@@ -6,6 +6,7 @@ import { ExamTypeService } from './exam-type.service';
 import { ExamScheduleService } from './exam-schedule.service';
 import { MarksService } from './marks.service';
 import { ResultService } from './result.service';
+import { PdfService } from './pdf.service';
 
 @Module({
   imports: [TenantModule],
@@ -16,6 +17,7 @@ import { ResultService } from './result.service';
     ExamScheduleService,
     MarksService,
     ResultService,
+    PdfService,
   ],
   exports: [GradingScaleService, ResultService],
 })

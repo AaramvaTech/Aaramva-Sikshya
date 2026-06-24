@@ -33,6 +33,10 @@ export class UpdateExamTypeDto {
   @IsOptional() @IsNumber() @Min(1) orderIndex?: number;
 }
 
+export class PublishExamTypeDto {
+  @IsBoolean() published: boolean;
+}
+
 export class ExamTypeQueryDto {
   @IsOptional() @IsUUID() academicYearId?: string;
 }

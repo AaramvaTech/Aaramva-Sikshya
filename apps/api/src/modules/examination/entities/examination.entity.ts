@@ -29,6 +29,7 @@ export interface ExamTypeRow {
   academic_year_id: string;
   grading_scale_id: string | null;
   order_index: number;
+  results_published_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
   deleted_at: Date | string | null;
@@ -188,6 +189,8 @@ export interface ExamTypeResponseDto {
   academicYearId: string;
   gradingScaleId: string | null;
   orderIndex: number;
+  resultsPublished: boolean;
+  resultsPublishedAt: string | null;
   createdAt: { ad: string; bs: string } | null;
   updatedAt: { ad: string; bs: string } | null;
 }
@@ -200,6 +203,12 @@ export function toExamTypeResponse(row: ExamTypeRow): ExamTypeResponseDto {
     academicYearId: row.academic_year_id,
     gradingScaleId: row.grading_scale_id ?? null,
     orderIndex: row.order_index,
+    resultsPublished: row.results_published_at != null,
+    resultsPublishedAt: row.results_published_at
+      ? (row.results_published_at instanceof Date
+          ? row.results_published_at.toISOString()
+          : String(row.results_published_at))
+      : null,
     createdAt: toDateField(row.created_at),
     updatedAt: toDateField(row.updated_at),
   };

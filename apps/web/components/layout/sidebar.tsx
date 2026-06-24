@@ -7,10 +7,11 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
-  MessageSquare, ChevronDown, Settings,
+  MessageSquare, ChevronDown, Settings, Rocket,
 } from 'lucide-react';
 import { useSidebar } from '@/context/sidebar-context';
 import { useTenantStore } from '@/store/tenant.store';
+import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
 
 type SubItem = { name: string; path: string };
 type NavItem = {
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
       { name: 'Overview', path: '/students/overview' },
       { name: 'All Students', path: '/students' },
       { name: 'Admit Student', path: '/students/new' },
+      { name: 'Import Students', path: '/students/import' },
     ],
   },
   {
@@ -41,6 +43,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: 'Overview', path: '/attendance' },
       { name: 'Mark Attendance', path: '/attendance/mark' },
+      { name: 'Leave Requests', path: '/attendance/requests' },
       { name: 'Reports', path: '/attendance/reports' },
     ],
   },
@@ -113,6 +116,8 @@ export function Sidebar() {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
   const tenant = useTenantStore((s) => s);
+  const { data: onboarding } = useOnboardingStatus();
+  const showSetup = !!onboarding && !onboarding.completed;
 
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<number, number>>({});
@@ -227,6 +232,25 @@ export function Sidebar() {
                 )}
               </h2>
               <ul className="flex flex-col gap-4">
+                {showSetup && (
+                  <li key="__setup">
+                    <Link
+                      href="/onboarding"
+                      className={`menu-item group ${
+                        isActive('/onboarding') ? 'menu-item-active' : 'menu-item-inactive'
+                      }`}
+                    >
+                      <span
+                        className={`${
+                          isActive('/onboarding') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+                        }`}
+                      >
+                        <Rocket className="w-5 h-5" />
+                      </span>
+                      {showLabels && <span className="menu-item-text">Setup</span>}
+                    </Link>
+                  </li>
+                )}
                 {navItems.map((nav, idx) => (
                   <li key={nav.name}>
                     {nav.subItems ? (

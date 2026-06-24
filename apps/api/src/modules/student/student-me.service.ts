@@ -122,6 +122,12 @@ export class StudentMeService {
     return this.resultService.getReportCard(student.id, userId, Role.STUDENT);
   }
 
+  /** GET /students/me/report-card/pdf — own report card as PDF (self-scoped). */
+  async getMyReportCardPdf(userId: string) {
+    const student = await this.resolveStudent(userId);
+    return this.resultService.buildReportCardPdf(student.id, userId, Role.STUDENT);
+  }
+
   /** GET /students/me — own profile + current enrollment */
   async getMyProfile(userId: string) {
     const student = await this.resolveStudent(userId);

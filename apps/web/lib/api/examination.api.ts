@@ -23,6 +23,8 @@ export const examinationApi = {
     api.patch<ApiResponse<ExamType>>(`/exams/types/${id}`, data),
   deleteExamType: (id: string) =>
     api.delete(`/exams/types/${id}`),
+  setExamTypePublished: (id: string, published: boolean) =>
+    api.patch<ApiResponse<ExamType>>(`/exams/types/${id}/publish`, { published }),
 
   // Schedules
   listSchedules: (params: { examTypeId?: string; classId?: string }) =>

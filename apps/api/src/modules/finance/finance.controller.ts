@@ -32,7 +32,6 @@ const ACCOUNTANT_AND_ABOVE = [
   Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL,
   Role.ACADEMIC_COORDINATOR, Role.ACCOUNTANT,
 ];
-const PRINCIPAL_AND_ABOVE = [Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL];
 
 @Controller('finance')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -203,13 +202,13 @@ export class FinanceController {
   // ─── Reports ───────────────────────────────────────────────────────────────
 
   @Get('reports/collection')
-  @Roles(...PRINCIPAL_AND_ABOVE)
+  @Roles(...ACCOUNTANT_AND_ABOVE)
   getCollectionReport(@Query('academicYearId') academicYearId: string) {
     return this.reportService.getCollectionReport(academicYearId);
   }
 
   @Get('reports/defaulters')
-  @Roles(...PRINCIPAL_AND_ABOVE)
+  @Roles(...ACCOUNTANT_AND_ABOVE)
   getDefaulters(@Query('academicYearId') academicYearId: string) {
     return this.reportService.getDefaulters(academicYearId);
   }

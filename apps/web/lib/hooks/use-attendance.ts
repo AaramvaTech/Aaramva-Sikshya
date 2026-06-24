@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from '@/lib/api/attendance.api';
 import { useTenantStore } from '@/store/tenant.store';
-import type { BulkAttendanceData } from '@/types/api.types';
+import type { BulkAttendanceData, ReviewLeaveData } from '@/types/api.types';
 
 export function useSectionAttendance(
   sectionId: string,
@@ -68,5 +68,30 @@ export function useSectionAttendanceReport(
     queryFn: () =>
       attendanceApi.getSectionReport(sectionId!, params!).then((r) => r.data.data),
     enabled: !!slug && !!sectionId && !!params,
+  });
+}
+
+// ── Student leave requests (review loop) ────────────────────────────────────
+
+export function useLeaveRequests(params: { status?: string; page?: number; limit?: number }) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'leave-requests', params],
+    // /attendance/leave is paginated → { data: [], meta: {} } at .data.data
+    queryFn: () => attendanceApi.listLeaveRequests(params).then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useReviewLeaveRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ReviewLeaveData }) =>
+      attendanceApi.reviewLeave(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'leave-requests'] });
+      // an approval writes LEAVE rows → refresh attendance summaries too
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'school-summary'] });
+    },
   });
 }

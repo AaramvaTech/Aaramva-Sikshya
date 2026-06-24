@@ -1,8 +1,10 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ResultService } from '../result.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { TenantContextService } from '../../tenant/tenant-context.service';
 import { GradingScaleService } from '../grading-scale.service';
+import { PdfService } from '../pdf.service';
 import { Role } from '../../common/enums/role.enum';
 
 const mockTx = {
@@ -77,8 +79,10 @@ function mockOneStudent(
 describe('ResultService', () => {
   let service: ResultService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let pdf: { renderReportCard: jest.Mock };
 
   beforeEach(async () => {
+    pdf = { renderReportCard: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 test')) };
     const module = await Test.createTestingModule({
       providers: [
         ResultService,
@@ -91,6 +95,11 @@ describe('ResultService', () => {
             execute: jest.fn(),
           },
         },
+        {
+          provide: TenantContextService,
+          useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo', schemaName: 'tenant_demo' }) },
+        },
+        { provide: PdfService, useValue: pdf },
       ],
     }).compile();
 
@@ -252,10 +261,12 @@ describe('ResultService', () => {
           academic_year_id: 'year-1',
           grading_scale_id: null,
           order_index: 1,
+          results_published_at: null,
           created_at: new Date(),
           updated_at: new Date(),
           deleted_at: null,
-        }]);
+        }])
+        .mockResolvedValueOnce([]); // no default grading scale → annual grade stays null
 
       const reportCard = await service.getReportCard('stu-1');
 
@@ -272,9 +283,9 @@ describe('ResultService', () => {
         { ...baseResultRow, id: 'result-3', exam_type_id: 'et-3', percentage: '90.00', obtained_marks: '90.00' },
       ];
       const examTypeRows = [
-        { id: 'et-1', name: 'First Terminal',  weight_percent: '20.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 1, created_at: new Date(), updated_at: new Date(), deleted_at: null },
-        { id: 'et-2', name: 'Second Terminal', weight_percent: '30.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 2, created_at: new Date(), updated_at: new Date(), deleted_at: null },
-        { id: 'et-3', name: 'Final',           weight_percent: '50.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 3, created_at: new Date(), updated_at: new Date(), deleted_at: null },
+        { id: 'et-1', name: 'First Terminal',  weight_percent: '20.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 1, results_published_at: new Date(), created_at: new Date(), updated_at: new Date(), deleted_at: null },
+        { id: 'et-2', name: 'Second Terminal', weight_percent: '30.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 2, results_published_at: new Date(), created_at: new Date(), updated_at: new Date(), deleted_at: null },
+        { id: 'et-3', name: 'Final',           weight_percent: '50.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 3, results_published_at: new Date(), created_at: new Date(), updated_at: new Date(), deleted_at: null },
       ];
 
       (tenantPrisma.query as jest.Mock)
@@ -287,12 +298,91 @@ describe('ResultService', () => {
         .mockResolvedValueOnce([]) // subject results for result-1
         .mockResolvedValueOnce([]) // subject results for result-2
         .mockResolvedValueOnce([]) // subject results for result-3
-        .mockResolvedValueOnce(examTypeRows);
+        .mockResolvedValueOnce(examTypeRows)
+        .mockResolvedValueOnce([{ id: 'scale-1' }]) // default grading scale
+        .mockResolvedValueOnce([ // thresholds
+          { grade: 'A', gpa_point: '3.6', min_percent: '80.00', max_percent: '100.00', remarks: null },
+          { grade: 'B', gpa_point: '3.0', min_percent: '60.00', max_percent: '79.99', remarks: null },
+        ]);
 
       const reportCard = await service.getReportCard('stu-1');
 
-      // 20*70 + 30*80 + 50*90 = 1400 + 2400 + 4500 = 8300 / 100 = 83
+      // weighted avg = (20*70 + 30*80 + 50*90) / (20+30+50) = 8300/100 = 83
       expect(reportCard.annualResult.weightedPercentage).toBeCloseTo(83, 1);
+      // un-stubbed: finalGpa/finalGrade now populated from the default scale (83 → A / 3.6)
+      expect(reportCard.annualResult.finalGrade).toBe('A');
+      expect(reportCard.annualResult.finalGpa).toBeCloseTo(3.6, 2);
+    });
+
+    it('publish gate: STUDENT sees only published terms, annual computed from them', async () => {
+      const resultRows = [
+        { ...baseResultRow, id: 'result-1', exam_type_id: 'et-1', percentage: '70.00', obtained_marks: '70.00' },
+        { ...baseResultRow, id: 'result-2', exam_type_id: 'et-2', percentage: '90.00', obtained_marks: '90.00' },
+      ];
+      const examTypeRows = [
+        { id: 'et-1', name: 'First Terminal', weight_percent: '40.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 1, results_published_at: new Date(), created_at: new Date(), updated_at: new Date(), deleted_at: null },
+        { id: 'et-2', name: 'Final', weight_percent: '60.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 2, results_published_at: null, created_at: new Date(), updated_at: new Date(), deleted_at: null },
+      ];
+
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{
+          id: 'stu-1', student_id: 'STU-001', first_name: 'Ram', last_name: 'Sharma',
+          roll_number: 1, section_id: 'sec-1', section_name: 'A', class_name: 'Class 10',
+          academic_year_id: 'year-1', academic_year_name: '2081',
+        }])
+        .mockResolvedValueOnce(resultRows)
+        .mockResolvedValueOnce([]) // subjects result-1
+        .mockResolvedValueOnce([]) // subjects result-2
+        .mockResolvedValueOnce(examTypeRows)
+        .mockResolvedValueOnce([]); // no default scale
+
+      const reportCard = await service.getReportCard('stu-1', 'student-user', Role.STUDENT);
+
+      // Only the published term (et-1) is visible
+      expect(reportCard.examResults).toHaveLength(1);
+      expect(reportCard.examResults[0].examType.id).toBe('et-1');
+      // annual computed from the visible term only: 40*70/40 = 70
+      expect(reportCard.annualResult.weightedPercentage).toBeCloseTo(70, 1);
+    });
+  });
+
+  describe('buildReportCardPdf()', () => {
+    it('throws 409 when no terms are published (clean "not available yet", not an empty PDF)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{
+          id: 'stu-1', student_id: 'STU-001', first_name: 'Ram', last_name: 'Sharma',
+          roll_number: 1, section_id: 'sec-1', section_name: 'A', class_name: 'Class 10',
+          academic_year_id: 'year-1', academic_year_name: '2081',
+        }])
+        .mockResolvedValueOnce([]) // no student_results
+        .mockResolvedValueOnce([]); // exam types
+
+      await expect(
+        service.buildReportCardPdf('stu-1', 'student-user', Role.STUDENT),
+      ).rejects.toThrow(ConflictException);
+      expect(pdf.renderReportCard).not.toHaveBeenCalled();
+    });
+
+    it('renders a PDF (with school name) when published terms exist', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{
+          id: 'stu-1', student_id: 'STU-001', first_name: 'Ram', last_name: 'Sharma',
+          roll_number: 1, section_id: 'sec-1', section_name: 'A', class_name: 'Class 10',
+          academic_year_id: 'year-1', academic_year_name: '2081',
+        }])
+        .mockResolvedValueOnce([{ ...baseResultRow, id: 'r-1', exam_type_id: 'et-1', percentage: '80.00' }])
+        .mockResolvedValueOnce([]) // subjects for r-1
+        .mockResolvedValueOnce([{ id: 'et-1', name: 'First Terminal', weight_percent: '100.00', academic_year_id: 'year-1', grading_scale_id: null, order_index: 1, results_published_at: new Date(), created_at: new Date(), updated_at: new Date(), deleted_at: null }])
+        .mockResolvedValueOnce([{ id: 'scale-1' }]) // default scale
+        .mockResolvedValueOnce([{ grade: 'A', gpa_point: '3.6', min_percent: '80.00', max_percent: '100.00', remarks: null }]) // thresholds
+        .mockResolvedValueOnce([{ name: 'Motherland School' }]); // getSchoolName
+
+      const result = await service.buildReportCardPdf('stu-1', 'student-user', Role.STUDENT);
+
+      expect(pdf.renderReportCard).toHaveBeenCalledTimes(1);
+      expect(pdf.renderReportCard.mock.calls[0][1]).toEqual({ schoolName: 'Motherland School' });
+      expect(result.buffer).toBeInstanceOf(Buffer);
+      expect(result.fileName).toBe('report-card-Ram-Sharma.pdf');
     });
   });
 

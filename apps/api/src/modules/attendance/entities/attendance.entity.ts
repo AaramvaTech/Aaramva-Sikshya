@@ -41,10 +41,18 @@ export interface LeaveApplicationRow {
   applied_by: string;
   reviewed_by: string | null;
   reviewed_at: Date | string | null;
+  review_remarks: string | null;
   created_at: Date | string;
   updated_at: Date | string;
   deleted_at: Date | string | null;
   total_count?: string;
+  // Enriched columns (present on list queries that JOIN; absent on bare row reads)
+  student_name?: string | null;
+  admission_number?: string | null;
+  class_name?: string | null;
+  section_name?: string | null;
+  applied_by_name?: string | null;
+  reviewed_by_name?: string | null;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -89,7 +97,15 @@ export interface LeaveApplicationResponseDto {
   appliedBy: string;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  reviewRemarks: string | null;
   createdAt: string;
+  // Enriched display fields — null on bare row reads, populated by the list query
+  studentName: string | null;
+  admissionNumber: string | null;
+  className: string | null;
+  sectionName: string | null;
+  appliedByName: string | null;
+  reviewedByName: string | null;
 }
 
 export interface StudentSummaryDto {
@@ -226,6 +242,13 @@ export function toLeaveApplicationResponse(row: LeaveApplicationRow): LeaveAppli
     reviewedAt: row.reviewed_at
       ? (row.reviewed_at instanceof Date ? row.reviewed_at.toISOString() : String(row.reviewed_at))
       : null,
+    reviewRemarks: row.review_remarks ?? null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    studentName: row.student_name ?? null,
+    admissionNumber: row.admission_number ?? null,
+    className: row.class_name ?? null,
+    sectionName: row.section_name ?? null,
+    appliedByName: row.applied_by_name ?? null,
+    reviewedByName: row.reviewed_by_name ?? null,
   };
 }

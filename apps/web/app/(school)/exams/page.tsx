@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, CalendarCheck, ClipboardList, BarChart2, Pencil, Trash2 } from 'lucide-react';
+import { Plus, CalendarCheck, ClipboardList, BarChart2, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ import {
   useCreateExamType,
   useUpdateExamType,
   useDeleteExamType,
+  useSetExamTypePublished,
 } from '@/lib/hooks/use-examination';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
 import type { ExamType } from '@/types/api.types';
@@ -45,6 +46,21 @@ export default function ExamsPage() {
   const createExamType = useCreateExamType();
   const updateExamType = useUpdateExamType();
   const deleteExamType = useDeleteExamType();
+  const setPublished = useSetExamTypePublished();
+
+  async function handleTogglePublish(et: ExamType) {
+    const next = !et.resultsPublished;
+    try {
+      await setPublished.mutateAsync({ id: et.id, published: next });
+      toast.success(
+        next
+          ? `${et.name} results published — now visible to students & parents`
+          : `${et.name} results unpublished — hidden from students & parents`,
+      );
+    } catch {
+      toast.error('Failed to update publish state');
+    }
+  }
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -165,6 +181,15 @@ export default function ExamsPage() {
                     {et.name}
                   </h3>
                   <div className="flex items-center gap-1 shrink-0">
+                    <Badge
+                      className={`border-0 text-xs ${
+                        et.resultsPublished
+                          ? 'bg-success-100 text-success-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {et.resultsPublished ? 'Published' : 'Unpublished'}
+                    </Badge>
                     {et.isComplete && (
                       <Badge className="bg-success-100 text-success-700 border-0 text-xs">
                         Complete
@@ -227,6 +252,29 @@ export default function ExamsPage() {
                   >
                     <BarChart2 className="h-3.5 w-3.5 mr-2 text-success-600" />
                     View Results
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`w-full text-xs justify-start ${
+                      et.resultsPublished
+                        ? 'text-amber-600 border-amber-200 hover:bg-amber-50'
+                        : 'text-success-600 border-success-200 hover:bg-success-50'
+                    }`}
+                    onClick={() => handleTogglePublish(et)}
+                    disabled={setPublished.isPending}
+                  >
+                    {et.resultsPublished ? (
+                      <>
+                        <EyeOff className="h-3.5 w-3.5 mr-2" />
+                        Unpublish Results
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-3.5 w-3.5 mr-2" />
+                        Publish Results
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

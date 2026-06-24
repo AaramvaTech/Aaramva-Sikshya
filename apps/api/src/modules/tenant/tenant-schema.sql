@@ -481,11 +481,18 @@ CREATE TABLE IF NOT EXISTS exam_types (
   academic_year_id UUID         NOT NULL REFERENCES academic_years(id),
   grading_scale_id UUID         REFERENCES grading_scales(id),
   order_index      SMALLINT     NOT NULL,
+  results_published_at TIMESTAMPTZ,
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   deleted_at       TIMESTAMPTZ,
   UNIQUE (name, academic_year_id)
 );
+
+-- Per-term results publish gate (SESSION-RS1): NULL = unpublished (hidden from
+-- students/parents), timestamp = published. Idempotent so re-running the
+-- template against existing tenants is safe.
+ALTER TABLE exam_types
+  ADD COLUMN IF NOT EXISTS results_published_at TIMESTAMPTZ;
 
 -- ─── EXAM SCHEDULES ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS exam_schedules (
@@ -713,10 +720,16 @@ CREATE TABLE IF NOT EXISTS leave_applications (
   applied_by       UUID      NOT NULL REFERENCES users(id),
   reviewed_by      UUID      REFERENCES users(id),
   reviewed_at      TIMESTAMPTZ,
+  review_remarks   TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at       TIMESTAMPTZ
 );
+
+-- Incremental column for the leave-approval loop (SESSION-LV1): decider's note on
+-- approve/reject. Idempotent so re-running the template against existing tenants is safe.
+ALTER TABLE leave_applications
+  ADD COLUMN IF NOT EXISTS review_remarks TEXT;
 
 -- ─── GUARDIANS (normalized — replaces JSONB guardians column on students) ────
 -- IDs preserved from existing JSONB data so guardianId URL params still work.

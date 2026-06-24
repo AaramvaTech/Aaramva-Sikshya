@@ -124,3 +124,21 @@ export function useSetCurrentAcademicYear() {
     },
   });
 }
+
+// ── Student CSV import (OB2) ──────────────────────────────────────────────────
+export function useImportPreview() {
+  return useMutation({
+    mutationFn: (csv: string) => studentsApi.importPreview(csv).then((r) => r.data.data),
+  });
+}
+
+export function useImportCommit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => studentsApi.importCommit(csv).then((r) => r.data.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['onboarding', 'status'] });
+    },
+  });
+}

@@ -76,6 +76,28 @@ export class ExamTypeService {
     return { ...toExamTypeResponse(rows[0]), totalWeight, isComplete: Math.abs(totalWeight - 100) < 0.01 };
   }
 
+  async setPublished(
+    id: string,
+    published: boolean,
+  ): Promise<ExamTypeResponseDto & { totalWeight: number; isComplete: boolean }> {
+    const existing = await this.tenantPrisma.query<ExamTypeRow>(
+      `SELECT id FROM exam_types WHERE id = $1::uuid AND deleted_at IS NULL`,
+      id,
+    );
+    if (!existing[0]) throw new NotFoundException(`ExamType ${id} not found`);
+
+    // NULL = unpublished (hidden from students/parents); NOW() = published.
+    const rows = await this.tenantPrisma.query<ExamTypeRow>(
+      `UPDATE exam_types
+         SET results_published_at = ${published ? 'NOW()' : 'NULL'}, updated_at = NOW()
+       WHERE id = $1::uuid
+       RETURNING *`,
+      id,
+    );
+    const totalWeight = await this._getTotalWeight(rows[0].academic_year_id);
+    return { ...toExamTypeResponse(rows[0]), totalWeight, isComplete: Math.abs(totalWeight - 100) < 0.01 };
+  }
+
   async softDelete(id: string): Promise<void> {
     const existing = await this.tenantPrisma.query<ExamTypeRow>(
       `SELECT id FROM exam_types WHERE id = $1::uuid AND deleted_at IS NULL`,

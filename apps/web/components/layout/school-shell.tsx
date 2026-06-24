@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { useAuthStore } from '@/store/auth.store';
 import { useSidebar } from '@/context/sidebar-context';
+import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
 
 function Backdrop() {
   const { isMobileOpen, toggleMobileSidebar } = useSidebar();
@@ -22,14 +23,32 @@ function Backdrop() {
 
 export function SchoolShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { accessToken, isInitialized } = useAuthStore();
+  const pathname = usePathname();
+  const { accessToken, isInitialized, user } = useAuthStore();
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { data: onboarding } = useOnboardingStatus();
+  const routedIntoSetup = useRef(false);
 
   useEffect(() => {
     if (isInitialized && !accessToken) {
       router.replace('/login');
     }
   }, [isInitialized, accessToken, router]);
+
+  // Route a new SCHOOL_OWNER into the setup wizard on login when setup isn't
+  // complete — once per session, so the owner can still navigate away afterward
+  // (the sidebar "Setup" entry keeps it obvious until done).
+  useEffect(() => {
+    if (!isInitialized || !accessToken || user?.role !== 'SCHOOL_OWNER') return;
+    if (!onboarding || onboarding.completed || routedIntoSetup.current) return;
+    if (typeof window !== 'undefined' && sessionStorage.getItem('ob-redirected')) {
+      routedIntoSetup.current = true;
+      return;
+    }
+    routedIntoSetup.current = true;
+    if (typeof window !== 'undefined') sessionStorage.setItem('ob-redirected', '1');
+    if (pathname !== '/onboarding') router.replace('/onboarding');
+  }, [isInitialized, accessToken, user?.role, onboarding, pathname, router]);
 
   if (!isInitialized) {
     return (

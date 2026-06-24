@@ -137,6 +137,45 @@ export interface StudentDocument {
   uploadedAt: string;
 }
 
+// Student CSV import (OB2)
+export interface ImportPreviewRow {
+  rowNumber: number;
+  data: Record<string, string>;
+  status: 'valid' | 'invalid' | 'duplicate';
+  errors: string[];
+}
+export interface ImportPreviewResult {
+  header: string[];
+  rows: ImportPreviewRow[];
+  summary: { total: number; valid: number; invalid: number; duplicate: number };
+  context: { academicYearId: string | null; academicYearName: string | null };
+}
+export interface ImportCommitResult {
+  created: {
+    rowNumber: number;
+    admissionNumber: string;
+    studentId: string;
+    parentEmail: string;
+    parentTempPassword: string | null;
+  }[];
+  skipped: { rowNumber: number; reason: string }[];
+  summary: { created: number; skipped: number };
+}
+
+// Onboarding wizard (OB1): step completion is derived from data presence;
+// `completed` is the persisted finish/dismiss flag.
+export interface OnboardingStatus {
+  steps: {
+    year: boolean; classes: boolean; sections: boolean; subjects: boolean;
+    students: boolean; staff: boolean; branding: boolean;
+  };
+  currentStep: number;
+  academicComplete: boolean;
+  completed: boolean;
+  completedAt: string | null;
+  counts: { hasCurrentYear: boolean; classes: number; sections: number; classSubjects: number; students: number; staff: number };
+}
+
 export interface ClassWithSections {
   id: string;
   name: string;
@@ -226,6 +265,34 @@ export interface StudentAttendanceSummary {
   leave: number;
   attendancePercent: number;
   recentHistory: { ad: string; bs: string; status: string }[];
+}
+
+// Student leave application (attendance-leave, distinct from HR staff leave).
+// Returned enriched by GET /attendance/leave for the review screen.
+export interface StudentLeaveRequest {
+  id: string;
+  studentId: string;
+  academicYearId: string;
+  fromDate: { ad: string; bs: string };
+  toDate: { ad: string; bs: string };
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  appliedBy: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewRemarks: string | null;
+  createdAt: string;
+  studentName: string | null;
+  admissionNumber: string | null;
+  className: string | null;
+  sectionName: string | null;
+  appliedByName: string | null;
+  reviewedByName: string | null;
+}
+
+export interface ReviewLeaveData {
+  status: 'APPROVED' | 'REJECTED';
+  remarks?: string;
 }
 
 export interface SectionAttendanceReport {
@@ -573,6 +640,8 @@ export interface ExamType {
   orderIndex: number;
   totalWeight: number;
   isComplete: boolean;
+  resultsPublished: boolean;
+  resultsPublishedAt: string | null;
 }
 
 export interface ExamSchedule {

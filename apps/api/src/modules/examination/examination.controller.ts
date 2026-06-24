@@ -1,7 +1,8 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
-  Patch, Post, Query, UseGuards,
+  Body, Controller, Delete, Get, Header, HttpCode, HttpStatus, Param, ParseUUIDPipe,
+  Patch, Post, Query, Res, UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -15,7 +16,7 @@ import { MarksService } from './marks.service';
 import { ResultService } from './result.service';
 import {
   CreateGradingScaleDto,
-  CreateExamTypeDto, UpdateExamTypeDto, ExamTypeQueryDto,
+  CreateExamTypeDto, UpdateExamTypeDto, ExamTypeQueryDto, PublishExamTypeDto,
   CreateExamScheduleDto, BulkCreateScheduleDto, UpdateExamScheduleDto, ExamScheduleQueryDto,
   MyExamScheduleQueryDto,
   BulkEnterMarksDto, UpdateMarkDto, MarksQueryDto,
@@ -87,6 +88,15 @@ export class ExaminationController {
     @Body() dto: UpdateExamTypeDto,
   ) {
     return this.examTypeService.update(id, dto);
+  }
+
+  @Patch('types/:id/publish')
+  @Roles(...COORDINATOR_AND_ABOVE)
+  publishExamType(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PublishExamTypeDto,
+  ) {
+    return this.examTypeService.setPublished(id, dto.published);
   }
 
   @Delete('types/:id')
@@ -201,5 +211,24 @@ export class ExaminationController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.resultService.getReportCard(studentId, user.userId, user.role);
+  }
+
+  @Get('results/report-card/:studentId/pdf')
+  @Roles(Role.PARENT, ...TEACHER_AND_ABOVE)
+  @Header('Content-Type', 'application/pdf')
+  async getReportCardPdf(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
+    // Hard-scope + publish gate enforced inside getReportCard (via buildReportCardPdf);
+    // PARENT is limited to own child, 409 when nothing is published.
+    const { buffer, fileName } = await this.resultService.buildReportCardPdf(
+      studentId,
+      user.userId,
+      user.role,
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
   }
 }

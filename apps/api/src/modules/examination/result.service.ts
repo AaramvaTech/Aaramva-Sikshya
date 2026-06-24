@@ -1,7 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import { GradingScaleService } from './grading-scale.service';
+import { PdfService } from './pdf.service';
 import {
   ExamScheduleRow,
   ExamTypeRow,
@@ -26,7 +28,9 @@ export interface ComputeSummary {
 export class ResultService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly tenantContext: TenantContextService,
     private readonly gradingScaleService: GradingScaleService,
+    private readonly pdfService: PdfService,
   ) {}
 
   async computeResults(dto: ComputeResultsDto): Promise<ComputeSummary> {
@@ -329,11 +333,14 @@ export class ResultService {
     if (callerRole === Role.PARENT && callerId) {
       await this.assertGuardianOwnsStudent(studentId, callerId);
     }
+    // Students & parents only see published terms; staff see all.
+    const publishedOnly = callerRole === Role.STUDENT || callerRole === Role.PARENT;
     const rows = await this.tenantPrisma.query<StudentResultRow & { exam_type_name: string }>(
       `SELECT sr.*, et.name AS exam_type_name
        FROM student_results sr
        JOIN exam_types et ON sr.exam_type_id = et.id
        WHERE sr.student_id = $1::uuid
+         ${publishedOnly ? 'AND et.results_published_at IS NOT NULL' : ''}
        ORDER BY et.order_index ASC`,
       studentId,
     );
@@ -467,13 +474,23 @@ export class ResultService {
       student.academic_year_id,
     );
 
-    // Build exam results with type info
-    const examResults = examResultsWithSubjects.map((er) => {
+    // Publish gate: students & parents only see terms whose results are
+    // published; staff (admin/teacher) see everything (incl. unpublished).
+    const publishedOnly = callerRole === Role.STUDENT || callerRole === Role.PARENT;
+    const isPublished = (examTypeId: string) =>
+      examTypes.find((et) => et.id === examTypeId)?.results_published_at != null;
+    const visibleResults = publishedOnly
+      ? examResultsWithSubjects.filter((er) => isPublished(er.examTypeId))
+      : examResultsWithSubjects;
+
+    // Build exam results with type info (only the visible terms)
+    const examResults = visibleResults.map((er) => {
       const examType = examTypes.find((et) => et.id === er.examTypeId);
-      const base = { id: er.examTypeId, name: '', weightPercent: 0, orderIndex: 0 };
+      const base = { id: er.examTypeId, name: '', weightPercent: 0, orderIndex: 0, resultsPublished: false };
       if (examType) {
         const dto = toExamTypeResponse(examType);
-        base.id = dto.id; base.name = dto.name; base.weightPercent = dto.weightPercent; base.orderIndex = dto.orderIndex;
+        base.id = dto.id; base.name = dto.name; base.weightPercent = dto.weightPercent;
+        base.orderIndex = dto.orderIndex; base.resultsPublished = dto.resultsPublished;
       }
       return {
         examType: base,
@@ -488,21 +505,23 @@ export class ResultService {
       };
     });
 
-    // Calculate annual result (weighted)
-    let weightedTotal = 0;
+    // Annual result: weighted average over the VISIBLE terms, normalized by the
+    // sum of their weights — Σ(wᵢ·pctᵢ)/Σwᵢ. (The system intends per-year weights
+    // to total 100; normalizing makes a partial/published subset behave correctly.)
+    let weightedSum = 0;
     let totalWeight = 0;
     let allPassed = true;
-    for (const er of examResultsWithSubjects) {
+    for (const er of visibleResults) {
       const examType = examTypes.find((et) => et.id === er.examTypeId);
       if (examType) {
         const weight = toNum(examType.weight_percent);
-        weightedTotal += (weight * er.percentage) / 100;
+        weightedSum += weight * er.percentage;
         totalWeight += weight;
         if (!er.isPassed) allPassed = false;
       }
     }
 
-    const weightedPercentage = totalWeight > 0 ? Math.round(weightedTotal * 100) / 100 : 0;
+    const weightedPercentage = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0;
     const division =
       weightedPercentage >= 60
         ? 'First Division'
@@ -511,6 +530,29 @@ export class ResultService {
         : weightedPercentage >= 32
         ? 'Third Division'
         : 'Fail';
+
+    // finalGrade / finalGpa from the school's grading scale: prefer the default
+    // scale, else any term's scale. Stays null only if no scale is configured.
+    let finalGrade: string | null = null;
+    let finalGpa: number | null = null;
+    if (totalWeight > 0) {
+      const defaultScale = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM grading_scales WHERE is_default = true AND deleted_at IS NULL LIMIT 1`,
+      );
+      const annualScaleId =
+        defaultScale[0]?.id ??
+        examTypes.find((et) => et.grading_scale_id)?.grading_scale_id ??
+        null;
+      if (annualScaleId) {
+        const thresholds = await this.tenantPrisma.query<GradeThresholdRow>(
+          `SELECT * FROM grade_thresholds WHERE grading_scale_id = $1::uuid ORDER BY min_percent DESC`,
+          annualScaleId,
+        );
+        const { grade, gpaPoint } = this.gradingScaleService.findGrade(weightedPercentage, thresholds);
+        finalGrade = grade !== 'NG' ? grade : null;
+        finalGpa = gpaPoint;
+      }
+    }
 
     return {
       student: {
@@ -525,11 +567,42 @@ export class ResultService {
       examResults,
       annualResult: {
         weightedPercentage,
-        finalGrade: null as string | null,
-        finalGpa: null as number | null,
+        finalGrade,
+        finalGpa,
         division,
         isPassed: allPassed && examResults.length > 0,
       },
     };
+  }
+
+  /** School name for the PDF header (public.tenants is reachable via search_path). */
+  private async getSchoolName(): Promise<string> {
+    const { tenantId } = this.tenantContext.getOrThrow();
+    const rows = await this.tenantPrisma.query<{ name: string }>(
+      `SELECT name FROM tenants WHERE id = $1`,
+      tenantId,
+    );
+    return rows[0]?.name ?? 'School';
+  }
+
+  /**
+   * Build the downloadable report-card PDF from the SAME getReportCard data
+   * (one source of truth, publish gate + hard-scope already enforced there).
+   * Throws 409 when no published terms exist — a clean "not available yet"
+   * instead of a broken empty PDF.
+   */
+  async buildReportCardPdf(
+    studentId: string,
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const rc = await this.getReportCard(studentId, callerId, callerRole);
+    if (rc.examResults.length === 0) {
+      throw new ConflictException('Report card is not available yet — no results have been published.');
+    }
+    const schoolName = await this.getSchoolName();
+    const buffer = await this.pdfService.renderReportCard(rc, { schoolName });
+    const safeName = rc.student.fullName.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'student';
+    return { buffer, fileName: `report-card-${safeName}.pdf` };
   }
 }

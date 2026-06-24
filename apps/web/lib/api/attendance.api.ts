@@ -7,6 +7,8 @@ import type {
   StudentAttendanceSummary,
   SectionAttendanceReport,
   SchoolAttendanceSummary,
+  StudentLeaveRequest,
+  ReviewLeaveData,
 } from '@/types/api.types';
 
 export const attendanceApi = {
@@ -39,4 +41,13 @@ export const attendanceApi = {
 
   getSchoolSummary: () =>
     api.get<ApiResponse<SchoolAttendanceSummary>>('/attendance/students/school/summary'),
+
+  // ── Student leave requests (review loop) ──────────────────────────────────
+  listLeaveRequests: (params: { status?: string; page?: number; limit?: number }) =>
+    api.get<ApiResponse<PaginatedResponse<StudentLeaveRequest>>>('/attendance/leave', {
+      params,
+    }),
+
+  reviewLeave: (id: string, data: ReviewLeaveData) =>
+    api.patch<ApiResponse<StudentLeaveRequest>>(`/attendance/leave/${id}/review`, data),
 };

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { LeaveService } from '../leave.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { SmsService } from '../../communication/sms.service';
 import { Role } from '../../common/enums/role.enum';
 
 const mockLeaveRow = {
@@ -30,8 +31,14 @@ const leaveDto = {
 describe('LeaveService', () => {
   let service: LeaveService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let sms: { send: jest.Mock };
+  // Fake transaction client handed to tenantPrisma.run()
+  let tx: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
 
   beforeEach(async () => {
+    tx = { $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() };
+    sms = { send: jest.fn().mockResolvedValue(undefined) };
+
     const module = await Test.createTestingModule({
       providers: [
         LeaveService,
@@ -40,8 +47,11 @@ describe('LeaveService', () => {
           useValue: {
             query: jest.fn(),
             execute: jest.fn(),
+            // run() invokes the caller's fn with the fake tx client
+            run: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
           },
         },
+        { provide: SmsService, useValue: sms },
       ],
     }).compile();
 
@@ -144,40 +154,91 @@ describe('LeaveService', () => {
   });
 
   describe('reviewLeave()', () => {
-    it('sets status to APPROVED and records reviewedBy + reviewedAt', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([mockLeaveRow]) // findOne (PENDING)
+    it('APPROVE: stamps reviewer + note, reflects LEAVE into attendance, and notifies the applicant', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ ...mockLeaveRow, student_section_id: 'section-1' }]) // SELECT existing (PENDING)
         .mockResolvedValueOnce([{
           ...mockLeaveRow,
           status: 'APPROVED',
           reviewed_by: 'principal-1',
           reviewed_at: new Date(),
-        }]);
+          review_remarks: 'Enjoy',
+        }]); // UPDATE ... RETURNING
+      tx.$executeRawUnsafe.mockResolvedValueOnce(3); // generate_series LEAVE upsert
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { phone: '9800000000', student_name: 'Aarav Sharma' },
+      ]); // notifyApplicant lookup
 
       const result = await service.reviewLeave(
         'leave-1',
-        { status: 'APPROVED' },
+        { status: 'APPROVED', remarks: 'Enjoy' },
         'principal-1',
       );
 
       expect(result.status).toBe('APPROVED');
       expect(result.reviewedBy).toBe('principal-1');
-      expect(result.reviewedAt).not.toBeNull();
+      expect(result.reviewRemarks).toBe('Enjoy');
+      // attendance reflection ran
+      expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+      expect(tx.$executeRawUnsafe.mock.calls[0][0]).toContain("'LEAVE'");
+      // applicant was notified exactly once
+      expect(sms.send).toHaveBeenCalledTimes(1);
+      expect(sms.send).toHaveBeenCalledWith('9800000000', expect.stringContaining('APPROVED'), 'LEAVE_DECISION', 'student-1');
+    });
+
+    it('REJECT: stamps decision but does NOT touch attendance', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ ...mockLeaveRow, student_section_id: 'section-1' }])
+        .mockResolvedValueOnce([{
+          ...mockLeaveRow,
+          status: 'REJECTED',
+          reviewed_by: 'principal-1',
+          reviewed_at: new Date(),
+          review_remarks: 'Insufficient notice',
+        }]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { phone: '9800000000', student_name: 'Aarav Sharma' },
+      ]);
+
+      const result = await service.reviewLeave(
+        'leave-1',
+        { status: 'REJECTED', remarks: 'Insufficient notice' },
+        'principal-1',
+      );
+
+      expect(result.status).toBe('REJECTED');
+      expect(tx.$executeRawUnsafe).not.toHaveBeenCalled(); // no attendance write on reject
+      expect(sms.send).toHaveBeenCalledWith('9800000000', expect.stringContaining('REJECTED'), 'LEAVE_DECISION', 'student-1');
+    });
+
+    it('skips notify-back when the applicant has no phone on file (decision still stands)', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ ...mockLeaveRow, student_section_id: null }])
+        .mockResolvedValueOnce([{ ...mockLeaveRow, status: 'APPROVED', reviewed_by: 'principal-1', reviewed_at: new Date() }]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ phone: null, student_name: 'Aarav Sharma' }]);
+
+      const result = await service.reviewLeave('leave-1', { status: 'APPROVED' }, 'principal-1');
+
+      expect(result.status).toBe('APPROVED');
+      expect(tx.$executeRawUnsafe).not.toHaveBeenCalled(); // null section → no reflection
+      expect(sms.send).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException if leave is already reviewed', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+      tx.$queryRawUnsafe.mockResolvedValueOnce([
         {
           ...mockLeaveRow,
           status: 'APPROVED',
           reviewed_by: 'principal-1',
           reviewed_at: new Date(),
+          student_section_id: 'section-1',
         },
       ]);
 
       await expect(
         service.reviewLeave('leave-1', { status: 'REJECTED' }, 'principal-2'),
       ).rejects.toThrow(BadRequestException);
+      expect(sms.send).not.toHaveBeenCalled();
     });
   });
 });

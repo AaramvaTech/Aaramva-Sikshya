@@ -97,6 +97,16 @@ export function useDeleteExamType() {
   });
 }
 
+export function useSetExamTypePublished() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, published }: { id: string; published: boolean }) =>
+      examinationApi.setExamTypePublished(id, published),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['exam-types'] }),
+  });
+}
+
 export function useBulkCreateSchedules() {
   const queryClient = useQueryClient();
   return useMutation({
