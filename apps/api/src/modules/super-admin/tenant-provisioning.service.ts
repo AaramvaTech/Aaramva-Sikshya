@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantService } from '../tenant/tenant.service';
+import { TenantMigrationService } from '../tenant/tenant-migration.service';
 import { Role } from '../common/enums/role.enum';
 
 const BCRYPT_ROUNDS = 12;
@@ -35,6 +36,7 @@ export class TenantProvisioningService {
     private readonly tenantService: TenantService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly tenantMigration: TenantMigrationService,
   ) {}
 
   async provision(input: ProvisionInput): Promise<ProvisionResult> {
@@ -90,7 +92,11 @@ export class TenantProvisioningService {
     };
 
     try {
-      await this.tenantService.provisionSchema(input.slug);
+      // Provision via the migration runner (MIG-1): it creates the schema, the
+      // _tenant_migrations ledger, and applies every migration from 0001. New
+      // tenants therefore share a byte-identical schema history with migrated
+      // ones. (Replaces the old tenant-schema.sql one-shot.)
+      await this.tenantMigration.migrateSchema(ctx.schemaName, { label: input.slug });
 
       return await this.tenantContext.run(ctx, async () => {
         const passwordHash = await bcrypt.hash(input.adminPassword, BCRYPT_ROUNDS);
