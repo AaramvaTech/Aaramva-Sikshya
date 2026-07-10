@@ -28,3 +28,6 @@ Thumbs.db
 
 # Expo (local caches / generated artifacts — never commit)
 .expo/
+
+# Claude Code local state (agent worktrees, session artifacts — tool noise)
+.claude/
