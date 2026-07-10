@@ -10,6 +10,7 @@ import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { useThemeColors, SATURDAY_HIGHLIGHT, brandSurface, brandMuted } from '../../lib/theme/colors';
 import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
+import { localDateKey } from '../../lib/time';
 import NpText from '../../components/NpText';
 import { todayBs, daysInBsMonth, bsToAd, adToBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
@@ -55,7 +56,9 @@ export default function ParentAttendance() {
     const totalDays = daysInBsMonth(viewMonth.year, viewMonth.month);
     const firstAd = bsToAd({ year: viewMonth.year, month: viewMonth.month, day: 1 });
     const lastAd = bsToAd({ year: viewMonth.year, month: viewMonth.month, day: totalDays });
-    return { fromDate: firstAd.toISOString().split('T')[0], toDate: lastAd.toISOString().split('T')[0] };
+    // localDateKey is TZ-safe; toISOString would shift these local-midnight
+    // month-boundary dates back a day at Nepal's +05:45 offset.
+    return { fromDate: localDateKey(firstAd), toDate: localDateKey(lastAd) };
   }, [viewMonth.year, viewMonth.month]);
 
   const historyQuery = useChildAttendanceHistory({

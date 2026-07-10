@@ -9,6 +9,7 @@ import { todayBs, bsToAd, adToBs, BS_MONTH_NAMES_EN, formatBs, daysInBsMonth } f
 import type { BsDate } from 'bs-calendar';
 import type { LeaveRequest, LeaveType } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
+import { localDateKey } from '../../lib/time';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, StatusBadge, SelectChip,
   MonthNav, EmptyState, ErrorState, LoadingBlock,
@@ -32,7 +33,9 @@ function formatLeaveDate(d: { ad: string; bs: string } | null | undefined): stri
   return '—';
 }
 function bsToAdString(bs: BsDate): string {
-  return bsToAd(bs).toISOString().split('T')[0];
+  // localDateKey reads local calendar components (TZ-safe); toISOString would
+  // shift a Nepal (+05:45) local-midnight date back to the previous UTC day.
+  return localDateKey(bsToAd(bs));
 }
 function prevMonth(b: BsDate): BsDate {
   if (b.month === 1) return { year: b.year - 1, month: 12, day: 1 };

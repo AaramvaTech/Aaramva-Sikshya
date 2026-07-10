@@ -5,6 +5,7 @@ import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import type { StaffAttendanceRecord } from '../../types';
 import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
+import { localDateKey } from '../../lib/time';
 import {
   ScreenHeader, MonthNav, Card, CardLabel, AttendanceCalendar, Legend,
   type CalendarStatusStyle,
@@ -47,9 +48,11 @@ export default function TeacherMyAttendance() {
     const nextBs: BsDate = month === 12 ? { year: year + 1, month: 1, day: 1 } : { year, month: month + 1, day: 1 };
     const toAdDate = bsToAd(nextBs);
     toAdDate.setDate(toAdDate.getDate() - 1);
+    // localDateKey is TZ-safe; toISOString would shift these local-midnight
+    // month-boundary dates back a day at Nepal's +05:45 offset.
     return {
-      fromDate: firstAd.toISOString().split('T')[0],
-      toDate: toAdDate.toISOString().split('T')[0],
+      fromDate: localDateKey(firstAd),
+      toDate: localDateKey(toAdDate),
       daysInMonth: days,
     };
   }, [viewMonth]);

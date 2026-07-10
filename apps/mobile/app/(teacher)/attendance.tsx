@@ -11,6 +11,7 @@ import type { BsDate } from 'bs-calendar';
 import type { StudentProfile, SectionAttendanceRecord } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
+import { localDateKey } from '../../lib/time';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock,
@@ -20,7 +21,9 @@ type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
 const STATUS_OPTIONS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
 
 function adStringFromBs(bs: BsDate): string {
-  return bsToAd(bs).toISOString().split('T')[0];
+  // localDateKey reads local calendar components (TZ-safe); toISOString would
+  // shift a Nepal (+05:45) local-midnight date back to the previous UTC day.
+  return localDateKey(bsToAd(bs));
 }
 function prevMonth(b: BsDate): BsDate {
   if (b.month === 1) return { year: b.year - 1, month: 12, day: 1 };
