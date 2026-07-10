@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { adToBs } from 'bs-calendar';
 
 export interface StudentRow {
@@ -19,16 +18,10 @@ export interface StudentRow {
   email: string | null;
   permanent_address: Record<string, string> | null;
   temporary_address: Record<string, string> | null;
-  /**
-   * @deprecated Legacy JSONB guardian blob. As of FIX-1B all guardian *contact
-   * resolution* reads (SMS recipients, fee-overdue contact, parent-account
-   * linkage, defaulter report) resolve from the normalized `guardians` table.
-   * This column is still written by admitStudent and still mirrored by
-   * toStudentResponse() for the student-detail view — so it cannot be dropped
-   * yet. TODO(MIG-1→0002): migrate the profile read + converge the write path
-   * onto the normalized table via a forward backfill, then drop this column.
-   */
-  guardians: Record<string, unknown> | null;
+  // Guardians are NOT a column on students anymore (MIG-2 dropped the JSONB
+  // `guardians` column in migration 0002). They live in the normalized
+  // `guardians` table and are attached to the response via toStudentResponse's
+  // `guardians` argument — see StudentService.fetchGuardians / GuardianService.
   class_name: string | null;
   section_name: string | null;
   roll_number: number | null;
@@ -58,6 +51,30 @@ export interface GuardianDto {
   phone: string;
   email: string | null;
   isPrimary: boolean;
+}
+
+/** Minimal shape of a row from the normalized `guardians` table. */
+export interface GuardianRowLite {
+  id: string;
+  relation: string;
+  first_name: string;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  is_primary: boolean;
+}
+
+/** Map a normalized guardians-table row to the API GuardianDto. */
+export function toGuardianDto(g: GuardianRowLite): GuardianDto {
+  return {
+    id: g.id,
+    relation: g.relation,
+    firstName: g.first_name,
+    lastName: g.last_name ?? '',
+    phone: g.phone ?? '',
+    email: g.email ?? null,
+    isPrimary: g.is_primary,
+  };
 }
 
 export interface StudentResponseDto {
@@ -103,7 +120,10 @@ function toBsString(d: Date | string): string {
   return `${bs.year}-${String(bs.month).padStart(2, '0')}-${String(bs.day).padStart(2, '0')}`;
 }
 
-export function toStudentResponse(row: StudentRow): StudentResponseDto {
+export function toStudentResponse(
+  row: StudentRow,
+  guardians: GuardianDto[] = [],
+): StudentResponseDto {
   return {
     id: row.id,
     studentId: row.student_id,
@@ -123,19 +143,9 @@ export function toStudentResponse(row: StudentRow): StudentResponseDto {
     email: row.email,
     permanentAddress: row.permanent_address,
     temporaryAddress: row.temporary_address,
-    guardians: Array.isArray(row.guardians)
-      ? (row.guardians as Record<string, unknown>[])
-          .filter((g) => !!g.firstName || !!g.relation)
-          .map((g) => ({
-            id: (g.id as string) ?? randomUUID(),
-            relation: (g.relation as string) ?? '',
-            firstName: (g.firstName as string) ?? '',
-            lastName: (g.lastName as string) ?? '',
-            phone: (g.phone as string) ?? '',
-            email: (g.email as string | null) ?? null,
-            isPrimary: (g.isPrimary as boolean) ?? false,
-          }))
-      : [],
+    // Guardians come from the normalized `guardians` table (MIG-2), passed in by
+    // the caller (StudentService.fetchGuardians / GuardianService.insertGuardiansTx).
+    guardians,
     className: row.class_name,
     sectionName: row.section_name,
     rollNumber: row.roll_number,

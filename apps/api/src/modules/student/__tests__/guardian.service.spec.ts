@@ -154,4 +154,92 @@ describe('GuardianService', () => {
 
     expect(result).toEqual([]);
   });
+
+  // ── insertGuardiansTx (MIG-2 normalized write path) ───────────────────────
+
+  describe('insertGuardiansTx', () => {
+    const tx = { $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() };
+
+    // A normalized guardians-table row as returned by INSERT ... RETURNING.
+    const gRow = (over: Record<string, unknown> = {}) => ({
+      id: 'gid', student_id: 'stu-1', relation: 'Guardian', first_name: 'A',
+      last_name: null, phone: '9800000000', email: null, is_primary: false,
+      user_id: null, ...over,
+    });
+    // A guardian as it arrives on the create/update DTO.
+    const gIn = (over: Record<string, unknown> = {}) => ({
+      relation: 'Guardian', firstName: 'A', lastName: 'B', phone: '9800000000',
+      isPrimary: false, ...over,
+    });
+    // The INSERT's last positional arg is `is_primary`.
+    const isPrimaryArgOf = (i: number): unknown => {
+      const call = tx.$queryRawUnsafe.mock.calls[i];
+      return call[call.length - 1];
+    };
+
+    beforeEach(() => {
+      tx.$queryRawUnsafe.mockReset();
+      tx.$executeRawUnsafe.mockReset();
+    });
+
+    it('inserts nothing and issues no query for an empty list', async () => {
+      const out = await service.insertGuardiansTx(tx as any, 'stu-1', []);
+      expect(out).toEqual([]);
+      expect(tx.$queryRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it('respects an explicit single primary (not the first-listed)', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([])                                   // find g0
+        .mockResolvedValueOnce([gRow({ id: 'id0', phone: '111' })]) // insert g0
+        .mockResolvedValueOnce([])                                   // find g1
+        .mockResolvedValueOnce([gRow({ id: 'id1', phone: '222', is_primary: true })]); // insert g1
+
+      const out = await service.insertGuardiansTx(tx as any, 'stu-1', [
+        gIn({ phone: '111', isPrimary: false }),
+        gIn({ phone: '222', isPrimary: true }),
+      ]);
+
+      expect(isPrimaryArgOf(1)).toBe(false); // g0
+      expect(isPrimaryArgOf(3)).toBe(true);  // g1 (the flagged one)
+      expect(out).toHaveLength(2);
+    });
+
+    it('falls back to first-listed when the DTO marks ZERO primaries', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([]).mockResolvedValueOnce([gRow({ id: 'id0', phone: '111' })])
+        .mockResolvedValueOnce([]).mockResolvedValueOnce([gRow({ id: 'id1', phone: '222' })]);
+
+      await service.insertGuardiansTx(tx as any, 'stu-1', [
+        gIn({ phone: '111', isPrimary: false }),
+        gIn({ phone: '222', isPrimary: false }),
+      ]);
+
+      expect(isPrimaryArgOf(1)).toBe(true);  // first-listed wins
+      expect(isPrimaryArgOf(3)).toBe(false);
+    });
+
+    it('falls back to first-listed when the DTO marks MULTIPLE primaries', async () => {
+      tx.$queryRawUnsafe
+        .mockResolvedValueOnce([]).mockResolvedValueOnce([gRow({ id: 'id0', phone: '111' })])
+        .mockResolvedValueOnce([]).mockResolvedValueOnce([gRow({ id: 'id1', phone: '222' })]);
+
+      await service.insertGuardiansTx(tx as any, 'stu-1', [
+        gIn({ phone: '111', isPrimary: true }),
+        gIn({ phone: '222', isPrimary: true }),
+      ]);
+
+      expect(isPrimaryArgOf(1)).toBe(true);  // first-listed wins
+      expect(isPrimaryArgOf(3)).toBe(false);
+    });
+
+    it('is idempotent — skips (no insert) a guardian whose phone already exists', async () => {
+      tx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'existing' }]); // find → found
+
+      const out = await service.insertGuardiansTx(tx as any, 'stu-1', [gIn({ phone: '111' })]);
+
+      expect(out).toEqual([]);                          // nothing inserted
+      expect(tx.$queryRawUnsafe).toHaveBeenCalledTimes(1); // only the find, never the insert
+    });
+  });
 });

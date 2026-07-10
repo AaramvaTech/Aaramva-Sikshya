@@ -1,8 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
 import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
+import { GuardianInputDto } from './dto/create-student.dto';
+import { GuardianDto, toGuardianDto } from './entities/student.entity';
 import { Role } from '../common/enums/role.enum';
 
 interface GuardianRow {
@@ -230,6 +232,63 @@ export class GuardianService {
         linked: true as const,
       };
     });
+  }
+
+  /**
+   * MIG-2 write path: persist the guardians supplied on a student create/update
+   * DTO into the normalized `guardians` table, inside the caller's transaction.
+   *
+   * Semantics mirror provisionGuardian's guardian insert:
+   *  - find-or-create on (student_id, phone): a guardian whose phone already
+   *    exists for this student is left untouched — never duplicated, and its
+   *    user_id parent-account linkage is preserved. This makes the call
+   *    idempotent and non-destructive on the student-update path.
+   *  - no user/login account is created (that stays a deliberate separate action).
+   *
+   * Exactly one guardian is stored as primary. Precedence rule (deterministic):
+   * if the DTO marks EXACTLY ONE primary, that one wins; if it marks ZERO or
+   * SEVERAL, the FIRST-LISTED guardian wins as primary. Returns the rows it
+   * inserted (the create path uses this as the response's guardian list).
+   */
+  async insertGuardiansTx(
+    tx: TenantTx,
+    studentId: string,
+    guardians: GuardianInputDto[],
+  ): Promise<GuardianDto[]> {
+    if (!guardians?.length) return [];
+
+    const explicitPrimaries = guardians.filter((g) => g.isPrimary).length;
+    const primaryIndex =
+      explicitPrimaries === 1 ? guardians.findIndex((g) => g.isPrimary) : 0;
+
+    const inserted: GuardianDto[] = [];
+    for (let i = 0; i < guardians.length; i++) {
+      const g = guardians[i];
+
+      const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM guardians
+         WHERE student_id = $1::uuid AND phone IS NOT DISTINCT FROM $2
+         LIMIT 1`,
+        studentId,
+        g.phone ?? null,
+      );
+      if (existing[0]) continue; // idempotent — guardian with this phone already present
+
+      const rows = await tx.$queryRawUnsafe<GuardianRow[]>(
+        `INSERT INTO guardians (student_id, relation, first_name, last_name, phone, email, is_primary)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+         RETURNING id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id`,
+        studentId,
+        g.relation,
+        g.firstName,
+        g.lastName ?? null,
+        g.phone ?? null,
+        g.email ?? null,
+        i === primaryIndex,
+      );
+      inserted.push(toGuardianDto(rows[0]));
+    }
+    return inserted;
   }
 
   async getMyChildren(userId: string) {

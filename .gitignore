@@ -31,3 +31,6 @@ Thumbs.db
 
 # Claude Code local state (agent worktrees, session artifacts — tool noise)
 .claude/
+
+# Local DB safety snapshots (MIG-2 pg_dump one-offs — never commit data dumps)
+backups/

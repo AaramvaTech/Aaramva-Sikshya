@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentService } from '../student.service';
+import { GuardianService } from '../guardian.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 
@@ -8,6 +9,12 @@ const mockTenantCtx = {
   tenantId: 'tid-1',
   slug: 'testschool',
   schemaName: 'tenant_testschool',
+};
+
+// MIG-2: StudentService delegates the guardian write to GuardianService and
+// reads guardians from the normalized table. Both are mocked here.
+const mockGuardianService = {
+  insertGuardiansTx: jest.fn().mockResolvedValue([]),
 };
 
 const admissionDateAd = '2024-07-16'; // corresponds to BS 2081-04-01
@@ -88,6 +95,7 @@ describe('StudentService', () => {
             getOrThrow: jest.fn().mockReturnValue(mockTenantCtx),
           },
         },
+        { provide: GuardianService, useValue: mockGuardianService },
       ],
     }).compile();
 
@@ -102,6 +110,11 @@ describe('StudentService', () => {
       (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
     );
     (tenantContext.getOrThrow as jest.Mock).mockReturnValue(mockTenantCtx);
+    // Default: the trailing fetchGuardians() SELECT resolves empty. Each test's
+    // own mockResolvedValueOnce(...) still wins for the query it actually cares
+    // about; this only backstops the extra guardians read MIG-2 added.
+    (tenantPrisma.query as jest.Mock).mockResolvedValue([]);
+    (mockGuardianService.insertGuardiansTx as jest.Mock).mockReset().mockResolvedValue([]);
   });
 
   describe('admitStudent()', () => {
@@ -145,6 +158,40 @@ describe('StudentService', () => {
 
       await expect(service.admitStudent(dtoWithOldDate as any, 'uid-1'))
         .rejects.toThrow(BadRequestException);
+    });
+
+    it('writes guardians to the normalized table (not a JSONB students column) — MIG-2', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ max_id: null }])                       // generateStudentId
+        .mockResolvedValueOnce([{ ...mockStudentRow, id: 'sid-1' }]);    // INSERT students RETURNING *
+
+      const returnedGuardian = {
+        id: 'g-1', relation: 'Father', firstName: 'Hari', lastName: 'Sharma',
+        phone: '9800000000', email: null, isPrimary: true,
+      };
+      (mockGuardianService.insertGuardiansTx as jest.Mock).mockResolvedValueOnce([returnedGuardian]);
+
+      const dtoWithGuardians = {
+        ...createDto,
+        guardians: [
+          { relation: 'Father', firstName: 'Hari', lastName: 'Sharma', phone: '9800000000', isPrimary: true },
+        ],
+      };
+
+      const result = await service.admitStudent(dtoWithGuardians as any, 'uid-1');
+
+      // guardians persisted via the normalized-table service, in the same tx
+      expect(mockGuardianService.insertGuardiansTx).toHaveBeenCalledWith(
+        mockTx,
+        'sid-1',
+        dtoWithGuardians.guardians,
+      );
+      // the students INSERT no longer references a guardians column / JSONB write
+      const insertSql = (mockTx.$queryRawUnsafe as jest.Mock).mock.calls[1][0] as string;
+      expect(insertSql).toContain('INSERT INTO students');
+      expect(insertSql).not.toMatch(/\bguardians\b/);
+      // response surfaces the normalized guardians
+      expect(result.guardians).toEqual([returnedGuardian]);
     });
   });
 

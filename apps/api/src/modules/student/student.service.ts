@@ -1,10 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { adToBs, getBsYear } from 'bs-calendar';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
-import { StudentRow, StudentResponseDto, toStudentResponse } from './entities/student.entity';
+import {
+  StudentRow,
+  StudentResponseDto,
+  GuardianDto,
+  GuardianRowLite,
+  toGuardianDto,
+  toStudentResponse,
+} from './entities/student.entity';
+import { GuardianService } from './guardian.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
@@ -37,7 +44,9 @@ const UPDATE_FIELD_MAP: UpdateFieldSpec[] = [
   ['email',            'email',             'text'],
   ['permanentAddress', 'permanent_address', 'jsonb'],
   ['temporaryAddress', 'temporary_address', 'jsonb'],
-  ['guardians',        'guardians',         'jsonb'],
+  // NOTE: `guardians` is deliberately NOT here (MIG-2). Guardians are written to
+  // the normalized `guardians` table via GuardianService.insertGuardiansTx, not
+  // a JSONB column on students. See updateStudent().
   // className / sectionName / academicYear text fields are skipped when UUID IDs are provided
   ['className',        'class_name',        'text'],
   ['sectionName',      'section_name',      'text'],
@@ -53,6 +62,7 @@ export class StudentService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   async admitStudent(dto: CreateStudentDto, createdById: string): Promise<StudentResponseDto> {
@@ -60,7 +70,7 @@ export class StudentService {
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const row = await this.tenantPrisma.run(async (tx) => {
+        const result = await this.tenantPrisma.run(async (tx) => {
           const admissionDate = new Date(dto.admissionDate);
           if (isNaN(admissionDate.getTime())) {
             throw new BadRequestException('Invalid admission date');
@@ -111,15 +121,15 @@ export class StudentService {
             `INSERT INTO students (
                tenant_id, student_id, first_name, last_name, date_of_birth, gender,
                blood_group, religion, ethnicity, nationality, mother_tongue,
-               phone, email, permanent_address, temporary_address, guardians,
+               phone, email, permanent_address, temporary_address,
                class_id, section_id, class_name, section_name, roll_number,
                admission_date, academic_year, previous_school, created_by
              ) VALUES (
                $1::uuid, $2, $3, $4, $5::date, $6,
                $7, $8, $9, $10, $11,
-               $12, $13, $14::jsonb, $15::jsonb, $16::jsonb,
-               $17::uuid, $18::uuid, $19, $20, $21,
-               $22::date, $23, $24, $25::uuid
+               $12, $13, $14::jsonb, $15::jsonb,
+               $16::uuid, $17::uuid, $18, $19, $20,
+               $21::date, $22, $23, $24::uuid
              ) RETURNING *`,
             tenantId, studentId,
             dto.firstName, dto.lastName, dto.dateOfBirth, dto.gender,
@@ -128,24 +138,24 @@ export class StudentService {
             dto.phone ?? null, dto.email ?? null,
             dto.permanentAddress ? JSON.stringify(dto.permanentAddress) : null,
             dto.temporaryAddress ? JSON.stringify(dto.temporaryAddress) : null,
-            // @deprecated JSONB guardian write — kept for backward-compat only.
-            // No longer a contact-resolution read source as of FIX-1B (SMS,
-            // fee-overdue, parent linkage, defaulters read the normalized
-            // `guardians` table); see StudentRow.guardians.
-            // TODO(MIG-1→0002): drop students.guardians after a forward backfill
-            // migration converges the write path onto the normalized table.
-            dto.guardians?.length
-              ? JSON.stringify(dto.guardians.map((g) => ({ id: randomUUID(), ...g })))
-              : null,
             classIdToInsert, sectionIdToInsert,
             classNameToInsert, sectionNameToInsert, dto.rollNumber ?? null,
             dto.admissionDate, academicYearToInsert,
             dto.previousSchool ?? null, createdById,
           );
 
-          return rows[0];
+          const student = rows[0];
+          // MIG-2: guardians are persisted to the normalized `guardians` table
+          // in the SAME transaction as the student insert (atomic), not a JSONB
+          // column on students.
+          const guardians = await this.guardianService.insertGuardiansTx(
+            tx,
+            student.id,
+            dto.guardians ?? [],
+          );
+          return { student, guardians };
         });
-        return toStudentResponse(row);
+        return toStudentResponse(result.student, result.guardians);
       } catch (err: any) {
         if (attempt < 2 && err?.code === 'P2002') continue;
         throw err;
@@ -197,8 +207,10 @@ export class StudentService {
 
     const total = rows[0]?.total_count ? parseInt(rows[0].total_count, 10) : 0;
 
+    const guardiansByStudent = await this.fetchGuardians(rows.map((r) => r.id));
+
     return {
-      data: rows.map(toStudentResponse),
+      data: rows.map((r) => toStudentResponse(r, guardiansByStudent.get(r.id) ?? [])),
       meta: { page, limit, total },
     };
   }
@@ -210,11 +222,28 @@ export class StudentService {
       id, tenantId,
     );
     if (!rows[0]) throw new NotFoundException(`Student ${id} not found`);
-    return toStudentResponse(rows[0]);
+    const guardiansByStudent = await this.fetchGuardians([rows[0].id]);
+    return toStudentResponse(rows[0], guardiansByStudent.get(rows[0].id) ?? []);
   }
 
   async updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentResponseDto> {
     const { tenantId } = this.tenantContext.getOrThrow();
+
+    // MIG-2: guardians supplied on an update are written to the normalized
+    // `guardians` table (find-or-create, additive — never wholesale-replaces or
+    // unlinks existing rows). Guardian edits/removals belong to the dedicated
+    // guardian endpoints, which own the user_id parent-account linkage.
+    if (dto.guardians?.length) {
+      const exists = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM students WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL`,
+        id, tenantId,
+      );
+      if (!exists[0]) throw new NotFoundException(`Student ${id} not found`);
+      await this.tenantPrisma.run((tx) =>
+        this.guardianService.insertGuardiansTx(tx, id, dto.guardians!),
+      );
+    }
+
     const setClauses: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -278,7 +307,8 @@ export class StudentService {
       ...params,
     );
     if (!rows[0]) throw new NotFoundException(`Student ${id} not found`);
-    return toStudentResponse(rows[0]);
+    const guardiansByStudent = await this.fetchGuardians([rows[0].id]);
+    return toStudentResponse(rows[0], guardiansByStudent.get(rows[0].id) ?? []);
   }
 
   async updateStatus(id: string, dto: UpdateStudentStatusDto): Promise<StudentResponseDto> {
@@ -492,6 +522,32 @@ export class StudentService {
         status: r.status,
       })),
     };
+  }
+
+  /**
+   * Load guardians for the given students from the normalized `guardians` table
+   * (MIG-2 — the student profile/list read source), grouped by student_id and
+   * ordered primary-first. Returns an empty map for an empty id list.
+   */
+  private async fetchGuardians(
+    studentIds: string[],
+  ): Promise<Map<string, GuardianDto[]>> {
+    const byStudent = new Map<string, GuardianDto[]>();
+    if (studentIds.length === 0) return byStudent;
+
+    const rows = await this.tenantPrisma.query<GuardianRowLite & { student_id: string }>(
+      `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary
+       FROM guardians
+       WHERE student_id = ANY($1::uuid[])
+       ORDER BY is_primary DESC, created_at ASC`,
+      studentIds,
+    );
+    for (const r of rows) {
+      const list = byStudent.get(r.student_id) ?? [];
+      list.push(toGuardianDto(r));
+      byStudent.set(r.student_id, list);
+    }
+    return byStudent;
   }
 
   private async generateStudentId(tx: TenantTx, admissionDate: Date): Promise<string> {
