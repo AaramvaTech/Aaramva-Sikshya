@@ -13,10 +13,14 @@ const mockTx = {
 };
 
 const TODAY = '2024-04-15';
+// Tomorrow as a LOCAL calendar date. toISOString() yields the UTC date, which
+// collapses to "today" in a +UTC timezone (e.g. Nepal, +05:45) during
+// early-morning runs — making a "future" date no longer future and this guard
+// test flaky. Local date components keep it genuinely one day ahead.
 const TOMORROW = (() => {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 })();
 
 const baseBulkDto = {

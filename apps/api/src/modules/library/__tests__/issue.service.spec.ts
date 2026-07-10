@@ -147,9 +147,15 @@ describe('IssueService', () => {
 
   describe('returnBook()', () => {
     it('calculates fine correctly for an overdue return', async () => {
-      const pastDue = new Date();
-      pastDue.setDate(pastDue.getDate() - 5);
-      const overdueIssue = { ...baseIssueRow, due_date: pastDue };
+      // 5 days ago as a date-only string (local calendar date). A Date object
+      // here carries a time-of-day that the service truncates via toISOString()
+      // (UTC), shifting the day count by ±1 depending on the clock/timezone at
+      // run time. A date-only string has no time component, so the fine is
+      // exactly 5 days regardless of when this test runs.
+      const d = new Date();
+      d.setDate(d.getDate() - 5);
+      const pastDueStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const overdueIssue = { ...baseIssueRow, due_date: pastDueStr };
 
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([overdueIssue]);
 
