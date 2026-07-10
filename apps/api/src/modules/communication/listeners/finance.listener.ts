@@ -51,21 +51,20 @@ export class FinanceListener {
       const studentRows = await this.tenantPrisma.query<{
         first_name: string;
         last_name: string;
-        guardians: { phone?: string; is_primary?: boolean }[] | null;
       }>(
-        `SELECT first_name, last_name, guardians FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+        `SELECT first_name, last_name FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
         payload.studentId,
       );
       if (!studentRows[0]) return;
 
-      const { first_name, last_name, guardians } = studentRows[0];
+      const { first_name, last_name } = studentRows[0];
       const studentName = `${first_name} ${last_name}`;
-      const primaryGuardian = (guardians ?? []).find((g) => g.is_primary);
+      const guardianPhone = await this.resolveGuardianPhone(payload.studentId);
 
-      if (primaryGuardian?.phone) {
+      if (guardianPhone) {
         const smsMessage = `Aaramva Shikshya: Fee of Rs.${payload.balance} is overdue for ${studentName}. Please pay at the earliest.`;
         try {
-          await this.smsService.send(primaryGuardian.phone, smsMessage, 'FEE_OVERDUE', payload.studentId);
+          await this.smsService.send(guardianPhone, smsMessage, 'FEE_OVERDUE', payload.studentId);
         } catch {
           // Silently swallow SMS errors
         }
@@ -86,11 +85,32 @@ export class FinanceListener {
     }
   }
 
+  /**
+   * Guardian contact for SMS = the primary-flagged guardian, else the earliest by
+   * created_at (FIX-1B: normalized `guardians` table is the sole read source; the
+   * legacy students.guardians JSONB is deprecated and no longer read). Returns
+   * null when the student has no guardian with a phone on file.
+   */
+  private async resolveGuardianPhone(studentId: string): Promise<string | null> {
+    const rows = await this.tenantPrisma.query<{ phone: string | null }>(
+      `SELECT phone FROM guardians
+       WHERE student_id = $1::uuid
+       ORDER BY is_primary DESC, created_at ASC
+       LIMIT 1`,
+      studentId,
+    );
+    return rows[0]?.phone ?? null;
+  }
+
   private async findParentUser(studentId: string): Promise<{ id: string } | null> {
+    // FIX-1B: resolve the linked PARENT via the normalized guardians.user_id
+    // linkage (tenant-scoped) instead of the legacy students.guardians JSONB
+    // containment query. Prefers the primary guardian's account when several link.
     const rows = await this.tenantPrisma.query<{ id: string }>(
-      `SELECT u.id FROM users u
-       JOIN students s ON (s.guardians @> jsonb_build_array(jsonb_build_object('user_id', u.id::text)))
-       WHERE s.id = $1::uuid AND u.role = 'PARENT' AND u.deleted_at IS NULL
+      `SELECT u.id FROM guardians g
+       JOIN users u ON u.id = g.user_id
+       WHERE g.student_id = $1::uuid AND u.role = 'PARENT' AND u.deleted_at IS NULL
+       ORDER BY g.is_primary DESC, g.created_at ASC
        LIMIT 1`,
       studentId,
     );

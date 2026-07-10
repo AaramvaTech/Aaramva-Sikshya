@@ -246,12 +246,20 @@ export class SmsService {
     }
 
     if (dto.audience === 'ALL_PARENTS') {
+      // FIX-1B: resolve one contact per student from the normalized `guardians`
+      // table — the primary-flagged guardian, else the earliest by created_at.
+      // The legacy students.guardians JSONB is deprecated and no longer read
+      // (its snake_case `is_primary` filter never matched the camelCase
+      // `isPrimary` keys, silently resolving zero recipients).
       const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT DISTINCT (g->>'phone') AS phone
-         FROM students s, jsonb_array_elements(s.guardians) g
-         WHERE s.deleted_at IS NULL
-           AND (g->>'is_primary')::boolean = true
-           AND (g->>'phone') IS NOT NULL`,
+        `SELECT d.phone FROM (
+           SELECT DISTINCT ON (g.student_id) g.phone
+           FROM guardians g
+           JOIN students s ON s.id = g.student_id
+           WHERE s.deleted_at IS NULL
+           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
+         ) d
+         WHERE d.phone IS NOT NULL`,
       );
       return rows.map((r) => r.phone);
     }
@@ -264,28 +272,35 @@ export class SmsService {
     }
 
     if (dto.audience === 'CLASS' && dto.classId) {
+      // Same normalized primary-else-earliest rule as ALL_PARENTS, scoped to a class.
       const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT DISTINCT (g->>'phone') AS phone
-         FROM students s
-         JOIN enrollments e ON e.student_id = s.id
-         , jsonb_array_elements(s.guardians) g
-         WHERE e.class_id = $1::uuid
-           AND s.deleted_at IS NULL
-           AND (g->>'is_primary')::boolean = true
-           AND (g->>'phone') IS NOT NULL`,
+        `SELECT d.phone FROM (
+           SELECT DISTINCT ON (g.student_id) g.phone
+           FROM guardians g
+           JOIN students s ON s.id = g.student_id
+           JOIN enrollments e ON e.student_id = s.id
+           WHERE e.class_id = $1::uuid
+             AND s.deleted_at IS NULL
+           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
+         ) d
+         WHERE d.phone IS NOT NULL`,
         dto.classId,
       );
       return rows.map((r) => r.phone);
     }
 
     if (dto.audience === 'SECTION' && dto.sectionId) {
+      // Same normalized primary-else-earliest rule as ALL_PARENTS, scoped to a section.
       const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT DISTINCT (g->>'phone') AS phone
-         FROM students s, jsonb_array_elements(s.guardians) g
-         WHERE s.section_id = $1::uuid
-           AND s.deleted_at IS NULL
-           AND (g->>'is_primary')::boolean = true
-           AND (g->>'phone') IS NOT NULL`,
+        `SELECT d.phone FROM (
+           SELECT DISTINCT ON (g.student_id) g.phone
+           FROM guardians g
+           JOIN students s ON s.id = g.student_id
+           WHERE s.section_id = $1::uuid
+             AND s.deleted_at IS NULL
+           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
+         ) d
+         WHERE d.phone IS NOT NULL`,
         dto.sectionId,
       );
       return rows.map((r) => r.phone);

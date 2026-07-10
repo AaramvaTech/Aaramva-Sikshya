@@ -128,6 +128,12 @@ export class StudentService {
             dto.phone ?? null, dto.email ?? null,
             dto.permanentAddress ? JSON.stringify(dto.permanentAddress) : null,
             dto.temporaryAddress ? JSON.stringify(dto.temporaryAddress) : null,
+            // @deprecated JSONB guardian write — kept for backward-compat only.
+            // No longer a contact-resolution read source as of FIX-1B (SMS,
+            // fee-overdue, parent linkage, defaulters read the normalized
+            // `guardians` table); see StudentRow.guardians.
+            // TODO(MIG-1→0002): drop students.guardians after a forward backfill
+            // migration converges the write path onto the normalized table.
             dto.guardians?.length
               ? JSON.stringify(dto.guardians.map((g) => ({ id: randomUUID(), ...g })))
               : null,

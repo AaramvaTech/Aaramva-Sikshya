@@ -19,6 +19,15 @@ export interface StudentRow {
   email: string | null;
   permanent_address: Record<string, string> | null;
   temporary_address: Record<string, string> | null;
+  /**
+   * @deprecated Legacy JSONB guardian blob. As of FIX-1B all guardian *contact
+   * resolution* reads (SMS recipients, fee-overdue contact, parent-account
+   * linkage, defaulter report) resolve from the normalized `guardians` table.
+   * This column is still written by admitStudent and still mirrored by
+   * toStudentResponse() for the student-detail view — so it cannot be dropped
+   * yet. TODO(MIG-1→0002): migrate the profile read + converge the write path
+   * onto the normalized table via a forward backfill, then drop this column.
+   */
   guardians: Record<string, unknown> | null;
   class_name: string | null;
   section_name: string | null;

@@ -127,14 +127,20 @@ export class ReportService {
               COUNT(i.id) AS overdue_invoices,
               SUM(i.balance) AS total_due,
               MIN(i.due_date) AS oldest_due_date,
-              COALESCE((s.guardians->0->>'phone')::text, s.phone, '') AS guardian_phone
+              COALESCE(
+                (SELECT g.phone FROM guardians g
+                  WHERE g.student_id = s.id
+                  ORDER BY g.is_primary DESC, g.created_at ASC
+                  LIMIT 1),
+                s.phone, ''
+              ) AS guardian_phone
        FROM students s
        JOIN invoices i ON i.student_id = s.id
          AND i.academic_year_id = $1::uuid
          AND i.status = 'OVERDUE'
          AND i.deleted_at IS NULL
        WHERE s.deleted_at IS NULL
-       GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.class_name, s.section_name, s.guardians, s.phone
+       GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.class_name, s.section_name, s.phone
        ORDER BY SUM(i.balance) DESC`,
       academicYearId,
     );
