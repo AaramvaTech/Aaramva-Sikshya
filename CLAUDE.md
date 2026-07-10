@@ -301,7 +301,15 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
 - DB: PostgreSQL 17 local (password: <DB_PASSWORD — see .env>). Redis not running yet (needed for queues)
 - Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*) AND /api/v1/tenants/verify/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
-- Run migrations: `cd apps/api && npx prisma migrate dev`
+- Run migrations (public schema, Prisma): `cd apps/api && npx prisma migrate dev`
+- Tenant schema migrations (MIG-1): tenant schemas are NOT Prisma-managed. Add SQL to
+  `apps/api/migrations/tenant/NNNN_desc.sql` (reference the schema only via `{{schema}}`),
+  then run `npm run migrate:tenants` (all) / `-- --tenant <slug>` (canary) / `-- --dry-run`
+  / `-- --status`. Ledger `_tenant_migrations` lives in each tenant schema; applied files are
+  immutable (checksum-guarded); no down migrations (recovery = restore-from-backup).
+  **Canary convention:** always apply to the `demo` school first, verify, then roll to all.
+  Provisioning (`register-school`) now runs the runner from `0001_baseline.sql` instead of
+  the retired `tenant-schema.sql`. See `apps/api/migrations/tenant/README.md`.
 - Run tests: `cd apps/api && npm test`
 
 > Update this checklist as modules are completed.
