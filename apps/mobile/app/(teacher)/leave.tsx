@@ -12,8 +12,9 @@ import { useThemeColors } from '../../lib/theme/colors';
 import { localDateKey } from '../../lib/time';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, StatusBadge, SelectChip,
-  MonthNav, EmptyState, ErrorState, LoadingBlock,
+  MonthNav, EmptyState, ErrorState,
 } from '../../components/ui';
+import Skeleton from '../../components/Skeleton';
 
 // Semantic leave-status palette (not brand-coupled).
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -241,7 +242,9 @@ export default function TeacherLeave() {
         <View>
           <CardLabel>Leave Requests</CardLabel>
           {leaveResult.isLoading ? (
-            <Card><LoadingBlock /></Card>
+            <View style={{ gap: 10 }}>
+              {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 88 }} className="rounded-2xl" />)}
+            </View>
           ) : leaveResult.isError ? (
             <Card><ErrorState title="Failed to load" onRetry={() => leaveResult.refetch()} /></Card>
           ) : requests.length === 0 ? (

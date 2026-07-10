@@ -7,7 +7,7 @@ import type { StaffAttendanceRecord } from '../../types';
 import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
 import { localDateKey } from '../../lib/time';
 import {
-  ScreenHeader, MonthNav, Card, CardLabel, AttendanceCalendar, Legend,
+  ScreenHeader, MonthNav, Card, CardLabel, AttendanceCalendar, Legend, ErrorState,
   type CalendarStatusStyle,
 } from '../../components/ui';
 
@@ -104,6 +104,16 @@ export default function TeacherMyAttendance() {
       </ScreenHeader>
 
       <View style={styles.body}>
+        {(summaryResult.isError || historyResult.isError) ? (
+          <Card padded>
+            <ErrorState
+              compact
+              title="Couldn't load attendance"
+              onRetry={() => { void summaryResult.refetch(); void historyResult.refetch(); }}
+            />
+          </Card>
+        ) : (
+        <>
         {/* Summary */}
         {summaryResult.data && (
           <Card padded>
@@ -139,6 +149,8 @@ export default function TeacherMyAttendance() {
           <CardLabel>Legend</CardLabel>
           <Legend items={legendItems} />
         </Card>
+        </>
+        )}
       </View>
     </ScrollView>
   );

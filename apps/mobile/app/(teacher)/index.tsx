@@ -2,7 +2,6 @@ import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, Status
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { todayBs, formatBs } from 'bs-calendar';
 
@@ -13,9 +12,10 @@ import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
-import { EmptyState, LoadingBlock } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -40,7 +40,6 @@ export default function TeacherHome() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
 
@@ -76,6 +75,35 @@ export default function TeacherHome() {
     { num: weeklyTotal, label: 'Weekly', color: c.warning },
   ];
 
+  // Identity + stats come from profile/sections; gate the initial screen on those.
+  const initialLoading = profileResult.isLoading || sectionsResult.isLoading;
+  const anyError = profileResult.isError || sectionsResult.isError || timetableResult.isError;
+  const retryAll = () => {
+    void profileResult.refetch(); void sectionsResult.refetch(); void timetableResult.refetch();
+  };
+
+  if (initialLoading) {
+    return (
+      <View style={[styles.root, { backgroundColor: c.background }]}>
+        <StatusBar barStyle="dark-content" />
+        <Skeleton style={{ height: 200 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
+          <Skeleton style={{ height: 70 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 56 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 160 }} className="rounded-2xl" />
+        </View>
+      </View>
+    );
+  }
+  if (anyError) {
+    return (
+      <View style={[styles.root, { backgroundColor: c.background, justifyContent: 'center' }]}>
+        <StatusBar barStyle="dark-content" />
+        <ErrorState title="Couldn't load your dashboard" onRetry={retryAll} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
       <StatusBar barStyle="dark-content" />
@@ -84,12 +112,7 @@ export default function TeacherHome() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Hero band */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={12} padBottom={18}>
           <View style={styles.bandTop}>
             <View style={styles.schoolWrap}>
               {branding?.logoUrl ? (
@@ -114,7 +137,7 @@ export default function TeacherHome() {
           <Text style={[styles.greeting, { color: c.brandMuted }]}>{getGreeting()}</Text>
           <NpText style={[styles.name, { color: c.foreground }]}>{teacherName}</NpText>
           <Text style={[styles.desig, { color: c.mutedForeground }]}>{desig} · {formatBs(todayBs(), 'en')}</Text>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {/* Stat cards */}
@@ -152,7 +175,9 @@ export default function TeacherHome() {
           {/* Today's classes */}
           <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
           {timetableResult.isLoading ? (
-            <LoadingBlock />
+            <View style={[styles.classCard, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 14, gap: 10 }]}>
+              {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 42 }} className="rounded-xl" />)}
+            </View>
           ) : isSaturday || todaySlots.length === 0 ? (
             <View style={[styles.classCard, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 24 }]}>
               <EmptyState
@@ -199,7 +224,6 @@ export default function TeacherHome() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  band: { paddingHorizontal: 20, paddingBottom: 18, borderBottomWidth: 1 },
   bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
   logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

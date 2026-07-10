@@ -2,7 +2,6 @@ import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, Status
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { todayBs, formatBs } from 'bs-calendar';
 
 import { useMyChildren, useChildAttendanceSummary, useChildTimetable } from '../../hooks/useParentChild';
@@ -11,9 +10,10 @@ import { useBranding } from '../../lib/theme/provider';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import {
-  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, LoadingBlock, type TodayPeriod,
+  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, type TodayPeriod,
 } from '../../components/ui';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 
 const QUICK = [
   { icon: 'ribbon-outline', label: 'Results', route: '/(parent)/results' },
@@ -41,7 +41,6 @@ function nameFromEmail(email: string): string {
 export default function ParentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const tenant = useAuthStore((s) => s.tenant);
   const user = useAuthStore((s) => s.user);
   const { branding } = useBranding();
@@ -70,7 +69,17 @@ export default function ParentDashboard() {
   };
 
   if (childrenQuery.isLoading) {
-    return <View style={[styles.fill, { backgroundColor: c.background }]}><LoadingBlock label="Loading…" /></View>;
+    return (
+      <View style={[styles.fill, { backgroundColor: c.background }]}>
+        <StatusBar barStyle="dark-content" />
+        <Skeleton style={{ height: 220 }} className="rounded-none" />
+        <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
+          <Skeleton style={{ height: 110 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 64 }} className="rounded-2xl" />
+          <Skeleton style={{ height: 150 }} className="rounded-2xl" />
+        </View>
+      </View>
+    );
   }
   if (childrenQuery.isError) {
     return (
@@ -131,12 +140,7 @@ export default function ParentDashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Hero band */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={12} padBottom={18}>
           <View style={styles.bandTop}>
             <View style={styles.schoolWrap}>
               {branding?.logoUrl ? (
@@ -200,7 +204,7 @@ export default function ParentDashboard() {
               })}
             </View>
           )}
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {s ? (
@@ -213,7 +217,7 @@ export default function ParentDashboard() {
               totalWorkingDays={s.totalWorkingDays}
             />
           ) : summaryQuery.isLoading ? (
-            <LoadingBlock />
+            <Skeleton style={{ height: 150 }} className="rounded-2xl" />
           ) : (
             <EmptyState compact icon="stats-chart-outline" title="Attendance data unavailable" />
           )}
@@ -247,7 +251,6 @@ export default function ParentDashboard() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
 
-  band: { paddingHorizontal: 20, paddingBottom: 18, borderBottomWidth: 1 },
   bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
   logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

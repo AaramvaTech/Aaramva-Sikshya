@@ -1,14 +1,13 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useMyChildren, useChildAttendanceSummary, useChildAttendanceHistory } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { useThemeColors, SATURDAY_HIGHLIGHT, brandSurface, brandMuted } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
 import NpText from '../../components/NpText';
@@ -36,7 +35,6 @@ export default function ParentAttendance() {
     return { year: t.year, month: t.month, day: 1 };
   });
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -114,12 +112,7 @@ export default function ParentAttendance() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Brand-tinted header band with rounded bottom corners */}
-        <View
-          style={[
-            styles.headerBand,
-            { paddingTop: insets.top + 14, backgroundColor: bandBg },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={18}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
@@ -154,7 +147,7 @@ export default function ParentAttendance() {
               </View>
             )}
           </View>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           <View style={[styles.card, styles.cardShadow, { backgroundColor: c.surface }]}>
@@ -237,13 +230,6 @@ export default function ParentAttendance() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header band — brand-tinted, rounds the bottom corners per comp
-  headerBand: {
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flex: 1, minWidth: 0 },
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },

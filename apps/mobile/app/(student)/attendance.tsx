@@ -1,6 +1,5 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import NpText from '../../components/NpText';
 import { useAttendanceHistory, useMyAttendanceSummary, useMyProfile } from '../../hooks/useStudentMe';
@@ -8,8 +7,8 @@ import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { localDateKey } from '../../lib/time';
-import { SATURDAY_HIGHLIGHT, useThemeColors, brandSurface, brandMuted } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState } from '../../components/ui';
+import { SATURDAY_HIGHLIGHT, useThemeColors, brandMuted } from '../../lib/theme/colors';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
 import type { AttendanceHistoryItem } from '../../types';
 
@@ -33,7 +32,6 @@ export default function StudentAttendance() {
     return { year: t.year, month: t.month, day: 1 };
   });
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const profileResult = useMyProfile();
   const summaryResult = useMyAttendanceSummary();
@@ -65,8 +63,7 @@ export default function StudentAttendance() {
   const profile = profileResult.data;
   const enrollment = profile?.currentEnrollment;
 
-  // Derived brand-tinted header colours (no raw hex — all derived from school primary)
-  const bandBg = brandSurface(c.primary);
+  // Derived brand-tinted header subtitle colour (derived from school primary)
   const subtitleColor = brandMuted(c.primary);
 
   const legendItems = [
@@ -91,12 +88,7 @@ export default function StudentAttendance() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Brand-tinted header band */}
-        <View
-          style={[
-            styles.headerBand,
-            { paddingTop: insets.top + 14, backgroundColor: bandBg },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={18}>
           <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
           <NpText style={[styles.headerSub, { color: subtitleColor }]}>
             {enrollment ? `Class ${enrollment.className}${enrollment.sectionName} · ` : ''}
@@ -118,7 +110,7 @@ export default function StudentAttendance() {
               })}
             </View>
           )}
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {/* Calendar card (month nav + grid + legend inside) */}
@@ -197,13 +189,6 @@ export default function StudentAttendance() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header band — brand-tinted, rounds the bottom corners per comp
-  headerBand: {
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
   headerSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },
 

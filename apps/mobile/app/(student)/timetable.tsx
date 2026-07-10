@@ -1,10 +1,9 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMyTimetable, useMyProfile } from '../../hooks/useStudentMe';
 import Skeleton from '../../components/Skeleton';
-import { Card, EmptyState, ErrorState, SubjectSlot } from '../../components/ui';
+import { Card, EmptyState, ErrorState, SubjectSlot, ScreenHeader } from '../../components/ui';
 import { subjectColor } from '../../lib/subjects';
 import type { TimetablePeriod } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
@@ -32,7 +31,6 @@ export default function StudentTimetable() {
   const { data, isLoading, isError, refetch } = useMyTimetable();
   const { data: profile } = useMyProfile();
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -79,15 +77,7 @@ export default function StudentTimetable() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* ── Brand-tinted header band ─────────────────────── */}
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop: insets.top + 14,
-              backgroundColor: c.brandSurface,
-            },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={16}>
           <View style={styles.headerTop}>
             <View style={styles.headerText}>
               <Text style={[styles.headerTitle, { color: c.foreground, fontFamily: FONT.extrabold }]}>
@@ -108,7 +98,7 @@ export default function StudentTimetable() {
               {bsDate}
             </Text>
           </View>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {!data.isSchoolDay ? (
@@ -171,12 +161,6 @@ export default function StudentTimetable() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',

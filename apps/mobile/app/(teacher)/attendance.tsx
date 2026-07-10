@@ -1,8 +1,8 @@
 import {
-  View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, StyleSheet,
+  View, Text, ScrollView, FlatList, TouchableOpacity, Alert, RefreshControl, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
   useMySections, useSectionStudents, useSectionAttendance, useBulkMarkAttendance,
 } from '../../hooks/useTeacher';
@@ -14,8 +14,9 @@ import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
-  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock,
+  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState,
 } from '../../components/ui';
+import { CARD_SHADOW } from '../../components/ui/Card';
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
 const STATUS_OPTIONS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
@@ -80,7 +81,7 @@ function DateSelector({ selectedBs, onSelect }: { selectedBs: BsDate; onSelect: 
 
 // ── Student toggle row ────────────────────────────────────────────────────────
 
-function StudentRow({ student, status, onCycle }: { student: StudentProfile; status: AttendanceStatus; onCycle: () => void }) {
+const StudentRow = memo(function StudentRow({ student, status, onCycle }: { student: StudentProfile; status: AttendanceStatus; onCycle: (studentId: string) => void }) {
   const cfg = STATUS_CONFIG[status];
   const roll = student.currentEnrollment?.rollNumber;
   return (
@@ -93,7 +94,7 @@ function StudentRow({ student, status, onCycle }: { student: StudentProfile; sta
         <Text className="text-muted-foreground" style={styles.admission}>{student.admissionNumber}</Text>
       </View>
       <TouchableOpacity
-        onPress={onCycle}
+        onPress={() => onCycle(student.id)}
         style={[styles.statusToggle, { backgroundColor: cfg.bg }]}
         accessibilityLabel={`Toggle attendance, current ${status}`}
       >
@@ -101,7 +102,7 @@ function StudentRow({ student, status, onCycle }: { student: StudentProfile; sta
       </TouchableOpacity>
     </View>
   );
-}
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export default function TeacherAttendance() {
   const selectedDateAd = useMemo(() => adStringFromBs(selectedBs), [selectedBs]);
   const [statusMap, setStatusMap] = useState<Record<string, AttendanceStatus>>({});
 
-  const { data: mySections, isLoading: sectionsLoading, refetch: refetchSections } = useMySections();
+  const { data: mySections, isLoading: sectionsLoading, isError: sectionsError, refetch: refetchSections } = useMySections();
   const studentsResult = useSectionStudents(selectedSection);
   const existingResult = useSectionAttendance(selectedSection, selectedDateAd);
   const markMutation = useBulkMarkAttendance();
@@ -182,99 +183,129 @@ export default function TeacherAttendance() {
   const presentCount = students.filter((s) => (statusMap[s.id] ?? 'PRESENT') === 'PRESENT').length;
   const absentCount = students.filter((s) => (statusMap[s.id] ?? 'PRESENT') === 'ABSENT').length;
 
+  const rosterLoading = studentsResult.isLoading || existingResult.isLoading;
+  const rosterError = studentsResult.isError || existingResult.isError;
+  // Roster rows render as FlatList items (virtualized) — only when ready, loaded and non-empty.
+  const showRows = !!selectedSection && !rosterLoading && !rosterError && students.length > 0;
+
   return (
-    <ScrollView
+    <FlatList
       className="bg-background"
       style={styles.fill}
+      data={showRows ? students : []}
+      keyExtractor={(item) => item.id}
+      extraData={statusMap}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
-    >
-      <ScreenHeader
-        variant="solid"
-        title="Mark attendance"
-        subtitle={`${selectedSec ? `${selectedSec.className} · ${selectedSec.sectionName} — ` : ''}${formatBs(selectedBs, 'en')}`}
-      >
-        {selectedSection && students.length > 0 && (
-          <View style={styles.headerStats}>
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatNum}>{presentCount}</Text>
-              <Text style={styles.headerStatLabel}>Present</Text>
-            </View>
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatNum}>{absentCount}</Text>
-              <Text style={styles.headerStatLabel}>Absent</Text>
-            </View>
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatNum}>{students.length}</Text>
-              <Text style={styles.headerStatLabel}>Total</Text>
-            </View>
-          </View>
-        )}
-      </ScreenHeader>
-
-      <View style={styles.body}>
-        {/* Section picker */}
-        <Card padded>
-          <CardLabel>{showAllSections ? 'All Sections' : 'My Sections'}</CardLabel>
-          {sectionsLoading ? (
-            <LoadingBlock />
-          ) : sections.length === 0 && !showAllSections ? (
-            <Text className="text-muted-foreground" style={styles.hint}>
-              No sections assigned. Use "Mark a different section" below.
-            </Text>
-          ) : (
-            <View style={styles.pickerList}>
-              {sections.map((s) => (
-                <SelectableRow
-                  key={s.sectionId}
-                  title={`${s.className} · ${s.sectionName}`}
-                  selected={selectedSection === s.sectionId}
-                  onPress={() => { setSelectedSection(s.sectionId); setStatusMap({}); setSubmitted(false); }}
-                />
-              ))}
-            </View>
-          )}
-          <TouchableOpacity onPress={() => setShowAllSections(!showAllSections)} style={styles.toggleRow} activeOpacity={0.7}>
-            <Ionicons name={showAllSections ? 'chevron-up' : 'swap-horizontal-outline'} size={14} color={c.mutedForeground} />
-            <Text className="text-muted-foreground" style={styles.toggleText}>
-              {showAllSections ? 'Show my sections only' : 'Mark a different section'}
-            </Text>
-          </TouchableOpacity>
-        </Card>
-
-        {/* Date picker */}
-        <Card padded>
-          <CardLabel>Date (BS)</CardLabel>
-          <DateSelector selectedBs={selectedBs} onSelect={(bs) => { setSelectedBs(bs); setStatusMap({}); setSubmitted(false); }} />
-          <Text className="text-muted-foreground" style={styles.adLine}>AD: {selectedDateAd}</Text>
-        </Card>
-
-        {/* Student list */}
-        {selectedSection && (
-          <Card padded={false}>
-            <View className="border-b border-border" style={styles.listHeader}>
-              <CardLabel>Students</CardLabel>
-              <TouchableOpacity onPress={markAllPresent} style={styles.allPresentBtn} accessibilityLabel="Mark all present">
-                <Text style={styles.allPresentText}>All Present</Text>
-              </TouchableOpacity>
-            </View>
-
-            {studentsResult.isLoading || existingResult.isLoading ? (
-              <LoadingBlock label="Loading students…" />
-            ) : students.length === 0 ? (
-              <EmptyState compact icon="people-outline" title="No students found in this section." />
-            ) : (
-              students.map((student) => (
-                <StudentRow
-                  key={student.id}
-                  student={student}
-                  status={statusMap[student.id] ?? 'PRESENT'}
-                  onCycle={() => cycleStatus(student.id)}
-                />
-              ))
+      renderItem={({ item }) => (
+        <View style={[styles.rowWrap, { backgroundColor: c.surface }]}>
+          <StudentRow
+            student={item}
+            status={statusMap[item.id] ?? 'PRESENT'}
+            onCycle={cycleStatus}
+          />
+        </View>
+      )}
+      ListHeaderComponent={
+        <>
+          <ScreenHeader
+            variant="solid"
+            title="Mark attendance"
+            subtitle={`${selectedSec ? `${selectedSec.className} · ${selectedSec.sectionName} — ` : ''}${formatBs(selectedBs, 'en')}`}
+          >
+            {selectedSection && students.length > 0 && (
+              <View style={styles.headerStats}>
+                <View style={styles.headerStat}>
+                  <Text style={styles.headerStatNum}>{presentCount}</Text>
+                  <Text style={styles.headerStatLabel}>Present</Text>
+                </View>
+                <View style={styles.headerStat}>
+                  <Text style={styles.headerStatNum}>{absentCount}</Text>
+                  <Text style={styles.headerStatLabel}>Absent</Text>
+                </View>
+                <View style={styles.headerStat}>
+                  <Text style={styles.headerStatNum}>{students.length}</Text>
+                  <Text style={styles.headerStatLabel}>Total</Text>
+                </View>
+              </View>
             )}
+          </ScreenHeader>
 
-            {students.length > 0 && (
+          <View style={styles.headerArea}>
+            {/* Section picker */}
+            <Card padded>
+              <CardLabel>{showAllSections ? 'All Sections' : 'My Sections'}</CardLabel>
+              {sectionsLoading ? (
+                <LoadingBlock />
+              ) : sectionsError ? (
+                <ErrorState compact title="Couldn't load sections" onRetry={() => void refetchSections()} />
+              ) : sections.length === 0 && !showAllSections ? (
+                <Text className="text-muted-foreground" style={styles.hint}>
+                  No sections assigned. Use "Mark a different section" below.
+                </Text>
+              ) : (
+                <View style={styles.pickerList}>
+                  {sections.map((s) => (
+                    <SelectableRow
+                      key={s.sectionId}
+                      title={`${s.className} · ${s.sectionName}`}
+                      selected={selectedSection === s.sectionId}
+                      onPress={() => { setSelectedSection(s.sectionId); setStatusMap({}); setSubmitted(false); }}
+                    />
+                  ))}
+                </View>
+              )}
+              <TouchableOpacity onPress={() => setShowAllSections(!showAllSections)} style={styles.toggleRow} activeOpacity={0.7}>
+                <Ionicons name={showAllSections ? 'chevron-up' : 'swap-horizontal-outline'} size={14} color={c.mutedForeground} />
+                <Text className="text-muted-foreground" style={styles.toggleText}>
+                  {showAllSections ? 'Show my sections only' : 'Mark a different section'}
+                </Text>
+              </TouchableOpacity>
+            </Card>
+
+            {/* Date picker */}
+            <Card padded>
+              <CardLabel>Date (BS)</CardLabel>
+              <DateSelector selectedBs={selectedBs} onSelect={(bs) => { setSelectedBs(bs); setStatusMap({}); setSubmitted(false); }} />
+              <Text className="text-muted-foreground" style={styles.adLine}>AD: {selectedDateAd}</Text>
+            </Card>
+
+            {/* Student list — card header + non-row states (rows render below as FlatList items) */}
+            {selectedSection && (
+              <View
+                style={[
+                  styles.rosterCardTop,
+                  CARD_SHADOW,
+                  { backgroundColor: c.surface },
+                  !showRows && styles.rosterCardBottom,
+                ]}
+              >
+                <View className="border-b border-border" style={styles.listHeader}>
+                  <CardLabel>Students</CardLabel>
+                  <TouchableOpacity onPress={markAllPresent} style={styles.allPresentBtn} accessibilityLabel="Mark all present">
+                    <Text style={styles.allPresentText}>All Present</Text>
+                  </TouchableOpacity>
+                </View>
+                {rosterLoading ? (
+                  <LoadingBlock label="Loading students…" />
+                ) : rosterError ? (
+                  <ErrorState
+                    compact
+                    title="Couldn't load students"
+                    onRetry={() => { void studentsResult.refetch(); void existingResult.refetch(); }}
+                  />
+                ) : students.length === 0 ? (
+                  <EmptyState compact icon="people-outline" title="No students found in this section." />
+                ) : null}
+              </View>
+            )}
+          </View>
+        </>
+      }
+      ListFooterComponent={
+        <View style={styles.footerArea}>
+          {showRows && (
+            <View style={[styles.legendCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
               <View className="border-t border-border" style={styles.legend}>
                 {STATUS_OPTIONS.map((s) => {
                   const cfg = STATUS_CONFIG[s];
@@ -288,28 +319,29 @@ export default function TeacherAttendance() {
                   );
                 })}
               </View>
-            )}
-          </Card>
-        )}
-
-        {/* Submit */}
-        {selectedSection && students.length > 0 && (
-          submitted ? (
-            <View style={styles.savedBanner}>
-              <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
-              <Text style={styles.savedText}>Attendance saved successfully</Text>
             </View>
-          ) : (
-            <PrimaryButton
-              label={markMutation.isPending ? 'Saving…' : `Save Attendance (${students.length})`}
-              icon="save-outline"
-              loading={markMutation.isPending}
-              onPress={handleSubmit}
-            />
-          )
-        )}
-      </View>
-    </ScrollView>
+          )}
+
+          {selectedSection && students.length > 0 && (
+            <View style={styles.submitWrap}>
+              {submitted ? (
+                <View style={styles.savedBanner}>
+                  <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
+                  <Text style={styles.savedText}>Attendance saved successfully</Text>
+                </View>
+              ) : (
+                <PrimaryButton
+                  label={markMutation.isPending ? 'Saving…' : `Save Attendance (${students.length})`}
+                  icon="save-outline"
+                  loading={markMutation.isPending}
+                  onPress={handleSubmit}
+                />
+              )}
+            </View>
+          )}
+        </View>
+      }
+    />
   );
 }
 
@@ -319,7 +351,16 @@ const styles = StyleSheet.create({
   headerStat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 11, paddingVertical: 8, alignItems: 'center' },
   headerStatNum: { color: '#fff', fontFamily: FONT.extrabold, fontSize: 16 },
   headerStatLabel: { color: 'rgba(255,255,255,0.85)', fontFamily: FONT.bold, fontSize: 9, textTransform: 'uppercase', marginTop: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, gap: 12 },
+  // FlatList header (header + pickers + roster card top) / footer (legend + submit).
+  // Roster rows render as virtualized items between them; the roster card is split into
+  // a rounded top (here) + surface rows + a rounded legend so it reads as one card.
+  headerArea: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  footerArea: { paddingBottom: 40 },
+  rosterCardTop: { borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
+  rosterCardBottom: { borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: 'hidden' },
+  rowWrap: { marginHorizontal: 16 },
+  legendCard: { marginHorizontal: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: 'hidden' },
+  submitWrap: { marginHorizontal: 16, marginTop: 12 },
   hint: { fontSize: 13 },
   pickerList: { gap: 8 },
   toggleRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24 },

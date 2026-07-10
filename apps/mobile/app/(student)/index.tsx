@@ -4,12 +4,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyProfile, useMyTimetable, useMyAttendanceSummary } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { AttendanceSummaryCard, TodayClasses, ErrorState, type TodayPeriod } from '../../components/ui';
+import { AttendanceSummaryCard, TodayClasses, ErrorState, ScreenHeader, type TodayPeriod } from '../../components/ui';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { todayBs, formatBs } from 'bs-calendar';
@@ -44,7 +43,6 @@ export default function StudentDashboard() {
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const profile = useMyProfile();
   const timetable = useMyTimetable();
@@ -120,12 +118,7 @@ export default function StudentDashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Hero band */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 12, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={12} padBottom={20}>
           <View style={styles.bandTop}>
             <View style={styles.schoolWrap}>
               {branding?.logoUrl ? (
@@ -166,7 +159,7 @@ export default function StudentDashboard() {
           <Text style={[styles.greeting, { color: c.mutedForeground }]}>{getGreeting()}</Text>
           <NpText style={[styles.name, { color: c.foreground }]}>{fullName}</NpText>
           <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {s && (
@@ -226,7 +219,6 @@ const styles = StyleSheet.create({
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
   // Hero band
-  band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
   bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
   logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

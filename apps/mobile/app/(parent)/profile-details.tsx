@@ -1,13 +1,12 @@
-import { View, Text, ScrollView, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyChildren } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import NpText from '../../components/NpText';
-import { CardLabel, ErrorState, LoadingBlock } from '../../components/ui';
+import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
+import Skeleton from '../../components/Skeleton';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 
@@ -47,7 +46,6 @@ function DetailRow({
 
 export default function ParentProfileDetails() {
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const { data: children, isLoading, isError, refetch } = useMyChildren();
 
@@ -61,25 +59,15 @@ export default function ParentProfileDetails() {
   const relation = children?.[0]?.relation ?? 'Guardian';
 
   // ── Header ────────────────────────────────────────────────────────────────
-  // Plain white header with back button — matches comp pEditProfile header bar.
+  // Plain white detail bar with back button — matches comp pEditProfile header bar.
   const Header = (
-    <View
-      style={[
-        styles.header,
-        { paddingTop: insets.top + 14, backgroundColor: c.surface, borderBottomColor: c.border },
-      ]}
-    >
-      <TouchableOpacity
-        onPress={() => router.back()}
-        hitSlop={10}
-        style={[styles.backBtn, { backgroundColor: c.background }]}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="chevron-back" size={20} color={c.primary} />
-      </TouchableOpacity>
-      <Text style={[styles.headerTitle, { color: c.foreground }]}>Profile details</Text>
-    </View>
+    <ScreenHeader
+      variant="bar"
+      onBack={() => router.back()}
+      title="Profile details"
+      padH={16}
+      padBottom={14}
+    />
   );
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -92,7 +80,10 @@ export default function ParentProfileDetails() {
           <View style={styles.avatarWrap}>
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: c.border }]} />
           </View>
-          <LoadingBlock />
+          <View style={{ gap: 12 }}>
+            <Skeleton style={{ height: 140 }} className="rounded-2xl" />
+            <Skeleton style={{ height: 100 }} className="rounded-2xl" />
+          </View>
         </ScrollView>
       </View>
     );
@@ -200,27 +191,6 @@ export default function ParentProfileDetails() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  // Header — white band with back button (comp pEditProfile header bar).
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONT.extrabold,
-    fontSize: 16,
-  },
 
   body: {
     paddingHorizontal: 16,

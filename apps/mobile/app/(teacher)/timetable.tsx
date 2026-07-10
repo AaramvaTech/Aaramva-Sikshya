@@ -1,9 +1,8 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyTimetable, useMyStaffProfile } from '../../hooks/useTeacher';
-import { EmptyState, ErrorState } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
 import { useThemeColors } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
@@ -25,7 +24,6 @@ export default function TeacherRoutine() {
   const { data, isLoading, isError, refetch } = useMyTimetable();
   const profileResult = useMyStaffProfile();
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const todayDow = nepalNow().getDay();
   const [selectedDay, setSelectedDay] = useState<number>(todayDow);
 
@@ -59,12 +57,7 @@ export default function TeacherRoutine() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* ── Hero band ────────────────────────────────────────────── */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 14, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={14} padBottom={16}>
           <View style={styles.bandTop}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.bandTitle, { color: c.foreground }]}>My routine</Text>
@@ -117,7 +110,7 @@ export default function TeacherRoutine() {
               );
             })}
           </View>
-        </View>
+        </ScreenHeader>
 
         {/* ── Content area ─────────────────────────────────────────── */}
         <View style={styles.body}>
@@ -207,7 +200,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   // Hero band
-  band: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   bandTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   bandTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
   bandSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },

@@ -5,12 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyResults } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { Card, EmptyState, ErrorState } from '../../components/ui';
+import { Card, EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
 import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
@@ -76,7 +75,6 @@ export default function StudentResults() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const { data, isLoading, isError, refetch } = useMyResults();
   const { download, downloading } = useReportCardDownload();
@@ -89,28 +87,13 @@ export default function StudentResults() {
 
   // Simple white header — comp sResults style (back button + title block).
   const Header = ({ examName }: { examName?: string }) => (
-    <View
-      style={[
-        styles.header,
-        { paddingTop: insets.top + 14, backgroundColor: c.surface, borderBottomColor: c.border },
-      ]}
-    >
-      <TouchableOpacity
-        onPress={() => router.back()}
-        hitSlop={10}
-        style={[styles.backBtn, { backgroundColor: c.background }]}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="chevron-back" size={20} color={c.primary} />
-      </TouchableOpacity>
-      <View style={styles.headerTitles}>
-        <Text style={[styles.headerTitle, { color: c.foreground }]}>Exam results</Text>
-        {examName ? (
-          <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>{examName}</Text>
-        ) : null}
-      </View>
-    </View>
+    <ScreenHeader
+      variant="bar"
+      onBack={() => router.back()}
+      title="Exam results"
+      subtitle={examName}
+      padBottom={16}
+    />
   );
 
   if (isLoading) {
@@ -258,19 +241,6 @@ export default function StudentResults() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  // Simple white header — comp sResults style
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitles: { flex: 1 },
-  headerTitle: { fontFamily: FONT.extrabold, fontSize: 16 },
-  headerSubtitle: { fontFamily: FONT.regular, fontSize: 11.5, marginTop: 1 },
 
   // Body
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 36 },

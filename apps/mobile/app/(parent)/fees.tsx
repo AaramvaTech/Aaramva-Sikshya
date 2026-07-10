@@ -7,8 +7,9 @@ import { useMyChildren, useChildLedger } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import {
-  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, LoadingBlock,
+  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState,
 } from '../../components/ui';
+import Skeleton from '../../components/Skeleton';
 import type { Invoice } from '../../types';
 
 // Semantic fee-status palette (not brand-coupled). Mirrors the backend invoice
@@ -130,7 +131,9 @@ export default function ParentFees() {
         )}
 
         {ledgerQuery.isLoading ? (
-          <Card><LoadingBlock /></Card>
+          <>
+            {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 92 }} className="rounded-2xl" />)}
+          </>
         ) : ledgerQuery.isError ? (
           <Card><ErrorState compact title="Failed to load fees" onRetry={() => void ledgerQuery.refetch()} /></Card>
         ) : invoices.length === 0 ? (

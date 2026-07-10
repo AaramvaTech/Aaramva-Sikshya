@@ -1,14 +1,12 @@
 import {
-  View, Text, ScrollView, TouchableOpacity, Image, StatusBar, StyleSheet,
+  View, Text, ScrollView, Image, StatusBar, StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyStaffProfile } from '../../hooks/useTeacher';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { CardLabel, ErrorState } from '../../components/ui';
+import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
@@ -40,29 +38,18 @@ function DetailRow({
 
 export default function TeacherProfileDetails() {
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const { data: p, isLoading, isError, refetch } = useMyStaffProfile();
 
   // ── Header ────────────────────────────────────────────────────────────────
-  // Plain white header with back button — matches comp tEditProfile header bar (line 1083).
+  // Plain white detail bar with back button — matches comp tEditProfile header bar.
   const Header = (
-    <View
-      style={[
-        styles.header,
-        { paddingTop: insets.top + 14, backgroundColor: c.surface, borderBottomColor: c.border },
-      ]}
-    >
-      <TouchableOpacity
-        onPress={() => router.back()}
-        hitSlop={10}
-        style={[styles.backBtn, { backgroundColor: c.background }]}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="chevron-back" size={20} color={c.primary} />
-      </TouchableOpacity>
-      <Text style={[styles.headerTitle, { color: c.foreground }]}>Profile details</Text>
-    </View>
+    <ScreenHeader
+      variant="bar"
+      onBack={() => router.back()}
+      title="Profile details"
+      padH={16}
+      padBottom={14}
+    />
   );
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -180,27 +167,6 @@ export default function TeacherProfileDetails() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  // Header — white band with back button (comp tEditProfile line 1083–1085).
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: FONT.extrabold,
-    fontSize: 16,
-  },
 
   body: {
     paddingHorizontal: 16,

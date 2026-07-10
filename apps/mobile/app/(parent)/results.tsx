@@ -1,13 +1,13 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
-import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
+import Skeleton from '../../components/Skeleton';
 import { FONT } from '../../lib/theme/fonts';
 import { gradeColors } from '../../lib/gradeColors';
 import NpText from '../../components/NpText';
@@ -71,7 +71,6 @@ function ResultBlock({ result }: { result: ExamResult }) {
 export default function ParentResults() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
 
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -101,19 +100,22 @@ export default function ParentResults() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
-        <View
-          style={[
-            styles.header,
-            { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border },
-          ]}
-        >
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>Exam results</Text>
-          {childName ? <NpText style={[styles.headerSub, { color: c.mutedForeground }]}>{childName}</NpText> : null}
-        </View>
+        <ScreenHeader
+          variant="plain"
+          compact
+          padTop={12}
+          padBottom={16}
+          title="Exam results"
+          subtitle={childName || undefined}
+          npSubtitle
+        />
 
         <View style={styles.body}>
           {resultsQuery.isLoading ? (
-            <LoadingBlock />
+            <View style={{ gap: 14 }}>
+              <Skeleton style={{ height: 92 }} className="rounded-2xl" />
+              <Skeleton style={{ height: 160 }} className="rounded-2xl" />
+            </View>
           ) : resultsQuery.isError ? (
             <View style={{ paddingTop: 24 }}>
               <ErrorState title="Failed to load results" onRetry={() => void resultsQuery.refetch()} />
@@ -135,9 +137,6 @@ export default function ParentResults() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
-  headerSub: { fontFamily: FONT.regular, fontSize: 12, marginTop: 3 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   examName: { fontFamily: FONT.extrabold, fontSize: 13, marginBottom: 10, marginLeft: 2 },

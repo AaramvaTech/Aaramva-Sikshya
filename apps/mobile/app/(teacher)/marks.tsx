@@ -1,8 +1,8 @@
 import {
-  View, Text, ScrollView, TextInput, Alert, RefreshControl, Switch, StyleSheet,
+  View, Text, FlatList, TextInput, Alert, RefreshControl, Switch, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import {
   useMyExamSchedules, useMySections, useSectionStudents, useExamMarks, useBulkSubmitMarks,
 } from '../../hooks/useTeacher';
@@ -12,8 +12,9 @@ import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
-  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock,
+  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState,
 } from '../../components/ui';
+import { CARD_SHADOW } from '../../components/ui/Card';
 
 // ── Per-student mark state ────────────────────────────────────────────────────
 
@@ -48,10 +49,10 @@ function validateMarks(_studentId: string, state: MarkState, schedule: ExamSched
 
 // ── Student mark row ──────────────────────────────────────────────────────────
 
-function StudentMarkRow({
+const StudentMarkRow = memo(function StudentMarkRow({
   student, state, isSplit, schedule, onChange,
 }: {
-  student: StudentProfile; state: MarkState; isSplit: boolean; schedule: ExamSchedule; onChange: (next: Partial<MarkState>) => void;
+  student: StudentProfile; state: MarkState; isSplit: boolean; schedule: ExamSchedule; onChange: (studentId: string, next: Partial<MarkState>) => void;
 }) {
   const c = useThemeColors();
   const roll = student.currentEnrollment?.rollNumber;
@@ -85,7 +86,7 @@ function StudentMarkRow({
           <Text style={[styles.absentLabel, { color: state.isAbsent ? c.danger : c.mutedForeground }]}>Absent</Text>
           <Switch
             value={state.isAbsent}
-            onValueChange={(val) => onChange({ isAbsent: val, theory: '', practical: '', marks: '' })}
+            onValueChange={(val) => onChange(student.id, { isAbsent: val, theory: '', practical: '', marks: '' })}
             trackColor={{ false: c.border, true: '#fecaca' }}
             thumbColor={state.isAbsent ? c.danger : c.surface}
           />
@@ -98,11 +99,11 @@ function StudentMarkRow({
             <>
               <View style={styles.inputCol}>
                 <Text className="text-muted-foreground" style={styles.inputLabel}>Theory /{schedule.theoryMarks}</Text>
-                <TextInput style={inputStyle} value={state.theory} onChangeText={(v) => onChange({ theory: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
+                <TextInput style={inputStyle} value={state.theory} onChangeText={(v) => onChange(student.id, { theory: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
               </View>
               <View style={styles.inputCol}>
                 <Text className="text-muted-foreground" style={styles.inputLabel}>Practical /{schedule.practicalMarks}</Text>
-                <TextInput style={inputStyle} value={state.practical} onChangeText={(v) => onChange({ practical: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
+                <TextInput style={inputStyle} value={state.practical} onChangeText={(v) => onChange(student.id, { practical: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
               </View>
               <View style={styles.totalCol}>
                 <Text className="text-muted-foreground" style={styles.inputLabel}>Total</Text>
@@ -122,7 +123,7 @@ function StudentMarkRow({
           ) : (
             <View style={styles.inputCol}>
               <Text className="text-muted-foreground" style={styles.inputLabel}>Marks /{schedule.fullMarks}</Text>
-              <TextInput style={[inputStyle, { minWidth: 120 }]} value={state.marks} onChangeText={(v) => onChange({ marks: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
+              <TextInput style={[inputStyle, { minWidth: 120 }]} value={state.marks} onChangeText={(v) => onChange(student.id, { marks: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
             </View>
           )}
         </View>
@@ -131,7 +132,7 @@ function StudentMarkRow({
       {validationError && <Text className="text-danger" style={styles.validationError}>{validationError}</Text>}
     </View>
   );
-}
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -144,8 +145,8 @@ export default function TeacherMarks() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
 
-  const { data: schedules, isLoading: schedulesLoading, refetch: refetchSchedules } = useMyExamSchedules();
-  const { data: allSections, isLoading: sectionsLoading } = useMySections();
+  const { data: schedules, isLoading: schedulesLoading, isError: schedulesError, refetch: refetchSchedules } = useMyExamSchedules();
+  const { data: allSections, isLoading: sectionsLoading, isError: sectionsError, refetch: refetchSections } = useMySections();
   const studentsResult = useSectionStudents(selectedSection);
   const marksResult = useExamMarks(selectedSchedule?.examScheduleId);
   const submitMutation = useBulkSubmitMarks();
@@ -254,141 +255,184 @@ export default function TeacherMarks() {
     (s) => validateMarks(s.id, marksMap[s.id] ?? emptyMark(), selectedSchedule!, isSplit) !== null,
   );
   const selectedSec = filteredSections.find((s) => s.sectionId === selectedSection);
+  const rosterError = studentsResult.isError || marksResult.isError;
+  // Roster rows render as FlatList items (virtualized) — only when ready, loaded and non-empty.
+  const showRows = rosterReady && !rosterLoading && !rosterError && students.length > 0;
 
   return (
-    <ScrollView
+    <FlatList
       className="bg-background"
       style={styles.fill}
+      data={showRows ? students : []}
+      keyExtractor={(item) => item.id}
+      extraData={marksMap}
+      removeClippedSubviews={false}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
-    >
-      <ScreenHeader
-        variant="plain"
-        eyebrow="Marks entry"
-        title={selectedSchedule ? `${selectedSchedule.examTypeName} · ${selectedSchedule.subjectName}` : 'Select an exam'}
-        subtitle={
-          selectedSchedule && selectedSec
-            ? `${selectedSec.className} · ${selectedSec.sectionName}${isSplit ? ` · Theory ${selectedSchedule.theoryMarks} + Practical ${selectedSchedule.practicalMarks}` : ` · Full marks ${selectedSchedule.fullMarks}`}`
-            : undefined
-        }
-      />
+      renderItem={({ item, index }) => (
+        <View
+          style={[
+            styles.rowWrap,
+            { backgroundColor: c.surface },
+            index === students.length - 1 && styles.rosterCardBottom,
+            index === students.length - 1 && CARD_SHADOW,
+          ]}
+        >
+          <StudentMarkRow
+            student={item}
+            state={marksMap[item.id] ?? emptyMark()}
+            isSplit={isSplit}
+            schedule={selectedSchedule!}
+            onChange={updateMark}
+          />
+        </View>
+      )}
+      ListHeaderComponent={
+        <>
+          <ScreenHeader
+            variant="plain"
+            eyebrow="Marks entry"
+            title={selectedSchedule ? `${selectedSchedule.examTypeName} · ${selectedSchedule.subjectName}` : 'Select an exam'}
+            subtitle={
+              selectedSchedule && selectedSec
+                ? `${selectedSec.className} · ${selectedSec.sectionName}${isSplit ? ` · Theory ${selectedSchedule.theoryMarks} + Practical ${selectedSchedule.practicalMarks}` : ` · Full marks ${selectedSchedule.fullMarks}`}`
+                : undefined
+            }
+          />
 
-      <View style={styles.body}>
-        {/* Step 1 — schedule */}
-        <Card padded>
-          <CardLabel>Step 1 — Pick an exam schedule</CardLabel>
-          {schedulesLoading ? (
-            <LoadingBlock />
-          ) : !schedules || schedules.length === 0 ? (
-            <EmptyState compact icon="calendar-outline" title="No exam schedules assigned to you." />
-          ) : (
-            <View style={styles.pickerList}>
-              {schedules.map((s) => {
-                const bsDate = (() => { try { return formatBs(adToBs(new Date(s.examDate)), 'en'); } catch { return s.examDate; } })();
-                return (
-                  <SelectableRow
-                    key={s.examScheduleId}
-                    title={`${s.examTypeName} · ${s.subjectName}`}
-                    subtitle={`${s.className} · ${bsDate}`}
-                    selected={selectedSchedule?.examScheduleId === s.examScheduleId}
-                    onPress={() => handleSelectSchedule(s)}
-                    right={
-                      <View style={styles.fullMarksCol}>
-                        <Text className="text-primary" style={styles.fullMarksNum}>{s.fullMarks}</Text>
-                        <Text className="text-muted-foreground" style={styles.fullMarksLabel}>Full</Text>
-                      </View>
-                    }
-                  />
-                );
-              })}
-            </View>
-          )}
-        </Card>
-
-        {/* Step 2 — section */}
-        {selectedSchedule && (
-          <Card padded>
-            <CardLabel>Step 2 — Pick a section</CardLabel>
-            {sectionsLoading ? (
-              <LoadingBlock />
-            ) : filteredSections.length === 0 ? (
-              <Text className="text-muted-foreground" style={styles.hint}>You have no sections assigned to this class.</Text>
-            ) : (
-              <View style={styles.pickerList}>
-                {filteredSections.map((s) => (
-                  <SelectableRow
-                    key={s.sectionId}
-                    title={`${s.className} · ${s.sectionName}`}
-                    selected={selectedSection === s.sectionId}
-                    onPress={() => handleSelectSection(s.sectionId)}
-                  />
-                ))}
-              </View>
-            )}
-          </Card>
-        )}
-
-        {/* Step 3 — marks */}
-        {rosterReady && (
-          <Card padded={false}>
-            <View className="border-b border-border" style={styles.listHeader}>
-              <CardLabel>Step 3 — Enter marks</CardLabel>
-              {isSplit && (
-                <View className="bg-primary/10" style={styles.splitPill}>
-                  <Text className="text-primary" style={styles.splitPillText}>Theory + Practical</Text>
+          <View style={styles.headerArea}>
+            {/* Step 1 — schedule */}
+            <Card padded>
+              <CardLabel>Step 1 — Pick an exam schedule</CardLabel>
+              {schedulesLoading ? (
+                <LoadingBlock />
+              ) : schedulesError ? (
+                <ErrorState compact title="Couldn't load exams" onRetry={() => void refetchSchedules()} />
+              ) : !schedules || schedules.length === 0 ? (
+                <EmptyState compact icon="calendar-outline" title="No exam schedules assigned to you." />
+              ) : (
+                <View style={styles.pickerList}>
+                  {schedules.map((s) => {
+                    const bsDate = (() => { try { return formatBs(adToBs(new Date(s.examDate)), 'en'); } catch { return s.examDate; } })();
+                    return (
+                      <SelectableRow
+                        key={s.examScheduleId}
+                        title={`${s.examTypeName} · ${s.subjectName}`}
+                        subtitle={`${s.className} · ${bsDate}`}
+                        selected={selectedSchedule?.examScheduleId === s.examScheduleId}
+                        onPress={() => handleSelectSchedule(s)}
+                        right={
+                          <View style={styles.fullMarksCol}>
+                            <Text className="text-primary" style={styles.fullMarksNum}>{s.fullMarks}</Text>
+                            <Text className="text-muted-foreground" style={styles.fullMarksLabel}>Full</Text>
+                          </View>
+                        }
+                      />
+                    );
+                  })}
                 </View>
               )}
-            </View>
-            {rosterLoading ? (
-              <LoadingBlock label="Loading students…" />
-            ) : students.length === 0 ? (
-              <EmptyState compact icon="people-outline" title="No students found in this section." />
-            ) : (
-              students.map((student) => (
-                <StudentMarkRow
-                  key={student.id}
-                  student={student}
-                  state={marksMap[student.id] ?? emptyMark()}
-                  isSplit={isSplit}
-                  schedule={selectedSchedule!}
-                  onChange={(patch) => updateMark(student.id, patch)}
-                />
-              ))
-            )}
-          </Card>
-        )}
+            </Card>
 
-        {/* Submit */}
-        {rosterReady && students.length > 0 && !rosterLoading && (
-          submitted ? (
-            <View style={styles.savedBanner}>
-              <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
-              <Text style={styles.savedText}>Marks saved successfully</Text>
-            </View>
-          ) : (
-            <PrimaryButton
-              label={
-                submitMutation.isPending ? 'Saving…'
-                  : hasValidationErrors ? 'Fix errors above'
-                  : `Save Marks (${touchedRef.current.size} changed)`
-              }
-              icon="save-outline"
-              loading={submitMutation.isPending}
-              disabled={hasValidationErrors}
-              onPress={handleSubmit}
-            />
-          )
-        )}
-      </View>
-    </ScrollView>
+            {/* Step 2 — section */}
+            {selectedSchedule && (
+              <Card padded>
+                <CardLabel>Step 2 — Pick a section</CardLabel>
+                {sectionsLoading ? (
+                  <LoadingBlock />
+                ) : sectionsError ? (
+                  <ErrorState compact title="Couldn't load sections" onRetry={() => void refetchSections()} />
+                ) : filteredSections.length === 0 ? (
+                  <Text className="text-muted-foreground" style={styles.hint}>You have no sections assigned to this class.</Text>
+                ) : (
+                  <View style={styles.pickerList}>
+                    {filteredSections.map((s) => (
+                      <SelectableRow
+                        key={s.sectionId}
+                        title={`${s.className} · ${s.sectionName}`}
+                        selected={selectedSection === s.sectionId}
+                        onPress={() => handleSelectSection(s.sectionId)}
+                      />
+                    ))}
+                  </View>
+                )}
+              </Card>
+            )}
+
+            {/* Step 3 — marks: card header + non-row states (rows render below as FlatList items) */}
+            {rosterReady && (
+              <View
+                style={[
+                  styles.rosterCardTop,
+                  CARD_SHADOW,
+                  { backgroundColor: c.surface },
+                  !showRows && styles.rosterCardBottom,
+                ]}
+              >
+                <View className="border-b border-border" style={styles.listHeader}>
+                  <CardLabel>Step 3 — Enter marks</CardLabel>
+                  {isSplit && (
+                    <View className="bg-primary/10" style={styles.splitPill}>
+                      <Text className="text-primary" style={styles.splitPillText}>Theory + Practical</Text>
+                    </View>
+                  )}
+                </View>
+                {rosterLoading ? (
+                  <LoadingBlock label="Loading students…" />
+                ) : rosterError ? (
+                  <ErrorState
+                    compact
+                    title="Couldn't load students"
+                    onRetry={() => { void studentsResult.refetch(); void marksResult.refetch(); }}
+                  />
+                ) : students.length === 0 ? (
+                  <EmptyState compact icon="people-outline" title="No students found in this section." />
+                ) : null}
+              </View>
+            )}
+          </View>
+        </>
+      }
+      ListFooterComponent={
+        <View style={styles.footerArea}>
+          {rosterReady && students.length > 0 && !rosterLoading && !rosterError && (
+            submitted ? (
+              <View style={styles.savedBanner}>
+                <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
+                <Text style={styles.savedText}>Marks saved successfully</Text>
+              </View>
+            ) : (
+              <PrimaryButton
+                label={
+                  submitMutation.isPending ? 'Saving…'
+                    : hasValidationErrors ? 'Fix errors above'
+                    : `Save Marks (${touchedRef.current.size} changed)`
+                }
+                icon="save-outline"
+                loading={submitMutation.isPending}
+                disabled={hasValidationErrors}
+                onPress={handleSubmit}
+              />
+            )
+          )}
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex1: { flex: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, gap: 12 },
+  // FlatList header area (steps 1–3 header) + footer area (submit). The roster rows
+  // render as virtualized items between them; the step-3 card is split into a rounded
+  // top (here) + surface rows + a rounded last row so it reads as one continuous card.
+  headerArea: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  footerArea: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
+  rosterCardTop: { borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
+  rosterCardBottom: { borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: 'hidden' },
+  rowWrap: { marginHorizontal: 16 },
   hint: { fontSize: 13 },
   pickerList: { gap: 8 },
   fullMarksCol: { alignItems: 'flex-end', marginLeft: 8 },

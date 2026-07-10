@@ -6,8 +6,9 @@ import { todayBs, formatBs } from 'bs-calendar';
 import { useMyChildren, useChildTimetable } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
-import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, LoadingBlock } from '../../components/ui';
+import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, ErrorState } from '../../components/ui';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 import { formatPeriodRange } from '../../lib/time';
 import type { SectionTimetableSlot } from '../../types';
 
@@ -98,7 +99,11 @@ export default function ParentTimetable() {
         <Card padded style={styles.lastCard}>
           <CardLabel>{`${DAY_NAMES[selectedDay]} Periods`}</CardLabel>
           {timetableQuery.isLoading ? (
-            <LoadingBlock />
+            <View style={{ gap: 10 }}>
+              {[0, 1, 2, 3].map((i) => <Skeleton key={i} style={{ height: 52 }} className="rounded-xl" />)}
+            </View>
+          ) : timetableQuery.isError ? (
+            <ErrorState compact title="Couldn't load timetable" onRetry={() => void timetableQuery.refetch()} />
           ) : selectedDay === 6 ? (
             <EmptyState icon="sunny-outline" title="Saturday — no school" />
           ) : daySlots.length === 0 ? (

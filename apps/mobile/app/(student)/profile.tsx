@@ -2,11 +2,10 @@ import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, Status
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyProfile } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { ErrorState } from '../../components/ui';
+import { ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
@@ -23,7 +22,6 @@ const SETTINGS: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyph
 
 export default function StudentProfile() {
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const { data: p, isLoading, isError, refetch } = useMyProfile();
@@ -76,12 +74,7 @@ export default function StudentProfile() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         {/* Hero band */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 18, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={18} padBottom={20} align="center">
           {/* Settings gear — top-right of hero band (comp sProfile line 408).
               Navigates to the read-only profile-details screen. */}
           <View style={styles.gearWrap}>
@@ -120,7 +113,7 @@ export default function StudentProfile() {
           )}
           <NpText style={[styles.name, { color: c.foreground }]}>{fullName}</NpText>
           <Text style={[styles.sub, { color: c.mutedForeground }]}>{sub}</Text>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {/* Info rows */}
@@ -168,7 +161,6 @@ export default function StudentProfile() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, alignItems: 'center' },
   // Gear button positioned absolutely in the top-right of the hero band (comp sProfile line 408).
   gearWrap: { position: 'absolute', top: 10, right: 16, zIndex: 1 },
   gearBtn: {

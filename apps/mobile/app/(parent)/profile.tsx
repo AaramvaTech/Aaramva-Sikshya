@@ -1,7 +1,6 @@
 import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyChildren } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
@@ -9,9 +8,10 @@ import { useBranding } from '../../lib/theme/provider';
 import { logout } from '../../lib/session';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
-import { LoadingBlock } from '../../components/ui';
+import { ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
+import Skeleton from '../../components/Skeleton';
 
 // "ramesh.shrestha@gmail.com" -> "Ramesh Shrestha"
 function nameFromEmail(email: string): string {
@@ -25,7 +25,6 @@ function nameFromEmail(email: string): string {
 
 export default function ParentProfile() {
   const c = useThemeColors();
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
@@ -48,12 +47,7 @@ export default function ParentProfile() {
       <StatusBar barStyle="dark-content" />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero band */}
-        <View
-          style={[
-            styles.band,
-            { paddingTop: insets.top + 18, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder },
-          ]}
-        >
+        <ScreenHeader variant="hero" bare padTop={18} padBottom={20} align="center">
           <View style={styles.schoolRow}>
             {branding?.logoUrl ? (
               <View style={[styles.schoolChip, { backgroundColor: c.surface }]}>
@@ -74,7 +68,7 @@ export default function ParentProfile() {
           </View>
           <Text style={[styles.name, { color: c.foreground }]}>{guardianName}</Text>
           <Text style={[styles.sub, { color: c.mutedForeground }]}>{relation}</Text>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.body}>
           {/* Guardian info */}
@@ -104,7 +98,13 @@ export default function ParentProfile() {
           {/* My children */}
           <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>My children</Text>
           {childrenQuery.isLoading ? (
-            <LoadingBlock />
+            <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 14, gap: 10 }]}>
+              {[0, 1].map((i) => <Skeleton key={i} style={{ height: 44 }} className="rounded-xl" />)}
+            </View>
+          ) : childrenQuery.isError ? (
+            <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
+              <ErrorState compact title="Couldn't load children" onRetry={() => void childrenQuery.refetch()} />
+            </View>
           ) : (
             <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
               {children.map((ch, idx) => {
@@ -148,7 +148,6 @@ export default function ParentProfile() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  band: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, alignItems: 'center' },
   schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
   schoolChip: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   schoolChipText: { fontFamily: FONT.extrabold, fontSize: 10 },
