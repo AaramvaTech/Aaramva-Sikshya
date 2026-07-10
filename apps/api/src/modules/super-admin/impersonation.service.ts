@@ -66,6 +66,10 @@ export class ImpersonationService {
         role: Role.SCHOOL_OWNER,
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
+        // Impersonation markers — distinguish this token from a real login in
+        // logs and future guards. No behavioral restriction is attached yet.
+        imp: true,
+        imp_by: adminId,
       },
       {
         secret: this.config.get<string>('JWT_ACCESS_SECRET'),

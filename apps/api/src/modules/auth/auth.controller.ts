@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ClientType } from '../common/decorators/client-type.decorator';
@@ -29,7 +30,10 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  // Public tenant provisioning: CREATE SCHEMA + full DDL per call — the worst
+  // abuse vector on the API. Hard cap: 3 per hour per IP.
   @Post('register-school')
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
   async registerSchool(
     @Body() dto: CreateSchoolDto,
     @Res({ passthrough: true }) res: Response,
@@ -43,7 +47,11 @@ export class AuthController {
     };
   }
 
+  // 5/min per IP. Known tuning point: Nepal schools share NAT'd IPs, so a whole
+  // staff logging in at 9:55am can burst against a single origin — revisit with
+  // per-user throttling if legitimate logins start hitting 429 (not this session).
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @HttpCode(200)
   async login(
     @Body() dto: LoginDto,
@@ -64,6 +72,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(200)
   async refresh(
     @Req() req: Request,

@@ -10,7 +10,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_ACCESS_SECRET') ?? 'change-me-access',
+      // No fallback default. Presence + min-length is guaranteed at boot by the
+      // Joi env schema (config/env.validation.ts); getOrThrow is belt-and-braces.
+      secretOrKey: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });
   }
 
@@ -22,6 +24,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: payload.role,
       tenantId: payload.tenantId,
       tenantSlug: payload.tenantSlug,
+      // Carry impersonation markers through to req.user (undefined on normal tokens).
+      imp: payload.imp,
+      imp_by: payload.imp_by,
     };
   }
 }

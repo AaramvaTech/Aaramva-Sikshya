@@ -25,3 +25,6 @@ Thumbs.db
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Expo (local caches / generated artifacts — never commit)
+.expo/

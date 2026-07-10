@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -101,13 +102,16 @@ export class CommunicationController {
 
   // ─── SMS ──────────────────────────────────────────────────────────────────
 
+  // SMS dispatch is metered (Sparrow costs real money): 10/min per IP.
   @Post('sms/send')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles(Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACCOUNTANT)
   sendSms(@Body() dto: SendSmsDto) {
     return this.smsService.send(dto.toNumber, dto.message, 'MANUAL', dto.studentId);
   }
 
   @Post('sms/bulk')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles(...PRINCIPAL_AND_ABOVE)
   bulkSms(@Body() dto: BulkSmsDto) {
     return this.smsService.bulkSend({
@@ -127,6 +131,7 @@ export class CommunicationController {
   }
 
   @Post('sms/retry/:id')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles(...PRINCIPAL_AND_ABOVE)
   retrySms(@Param('id', ParseUUIDPipe) id: string) {
     return this.smsService.retrySms(id);

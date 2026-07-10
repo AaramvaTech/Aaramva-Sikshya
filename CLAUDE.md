@@ -299,7 +299,7 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
-- DB: PostgreSQL 17 local (password: <REDACTED>). Redis not running yet (needed for queues)
+- DB: PostgreSQL 17 local (password: <DB_PASSWORD — see .env>). Redis not running yet (needed for queues)
 - Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*) AND /api/v1/tenants/verify/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
 - Run migrations: `cd apps/api && npx prisma migrate dev`
 - Run tests: `cd apps/api && npm test`
