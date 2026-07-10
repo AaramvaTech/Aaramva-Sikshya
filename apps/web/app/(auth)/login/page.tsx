@@ -12,6 +12,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { homeRoute } from '@/lib/route-access';
 
 const loginSchema = z.object({
   schoolSlug: z.string().min(1, 'School code is required'),
@@ -52,13 +53,17 @@ export default function LoginPage() {
       const token = data.data.accessToken;
       setAuth(token, data.data.user);
       setTenant(data.data.tenant);
+      let role = data.data.user.role;
       try {
         const meRes = await authApi.me();
         setAuth(token, meRes.data.data);
+        role = meRes.data.data.role;
       } catch {
         // non-critical
       }
-      router.push('/dashboard');
+      // Role-aware landing (D4): accountant → /finance, librarian → /library,
+      // everyone else → /dashboard. Avoids dropping a role onto a page it can't see.
+      router.push(homeRoute(role));
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error

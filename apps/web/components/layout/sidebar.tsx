@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/context/sidebar-context';
 import { useTenantStore } from '@/store/tenant.store';
+import { useAuthStore } from '@/store/auth.store';
 import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
+import { allowedNavItems } from '@/lib/route-access';
 
 type SubItem = { name: string; path: string };
 type NavItem = {
@@ -116,8 +118,16 @@ export function Sidebar() {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
   const tenant = useTenantStore((s) => s);
+  const role = useAuthStore((s) => s.user?.role);
   const { data: onboarding } = useOnboardingStatus();
   const showSetup = !!onboarding && !onboarding.completed;
+
+  // Task 4 — role-filtered nav. A role sees only sections/sub-items its role can
+  // reach per ROUTE_ACCESS (e.g. a teacher no longer sees Finance/HR/Payroll; an
+  // accountant sees the HR group with only its Payroll sub-item). The visible list
+  // drives both the render and the submenu-index state below, so indices stay
+  // consistent after filtering.
+  const visibleNavItems = useMemo(() => allowedNavItems(role, navItems), [role]);
 
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<number, number>>({});
@@ -143,14 +153,14 @@ export function Sidebar() {
   // Auto-open submenu for active route
   useEffect(() => {
     let matched = false;
-    navItems.forEach((nav, idx) => {
+    visibleNavItems.forEach((nav, idx) => {
       if (nav.subItems?.some((s) => isActive(s.path))) {
         setOpenSubmenu(idx);
         matched = true;
       }
     });
     if (!matched) setOpenSubmenu(null);
-  }, [pathname, isActive]);
+  }, [pathname, isActive, visibleNavItems]);
 
   // Measure submenu heights for animation
   useEffect(() => {
@@ -251,7 +261,7 @@ export function Sidebar() {
                     </Link>
                   </li>
                 )}
-                {navItems.map((nav, idx) => (
+                {visibleNavItems.map((nav, idx) => (
                   <li key={nav.name}>
                     {nav.subItems ? (
                       <button

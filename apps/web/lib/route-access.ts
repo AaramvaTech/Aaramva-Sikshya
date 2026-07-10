@@ -1,0 +1,132 @@
+import type { Role } from '@/types/api.types';
+
+/**
+ * SEC-2 — Single source of truth for web role-based access.
+ *
+ * ARCHITECTURAL NOTE (read before editing): this map is **UX + defense-in-depth
+ * only**. The backend's `@Roles()` guards are the real security boundary — every
+ * value below is derived from a specific backend controller guard (cited per row
+ * in ROUTE_ACCESS.endpoint). Never grant a role here that the backend denies; if
+ * the backend permits a role on a section, mirror it. Where a section is
+ * management-oriented we mirror the backend WRITE guard; where it is view-oriented
+ * we mirror the backend READ guard. STUDENT and PARENT are mobile-only and never
+ * authenticate on this web portal, so they are excluded from every entry.
+ */
+
+/** The six roles that actually use the school web portal. PLATFORM_ADMIN lives in
+ *  the super-admin portal; STUDENT/PARENT are mobile-only. */
+export const WEB_STAFF_ROLES: Role[] = [
+  'SCHOOL_OWNER',
+  'PRINCIPAL',
+  'ACADEMIC_COORDINATOR',
+  'ACCOUNTANT',
+  'LIBRARIAN',
+  'TEACHER',
+];
+
+// Backend role-group shorthands (resolved to concrete staff roles), so the rows
+// below read like the controllers they mirror.
+const OWNER_PRINCIPAL: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL'];
+const COORDINATOR_AND_ABOVE: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR'];
+const ACCOUNTANT_AND_ABOVE: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'ACCOUNTANT'];
+const TEACHER_TIER: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'TEACHER'];
+const LIBRARIAN_AND_ABOVE: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'ACCOUNTANT', 'LIBRARIAN'];
+const SETTINGS_VIEWERS: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'ACCOUNTANT'];
+// examination + communication reuse a broad TEACHER_AND_ABOVE that includes accountant + librarian.
+const EXAM_COMMS_TIER: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'ACCOUNTANT', 'LIBRARIAN', 'TEACHER'];
+// students roster read guard: everyone above + accountant + librarian.
+const ROSTER_VIEWERS: Role[] = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'TEACHER', 'ACCOUNTANT', 'LIBRARIAN'];
+
+export type RouteAccess = { prefix: string; roles: Role[]; endpoint: string };
+
+/**
+ * Route-prefix → allowed roles, most-specific prefix first. `canAccess` uses
+ * longest-prefix-wins, so more specific entries (e.g. /hr/payroll, /students/new)
+ * override their parent section. Each row cites the backend endpoint whose guard
+ * it mirrors (used by the SEC-2 parity check).
+ */
+export const ROUTE_ACCESS: RouteAccess[] = [
+  // Students — roster is a read view (backend GET /students opens to 6 staff);
+  // admit/import are narrower (backend POST /students).
+  { prefix: '/students/new', roles: COORDINATOR_AND_ABOVE, endpoint: 'POST /students' },
+  { prefix: '/students/import', roles: COORDINATOR_AND_ABOVE, endpoint: 'POST /students/import/commit' },
+  { prefix: '/students', roles: ROSTER_VIEWERS, endpoint: 'GET /students' },
+
+  // HR — staff/leave/setup are principal-tier management; payroll is accountant-tier.
+  { prefix: '/hr/payroll', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /hr/payroll/months' },
+  { prefix: '/hr', roles: OWNER_PRINCIPAL, endpoint: 'GET /hr/staff' },
+
+  // Communication SMS send is narrower than the notices section as a whole.
+  { prefix: '/communication/sms', roles: ['SCHOOL_OWNER', 'PRINCIPAL', 'ACCOUNTANT'], endpoint: 'POST /communication/sms/send' },
+  { prefix: '/communication', roles: EXAM_COMMS_TIER, endpoint: 'POST /communication/notices' },
+
+  { prefix: '/dashboard', roles: TEACHER_TIER, endpoint: 'GET /dashboard/weekly-attendance' },
+  // Academic structure management. Coordinator can manage classes/subjects/timetable
+  // (POST /classes = COORDINATOR_AND_ABOVE); note academic-year *creation* is narrower
+  // (SCHOOL_OWNER/PRINCIPAL only), which the section still permits via the shell.
+  { prefix: '/academic', roles: COORDINATOR_AND_ABOVE, endpoint: 'POST /classes' },
+  { prefix: '/attendance', roles: TEACHER_TIER, endpoint: 'POST /attendance/students/bulk' },
+  { prefix: '/finance', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-structures' },
+  { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
+  { prefix: '/library', roles: LIBRARIAN_AND_ABOVE, endpoint: 'POST /library/books' },
+  { prefix: '/settings', roles: SETTINGS_VIEWERS, endpoint: 'GET /settings/profile' },
+  { prefix: '/onboarding', roles: COORDINATOR_AND_ABOVE, endpoint: 'onboarding (setup wizard)' },
+];
+
+/** Longest-prefix match for a pathname. */
+function matchRoute(pathname: string): RouteAccess | null {
+  let best: RouteAccess | null = null;
+  for (const r of ROUTE_ACCESS) {
+    if (pathname === r.prefix || pathname.startsWith(r.prefix + '/')) {
+      if (!best || r.prefix.length > best.prefix.length) best = r;
+    }
+  }
+  return best;
+}
+
+/**
+ * Can `role` access `pathname`? A mapped route is gated by its row. An unmapped
+ * school route is allowed for any web-staff role (the backend still enforces the
+ * real boundary) but denied for mobile-only roles (STUDENT/PARENT) who should
+ * never be on this portal. PLATFORM_ADMIN is handled separately by the shell
+ * (redirected to the super-admin portal), so it is not granted school access here.
+ */
+export function canAccess(role: Role | null | undefined, pathname: string): boolean {
+  if (!role) return false;
+  const match = matchRoute(pathname);
+  if (match) return match.roles.includes(role);
+  return WEB_STAFF_ROLES.includes(role);
+}
+
+/**
+ * The landing route for a role after login and the "go home" target on the 403
+ * screen. Accountant/librarian are excluded from /dashboard (backend denies them),
+ * so they get their own home instead of a dashboard whose API calls would 403.
+ */
+export function homeRoute(role: Role | null | undefined): string {
+  if (role === 'ACCOUNTANT') return '/finance';
+  if (role === 'LIBRARIAN') return '/library';
+  return '/dashboard';
+}
+
+/** Item shape mirrors the sidebar's NavItem (name + optional path + subItems). */
+export type NavLike = { path?: string; subItems?: { path: string }[] };
+
+/**
+ * Filters a nav tree to what `role` may see: a leaf is kept if canAccess(path);
+ * a group is kept if at least one sub-item is accessible, and its sub-items are
+ * filtered the same way. Returns the indices/paths to keep — the sidebar maps
+ * this back onto its own item objects.
+ */
+export function allowedNavItems<T extends NavLike>(role: Role | null | undefined, items: T[]): T[] {
+  const out: T[] = [];
+  for (const item of items) {
+    if (item.subItems && item.subItems.length > 0) {
+      const subs = item.subItems.filter((s) => canAccess(role, s.path));
+      if (subs.length > 0) out.push({ ...item, subItems: subs });
+    } else if (item.path && canAccess(role, item.path)) {
+      out.push(item);
+    }
+  }
+  return out;
+}

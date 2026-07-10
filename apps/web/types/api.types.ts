@@ -10,12 +10,28 @@ export interface TenantInfo {
   logoUrl: string | null;
 }
 
+/**
+ * The nine RBAC roles — mirrors the backend `Role` enum verbatim
+ * (apps/api/src/modules/common/enums/role.enum.ts). Keep in sync by hand;
+ * the web app has no shared package with the API.
+ */
+export type Role =
+  | 'PLATFORM_ADMIN'
+  | 'SCHOOL_OWNER'
+  | 'PRINCIPAL'
+  | 'ACADEMIC_COORDINATOR'
+  | 'ACCOUNTANT'
+  | 'LIBRARIAN'
+  | 'TEACHER'
+  | 'STUDENT'
+  | 'PARENT';
+
 export interface AuthUser {
   id: string;
   email: string;
   firstName?: string;  // not in login response; populated after getMe
   lastName?: string;
-  role: string;
+  role: Role;
   tenantId: string | null;
   tenantSlug: string | null;
 }

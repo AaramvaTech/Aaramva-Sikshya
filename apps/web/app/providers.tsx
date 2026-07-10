@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
+import { clearAuthMarker } from '@/lib/auth-marker';
 import { SidebarProvider } from '@/context/sidebar-context';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -109,7 +110,11 @@ function SessionRestorer() {
           // Non-critical — app works with just the token
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // Failed refresh → no live session. Clear the marker so middleware stops
+        // treating this browser as authed and bouncing it away from /login.
+        clearAuthMarker();
+      })
       .finally(() => setInitialized());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

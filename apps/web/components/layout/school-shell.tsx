@@ -6,9 +6,11 @@ import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
+import { AccessDenied } from './access-denied';
 import { useAuthStore } from '@/store/auth.store';
 import { useSidebar } from '@/context/sidebar-context';
 import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
+import { canAccess } from '@/lib/route-access';
 
 function Backdrop() {
   const { isMobileOpen, toggleMobileSidebar } = useSidebar();
@@ -35,6 +37,14 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
     }
   }, [isInitialized, accessToken, router]);
 
+  // Task 5 — a PLATFORM_ADMIN must never render the school shell. Send them to
+  // their own portal instead of showing a 403 (their home is super-admin).
+  useEffect(() => {
+    if (isInitialized && accessToken && user?.role === 'PLATFORM_ADMIN') {
+      router.replace('/super-admin/dashboard');
+    }
+  }, [isInitialized, accessToken, user?.role, router]);
+
   // Route a new SCHOOL_OWNER into the setup wizard on login when setup isn't
   // complete — once per session, so the owner can still navigate away afterward
   // (the sidebar "Setup" entry keeps it obvious until done).
@@ -50,7 +60,10 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
     if (pathname !== '/onboarding') router.replace('/onboarding');
   }, [isInitialized, accessToken, user?.role, onboarding, pathname, router]);
 
-  if (!isInitialized) {
+  // Loader until the session is fully hydrated — including the brief window where
+  // the token is set but the user's role hasn't loaded yet (refresh in flight) —
+  // so the 403 screen never flashes before the role is known.
+  if (!isInitialized || (accessToken && !user?.role)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-gray-900">
         <Image src="/logo.png" alt="Aaramva Shikshya" width={180} height={46} className="object-contain" priority />
@@ -60,6 +73,10 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!accessToken) return null;
+  // PLATFORM_ADMIN is being redirected to the super-admin portal (effect above).
+  if (user?.role === 'PLATFORM_ADMIN') return null;
+
+  const allowed = canAccess(user?.role, pathname);
 
   const mainMargin = isMobileOpen
     ? 'ml-0'
@@ -75,7 +92,7 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
         <Header />
         <main>
           <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-            {children}
+            {allowed ? children : <AccessDenied role={user?.role} />}
           </div>
         </main>
       </div>
