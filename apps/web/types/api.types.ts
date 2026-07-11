@@ -1279,3 +1279,17 @@ export interface UpcomingEvents {
   exams: UpcomingExam[];
 }
 
+// ─── Online payments (PAY-1 eSewa) ───────────────────────────────────────────
+
+/** Public, PII-free receipt shown on /payment/success + /payment/failure. */
+export interface EsewaPublicReceipt {
+  transactionUuid: string;
+  status: 'INITIATED' | 'VERIFIED' | 'FAILED' | 'EXPIRED';
+  amount: number;
+  gateway: string;
+  gatewayRef: string | null;
+  invoiceNumber: string;
+  failureReason: string | null;
+  verifiedAt: string | null;
+}
+

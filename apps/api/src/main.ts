@@ -19,8 +19,10 @@ async function bootstrap() {
   });
 
   // Security headers on every response. Default CSP is fine for a JSON/PDF API
-  // (it only constrains browser HTML rendering, which we don't serve); the
-  // report-card PDF and logo endpoints were verified unaffected after enabling.
+  // (it only constrains browser HTML rendering); the report-card PDF and logo
+  // endpoints were verified unaffected after enabling. The ONE HTML route —
+  // the eSewa pay page — sets its own stricter per-response CSP with scoped
+  // allowances (script nonce + form-action to eSewa); see EsewaService.buildPayPage.
   app.use(helmet());
 
   app.use(json({ limit: '5mb' }));

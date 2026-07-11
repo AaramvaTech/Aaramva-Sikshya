@@ -18,13 +18,23 @@ import { AUTH_MARKER } from '@/lib/auth-marker';
  * it is httpOnly and scoped to the API origin's `/api/v1/auth` path, so the browser
  * never sends it to the Next server.
  */
+/**
+ * Pages that must render WITHOUT a session: password-reset links arrive in
+ * logged-out browsers (MAIL-1), and the eSewa payment result pages (PAY-1)
+ * land in the payer's system browser, which has never seen the web portal.
+ */
+const PUBLIC_PATHS = ['/forgot-password', '/reset-password', '/payment/success', '/payment/failure'];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasMarker = request.cookies.get(AUTH_MARKER)?.value === '1';
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
   // ── Auth-presence redirects ────────────────────────────────────────────────
   // Super-admin portal has its own login screen; keep it self-contained.
-  if (pathname.startsWith('/super-admin')) {
+  if (isPublic) {
+    // fall through to tenant-slug passthrough below
+  } else if (pathname.startsWith('/super-admin')) {
     const isSuperLogin = pathname === '/super-admin/login';
     if (!hasMarker && !isSuperLogin) {
       return NextResponse.redirect(new URL('/super-admin/login', request.url));

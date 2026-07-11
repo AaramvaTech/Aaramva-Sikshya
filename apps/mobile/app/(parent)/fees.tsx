@@ -1,13 +1,16 @@
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Alert, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as Linking from 'expo-linking';
 import { adToBs, formatBs } from 'bs-calendar';
 
 import { useMyChildren, useChildLedger } from '../../hooks/useParentChild';
+import { useInitiateEsewaPayment } from '../../hooks/useEsewaPayment';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
+import { API_BASE_URL } from '../../lib/api';
 import {
-  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState,
+  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, PrimaryButton,
 } from '../../components/ui';
 import Skeleton from '../../components/Skeleton';
 import type { Invoice } from '../../types';
@@ -33,7 +36,15 @@ function invoiceTitle(inv: Invoice): string {
   return inv.invoiceNumber;
 }
 
-function InvoiceCard({ inv }: { inv: Invoice }) {
+function InvoiceCard({
+  inv,
+  onPay,
+  paying,
+}: {
+  inv: Invoice;
+  onPay: (inv: Invoice) => void;
+  paying: boolean;
+}) {
   const c = useThemeColors();
   const cfg = feeStatus(inv.status);
   const bsDue = inv.dueDate?.ad ? formatBs(adToBs(new Date(inv.dueDate.ad)), 'en') : null;
@@ -60,6 +71,16 @@ function InvoiceCard({ inv }: { inv: Invoice }) {
           )}
         </View>
       </View>
+      {inv.balance > 0 && inv.status !== 'WAIVED' && (
+        <PrimaryButton
+          label={`Pay ${formatNPR(inv.balance)} with eSewa`}
+          icon="wallet-outline"
+          variant="soft"
+          loading={paying}
+          onPress={() => onPay(inv)}
+          style={styles.payButton}
+        />
+      )}
     </Card>
   );
 }
@@ -80,6 +101,45 @@ export default function ParentFees() {
   const academicYearId = selectedChild?.currentEnrollment?.academicYearId ?? null;
 
   const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
+
+  const slug = useAuthStore((s) => s.slug);
+  const initiatePayment = useInitiateEsewaPayment();
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const paymentLaunched = useRef(false);
+
+  // The payment happens in the system browser; when the payer comes back to
+  // the app, refetch so the invoice reflects the recorded payment.
+  const refetchLedger = ledgerQuery.refetch;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && paymentLaunched.current) {
+        paymentLaunched.current = false;
+        void refetchLedger();
+      }
+    });
+    return () => sub.remove();
+  }, [refetchLedger]);
+
+  const handlePay = async (inv: Invoice) => {
+    if (!slug || payingId) return;
+    setPayingId(inv.id);
+    try {
+      const init = await initiatePayment.mutateAsync(inv.id);
+      // Build the pay-page URL against OUR working API base (mirrors
+      // init.paymentPageUrl): in dev the server doesn't know the LAN host this
+      // phone actually reaches it on; in prod both resolve identically.
+      const payUrl = `${API_BASE_URL}/finance/payments/esewa/public/pay/${slug}/${init.transactionUuid}`;
+      paymentLaunched.current = true;
+      await Linking.openURL(payUrl);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message ?? 'Could not start the eSewa payment. Please try again.';
+      Alert.alert('Online payment', msg);
+    } finally {
+      setPayingId(null);
+    }
+  };
 
   const ledger = ledgerQuery.data;
   const invoices = ledger?.invoices ?? [];
@@ -139,7 +199,9 @@ export default function ParentFees() {
         ) : invoices.length === 0 ? (
           <Card><EmptyState icon="card-outline" title="No fee records" subtitle="Invoices will appear here once raised by the school." /></Card>
         ) : (
-          invoices.map((inv) => <InvoiceCard key={inv.id} inv={inv} />)
+          invoices.map((inv) => (
+            <InvoiceCard key={inv.id} inv={inv} onPay={handlePay} paying={payingId === inv.id} />
+          ))
         )}
         <View style={styles.bottomSpace} />
       </View>
@@ -163,6 +225,7 @@ const styles = StyleSheet.create({
   dueRow: { flexDirection: 'row', alignItems: 'center' },
   dueText: { fontSize: 12, marginLeft: 4 },
   feeRight: { alignItems: 'flex-end' },
+  payButton: { marginTop: 14 },
   amount: { fontSize: 14, fontWeight: '800', marginTop: 6 },
   subAmount: { fontSize: 11, marginTop: 2 },
   balance: { fontSize: 11, marginTop: 1, fontWeight: '600' },

@@ -14,6 +14,7 @@ export class TenantMiddleware implements NestMiddleware {
     '/auth/register-school',
     '/super-admin/',        // all platform-admin routes need no tenant context
     '/tenants/verify/',     // public school-code lookup used before login
+    '/payments/esewa/public/', // gateway browser redirects — tenant slug is in the path
   ];
 
   constructor(

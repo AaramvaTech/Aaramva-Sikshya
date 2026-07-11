@@ -5,15 +5,19 @@ import { FeeStructureService } from './fee-structure.service';
 import { InvoiceService } from './invoice.service';
 import { PaymentService } from './payment.service';
 import { ReportService } from './report.service';
+import { EsewaService } from './esewa/esewa.service';
+import { EsewaController } from './esewa/esewa.controller';
+import { EsewaPublicController } from './esewa/esewa-public.controller';
 
 @Module({
-  controllers: [FinanceController],
+  controllers: [FinanceController, EsewaController, EsewaPublicController],
   providers: [
     FeeCategoryService,
     FeeStructureService,
     InvoiceService,
     PaymentService,
     ReportService,
+    EsewaService,
   ],
   exports: [InvoiceService, PaymentService],
 })

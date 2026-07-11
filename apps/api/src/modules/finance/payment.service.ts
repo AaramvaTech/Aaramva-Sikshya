@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getBsYear } from 'bs-calendar';
-import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import {
   InvoiceRow,
@@ -35,9 +35,30 @@ export class PaymentService {
   // ─── Record payment (atomic: insert payment + update invoice) ───────────────
 
   async recordPayment(dto: RecordPaymentDto, receivedById: string): Promise<PaymentResponseDto> {
-    const { slug } = this.tenantContext.getOrThrow();
+    const payment = await this.tenantPrisma.run((tx) =>
+      this.recordPaymentInTx(tx, dto, receivedById),
+    );
 
-    const payment = await this.tenantPrisma.run(async (tx) => {
+    // Emit after successful transaction
+    this.emitPaymentReceived(payment);
+
+    return toPaymentResponse(payment);
+  }
+
+  /**
+   * The transaction body of recordPayment, exposed so gateway verification
+   * (PAY-1 eSewa) can record the payment INSIDE the same DB transaction as its
+   * INITIATED→VERIFIED conditional claim — the exactly-once guarantee lives at
+   * the DB level, not in application code. Behavior is identical to the
+   * original inline body. Callers must emit via emitPaymentReceived AFTER the
+   * transaction commits.
+   */
+  async recordPaymentInTx(
+    tx: TenantTx,
+    dto: RecordPaymentDto,
+    receivedById: string,
+  ): Promise<PaymentRow> {
+    {
       // Get invoice inside transaction (with lock semantics via the transaction)
       const [invoice] = await tx.$queryRawUnsafe<InvoiceRow[]>(
         `SELECT * FROM invoices WHERE id = $1::uuid AND deleted_at IS NULL`,
@@ -90,17 +111,18 @@ export class PaymentService {
       );
 
       return payment;
-    });
+    }
+  }
 
-    // Emit after successful transaction
+  /** Post-commit notification shared by direct recording and gateway crediting. */
+  emitPaymentReceived(payment: PaymentRow): void {
+    const { slug } = this.tenantContext.getOrThrow();
     this.eventEmitter.emit('payment.received', {
       studentId: payment.student_id,
       invoiceId: payment.invoice_id,
       amount: toNum(payment.amount),
       tenantSlug: slug,
     });
-
-    return toPaymentResponse(payment);
   }
 
   // ─── Cancel (soft-delete) payment ──────────────────────────────────────────

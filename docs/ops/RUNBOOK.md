@@ -89,3 +89,54 @@ Self-service since MAIL-1: super-admin portal -> Settings -> Change password
 chars). The OPS-1 one-off rotation script remains recoverable from git history
 (`git show 427149f:apps/api/scripts/set-platform-admin-password.ts`) for
 break-glass cases (e.g. current password lost).
+
+
+## eSewa online payments (PAY-1)
+
+The gateway is **config-switched, not code-switched**. Sandbox (default) vs
+production is entirely these env vars:
+
+| Var | Sandbox (default when unset) | Production |
+|---|---|---|
+| `ESEWA_PRODUCT_CODE` | `EPAYTEST` | merchant code from eSewa onboarding |
+| `ESEWA_SECRET_KEY` | `8gBm/:&EnhH.1/q` (public test key) | merchant secret (NEVER commit) |
+| `ESEWA_FORM_URL` | `https://rc-epay.esewa.com.np/api/epay/main/v2/form` | `https://epay.esewa.com.np/api/epay/main/v2/form` |
+| `ESEWA_STATUS_URL` | `https://rc.esewa.com.np/api/epay/transaction/status/` | `https://esewa.com.np/api/epay/transaction/status/` |
+| `API_PUBLIC_URL` | `http://localhost:3001` fallback | public API origin (eSewa redirects the payer's browser here) |
+| `WEB_BASE_URL` | `http://localhost:3000` in dev | unset -> `https://<slug>.<APP_DOMAIN>` per tenant |
+
+Both `ESEWA_PRODUCT_CODE` and `ESEWA_SECRET_KEY` unset = gateway disabled:
+boot notice, initiate returns 503, nothing else changes.
+
+**Trust model (do not weaken):** the browser redirect from eSewa is a hint.
+A payment is recognized only after the server's own status-check call returns
+`COMPLETE` with the amount matching to the paisa; the INITIATED->VERIFIED
+transition + payment row happen in one DB transaction (replay-safe).
+
+**Stuck payments** (payer closed the browser mid-flow): rows stay `INITIATED`;
+the app's "check status" (`GET /finance/payments/esewa/status/:uuid`) re-runs
+the same idempotent verification. `NOT_FOUND` past a 15-minute grace window
+marks the row `EXPIRED`; a late `COMPLETE` on an EXPIRED row still credits
+exactly once.
+
+**Reconciliation** (run per tenant schema; every VERIFIED transaction must
+have exactly one live payment row and vice versa for method ESEWA):
+
+```sql
+SET search_path TO tenant_<slug>, public;
+-- VERIFIED transactions missing their payment (should be zero rows)
+SELECT pt.transaction_uuid, pt.amount, pt.verified_at
+FROM payment_transactions pt
+LEFT JOIN payments p ON p.id = pt.payment_id AND p.deleted_at IS NULL
+WHERE pt.status = 'VERIFIED' AND p.id IS NULL;
+-- eSewa payments not backed by a VERIFIED transaction (should be zero rows)
+SELECT p.payment_number, p.amount, p.created_at
+FROM payments p
+LEFT JOIN payment_transactions pt ON pt.payment_id = p.id AND pt.status = 'VERIFIED'
+WHERE p.method = 'ESEWA' AND p.deleted_at IS NULL AND pt.id IS NULL;
+```
+
+Disputes: `payment_transactions.raw_payload` keeps the redirect payload and
+every status-check response; `gateway_ref` is eSewa's reference id shown to
+the payer. Rows in this table are an audit trail — never delete or soft-delete
+them from application code.

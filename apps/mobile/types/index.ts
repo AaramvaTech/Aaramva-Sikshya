@@ -204,6 +204,17 @@ export interface StudentLedger {
   summary: { totalInvoiced: number; totalPaid: number; totalBalance: number };
 }
 
+/** POST /finance/payments/esewa/initiate — amount is server-computed (outstanding balance). */
+export interface EsewaInitiateResponse {
+  transactionUuid: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  amount: number;
+  formUrl: string;
+  fields: Record<string, string>;
+  paymentPageUrl: string;
+}
+
 export interface SectionTimetableSlot {
   slotId: string;
   dayOfWeek: number; // 0 = Sunday … 6 = Saturday (JS convention)

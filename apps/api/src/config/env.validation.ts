@@ -67,6 +67,17 @@ export const envValidationSchema = Joi.object({
   // Cloud / payment placeholders — optional until configured.
   AWS_BUCKET_NAME: Joi.string().optional().allow(''),
   AWS_REGION: Joi.string().optional().allow(''),
-  ESEWA_SECRET_KEY: Joi.string().optional().allow(''),
   KHALTI_SECRET_KEY: Joi.string().optional().allow(''),
+
+  // eSewa ePay v2 (PAY-1) — gateway is enabled only when BOTH product code and
+  // secret are set; otherwise disabled with a boot notice (initiate → 503).
+  // URL defaults are the rc/UAT sandbox; going live = swapping these four.
+  ESEWA_PRODUCT_CODE: Joi.string().optional().allow(''),
+  ESEWA_SECRET_KEY: Joi.string().optional().allow(''),
+  ESEWA_FORM_URL: Joi.string().uri().default('https://rc-epay.esewa.com.np/api/epay/main/v2/form'),
+  ESEWA_STATUS_URL: Joi.string().uri().default('https://rc.esewa.com.np/api/epay/transaction/status/'),
+  // Public base URLs for gateway redirects: where eSewa sends the payer's
+  // browser back (API) and where our callbacks land the payer (web).
+  API_PUBLIC_URL: Joi.string().uri().optional().allow(''),
+  WEB_BASE_URL: Joi.string().uri().optional().allow(''),
 });

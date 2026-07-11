@@ -254,7 +254,12 @@ JWT_REFRESH_SECRET=
 AWS_BUCKET_NAME=
 AWS_REGION=
 SPARROW_SMS_TOKEN=
+ESEWA_PRODUCT_CODE=              ← both this + secret set = gateway enabled (PAY-1)
 ESEWA_SECRET_KEY=
+ESEWA_FORM_URL=                  ← optional; defaults to rc/UAT sandbox
+ESEWA_STATUS_URL=                ← optional; defaults to rc/UAT sandbox
+API_PUBLIC_URL=                  ← public API origin for gateway browser redirects
+WEB_BASE_URL=                    ← web origin for payment result pages (dev: localhost:3000)
 KHALTI_SECRET_KEY=
 APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 ```
@@ -368,6 +373,8 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   MAIL-1's resolveSchool). Backlog: force-change-on-first-login for emailed temp passwords
   (change-password exists; forcing it is a future nicety — MAIL-1 R2).
   App connects as postgres SUPERUSER in dev — prod must use a non-superuser role (runbook).
+
+- [x] eSewa online fee payment (PAY-1, `apps/api/src/modules/finance/esewa/`) — ePay v2 (contract verified against developer.esewa.com.np 2026-07-11): tenant migration `0005_payment_transactions` (audit-trail table, NO deleted_at by design); `POST /finance/payments/esewa/initiate` (PARENT object-scoped + staff; amount = server-computed outstanding balance, client sends only invoiceId); public browser routes under `/finance/payments/esewa/public/` (pay page, success/failure callbacks, receipt — tenant slug in path, excluded from TenantMiddleware like /tenants/verify); **trust model: redirect `?data=` is a stored hint only — money is recognized solely after a server-to-server status-check returns COMPLETE with amount matching to the paisa; INITIATED→VERIFIED is a conditional UPDATE sharing one DB tx with `PaymentService.recordPaymentInTx` (extracted from recordPayment, behavior identical) → exactly-once credit**; NOT_FOUND past 15-min grace → EXPIRED (late COMPLETE still credits once); pay page ships its own per-response CSP (nonce'd script + form-action to eSewa origin — helmet's global default blocks both inline JS and cross-origin form POST; do NOT weaken helmet globally); **eSewa pay URLs are single-shot** (first form-POST registers the uuid; re-POST → "Duplicate transaction UUID" — retry = new initiate); web `/payment/success|failure` result pages (public receipt lookup, no PII; proxy.ts PUBLIC_PATHS fix also unblocked logged-out /forgot-password + /reset-password); mobile parent fees screen "Pay with eSewa" button (Linking.openURL system browser, AppState refetch on refocus, pay URL derived from the app's own API base); runbook section (go-live env swap + reconciliation queries) — 23 new unit tests (352 total passing)
 
 > Update this checklist as modules are completed.
 
