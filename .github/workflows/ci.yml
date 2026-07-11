@@ -1,0 +1,128 @@
+# CI-1 — four parallel jobs (api / web / mobile / bs-calendar) + all-green gate.
+# See docs/ci/README.md for what runs, why, and the branch-protection setup.
+#
+# Non-workspace monorepo: each package has its own package-lock.json and is
+# npm-ci'd in its own directory. packages/bs-calendar/dist is NOT committed, so
+# jobs whose typecheck or module resolution points at it (api, mobile) build it
+# first.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            packages/bs-calendar/package-lock.json
+      - name: Build bs-calendar (api's tsconfig path alias resolves to its dist/)
+        working-directory: packages/bs-calendar
+        run: |
+          npm ci
+          npm run build
+      - name: Install
+        run: npm ci
+      # A fresh install ships an ungenerated @prisma/client stub — without this,
+      # typecheck fails with ~90 TS2347 errors on $queryRawUnsafe<T>() calls.
+      - name: Generate Prisma client
+        run: npx prisma generate
+      # Plain `tsc --noEmit` fails on TS6059 (test/ outside rootDir) — the build
+      # config is the clean typecheck. See docs/ci/README.md.
+      - name: Typecheck
+        run: npx tsc -p tsconfig.build.json --noEmit
+      - name: Unit tests (baseline 298 — informational; the gate is the exit code)
+        run: npm test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Test placeholder
+        run: echo "no test runner configured (known gap)"
+
+  mobile:
+    runs-on: ubuntu-latest
+    env:
+      # Tests are timezone-sensitive by design (BS calendar). The npm script
+      # already pins TZ via cross-env; this is belt-and-braces for any future
+      # script that forgets.
+      TZ: Asia/Kathmandu
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            packages/bs-calendar/package-lock.json
+      - name: "Build bs-calendar (file: dependency's main points at its dist/)"
+        working-directory: packages/bs-calendar
+        run: |
+          npm ci
+          npm run build
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Tests (jest-expo, TZ=Asia/Kathmandu)
+        run: npm test
+
+  bs-calendar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/bs-calendar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: packages/bs-calendar/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Build (doubles as typecheck)
+        run: npm run build
+      - name: Tests
+        run: npm test
+
+  # The single required status check for branch protection (docs/ci/README.md).
+  # If any needed job fails this one is skipped, which also blocks the merge.
+  all-green:
+    needs: [api, web, mobile, bs-calendar]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All CI jobs green."
