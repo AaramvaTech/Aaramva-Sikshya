@@ -318,11 +318,24 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   **dollar-quote aware** ($$…$$ / $tag$…$tag$ bodies stay one statement), so migrations may
   use DO blocks — but keep dollar-quoted bodies free of `--` comment lines (still stripped).
   Migration files are LF-pinned via root `.gitattributes` (ledger checksums are byte-checksums).
-- **FIX-2 (open):** `import.service.ts` BS→AD conversion uses local-time Date components — make
-  TZ-independent with regression tests that run under forced UTC. Found by CI's first run
-  (2 import.service tests fail under UTC runners). Interim mitigations: api CI job pins
-  `TZ: Asia/Kathmandu`; api Docker runtime image sets `ENV TZ=Asia/Kathmandu` (which is also
-  the platform convention — all dates are Nepal-local).
+- **FIX-2 (resolved):** BS→AD conversion is TZ-independent — `formatLocalDate()` in
+  `modules/common/utils/date.util.ts` formats locally-constructed Dates (bsToAd output, fiscal
+  boundaries, seeds) from their own local components instead of `toISOString()` (which shifted
+  the day back under UTC+ zones). **The full suite passes under BOTH `TZ=Asia/Kathmandu` and
+  `TZ=UTC`.** The CI + Docker TZ pins stay (platform convention, independent of this bug).
+  Rules: local-frame Dates → `formatLocalDate`; DB-sourced DATE values → existing
+  `toISOString()` round-trip is correct (UTC-frame consistent); timestamps → `toISOString()`.
+  Known remainder (deliberate, separate pass if wanted): ~11 sites compute "today" as UTC-today
+  (`new Date().toISOString().split('T')[0]`) — TZ-stable but Nepal-semantically early by 5h45m
+  each night (dashboard/report/invoice/staff/issue/attendance).
+- **FIX-3 (open):** the bs-calendar `BS_MONTH_DATA` table is **one day off in the 2070 era**
+  (authoritative: 1 Baisakh 2070 = 2013-04-14, 15 Bhadra 2070 = 2013-08-31; table yields one
+  day earlier — verified vs nepalicalendar.rat32.com 2026-07-11). Modern era is CORRECT
+  (27 Ashadh 2083 = 2026-07-11 confirmed). Epoch constant (`new Date(1943, 3, 12)`) also
+  contradicts the package's own "13 April 1943" docstring. Fix = audit the table between 2000
+  and ~2080 against authoritative anchors; affects historical dates (student dobs!) platform-wide.
+  The 2070-era vectors in `date.util.spec.ts` deliberately key to the current table and must be
+  updated with the table fix.
 - Run tests: `cd apps/api && npm test`
 
 > Update this checklist as modules are completed.
