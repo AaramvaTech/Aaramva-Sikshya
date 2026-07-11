@@ -310,6 +310,14 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   **Canary convention:** always apply to the `demo` school first, verify, then roll to all.
   Provisioning (`register-school`) now runs the runner from `0001_baseline.sql` instead of
   the retired `tenant-schema.sql`. See `apps/api/migrations/tenant/README.md`.
+- MIG-3 (guardian dedup, `0003_dedup_guardians.sql`): removed motherland's backfill
+  triplicates (151→51 rows; survivor rule prefers the `user_id`-linked row so parent logins
+  survive; DO-block invariant aborts if a dup group holds two distinct user_ids). NO unique
+  constraint on `(student_id, phone)` by design — father and mother can share a phone; dup
+  prevention lives in the write path (GuardianService). The runner's `splitStatements` is now
+  **dollar-quote aware** ($$…$$ / $tag$…$tag$ bodies stay one statement), so migrations may
+  use DO blocks — but keep dollar-quoted bodies free of `--` comment lines (still stripped).
+  Migration files are LF-pinned via root `.gitattributes` (ledger checksums are byte-checksums).
 - Run tests: `cd apps/api && npm test`
 
 > Update this checklist as modules are completed.
