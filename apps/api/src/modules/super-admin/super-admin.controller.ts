@@ -18,7 +18,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Role } from '../common/enums/role.enum';
 import type { AuthUser } from '../auth/auth.types';
 import { PlatformAuthService } from './platform-auth.service';
-import { PlatformLoginDto } from './dto/platform-login.dto';
+import { PlatformChangePasswordDto, PlatformLoginDto } from './dto/platform-login.dto';
 import { PlanService } from './plan.service';
 import { CreatePlanDto, UpdatePlanDto } from './dto/plan.dto';
 import { TenantAdminService } from './tenant-admin.service';
@@ -51,6 +51,15 @@ export class SuperAdminController {
   @HttpCode(200)
   login(@Body() dto: PlatformLoginDto) {
     return this.platformAuth.login(dto);
+  }
+
+  // MAIL-1 T4: platform-admin change-password (closes the OPS-1 script gap).
+  @Post('auth/change-password')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PLATFORM_ADMIN)
+  changePassword(@CurrentUser() user: AuthUser, @Body() dto: PlatformChangePasswordDto) {
+    return this.platformAuth.changePassword(user.userId, dto.currentPassword, dto.newPassword);
   }
 
   @Post('auth/logout')

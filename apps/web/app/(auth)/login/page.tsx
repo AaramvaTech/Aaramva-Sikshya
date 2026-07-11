@@ -155,7 +155,7 @@ export default function LoginPage() {
                   Password <span className="text-error-500">*</span>
                 </label>
                 <Link
-                  href="#"
+                  href="/forgot-password"
                   className="text-theme-xs text-brand-500 hover:text-brand-600 dark:text-brand-400"
                 >
                   Forgot password?

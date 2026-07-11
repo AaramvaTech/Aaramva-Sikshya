@@ -1,4 +1,5 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -45,6 +46,9 @@ describe('AuthService', () => {
           useValue: {
             query: jest.fn(),
             execute: jest.fn(),
+            run: jest.fn().mockImplementation((fn: (tx: unknown) => unknown) =>
+              fn({ $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() }),
+            ),
           },
         },
         {
@@ -62,6 +66,7 @@ describe('AuthService', () => {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('test-secret') },
         },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 
@@ -242,6 +247,89 @@ describe('AuthService', () => {
           tenantSlug: 'testschool',
         }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ─── Password reset + change (MAIL-1 T3/T4) ─────────────────────────────────
+
+  describe('forgotPassword()', () => {
+    it('is oracle-free: resolves void and emits nothing for an unknown email', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // no user
+      const events = (authService as any).events as { emit: jest.Mock };
+
+      await expect(authService.forgotPassword('nobody@x.com')).resolves.toBeUndefined();
+
+      expect(events.emit).not.toHaveBeenCalled();
+      expect(tenantPrisma.execute).not.toHaveBeenCalled(); // no token row created
+    });
+
+    it('stores a HASHED token (never the raw token) and emits the reset event', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockUser]);
+      (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(1);
+      const events = (authService as any).events as { emit: jest.Mock };
+
+      await authService.forgotPassword(mockUser.email);
+
+      const [insertSql, , storedHash] = (tenantPrisma.execute as jest.Mock).mock.calls[0];
+      expect(insertSql).toContain('INSERT INTO password_reset_tokens');
+      expect(storedHash).toMatch(/^[0-9a-f]{64}$/); // sha256 hex
+      const event = events.emit.mock.calls[0][1] as { resetUrl: string };
+      const rawToken = new URL(event.resetUrl).searchParams.get('token')!;
+      expect(rawToken).toMatch(/^[0-9a-f]{64}$/); // 32 random bytes hex
+      expect(storedHash).not.toBe(rawToken); // hashed at rest
+    });
+  });
+
+  describe('resetPassword()', () => {
+    it('rejects an invalid/expired/used token (atomic claim returns no row)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // claim fails
+
+      await expect(authService.resetPassword('a'.repeat(64), 'NewPass123!'))
+        .rejects.toThrow(BadRequestException);
+      expect(tenantPrisma.run).not.toHaveBeenCalled(); // nothing changed
+    });
+
+    it('claims single-use atomically, updates the hash, and revokes all sessions', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ user_id: 'uid-1' }]);
+      const txCalls: string[] = [];
+      (tenantPrisma.run as jest.Mock).mockImplementationOnce((fn: (tx: unknown) => unknown) =>
+        fn({ $executeRawUnsafe: jest.fn((sql: string) => { txCalls.push(sql); return 1; }) }),
+      );
+
+      await expect(authService.resetPassword('b'.repeat(64), 'NewPass123!'))
+        .resolves.toEqual({ reset: true });
+
+      const claimSql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(claimSql).toContain('used_at IS NULL'); // single-use claim
+      expect(claimSql).toContain('expires_at > NOW()'); // expiry enforced
+      expect(txCalls.join(' ')).toContain('UPDATE users SET password_hash');
+      expect(txCalls.join(' ')).toContain('DELETE FROM refresh_tokens');
+      expect(txCalls.join(' ')).toContain('UPDATE password_reset_tokens'); // void other links
+    });
+  });
+
+  describe('changePassword()', () => {
+    it('rejects when the current password does not match', async () => {
+      const hash = await bcrypt.hash('RealPassword1', 10);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'uid-1', password_hash: hash }]);
+
+      await expect(authService.changePassword('uid-1', 'WrongPassword', 'NewPass123!'))
+        .rejects.toThrow(UnauthorizedException);
+      expect(tenantPrisma.run).not.toHaveBeenCalled();
+    });
+
+    it('changes the password and revokes refresh tokens when current matches', async () => {
+      const hash = await bcrypt.hash('RealPassword1', 10);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'uid-1', password_hash: hash }]);
+      const txCalls: string[] = [];
+      (tenantPrisma.run as jest.Mock).mockImplementationOnce((fn: (tx: unknown) => unknown) =>
+        fn({ $executeRawUnsafe: jest.fn((sql: string) => { txCalls.push(sql); return 1; }) }),
+      );
+
+      await expect(authService.changePassword('uid-1', 'RealPassword1', 'NewPass123!'))
+        .resolves.toEqual({ changed: true });
+      expect(txCalls.join(' ')).toContain('UPDATE users SET password_hash');
+      expect(txCalls.join(' ')).toContain('DELETE FROM refresh_tokens');
     });
   });
 });

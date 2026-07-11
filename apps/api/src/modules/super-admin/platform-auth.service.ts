@@ -66,4 +66,31 @@ export class PlatformAuthService {
     // JWTs are short-lived (15m). No server-side blocklist required for now.
     // A Redis blocklist can be added if longer-lived tokens are introduced.
   }
+
+  /**
+   * MAIL-1 T4: closes the OPS-1 gap — the next platform-admin password
+   * rotation is a form, not an operator script. Platform admins have no
+   * refresh tokens, so there are no sessions to revoke (access JWTs age out
+   * in 15 minutes).
+   */
+  async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ changed: true }> {
+    const rows = await this.publicPrisma.query<DbAdmin>(
+      `SELECT id, email, password_hash, is_active FROM platform_admins WHERE id = $1::uuid`,
+      adminId,
+    );
+    const admin = rows[0];
+    if (!admin || !admin.is_active || !(await bcrypt.compare(currentPassword, admin.password_hash))) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.publicPrisma.execute(
+      `UPDATE platform_admins SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+      passwordHash, adminId,
+    );
+    return { changed: true };
+  }
 }

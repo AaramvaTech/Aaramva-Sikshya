@@ -15,6 +15,8 @@ import {
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
+import { ChangePasswordCard } from '@/components/shared/change-password-card';
+import { authApi } from '@/lib/api/auth.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -208,6 +210,9 @@ export default function SettingsPage() {
           />
         </Grid>
       </Section>
+
+      {/* MAIL-1 T4: account security */}
+      <ChangePasswordCard onChange={(data) => authApi.changePassword(data)} />
     </div>
   );
 }

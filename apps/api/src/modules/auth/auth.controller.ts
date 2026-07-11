@@ -19,6 +19,7 @@ import { AuthService } from './auth.service';
 import type { AuthUser } from './auth.types';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto';
 
 const REFRESH_COOKIE = 'refresh_token';
 const REFRESH_COOKIE_PATH = '/api/v1/auth';
@@ -126,6 +127,32 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: AuthUser) {
     return this.authService.getMe(user);
+  }
+
+  // ─── Password reset + change (MAIL-1 T3/T4) ────────────────────────────────
+
+  // Public + oracle-free: identical generic 200 whether or not the account
+  // exists. 3/hour per IP (SEC-1 discipline — this endpoint sends email).
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  @HttpCode(200)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.forgotPassword(dto.email);
+    return { message: 'If an account exists for that email, a reset link has been sent.' };
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  @HttpCode(200)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.userId, dto.currentPassword, dto.newPassword);
   }
 
   private setRefreshCookie(res: Response, token: string, expiresAt: Date): void {

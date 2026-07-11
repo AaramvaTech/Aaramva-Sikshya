@@ -1,11 +1,16 @@
 import {
+  BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { MAIL_EVENTS } from '../mail/mail.events';
+import type { PasswordResetRequestedEvent } from '../mail/mail.events';
 import {
   TenantContext,
   TenantContextService,
@@ -34,12 +39,15 @@ interface DbUser {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly provisioning: TenantProvisioningService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly events: EventEmitter2,
   ) {}
 
   // ─── Register a new school + first SCHOOL_OWNER ────────────────────────────
@@ -251,5 +259,104 @@ export class AuthService {
   /** Deterministic hash so refresh tokens can be looked up by value. */
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  // ─── Password reset + change (MAIL-1 T3/T4) ────────────────────────────────
+
+  /**
+   * Oracle-free: ALWAYS resolves void; the controller returns the same generic
+   * 200 whether or not the account exists. Token: 32 random bytes, stored
+   * SHA-256-hashed, 30-min expiry, single-use.
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const { tenantId, slug } = this.tenantContext.getOrThrow();
+    const users = await this.tenantPrisma.query<{ id: string; email: string }>(
+      `SELECT id, email FROM users WHERE email = $1 AND deleted_at IS NULL`,
+      email,
+    );
+    if (!users[0]) {
+      this.logger.log(`forgot-password: no account for the requested email — skipped (no email sent)`);
+      return;
+    }
+    const user = users[0];
+
+    const token = randomBytes(32).toString('hex');
+    await this.tenantPrisma.execute(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1::uuid, $2, NOW() + interval '30 minutes')`,
+      user.id,
+      this.hashToken(token),
+    );
+
+    const domain = this.config.get<string>('APP_DOMAIN') || 'aaramvashikshya.com';
+    // tenant param is redundant with the subdomain in prod but lets the reset
+    // page resolve the school when opened on a non-subdomain host (dev).
+    const resetUrl = `https://${slug}.${domain}/reset-password?token=${token}&tenant=${slug}`;
+    this.events.emit(MAIL_EVENTS.passwordResetRequested, {
+      tenantId, to: user.email, resetUrl, relatedUserId: user.id,
+    } satisfies PasswordResetRequestedEvent);
+  }
+
+  /**
+   * Single-use is enforced by an atomic claim: the UPDATE only wins if the
+   * token is unused and unexpired. On success every refresh token AND every
+   * other outstanding reset token for the user is invalidated.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ reset: true }> {
+    const claimed = await this.tenantPrisma.query<{ user_id: string }>(
+      `UPDATE password_reset_tokens
+       SET used_at = NOW()
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+       RETURNING user_id`,
+      this.hashToken(token),
+    );
+    if (!claimed[0]) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+    const userId = claimed[0].user_id;
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.tenantPrisma.run(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        passwordHash, userId,
+      );
+      // Force re-login everywhere + void any other outstanding reset links.
+      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
+      await tx.$executeRawUnsafe(
+        `UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1::uuid AND used_at IS NULL`,
+        userId,
+      );
+    });
+    return { reset: true };
+  }
+
+  /** Authenticated change: verifies the current password, revokes sessions. */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ changed: true }> {
+    const rows = await this.tenantPrisma.query<{ id: string; password_hash: string }>(
+      `SELECT id, password_hash FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
+      userId,
+    );
+    if (!rows[0] || !(await bcrypt.compare(currentPassword, rows[0].password_hash))) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.tenantPrisma.run(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        passwordHash, userId,
+      );
+      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
+      await tx.$executeRawUnsafe(
+        `UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1::uuid AND used_at IS NULL`,
+        userId,
+      );
+    });
+    return { changed: true };
   }
 }

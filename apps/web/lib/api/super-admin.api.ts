@@ -23,6 +23,8 @@ export const superAdminApi = {
       data,
     ),
   logout: () => api.post('/super-admin/auth/logout'),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.post<ApiResponse<{ changed: boolean }>>('/super-admin/auth/change-password', data),
 
   // Analytics
   getOverview: () =>

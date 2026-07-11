@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Settings, MessageSquare, CreditCard, Palette, Info } from 'lucide-react';
 import { usePlatformSettings, useUpdatePlatformSettings } from '@/lib/hooks/use-super-admin';
+import { ChangePasswordCard } from '@/components/shared/change-password-card';
+import { superAdminApi } from '@/lib/api/super-admin.api';
 
 export default function SettingsPage() {
   const { data: settings, isLoading } = usePlatformSettings();
@@ -189,6 +191,13 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* MAIL-1 T4: platform-admin password — a form now, not an operator script */}
+      <ChangePasswordCard
+        onChange={(data) => superAdminApi.changePassword(data)}
+        minLength={12}
+        note="Platform-admin passwords must be at least 12 characters."
+      />
     </div>
   );
 }

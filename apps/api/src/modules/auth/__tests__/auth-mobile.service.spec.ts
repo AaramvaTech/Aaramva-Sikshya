@@ -1,4 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -39,6 +40,7 @@ describe('AuthService — mobile client behaviour', () => {
         },
         { provide: JwtService, useValue: { signAsync: jest.fn().mockResolvedValue('mock.jwt.token') } },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test-secret') } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 
