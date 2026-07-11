@@ -2,7 +2,7 @@
 
 **Save location:** `docs/api-contracts/CI-1-ci-pipeline.md`
 **Scope:** repo root + apps/api + apps/web. Creates .github/workflows, Dockerfiles, .dockerignore. No feature code changes.
-**HARD PREREQUISITE (manual, Srijan):** the git-history password scrub (`git filter-repo` removing <REDACTED>) and DB password rotation MUST be complete before this repo is pushed to GitHub. The session builds everything locally; the first push is a separate, gated step.
+**HARD PREREQUISITE (manual, Srijan):** the git-history password scrub (`git filter-repo` removing the old DB password (see .env)) and DB password rotation MUST be complete before this repo is pushed to GitHub. The session builds everything locally; the first push is a separate, gated step.
 **Baseline:** 298 tests (api). Mobile has jest-expo tests (TZ-pinned). bs-calendar has 13 tests. Web has NO test runner (tsc only).
 
 ---

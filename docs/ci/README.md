@@ -20,7 +20,7 @@ which also blocks the merge.
 
 ## Pre-push gate (do NOT push until done)
 
-The git history contains a database password (`<REDACTED>`). Before the first
+The git history contains the old DB password (see .env). Before the first
 push to GitHub:
 
 1. Scrub history with `git filter-repo` (remove the password everywhere).
