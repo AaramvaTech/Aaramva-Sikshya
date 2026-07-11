@@ -47,8 +47,12 @@ describe('ImportService.preview', () => {
 
     expect(res.summary).toEqual({ total: 4, valid: 1, invalid: 2, duplicate: 1 });
     expect(res.rows[0].status).toBe('valid');
-    // BS 2070-05-15 → AD round-trip (bs-calendar)
-    expect(res.rows[0].resolved?.dobAd).toBe('2013-08-29');
+    // BS 2070-05-15 → AD per the bs-calendar table. FIX-2: the pre-fix
+    // toISOString() formatting shifted this to 2013-08-29 under Nepal TZ —
+    // 2013-08-30 is the table-true value in every timezone. (Authoritative
+    // calendars say 2013-08-31: the table itself is a day off in the 2070
+    // era — FIX-3, tracked separately; see date.util.spec.)
+    expect(res.rows[0].resolved?.dobAd).toBe('2013-08-30');
     expect(res.rows[0].resolved?.classId).toBe('class-1');
     expect(res.rows[0].resolved?.sectionId).toBe('sec-1');
 
@@ -60,7 +64,8 @@ describe('ImportService.preview', () => {
   });
 
   it('flags rows duplicating EXISTING students (re-import safety)', async () => {
-    mockContext({ existing: [{ fn: 'ram', ln: 'sharma', dob: '2013-08-29' }] });
+    // dob matches what FIX-2's conversion now yields for BS 2070-05-15.
+    mockContext({ existing: [{ fn: 'ram', ln: 'sharma', dob: '2013-08-30' }] });
     const csv = [
       HEADER,
       'Ram,Sharma,2070-05-15,MALE,Grade 1,A,1,Hari,Sharma,9800000001,Father,hari@x.com',

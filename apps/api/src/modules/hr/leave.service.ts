@@ -8,6 +8,7 @@ import {
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role } from '../common/enums/role.enum';
+import { formatLocalDate } from '../common/utils/date.util';
 import { assertSelfOrHrAdmin } from './hr-access.util';
 import {
   LeaveTypeRow,
@@ -241,8 +242,10 @@ export class LeaveService {
             AND to_date <= $4::date`,
         userId,
         lt.id,
-        fiscalYearStart.toISOString().split('T')[0],
-        fiscalYearEnd.toISOString().split('T')[0],
+        // FIX-2: these Dates are local-frame constructions (new Date(y, 6, 16));
+        // toISOString() rendered them as July 15 under Nepal time.
+        formatLocalDate(fiscalYearStart),
+        formatLocalDate(fiscalYearEnd),
       );
       const usedDays = parseInt(usedRow?.used_days ?? '0', 10);
       balances.push({

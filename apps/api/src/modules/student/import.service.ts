@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { bsToAd, parseBsString } from 'bs-calendar';
+import { formatLocalDate } from '../common/utils/date.util';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { StudentService } from './student.service';
 import { GuardianService } from './guardian.service';
@@ -143,7 +144,10 @@ export class ImportService {
       let dobAd: string | null = null;
       if (data[K.dobBs]) {
         try {
-          dobAd = bsToAd(parseBsString(data[K.dobBs])).toISOString().split('T')[0];
+          // FIX-2: bsToAd returns a local-frame Date — format from its local
+          // components. toISOString() (UTC frame) shifted the day back under
+          // UTC+ timezones (Nepal: 2070-05-15 BS became 2013-08-29, not -30).
+          dobAd = formatLocalDate(bsToAd(parseBsString(data[K.dobBs])));
         } catch {
           errors.push(`DOB (BS) "${data[K.dobBs]}" is not a valid BS date (use YYYY-MM-DD)`);
         }

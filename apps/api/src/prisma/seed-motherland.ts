@@ -8,6 +8,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { formatLocalDate } from '../modules/common/utils/date.util';
 
 const SCHEMA = 'tenant_motherland_school';
 const TENANT_ID = '4ba39f83-c58c-46b1-9662-8ed33611576e';
@@ -18,7 +19,10 @@ const STUDENTS_PER_SECTION = 5;
 
 const prisma = new PrismaClient();
 
-const iso = (d: Date) => d.toISOString().split('T')[0];
+// FIX-2: local components, not toISOString() — several call sites pass
+// local-frame Dates (new Date(y, m, d)), which UTC formatting shifted a day
+// back on Nepal-TZ dev machines. A seed means "the calendar day on this machine".
+const iso = (d: Date) => formatLocalDate(d);
 const rnd = (seed: number) => {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
