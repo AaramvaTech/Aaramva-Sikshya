@@ -1,0 +1,19 @@
+# Context filter for root-context builds (apps/api/Dockerfile).
+# apps/web builds from its own context and has its own .dockerignore.
+.git
+.claude
+.github
+docs
+backups
+scripts
+**/node_modules
+**/.env*
+**/dist
+**/.next
+**/.expo
+**/coverage
+apps/web
+apps/mobile
+apps/api/test
+**/__tests__
+**/*.spec.ts

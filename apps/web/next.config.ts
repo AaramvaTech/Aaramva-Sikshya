@@ -6,6 +6,8 @@ import { dirname } from 'node:path';
 // so pin Turbopack's root here. Otherwise Next.js detects multiple lockfiles
 // (root + apps/web) and warns about an ambiguous workspace root.
 const nextConfig: NextConfig = {
+  // Emit .next/standalone for the Docker runtime image (see apps/web/Dockerfile).
+  output: 'standalone',
   turbopack: {
     root: dirname(fileURLToPath(import.meta.url)),
   },
