@@ -49,14 +49,15 @@ export class StaffService {
       let user: { id: string };
       try {
         [user] = await tx.$queryRawUnsafe<{ id: string }[]>(
-          `INSERT INTO users (email, password_hash, first_name, last_name, role)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO users (email, password_hash, first_name, last_name, role, must_change_password)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id`,
           dto.email,
           passwordHash,
           dto.firstName,
           dto.lastName,
           dto.role,
+          generated, // POL-1 T4: emailed temp password → force change on first login
         );
       } catch (err: unknown) {
         const msg = (err as Error)?.message ?? '';
@@ -139,7 +140,8 @@ export class StaffService {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await this.tenantPrisma.run(async (tx) => {
       await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+         WHERE id = $2::uuid`,
         passwordHash, userId,
       );
       await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);

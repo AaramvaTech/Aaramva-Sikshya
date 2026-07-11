@@ -84,8 +84,10 @@ export class AuthService {
   async login(dto: LoginDto) {
     const ctx = this.tenantContext.getOrThrow();
 
-    const rows = await this.tenantPrisma.query<DbUser & { password_hash: string; is_active: boolean }>(
-      `SELECT id, email, role, password_hash, is_active
+    const rows = await this.tenantPrisma.query<
+      DbUser & { password_hash: string; is_active: boolean; must_change_password: boolean }
+    >(
+      `SELECT id, email, role, password_hash, is_active, must_change_password
        FROM users WHERE email = $1 AND deleted_at IS NULL`,
       dto.email,
     );
@@ -117,7 +119,14 @@ export class AuthService {
         slug: ctx.slug,
         logoUrl: tenantRows[0]?.logoUrl ?? null,
       },
-      user: { id: user.id, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        // POL-1 T4: true while an emailed temporary password is in effect —
+        // the web shell keeps the user on change-password until it clears.
+        mustChangePassword: user.must_change_password,
+      },
     };
   }
 
@@ -186,8 +195,9 @@ export class AuthService {
     const rows = await this.tenantPrisma.query<{
       id: string; email: string; first_name: string; last_name: string;
       role: string; phone: string | null; avatar_url: string | null;
+      must_change_password: boolean;
     }>(
-      `SELECT id, email, first_name, last_name, role, phone, avatar_url
+      `SELECT id, email, first_name, last_name, role, phone, avatar_url, must_change_password
        FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
       user.userId,
     );
@@ -219,6 +229,7 @@ export class AuthService {
       role: r.role,
       phone: r.phone,
       avatarUrl: r.avatar_url,
+      mustChangePassword: r.must_change_password,
       tenantId: user.tenantId,
       tenantSlug: user.tenantSlug,
       tenant,
@@ -317,8 +328,10 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.tenantPrisma.run(async (tx) => {
+      // The user chose this password themselves → any temp-password force clears.
       await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        `UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW()
+         WHERE id = $2::uuid`,
         passwordHash, userId,
       );
       // Force re-login everywhere + void any other outstanding reset links.
@@ -347,8 +360,10 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.tenantPrisma.run(async (tx) => {
+      // POL-1 T4: changing the password clears the first-login force flag.
       await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        `UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW()
+         WHERE id = $2::uuid`,
         passwordHash, userId,
       );
       await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);

@@ -147,6 +147,23 @@ describe('AuthService', () => {
       expect(result.tenant.logoUrl).toBeNull();
     });
 
+    // POL-1 T4: the web shell needs the flag on login to force the
+    // change-password redirect while a temp password is in effect.
+    it('surfaces must_change_password on the login response user', async () => {
+      const hash = await bcrypt.hash('Secret123', 1);
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockUser, password_hash: hash, must_change_password: true }])
+        .mockResolvedValueOnce([mockTenant]);
+      (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
+
+      const result = await authService.login({
+        email: 'ram@test.edu.np',
+        password: 'Secret123',
+      });
+
+      expect(result.user.mustChangePassword).toBe(true);
+    });
+
     it('throws UnauthorizedException for wrong password', async () => {
       const hash = await bcrypt.hash('Secret123', 1);
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
@@ -330,6 +347,24 @@ describe('AuthService', () => {
         .resolves.toEqual({ changed: true });
       expect(txCalls.join(' ')).toContain('UPDATE users SET password_hash');
       expect(txCalls.join(' ')).toContain('DELETE FROM refresh_tokens');
+      // POL-1 T4: changing the password ends any first-login force.
+      expect(txCalls.join(' ')).toContain('must_change_password = false');
+    });
+  });
+
+  // ─── POL-1 T4: reset-password also clears the first-login force ─────────────
+
+  describe('resetPassword() — must_change_password', () => {
+    it('clears the flag when the user resets via an emailed link', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ user_id: 'uid-1' }]); // claim wins
+      const txCalls: string[] = [];
+      (tenantPrisma.run as jest.Mock).mockImplementationOnce((fn: (tx: unknown) => unknown) =>
+        fn({ $executeRawUnsafe: jest.fn((sql: string) => { txCalls.push(sql); return 1; }) }),
+      );
+
+      await expect(authService.resetPassword('raw-token', 'NewPass123!'))
+        .resolves.toEqual({ reset: true });
+      expect(txCalls.join(' ')).toContain('must_change_password = false');
     });
   });
 });

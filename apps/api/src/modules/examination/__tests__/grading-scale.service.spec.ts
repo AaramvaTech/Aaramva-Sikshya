@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { GradingScaleService } from '../grading-scale.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -34,6 +35,30 @@ describe('GradingScaleService', () => {
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
 
     jest.clearAllMocks();
+  });
+
+  // POL-1 T6: rename is the only mutable field — thresholds stay immutable
+  // (they feed computed results; a new scale is the way to change bands).
+  describe('rename()', () => {
+    it('updates only the name via UPDATE...RETURNING', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { id: 'scale-1', name: 'NEB Scale 2081', is_default: false, created_at: new Date(), deleted_at: null },
+      ]);
+
+      const result = await service.rename('scale-1', { name: 'NEB Scale 2081' });
+
+      expect(result.name).toBe('NEB Scale 2081');
+      const [sql, ...params] = (tenantPrisma.query as jest.Mock).mock.calls[0] as [string, ...unknown[]];
+      expect(sql).toContain('UPDATE grading_scales SET name');
+      expect(sql).not.toContain('grade_thresholds');
+      expect(params).toEqual(['NEB Scale 2081', 'scale-1']);
+    });
+
+    it('throws NotFoundException for a missing or deleted scale', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(service.rename('nope', { name: 'X' })).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('calculateGrade()', () => {

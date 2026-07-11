@@ -10,7 +10,7 @@ import type {
   InvoiceDetail,
   Payment,
   CollectionReport,
-  DefaulterStudent,
+  DefaulterReport,
   StudentLedger,
   CreateFeeCategoryData,
   CreateFeeStructureData,
@@ -77,7 +77,7 @@ export const financeApi = {
   getCollectionReport: (params: { academicYearId: string }) =>
     api.get<ApiResponse<CollectionReport>>('/finance/reports/collection', { params }),
   getDefaulters: (params: { academicYearId?: string }) =>
-    api.get<ApiResponse<DefaulterStudent[]>>('/finance/reports/defaulters', { params }),
+    api.get<ApiResponse<DefaulterReport>>('/finance/reports/defaulters', { params }),
   getStudentLedger: (studentId: string, params: { academicYearId: string }) =>
     api.get<ApiResponse<StudentLedger>>(`/finance/reports/student/${studentId}`, { params }),
 };

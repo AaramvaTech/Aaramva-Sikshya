@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -100,14 +100,15 @@ export class GuardianService {
       } else {
         createdNewUser = true;
         const newUserRows = await tx.$queryRawUnsafe<UserRow[]>(
-          `INSERT INTO users (email, password_hash, role, first_name, last_name)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO users (email, password_hash, role, first_name, last_name, must_change_password)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, email, role, first_name, last_name`,
           dto.email,
           passwordHash,
           Role.PARENT,
           guardian.first_name,
           guardian.last_name ?? null,
+          generated, // POL-1 T4: emailed temp password → force change on first login
         );
         userId = newUserRows[0].id;
       }
@@ -161,7 +162,8 @@ export class GuardianService {
     const passwordHash = await bcrypt.hash(password, 10);
     await this.tenantPrisma.run(async (tx) => {
       await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+         WHERE id = $2::uuid`,
         passwordHash, userId,
       );
       await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
@@ -351,6 +353,80 @@ export class GuardianService {
       inserted.push(toGuardianDto(rows[0]));
     }
     return inserted;
+  }
+
+  /**
+   * POL-1 T2 — GET /guardians/me. Self-scoped like the /students/me routes:
+   * everything resolves from token.userId → guardians.user_id; no id params.
+   * A parent may hold several guardian rows (one per child); profile fields
+   * come from the primary-preferred row, falling back to the users row.
+   */
+  async getMyProfile(userId: string) {
+    const rows = await this.tenantPrisma.query<{
+      guardian_id: string;
+      relation: string;
+      is_primary: boolean;
+      g_first_name: string | null;
+      g_last_name: string | null;
+      g_phone: string | null;
+      g_email: string | null;
+      student_pk: string;
+      admission_number: string;
+      first_name: string;
+      last_name: string | null;
+      photo_url: string | null;
+      class_name: string | null;
+      section_name: string | null;
+      roll_number: number | null;
+    }>(
+      `SELECT g.id AS guardian_id, g.relation, g.is_primary,
+              g.first_name AS g_first_name, g.last_name AS g_last_name,
+              g.phone AS g_phone, g.email AS g_email,
+              s.id AS student_pk, s.student_id AS admission_number,
+              s.first_name, s.last_name, s.photo_url,
+              s.class_name, s.section_name, s.roll_number
+       FROM guardians g
+       JOIN students s ON s.id = g.student_id AND s.deleted_at IS NULL
+       WHERE g.user_id = $1::uuid
+       ORDER BY g.is_primary DESC, g.created_at ASC`,
+      userId,
+    );
+    if (!rows[0]) {
+      throw new ForbiddenException('No guardian record linked to this account');
+    }
+
+    const userRows = await this.tenantPrisma.query<{
+      email: string;
+      phone: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>(
+      `SELECT email, phone, first_name, last_name FROM users WHERE id = $1::uuid`,
+      userId,
+    );
+    const user = userRows[0] ?? { email: '', phone: null, first_name: null, last_name: null };
+
+    const primary = rows[0];
+    return {
+      userId,
+      firstName: primary.g_first_name ?? user.first_name ?? '',
+      lastName: primary.g_last_name ?? user.last_name ?? null,
+      relation: primary.relation,
+      phone: primary.g_phone ?? user.phone ?? null,
+      email: user.email,
+      children: rows.map((r) => ({
+        id: r.student_pk,
+        admissionNumber: r.admission_number,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        photoUrl: r.photo_url,
+        relation: r.relation,
+        isPrimary: r.is_primary,
+        className: r.class_name,
+        sectionName: r.section_name,
+        rollNumber: r.roll_number,
+      })),
+    };
   }
 
   async getMyChildren(userId: string) {

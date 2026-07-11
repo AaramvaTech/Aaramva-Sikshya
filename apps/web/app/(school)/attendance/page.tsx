@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
+import { QueryErrorState } from '@/components/shared/query-error-state';
 import { Button } from '@/components/ui/button';
 import { BsDate } from '@/components/shared/bs-date';
 import {
@@ -30,7 +31,12 @@ export default function AttendancePage() {
   const [sectionId, setSectionId] = useState(ALL);
 
   const { data: classes } = useClasses();
-  const { data: summary, isLoading: summaryLoading } = useSchoolAttendanceSummary();
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+    refetch: refetchSummary,
+  } = useSchoolAttendanceSummary();
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -97,6 +103,10 @@ export default function AttendancePage() {
         }
       />
 
+      {summaryError && <QueryErrorState onRetry={() => refetchSummary()} />}
+
+      {!summaryError && (
+      <>
       {/* Filter bar */}
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-5">
@@ -283,6 +293,8 @@ export default function AttendancePage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

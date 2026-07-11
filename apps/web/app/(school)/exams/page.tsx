@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, CalendarCheck, ClipboardList, BarChart2, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
+import { QueryErrorState } from '@/components/shared/query-error-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +43,7 @@ import type { ExamType } from '@/types/api.types';
 export default function ExamsPage() {
   const router = useRouter();
   const { data: currentYear } = useCurrentAcademicYear();
-  const { data: examTypes, isLoading } = useExamTypes(currentYear?.id ?? '');
+  const { data: examTypes, isLoading, isError, refetch } = useExamTypes(currentYear?.id ?? '');
   const createExamType = useCreateExamType();
   const updateExamType = useUpdateExamType();
   const deleteExamType = useDeleteExamType();
@@ -160,7 +161,9 @@ export default function ExamsPage() {
         }
       />
 
-      {isLoading ? (
+      {isError ? (
+        <QueryErrorState onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 2xl:gap-7.5">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-44 rounded-sm" />

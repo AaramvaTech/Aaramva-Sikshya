@@ -74,6 +74,7 @@ const navItems: NavItem[] = [
     name: 'Examinations',
     subItems: [
       { name: 'Exam Types', path: '/exams' },
+      { name: 'Grading Scales', path: '/exams/grading-scales' },
       { name: 'Schedule', path: '/exams/schedule' },
       { name: 'Enter Marks', path: '/exams/marks' },
       { name: 'Results', path: '/exams/results' },

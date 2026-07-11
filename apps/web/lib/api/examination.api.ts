@@ -9,6 +9,7 @@ import type {
   GradingScale,
   ComputeResultSummary,
   CreateExamTypeData,
+  CreateGradingScaleData,
   BulkCreateScheduleData,
   BulkMarksData,
 } from '@/types/api.types';
@@ -68,7 +69,15 @@ export const examinationApi = {
       `/exams/results/report-card/${studentId}`,
     ),
 
-  // Grading scales
+  // Grading scales (POL-1 T6)
   listGradingScales: () =>
     api.get<ApiResponse<GradingScale[]>>('/exams/grading-scales'),
+  getGradingScale: (id: string) =>
+    api.get<ApiResponse<GradingScale>>(`/exams/grading-scales/${id}`),
+  createGradingScale: (data: CreateGradingScaleData) =>
+    api.post<ApiResponse<GradingScale>>('/exams/grading-scales', data),
+  renameGradingScale: (id: string, data: { name: string }) =>
+    api.patch<ApiResponse<GradingScale>>(`/exams/grading-scales/${id}`, data),
+  setDefaultGradingScale: (id: string) =>
+    api.patch<ApiResponse<GradingScale>>(`/exams/grading-scales/${id}/set-default`),
 };

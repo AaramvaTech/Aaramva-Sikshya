@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
+import { QueryErrorState } from '@/components/shared/query-error-state';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BsDate } from '@/components/shared/bs-date';
@@ -20,7 +21,7 @@ export default function FinancePage() {
   const { data: currentYear } = useCurrentAcademicYear();
   const academicYearId = currentYear?.id ?? '';
 
-  const { data: report, isLoading: reportLoading } = useCollectionReport(academicYearId);
+  const { data: report, isLoading: reportLoading, isError: reportError, refetch: refetchReport } = useCollectionReport(academicYearId);
   const { data: defaulters, isLoading: defaultersLoading } = useDefaulters(academicYearId);
   const { data: recentInvoices, isLoading: invoicesLoading } = useInvoices({
     page: 1,
@@ -84,7 +85,9 @@ export default function FinancePage() {
       />
 
       {/* Summary cards — TailAdmin stat card style */}
-      {reportLoading ? (
+      {reportError ? (
+        <QueryErrorState onRetry={() => refetchReport()} />
+      ) : reportLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 2xl:gap-7.5">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-sm" />
