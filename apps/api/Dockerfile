@@ -51,6 +51,9 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:24-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
+# Platform-wide convention — all date computations are Nepal-local (see
+# CLAUDE.md); also mitigates known TZ-sensitive date handling pending FIX-2.
+ENV TZ=Asia/Kathmandu
 WORKDIR /app
 COPY --from=proddeps --chown=node:node /app/apps/api/node_modules apps/api/node_modules
 # Generated Prisma client + engine (proddeps installed with --ignore-scripts,
