@@ -14,7 +14,7 @@ import { APP_FONTS } from '../lib/theme/fonts';
 
 export default function RootLayout() {
   useBootSession();
-  const { status, user } = useAuthStore();
+  const { status, user, mustChangePassword } = useAuthStore();
   const [fontsLoaded] = useFonts(APP_FONTS);
 
   useEffect(() => {
@@ -33,6 +33,12 @@ export default function RootLayout() {
     } else if (status === 'unauthed') {
       router.replace('/login');
     } else if (status === 'authed') {
+      // POL-2 T6: a temp-password login is held on the change-password screen
+      // until the flag clears — before any role app (mirrors POL-1's web shell).
+      if (mustChangePassword) {
+        router.replace('/change-password');
+        return;
+      }
       const role = user?.role;
       if (role === 'STUDENT') {
         router.replace('/(student)');
@@ -44,7 +50,7 @@ export default function RootLayout() {
         router.replace('/web-portal');
       }
     }
-  }, [status, user?.role, fontsLoaded]);
+  }, [status, user?.role, mustChangePassword, fontsLoaded]);
 
   const showLoader = status === 'booting' || !fontsLoaded;
 

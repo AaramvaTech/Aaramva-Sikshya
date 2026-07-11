@@ -96,7 +96,6 @@ export default function TeacherLayout() {
       {/* Reachable from Profile, hidden from the tab bar */}
       <Tabs.Screen name="my-attendance" options={{ href: null }} />
       <Tabs.Screen name="leave" options={{ href: null }} />
-      <Tabs.Screen name="home" options={{ href: null }} />
       <Tabs.Screen name="profile-details" options={{ href: null }} />
       {/* Notification inbox (header bell) + notices (Profile → School notices) */}
       <Tabs.Screen name="inbox" options={{ href: null }} />

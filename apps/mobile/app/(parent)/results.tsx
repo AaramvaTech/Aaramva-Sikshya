@@ -1,8 +1,10 @@
-import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
+import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
@@ -85,6 +87,11 @@ export default function ParentResults() {
   const resultsQuery = useChildResults(effectiveChildId ?? '');
   const results = resultsQuery.data ?? [];
 
+  // POL-2 T4: own-child report-card PDF. Passing the childId routes the shared
+  // download hook to the parent-scoped endpoint (/exams/results/report-card/:id/pdf),
+  // which enforces the guardian hard-scope + publish gate (403 / 409 handled inside).
+  const { download, downloading } = useReportCardDownload(effectiveChildId ?? undefined);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await resultsQuery.refetch();
@@ -127,6 +134,19 @@ export default function ParentResults() {
           ) : (
             <>
               {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
+
+              {/* Download report card PDF — mirrors the student results screen */}
+              <TouchableOpacity
+                onPress={download}
+                disabled={downloading}
+                activeOpacity={0.85}
+                style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+              >
+                <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
+                <Text style={[styles.downloadBtnText, { color: c.primary }]}>
+                  {downloading ? 'Downloading…' : 'Download report card PDF'}
+                </Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -156,4 +176,11 @@ const styles = StyleSheet.create({
   obtained: { fontFamily: FONT.extrabold, fontSize: 13.5 },
   gradeChip: { width: 38, alignItems: 'center', paddingVertical: 3, borderRadius: 7 },
   gradeChipText: { fontFamily: FONT.extrabold, fontSize: 11 },
+
+  // Download PDF button — same treatment as the student results screen
+  downloadBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: 14, borderWidth: 1.5, marginTop: 4,
+  },
+  downloadBtnText: { fontFamily: FONT.bold, fontSize: 14 },
 });

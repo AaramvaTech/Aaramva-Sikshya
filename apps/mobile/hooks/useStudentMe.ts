@@ -3,11 +3,23 @@ import api from '../lib/api';
 import type {
   StudentProfile,
   TimetableResponse,
+  SectionTimetableSlot,
   AttendanceSummary,
   AttendanceHistoryItem,
   NoticeItem,
   StudentResults,
 } from '../types';
+
+// Slot rows as the backend returns them under the day-keyed schedule map.
+interface RawSectionSlot {
+  slotId: string;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  subject: { id: string; name: string; code: string | null };
+  teacher: { id: string; fullName: string };
+  room: string | null;
+}
 
 export function useMyProfile() {
   return useQuery<StudentProfile>({
@@ -26,6 +38,30 @@ export function useMyTimetable() {
       const res = await api.get('/students/me/timetable/today');
       return res.data.data as TimetableResponse;
     },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// POL-2 T2: the student's own section weekly timetable. Reuses the shared
+// section endpoint (GET /timetable/section/:id — STUDENT-allowed) with the
+// sectionId now exposed on /students/me. Flattens the day-keyed schedule into
+// SectionTimetableSlot[] (dayOfWeek injected from the map key), exactly like the
+// parent's useChildTimetable so both weekly views share one shape.
+export function useMyWeeklyTimetable(sectionId: string | null | undefined) {
+  return useQuery<SectionTimetableSlot[]>({
+    queryKey: ['student', 'me', 'timetable', 'week', sectionId],
+    queryFn: async () => {
+      const res = await api.get(`/timetable/section/${sectionId}`);
+      const raw = res.data.data as { schedule?: Record<string, RawSectionSlot[]> } | SectionTimetableSlot[];
+      if (Array.isArray(raw)) return raw;
+      const schedule = raw?.schedule ?? {};
+      const slots: SectionTimetableSlot[] = [];
+      for (const [dow, daySlots] of Object.entries(schedule)) {
+        for (const s of daySlots) slots.push({ ...s, dayOfWeek: Number(dow) });
+      }
+      return slots;
+    },
+    enabled: !!sectionId,
     staleTime: 5 * 60 * 1000,
   });
 }

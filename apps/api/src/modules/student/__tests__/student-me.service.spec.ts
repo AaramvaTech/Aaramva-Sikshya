@@ -134,6 +134,7 @@ describe('StudentMeService', () => {
       expect(result.currentEnrollment!.className).toBe('Class 8');
       expect(result.currentEnrollment!.sectionName).toBe('B');
       expect(result.currentEnrollment!.rollNumber).toBe(12);
+      expect(result.currentEnrollment!.sectionId).toBe('section-uuid-1'); // POL-2 T2
       expect(result.currentEnrollment!.academicYearId).toBe('year-uuid-1');
       expect(result.currentEnrollment!.academicYearName).toBe('2082');
     });

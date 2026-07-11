@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 
-import { useMyChildren } from '../../hooks/useParentChild';
+import { useMyChildren, useGuardianProfile } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import NpText from '../../components/NpText';
 import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
@@ -9,16 +9,7 @@ import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
-
-// "ramesh.shrestha@gmail.com" -> "Ramesh Shrestha"
-function nameFromEmail(email: string): string {
-  const local = email.split('@')[0] ?? email;
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
+import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
 
 // A single label/value row inside an info card — mirrors comp pEditProfile visual language.
 function DetailRow({
@@ -48,15 +39,12 @@ export default function ParentProfileDetails() {
   const c = useThemeColors();
   const user = useAuthStore((s) => s.user);
   const { data: children, isLoading, isError, refetch } = useMyChildren();
+  const { data: guardian } = useGuardianProfile();
 
-  const email = user?.email ?? '';
-  const guardianName = email ? nameFromEmail(email) : 'Parent';
-  const initials = guardianName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-  const relation = children?.[0]?.relation ?? 'Guardian';
+  const email = guardian?.email ?? user?.email ?? '';
+  const guardianName = guardianDisplayName(guardian, email);
+  const initials = guardianInitials(guardianName);
+  const relation = guardian?.relation ?? children?.[0]?.relation ?? 'Guardian';
 
   // ── Header ────────────────────────────────────────────────────────────────
   // Plain white detail bar with back button — matches comp pEditProfile header bar.
@@ -104,10 +92,12 @@ export default function ParentProfileDetails() {
 
   // ── Data ─────────────────────────────────────────────────────────────────
   // Guardian info rows — only fields with real backing data are shown.
-  // Data gaps: phone, address, gender — no endpoint exposes these for a guardian.
+  // Phone now comes from GET /guardians/me (POL-2 T5); address/gender still have
+  // no guardian endpoint.
   const guardianRows: { label: string; value: string }[] = [
     { label: 'Name', value: guardianName },
     { label: 'Email', value: email || '—' },
+    ...(guardian?.phone ? [{ label: 'Phone', value: guardian.phone }] : []),
     { label: 'Relation', value: relation },
   ];
 
