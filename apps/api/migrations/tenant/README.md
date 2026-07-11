@@ -45,6 +45,9 @@ This directory + the runner are how the tenant schemas evolve.
    file after it has been applied anywhere. The runner stores a checksum and will
    refuse to run (checksum-mismatch abort) if an applied file changes. To fix a
    mistake, add a new forward migration.
+5. Migration files are **LF-pinned** via the root `.gitattributes` — the ledger
+   checksums are byte-checksums, so a CRLF smudge on checkout would abort the
+   runner on every tenant.
 
 ## Commands
 
