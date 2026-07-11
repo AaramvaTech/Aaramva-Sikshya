@@ -337,6 +337,21 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   The 2070-era vectors in `date.util.spec.ts` deliberately key to the current table and must be
   updated with the table fix.
 - Run tests: `cd apps/api && npm test`
+- OPS-1 (operations hardening): `GET /health` at ROOT path (no api/v1 prefix, no tenant, no
+  throttle) — `ok|degraded|error`, 503 only when db down; redis down = degraded (app runs
+  without Redis). Sentry via `src/instrument.ts` (SENTRY_DSN optional; scrubbed; captures only
+  non-HTTP errors in HttpExceptionFilter). Request logging: LoggingInterceptor JSON lines
+  (reqId/method/path/status/ms/tenant/userId; never bodies or auth headers; /health excluded);
+  ConsoleLogger json:true in production. Fine cron: `@nestjs/schedule` `'5 0 * * *'`
+  Asia/Kathmandu in `src/jobs/` (BullMQ REMOVED — the old job was quadruple-dead: Redis-gated
+  module, silent BullMQ buffering, snake_case SQL against the camelCase public schema, and a
+  status='ACTIVE' filter matching zero tenants). Manual trigger:
+  `POST /super-admin/jobs/recalculate-fines` (PLATFORM_ADMIN). NOTE: recalculateFine skips
+  invoices whose items have fine_per_day=0 — stale nonzero fines are never zeroed (pre-existing,
+  out of OPS-1 scope). Backups: `scripts/backup-db.sh` (pg_dump -Fc) + `docs/ops/RUNBOOK.md`
+  (restore IS the rollback). Platform-admin password rotation:
+  `apps/api/scripts/set-platform-admin-password.ts` (operator-run; no UI exists yet).
+  App connects as postgres SUPERUSER in dev — prod must use a non-superuser role (runbook).
 
 > Update this checklist as modules are completed.
 
