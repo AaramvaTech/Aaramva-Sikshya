@@ -1,84 +1,115 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job, Queue } from 'bullmq';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../modules/tenant/tenant-context.service';
+import { TenantService } from '../modules/tenant/tenant.service';
 import { InvoiceService } from '../modules/finance/invoice.service';
 
-const QUEUE_NAME = 'recalculate-fines';
-const JOB_NAME = 'daily-recalculate';
-
-/**
- * Schedules + processes the daily fine recalculation job.
- * Cron: '20 18 * * *' = 00:05 Nepal time (UTC+5:45)
- *
- * For now processes invoices across all active tenants.
- */
-@Injectable()
-export class RecalculateFinesScheduler implements OnModuleInit {
-  constructor(@InjectQueue(QUEUE_NAME) private readonly queue: Queue) {}
-
-  async onModuleInit() {
-    await this.queue.add(
-      JOB_NAME,
-      {},
-      {
-        repeat: { pattern: '20 18 * * *' },
-        jobId: JOB_NAME,
-        removeOnComplete: true,
-      },
-    );
-  }
+export interface FineRunSummary {
+  trigger: 'cron' | 'manual';
+  tenants: number;
+  failedTenants: string[];
+  recalculated: number;
+  ms: number;
 }
 
-@Processor(QUEUE_NAME)
-export class RecalculateFinesProcessor extends WorkerHost {
-  private readonly logger = new Logger(RecalculateFinesProcessor.name);
+/**
+ * Daily fine recalculation (OPS-1 T4 — resurrected from the silently-dead
+ * BullMQ version). The work is a sequential in-process loop with no queue
+ * semantics, so it runs on @nestjs/schedule — no Redis required, no silent
+ * death: registration is logged at boot and every run logs start + summary.
+ *
+ * Kathmandu-timezone cron: 00:05 Nepal time daily (school-day boundaries are
+ * Nepal-local). Manual trigger: POST /api/v1/super-admin/jobs/recalculate-fines
+ * (PLATFORM_ADMIN) — the per-invoice variant remains at
+ * PATCH /finance/invoices/:id/recalculate-fine.
+ */
+@Injectable()
+export class RecalculateFinesService implements OnModuleInit {
+  private readonly logger = new Logger(RecalculateFinesService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly invoiceService: InvoiceService,
-  ) {
-    super();
+  ) {}
+
+  onModuleInit(): void {
+    this.logger.log(
+      `Fine-recalculation cron registered: '5 0 * * *' Asia/Kathmandu (daily 00:05 Nepal time)`,
+    );
   }
 
-  async process(job: Job): Promise<void> {
-    this.logger.log(`Running fine recalculation job: ${job.id}`);
+  @Cron('5 0 * * *', { name: 'recalculate-fines', timeZone: 'Asia/Kathmandu' })
+  async handleCron(): Promise<void> {
+    await this.run('cron');
+  }
 
-    // Get all active tenants
-    const tenants = await this.prisma.$queryRaw<{ id: string; slug: string }[]>`
-      SELECT t.id, t.slug
-      FROM tenants t
-      JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'ACTIVE'
-      WHERE t.deleted_at IS NULL
-    `;
+  async run(trigger: 'cron' | 'manual'): Promise<FineRunSummary> {
+    const start = Date.now();
+    this.logger.log(`Fine recalculation started (trigger=${trigger})`);
 
+    // Model API, not raw SQL: the dead BullMQ version's query used snake_case
+    // columns that don't exist in the Prisma-managed public schema, and its
+    // status='ACTIVE' filter matched zero tenants (every school is TRIAL in
+    // dev). Fines accrue for any school that isn't cancelled/expired.
+    const tenants = await this.prisma.tenant.findMany({
+      where: {
+        deletedAt: null,
+        subscription: {
+          status: {
+            in: [
+              SubscriptionStatus.TRIAL,
+              SubscriptionStatus.ACTIVE,
+              SubscriptionStatus.PAST_DUE,
+            ],
+          },
+        },
+      },
+      select: { id: true, slug: true },
+    });
+
+    let recalculated = 0;
+    const failedTenants: string[] = [];
     for (const tenant of tenants) {
       try {
-        await this.tenantContext.run(
+        const count = await this.tenantContext.run(
           {
             tenantId: tenant.id,
             slug: tenant.slug,
-            schemaName: `tenant_${tenant.slug}`,
+            // The dead BullMQ version built `tenant_${slug}` by hand, which is
+            // wrong for dash-containing slugs (motherland-school). Use the
+            // canonical mapping.
+            schemaName: TenantService.schemaNameFor(tenant.slug),
           },
           () => this.recalculateForTenant(tenant.slug),
         );
+        recalculated += count;
       } catch (err) {
+        failedTenants.push(tenant.slug);
         this.logger.error(`Fine recalculation failed for tenant ${tenant.slug}`, err);
       }
     }
+
+    const ms = Date.now() - start;
+    const summary: FineRunSummary = {
+      trigger,
+      tenants: tenants.length,
+      failedTenants,
+      recalculated,
+      ms,
+    };
+    this.logger.log(
+      `Fine recalculation finished (trigger=${trigger}): tenants=${tenants.length} ` +
+        `failed=${failedTenants.length} recalculated=${recalculated} ms=${ms}`,
+    );
+    return summary;
   }
 
-  private async recalculateForTenant(slug: string): Promise<void> {
-    // Get all UNPAID + PARTIAL invoices past due date
-    const overdueInvoices = await this.invoiceService.findAll({
-      status: 'UNPAID',
-    });
-    const partialInvoices = await this.invoiceService.findAll({
-      status: 'PARTIAL',
-    });
+  private async recalculateForTenant(slug: string): Promise<number> {
+    const overdueInvoices = await this.invoiceService.findAll({ status: 'UNPAID' });
+    const partialInvoices = await this.invoiceService.findAll({ status: 'PARTIAL' });
 
     const allInvoices = [...overdueInvoices.data, ...partialInvoices.data];
     const today = new Date();
@@ -95,5 +126,6 @@ export class RecalculateFinesProcessor extends WorkerHost {
     }
 
     this.logger.log(`Tenant ${slug}: recalculated fines for ${processed} invoices`);
+    return processed;
   }
 }

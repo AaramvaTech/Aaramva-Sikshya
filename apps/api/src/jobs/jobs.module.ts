@@ -1,27 +1,18 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
-import { ConfigService } from '@nestjs/config';
-import { RecalculateFinesProcessor, RecalculateFinesScheduler } from './recalculate-fines.job';
+import { ScheduleModule } from '@nestjs/schedule';
+import { RecalculateFinesService } from './recalculate-fines.job';
+import { JobsController } from './jobs.controller';
 import { FinanceModule } from '../modules/finance/finance.module';
 
+/**
+ * OPS-1 T4: BullMQ is gone — the fine cron was its only consumer and needs no
+ * queue semantics. @nestjs/schedule runs in-process (no Redis), so this module
+ * is imported UNCONDITIONALLY (the old conditional Redis gate was one of the
+ * two layers of the silent-death bug).
+ */
 @Module({
-  imports: [
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6379),
-          enableReadyCheck: false,
-          maxRetriesPerRequest: null,
-          // Cap reconnect attempts to once per 30s so dev logs stay quiet when Redis is down
-          retryStrategy: (times: number) => Math.min(times * 1000, 30000),
-        },
-      }),
-    }),
-    BullModule.registerQueue({ name: 'recalculate-fines' }),
-    FinanceModule,
-  ],
-  providers: [RecalculateFinesScheduler, RecalculateFinesProcessor],
+  imports: [ScheduleModule.forRoot(), FinanceModule],
+  controllers: [JobsController],
+  providers: [RecalculateFinesService],
 })
 export class JobsModule {}
