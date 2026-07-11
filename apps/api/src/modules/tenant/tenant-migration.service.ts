@@ -139,15 +139,45 @@ export class TenantMigrationService {
     }
   }
 
-  /** Strip whole-line SQL comments, then split into statements on ';'. */
+  /**
+   * Strip whole-line SQL comments, then split into statements on ';'.
+   * Dollar-quote aware: a ';' inside $$ … $$ (or $tag$ … $tag$) does not split,
+   * so DO blocks / function bodies stay one statement. Inside an open dollar
+   * quote only the matching tag closes it (Postgres semantics). Comment lines
+   * inside a dollar-quoted body would still be stripped — keep bodies comment-free.
+   */
   static splitStatements(sql: string): string[] {
-    return sql
+    const text = sql
       .split('\n')
       .filter((line) => !line.trim().startsWith('--'))
-      .join('\n')
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .join('\n');
+
+    const statements: string[] = [];
+    let current = '';
+    let openTag: string | null = null;
+    let i = 0;
+    while (i < text.length) {
+      const ch = text[i];
+      if (openTag === null && ch === ';') {
+        statements.push(current);
+        current = '';
+        i++;
+        continue;
+      }
+      if (ch === '$') {
+        const match = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(text.slice(i));
+        if (match && (openTag === null || match[0] === openTag)) {
+          openTag = openTag === null ? match[0] : null;
+          current += match[0];
+          i += match[0].length;
+          continue;
+        }
+      }
+      current += ch;
+      i++;
+    }
+    statements.push(current);
+    return statements.map((s) => s.trim()).filter((s) => s.length > 0);
   }
 
   // ─── Loading ───────────────────────────────────────────────────────────────

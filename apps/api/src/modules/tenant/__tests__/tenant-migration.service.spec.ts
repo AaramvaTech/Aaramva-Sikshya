@@ -109,6 +109,33 @@ describe('TenantMigrationService (pure logic)', () => {
     it('produces no empty trailing statement after a final semicolon', () => {
       expect(TenantMigrationService.splitStatements('SELECT 1;')).toEqual(['SELECT 1']);
     });
+
+    it('keeps a DO $$ block with internal semicolons as one statement', () => {
+      const block = [
+        'DO $$',
+        'DECLARE',
+        '  n integer;',
+        'BEGIN',
+        '  SELECT 1 INTO n;',
+        "  IF n > 0 THEN RAISE EXCEPTION 'boom; with semicolon'; END IF;",
+        'END $$',
+      ].join('\n');
+      const sql = `${block};\nSELECT 2;`;
+      expect(TenantMigrationService.splitStatements(sql)).toEqual([block, 'SELECT 2']);
+    });
+
+    it('handles tagged dollar quotes ($fn$ … $fn$)', () => {
+      const fn = 'CREATE FUNCTION f() RETURNS void AS $fn$ BEGIN RETURN; END; $fn$ LANGUAGE plpgsql';
+      expect(TenantMigrationService.splitStatements(`${fn};\nSELECT 3;`)).toEqual([
+        fn,
+        'SELECT 3',
+      ]);
+    });
+
+    it('does not close a $$ block on a differently-tagged inner marker', () => {
+      const block = "DO $$ BEGIN PERFORM 1; RAISE NOTICE '$x$ not a closer'; END $$";
+      expect(TenantMigrationService.splitStatements(`${block};`)).toEqual([block]);
+    });
   });
 
   describe('checksum', () => {
