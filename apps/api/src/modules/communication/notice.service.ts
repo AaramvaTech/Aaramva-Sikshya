@@ -1,5 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateNoticeDto, ListNoticesQueryDto, UpdateNoticeDto } from './dto/notice.dto';
 
 export interface NoticeRow {
@@ -36,8 +38,9 @@ function toNoticeResponse(row: NoticeRow) {
   };
 }
 
-/** Audience values a given role may see. */
-const ROLE_AUDIENCES: Record<string, string[]> = {
+/** Audience values a given role may see. Exported so the notice.posted fan-out
+ *  (NoticeListener) targets exactly the users who can see the notice in lists. */
+export const ROLE_AUDIENCES: Record<string, string[]> = {
   PLATFORM_ADMIN: ['ALL', 'TEACHERS', 'PARENTS', 'STUDENTS', 'CLASS'],
   SCHOOL_OWNER:   ['ALL', 'TEACHERS', 'PARENTS', 'STUDENTS', 'CLASS'],
   PRINCIPAL:      ['ALL', 'TEACHERS', 'PARENTS', 'STUDENTS', 'CLASS'],
@@ -51,7 +54,11 @@ const ROLE_AUDIENCES: Record<string, string[]> = {
 
 @Injectable()
 export class NoticeService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly tenantContext: TenantContextService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async createNotice(dto: CreateNoticeDto, userId: string) {
     const rows = await this.tenantPrisma.run((tx) =>
@@ -88,6 +95,20 @@ export class NoticeService {
         id,
       ),
     );
+
+    // PUSH-1 (NEW event): fan-out only on the FIRST publish — re-publishing an
+    // already-published notice must not re-notify. Fire-and-forget.
+    if (!existing[0].is_published) {
+      const { slug } = this.tenantContext.getOrThrow();
+      this.eventEmitter.emit('notice.posted', {
+        tenantSlug: slug,
+        noticeId: rows[0].id,
+        title: rows[0].title,
+        body: rows[0].body,
+        audience: rows[0].audience,
+        classId: rows[0].class_id,
+      });
+    }
     return toNoticeResponse(rows[0]);
   }
 

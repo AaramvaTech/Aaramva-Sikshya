@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import { useMyProfile, useMyTimetable, useMyAttendanceSummary } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { AttendanceSummaryCard, TodayClasses, ErrorState, ScreenHeader, type TodayPeriod } from '../../components/ui';
+import { AttendanceSummaryCard, TodayClasses, ErrorState, ScreenHeader, HeaderBell, type TodayPeriod } from '../../components/ui';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { todayBs, formatBs } from 'bs-calendar';
@@ -136,15 +136,7 @@ export default function StudentDashboard() {
               </View>
             </View>
             <View style={styles.bandActions}>
-              <TouchableOpacity
-                onPress={() => router.push('/(student)/notices')}
-                hitSlop={10}
-                accessibilityLabel="Notices"
-                style={styles.bellWrap}
-              >
-                <Ionicons name="notifications-outline" size={22} color={c.primary} />
-                <View style={[styles.badge, { backgroundColor: c.danger, borderColor: c.brandSurface }]} />
-              </TouchableOpacity>
+              <HeaderBell inboxRoute="/(student)/inbox" />
               {studentInitials ? (
                 <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: c.surface }]}>
                   <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{studentInitials}</Text>
@@ -229,10 +221,8 @@ const styles = StyleSheet.create({
   greeting: { fontFamily: FONT.medium, fontSize: 13, marginTop: 6 },
   name: { fontFamily: FONT.extrabold, fontSize: 25, marginTop: 1, letterSpacing: -0.4 },
   enroll: { fontFamily: FONT.medium, fontSize: 12.5, marginTop: 3 },
-  // Right side of band top: bell + avatar
+  // Right side of band top: bell (HeaderBell, live unread count) + avatar
   bandActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bellWrap: { position: 'relative' },
-  badge: { position: 'absolute', top: -1, right: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   avatarText: { fontFamily: FONT.extrabold, fontSize: 14 },
 

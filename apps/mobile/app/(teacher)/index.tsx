@@ -12,7 +12,7 @@ import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
-import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader, HeaderBell } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
@@ -129,9 +129,7 @@ export default function TeacherHome() {
                 <Text style={[styles.schoolTail, { color: c.brandMuted }]}>Teacher portal</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={() => router.push('/(teacher)/profile')} hitSlop={10} accessibilityLabel="Profile">
-              <Ionicons name="notifications-outline" size={22} color={c.primary} />
-            </TouchableOpacity>
+            <HeaderBell inboxRoute="/(teacher)/inbox" />
           </View>
 
           <Text style={[styles.greeting, { color: c.brandMuted }]}>{getGreeting()}</Text>

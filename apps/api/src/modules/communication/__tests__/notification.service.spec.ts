@@ -38,14 +38,48 @@ describe('NotificationService', () => {
   });
 
   describe('createNotification()', () => {
-    it('inserts a notification record for the given user', async () => {
-      mockTx.$executeRawUnsafe.mockResolvedValueOnce(1);
+    it('inserts a notification record and returns the new row id (PUSH-1 mirror rule)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'notif-9' }]);
 
-      await service.createNotification('user-1', 'Payment received', 'Rs.500 received', 'FEE');
+      const id = await service.createNotification('user-1', 'Payment received', 'Rs.500 received', 'FEE');
 
-      const [sql, userId] = (mockTx.$executeRawUnsafe as jest.Mock).mock.calls[0] as [string, string];
+      expect(id).toBe('notif-9');
+      const [sql, userId] = (mockTx.$queryRawUnsafe as jest.Mock).mock.calls[0] as [string, string];
       expect(sql.toLowerCase()).toContain('notifications');
+      expect(sql.toUpperCase()).toContain('RETURNING');
       expect(userId).toBe('user-1');
+    });
+  });
+
+  describe('createNotificationsBulk()', () => {
+    it('inserts one row per user in a single statement and returns (id, userId) pairs', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { id: 'n-1', user_id: 'user-1' },
+        { id: 'n-2', user_id: 'user-2' },
+      ]);
+
+      const rows = await service.createNotificationsBulk(
+        ['user-1', 'user-2'],
+        'Results Published',
+        'Results for First Terminal have been published.',
+        'EXAM',
+        { examTypeId: 'et-1', route: 'results' },
+      );
+
+      expect(rows).toEqual([
+        { id: 'n-1', userId: 'user-1' },
+        { id: 'n-2', userId: 'user-2' },
+      ]);
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+      const [sql, userIds] = (mockTx.$queryRawUnsafe as jest.Mock).mock.calls[0] as [string, string[]];
+      expect(sql.toLowerCase()).toContain('unnest');
+      expect(userIds).toEqual(['user-1', 'user-2']);
+    });
+
+    it('returns [] without touching the DB for an empty audience', async () => {
+      const rows = await service.createNotificationsBulk([], 'T', 'B', 'NOTICE');
+      expect(rows).toEqual([]);
+      expect(mockTx.$queryRawUnsafe).not.toHaveBeenCalled();
     });
   });
 

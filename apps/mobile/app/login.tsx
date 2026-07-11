@@ -15,10 +15,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import api from '../lib/api';
 import { persistLoginSession } from '../lib/session';
+import { registerPushToken } from '../lib/notifications';
 import { deleteSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 import NpText from '../components/NpText';
@@ -32,24 +31,6 @@ type LoginResponse = {
   user: { id: string; email: string; role: string };
   tenant: { name: string; slug: string; logoUrl: string | null };
 };
-
-// Push tokens require a development build — expo-notifications throws at module
-// init time in Expo Go (SDK 53+), so we must guard before importing.
-async function registerPushToken(): Promise<void> {
-  if (!Device.isDevice) return;
-  if (Constants.executionEnvironment === 'storeClient') return;
-  try {
-    const Notifications = await import('expo-notifications');
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') return;
-    const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
-    if (!projectId) return;
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-    await api.post('/communication/devices', { token: tokenData.data });
-  } catch {
-    // silently skip
-  }
-}
 
 function initialsOf(name: string): string {
   return name
@@ -100,7 +81,7 @@ export default function LoginScreen() {
         refreshToken,
       });
       setSession({ accessToken, user, tenant, slug: effectiveSlug });
-      registerPushToken();
+      void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
       let msg = 'Login failed. Please try again.';
       if (err instanceof Error) {

@@ -32,17 +32,19 @@ function toNotificationResponse(row: NotificationRow) {
 export class NotificationService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
+  /** Returns the new row's id so a mirroring push can reference it (PUSH-1). */
   async createNotification(
     userId: string,
     title: string,
     body: string,
     type: string,
     data?: object,
-  ): Promise<void> {
-    await this.tenantPrisma.run((tx) =>
-      tx.$executeRawUnsafe(
+  ): Promise<string> {
+    const rows = await this.tenantPrisma.run((tx) =>
+      tx.$queryRawUnsafe<{ id: string }[]>(
         `INSERT INTO notifications (user_id, title, body, type, data)
-         VALUES ($1::uuid, $2, $3, $4, $5::jsonb)`,
+         VALUES ($1::uuid, $2, $3, $4, $5::jsonb)
+         RETURNING id`,
         userId,
         title,
         body,
@@ -50,6 +52,34 @@ export class NotificationService {
         JSON.stringify(data ?? {}),
       ),
     );
+    return rows[0].id;
+  }
+
+  /**
+   * One insert for an audience fan-out (results published, notice posted).
+   * Returns (id, userId) pairs so each user's push carries their own row id.
+   */
+  async createNotificationsBulk(
+    userIds: string[],
+    title: string,
+    body: string,
+    type: string,
+    data?: object,
+  ): Promise<{ id: string; userId: string }[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.tenantPrisma.run((tx) =>
+      tx.$queryRawUnsafe<{ id: string; user_id: string }[]>(
+        `INSERT INTO notifications (user_id, title, body, type, data)
+         SELECT u, $2, $3, $4, $5::jsonb FROM unnest($1::uuid[]) AS u
+         RETURNING id, user_id`,
+        userIds,
+        title,
+        body,
+        type,
+        JSON.stringify(data ?? {}),
+      ),
+    );
+    return rows.map((r) => ({ id: r.id, userId: r.user_id }));
   }
 
   async getMyNotifications(

@@ -98,6 +98,9 @@ export default function TeacherLayout() {
       <Tabs.Screen name="leave" options={{ href: null }} />
       <Tabs.Screen name="home" options={{ href: null }} />
       <Tabs.Screen name="profile-details" options={{ href: null }} />
+      {/* Notification inbox (header bell) + notices (Profile → School notices) */}
+      <Tabs.Screen name="inbox" options={{ href: null }} />
+      <Tabs.Screen name="notices" options={{ href: null }} />
     </Tabs>
   );
 }

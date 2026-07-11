@@ -15,3 +15,5 @@ export { SubjectSlot, type SlotMeta } from './SubjectSlot';
 export { SelectableRow, SelectChip } from './Selectable';
 export { Legend, type LegendItem } from './Legend';
 export { NoticeFeed, type NoticeFeedItem } from './NoticeFeed';
+export { HeaderBell } from './HeaderBell';
+export { NotificationInbox } from './NotificationInbox';

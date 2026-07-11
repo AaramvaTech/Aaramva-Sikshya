@@ -354,3 +354,17 @@ export interface BulkMarkEntry {
   isAbsent: boolean;
   remarks?: string;
 }
+
+// ─── In-app notifications (PUSH-1) ───────────────────────────────────────────
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: string; // ATTENDANCE | FEE | EXAM | NOTICE | ...
+  isRead: boolean;
+  readAt: string | null;
+  data: { route?: string; [key: string]: unknown } | null;
+  createdAt: string;
+}

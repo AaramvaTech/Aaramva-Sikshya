@@ -64,6 +64,7 @@ export default function TeacherProfile() {
   const actions: { icon: keyof typeof Ionicons.glyphMap; label: string; route: Href }[] = [
     { icon: 'stats-chart-outline', label: 'My attendance record', route: '/(teacher)/my-attendance' },
     { icon: 'document-text-outline', label: 'Apply for leave', route: '/(teacher)/leave' },
+    { icon: 'megaphone-outline', label: 'School notices', route: '/(teacher)/notices' },
   ];
 
   return (

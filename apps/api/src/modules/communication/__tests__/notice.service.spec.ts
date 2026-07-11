@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NoticeService } from '../notice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { TenantContextService } from '../../tenant/tenant-context.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -10,6 +12,7 @@ const mockTx = {
 describe('NoticeService', () => {
   let service: NoticeService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let eventEmitter: jest.Mocked<EventEmitter2>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -23,11 +26,20 @@ describe('NoticeService', () => {
             execute: jest.fn(),
           },
         },
+        {
+          provide: TenantContextService,
+          useValue: { getOrThrow: jest.fn().mockReturnValue({ tenantId: 't-1', slug: 'demo' }) },
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(NoticeService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    eventEmitter = module.get(EventEmitter2) as jest.Mocked<EventEmitter2>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -68,6 +80,33 @@ describe('NoticeService', () => {
       const updateCall = calls.find(([sql]) => sql.toUpperCase().includes('UPDATE'));
       expect(updateCall).toBeDefined();
       expect(result.isPublished).toBe(true);
+    });
+
+    it('emits notice.posted on first publish (PUSH-1 new event)', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'notice-1', is_published: false, created_by: 'user-1' }])
+        .mockResolvedValueOnce([{ id: 'notice-1', is_published: true, published_at: new Date(), title: 'T', body: 'B', type: 'GENERAL', audience: 'STUDENTS', class_id: null, created_at: new Date(), updated_at: new Date() }]);
+
+      await service.publishNotice('notice-1', 'user-1');
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith('notice.posted', {
+        tenantSlug: 'demo',
+        noticeId: 'notice-1',
+        title: 'T',
+        body: 'B',
+        audience: 'STUDENTS',
+        classId: null,
+      });
+    });
+
+    it('does NOT re-emit when the notice was already published', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'notice-1', is_published: true, created_by: 'user-1' }])
+        .mockResolvedValueOnce([{ id: 'notice-1', is_published: true, published_at: new Date(), title: 'T', body: 'B', type: 'GENERAL', audience: 'ALL', class_id: null, created_at: new Date(), updated_at: new Date() }]);
+
+      await service.publishNotice('notice-1', 'user-1');
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 

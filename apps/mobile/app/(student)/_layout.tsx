@@ -97,6 +97,8 @@ export default function StudentLayout() {
       <Tabs.Screen name="results" options={{ href: null }} />
       {/* Read-only profile details — opened from the Profile gear button, not a tab */}
       <Tabs.Screen name="profile-details" options={{ href: null }} />
+      {/* Notification inbox — opened from the header bell, not a tab */}
+      <Tabs.Screen name="inbox" options={{ href: null }} />
     </Tabs>
   );
 }

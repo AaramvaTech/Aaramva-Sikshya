@@ -258,6 +258,7 @@ ESEWA_PRODUCT_CODE=              ← both this + secret set = gateway enabled (P
 ESEWA_SECRET_KEY=
 ESEWA_FORM_URL=                  ← optional; defaults to rc/UAT sandbox
 ESEWA_STATUS_URL=                ← optional; defaults to rc/UAT sandbox
+EXPO_ACCESS_TOKEN=               ← optional (PUSH-1); only for EAS enhanced push security
 API_PUBLIC_URL=                  ← public API origin for gateway browser redirects
 WEB_BASE_URL=                    ← web origin for payment result pages (dev: localhost:3000)
 KHALTI_SECRET_KEY=
@@ -375,6 +376,42 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   App connects as postgres SUPERUSER in dev — prod must use a non-superuser role (runbook).
 
 - [x] eSewa online fee payment (PAY-1, `apps/api/src/modules/finance/esewa/`) — ePay v2 (contract verified against developer.esewa.com.np 2026-07-11): tenant migration `0005_payment_transactions` (audit-trail table, NO deleted_at by design); `POST /finance/payments/esewa/initiate` (PARENT object-scoped + staff; amount = server-computed outstanding balance, client sends only invoiceId); public browser routes under `/finance/payments/esewa/public/` (pay page, success/failure callbacks, receipt — tenant slug in path, excluded from TenantMiddleware like /tenants/verify); **trust model: redirect `?data=` is a stored hint only — money is recognized solely after a server-to-server status-check returns COMPLETE with amount matching to the paisa; INITIATED→VERIFIED is a conditional UPDATE sharing one DB tx with `PaymentService.recordPaymentInTx` (extracted from recordPayment, behavior identical) → exactly-once credit**; NOT_FOUND past 15-min grace → EXPIRED (late COMPLETE still credits once); pay page ships its own per-response CSP (nonce'd script + form-action to eSewa origin — helmet's global default blocks both inline JS and cross-origin form POST; do NOT weaken helmet globally); **eSewa pay URLs are single-shot** (first form-POST registers the uuid; re-POST → "Duplicate transaction UUID" — retry = new initiate); web `/payment/success|failure` result pages (public receipt lookup, no PII; proxy.ts PUBLIC_PATHS fix also unblocked logged-out /forgot-password + /reset-password); mobile parent fees screen "Pay with eSewa" button (Linking.openURL system browser, AppState refetch on refocus, pay URL derived from the app's own API base); runbook section (go-live env swap + reconciliation queries) — 23 new unit tests (352 total passing)
+
+- [x] Push delivery pipeline + notification inbox (PUSH-1) — **backend:** `PushService`
+  (`modules/communication/push.service.ts`, expo-server-sdk v6: ESM-only → runtime loads via
+  Node 24 require(esm); jest maps it to `src/testing/expo-server-sdk.jest.ts`) resolves
+  device_tokens per user, sends in chunks, prunes `DeviceNotRegistered` at ticket AND receipt
+  level (receipts polled 30s after send; every prune logged); **NEW bus events** (flagged per R1):
+  `result.published` (ExamTypeService.setPublished, only on unpublished→published edge) and
+  `notice.posted` (NoticeService.publishNotice, first publish only — re-publish never re-notifies).
+  **Mirror rule everywhere:** listener creates the in-app `notifications` row(s) FIRST
+  (createNotification now returns id; createNotificationsBulk for fan-outs), then pushes with
+  `data: { route, notificationId }`. AttendanceListener resolves per-student audience from
+  normalized guardians→users (object-scoped; also fixed dormant bug: the emit only carries
+  studentId, the old listener expected parentPhone → absent SMS never sent). NoticeListener
+  audience mirrors ROLE_AUDIENCES list visibility; CLASS → that class's students + their parents
+  (list visibility for CLASS to students/parents is a pre-existing gap, see backlog).
+  **Mobile:** `lib/notifications.ts` (ALL expo-notifications access via guarded dynamic import —
+  static import crashes Expo Go SDK 53+; registration now sends required `platform` field — the
+  old login.tsx payload silently 400'd), `PushBootstrap` in root layout (foreground banner,
+  tap → role-scoped route map `routeForPush`, cold-start tap replay-guarded), `HeaderBell`
+  (live unread count, replaces all three hardcoded dots; teacher bell previously mis-routed to
+  profile), shared `NotificationInbox` + hidden `inbox` routes in all three role apps
+  (mark-read on open, mark-all-read, BS-aware timestamps), teacher notices screen (reuses
+  NoticeFeed; entry: teacher Profile → School notices), logout now sends expoPushToken (R3).
+  `EXPO_PUBLIC_PROJECT_ID` documented in apps/mobile/.env — 377 unit tests passing.
+
+**PUSH-1 backlog (deliberate descopes):**
+- `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
+  (one push per invoice vs digest) before emitting per-invoice events. payment.received +
+  invoice.overdue cover finance meanwhile.
+- On-device push receipt: needs the EAS/FCM session — EAS project (`EXPO_PUBLIC_PROJECT_ID`),
+  Android dev build + Firebase FCM V1 credentials uploaded to Expo. Expo Go on Android cannot
+  receive remote push since SDK 53; the entire receive path ships dormant-ready behind
+  `isPushSupported()`.
+- CLASS-audience notices are not visible in GET /notices to STUDENT/PARENT roles
+  (ROLE_AUDIENCES gap) even though PUSH-1 now notifies class students+parents about them.
+- Force-change-on-first-login for emailed temp passwords (carried from MAIL-1 R2).
 
 > Update this checklist as modules are completed.
 

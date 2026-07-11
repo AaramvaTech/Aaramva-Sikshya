@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import {
   ExamTypeRow,
   ExamTypeResponseDto,
@@ -10,7 +12,11 @@ import { CreateExamTypeDto, UpdateExamTypeDto, ExamTypeQueryDto } from './dto/ex
 
 @Injectable()
 export class ExamTypeService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly tenantContext: TenantContextService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(dto: CreateExamTypeDto): Promise<ExamTypeResponseDto & { totalWeight: number; isComplete: boolean }> {
     const rows = await this.tenantPrisma.query<ExamTypeRow>(
@@ -81,7 +87,7 @@ export class ExamTypeService {
     published: boolean,
   ): Promise<ExamTypeResponseDto & { totalWeight: number; isComplete: boolean }> {
     const existing = await this.tenantPrisma.query<ExamTypeRow>(
-      `SELECT id FROM exam_types WHERE id = $1::uuid AND deleted_at IS NULL`,
+      `SELECT id, results_published_at FROM exam_types WHERE id = $1::uuid AND deleted_at IS NULL`,
       id,
     );
     if (!existing[0]) throw new NotFoundException(`ExamType ${id} not found`);
@@ -94,6 +100,18 @@ export class ExamTypeService {
        RETURNING *`,
       id,
     );
+
+    // PUSH-1 (NEW event): fan-out only on the unpublished→published edge —
+    // re-publishing must not re-notify. Fire-and-forget.
+    if (published && existing[0].results_published_at == null) {
+      const { slug } = this.tenantContext.getOrThrow();
+      this.eventEmitter.emit('result.published', {
+        tenantSlug: slug,
+        examTypeId: rows[0].id,
+        examTypeName: rows[0].name,
+        academicYearId: rows[0].academic_year_id,
+      });
+    }
     const totalWeight = await this._getTotalWeight(rows[0].academic_year_id);
     return { ...toExamTypeResponse(rows[0]), totalWeight, isComplete: Math.abs(totalWeight - 100) < 0.01 };
   }

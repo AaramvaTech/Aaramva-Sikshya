@@ -3,8 +3,11 @@ import { CommunicationController } from './communication.controller';
 import { SmsService } from './sms.service';
 import { NoticeService } from './notice.service';
 import { NotificationService } from './notification.service';
+import { PushService } from './push.service';
 import { AttendanceListener } from './listeners/attendance.listener';
 import { FinanceListener } from './listeners/finance.listener';
+import { ExaminationListener } from './listeners/examination.listener';
+import { NoticeListener } from './listeners/notice.listener';
 import { DeviceTokenService } from './device-token.service';
 
 @Module({
@@ -13,10 +16,13 @@ import { DeviceTokenService } from './device-token.service';
     SmsService,
     NoticeService,
     NotificationService,
+    PushService,
     AttendanceListener,
     FinanceListener,
+    ExaminationListener,
+    NoticeListener,
     DeviceTokenService,
   ],
-  exports: [SmsService, NoticeService, NotificationService],
+  exports: [SmsService, NoticeService, NotificationService, PushService],
 })
 export class CommunicationModule {}

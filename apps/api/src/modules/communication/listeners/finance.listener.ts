@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { SmsService } from '../sms.service';
 import { NotificationService } from '../notification.service';
+import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 
 interface PaymentReceivedEvent {
@@ -23,6 +24,7 @@ export class FinanceListener {
   constructor(
     private readonly smsService: SmsService,
     private readonly notificationService: NotificationService,
+    private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
   ) {}
 
@@ -33,12 +35,18 @@ export class FinanceListener {
       if (!parentUser) return;
 
       const studentName = await this.getStudentName(payload.studentId);
-      await this.notificationService.createNotification(
+      const title = 'Fee Payment Received';
+      const body = `Aaramva Shikshya: Rs.${payload.amount} received for ${studentName}. Thank you.`;
+      const notificationId = await this.notificationService.createNotification(
         parentUser.id,
-        'Fee Payment Received',
-        `Aaramva Shikshya: Rs.${payload.amount} received for ${studentName}. Thank you.`,
+        title,
+        body,
         'FEE',
-        { invoiceId: payload.invoiceId, studentId: payload.studentId },
+        { invoiceId: payload.invoiceId, studentId: payload.studentId, route: 'fees' },
+      );
+      await this.pushService.sendToRecipients(
+        [{ userId: parentUser.id, notificationId }],
+        { title, body, route: 'fees', data: { invoiceId: payload.invoiceId, studentId: payload.studentId } },
       );
     } catch {
       // Silently swallow — must not crash the payment request
@@ -72,12 +80,18 @@ export class FinanceListener {
 
       const parentUser = await this.findParentUser(payload.studentId);
       if (parentUser) {
-        await this.notificationService.createNotification(
+        const title = 'Fee Overdue';
+        const body = `Fee of Rs.${payload.balance} is overdue for ${studentName}. Please pay at the earliest.`;
+        const notificationId = await this.notificationService.createNotification(
           parentUser.id,
-          'Fee Overdue',
-          `Fee of Rs.${payload.balance} is overdue for ${studentName}. Please pay at the earliest.`,
+          title,
+          body,
           'FEE',
-          { invoiceId: payload.invoiceId, studentId: payload.studentId },
+          { invoiceId: payload.invoiceId, studentId: payload.studentId, route: 'fees' },
+        );
+        await this.pushService.sendToRecipients(
+          [{ userId: parentUser.id, notificationId }],
+          { title, body, route: 'fees', data: { invoiceId: payload.invoiceId, studentId: payload.studentId } },
         );
       }
     } catch {

@@ -99,6 +99,8 @@ export default function ParentLayout() {
       <Tabs.Screen name="request-leave" options={{ href: null }} />
       <Tabs.Screen name="home" options={{ href: null }} />
       <Tabs.Screen name="profile-details" options={{ href: null }} />
+      {/* Notification inbox — opened from the header bell, not a tab */}
+      <Tabs.Screen name="inbox" options={{ href: null }} />
     </Tabs>
   );
 }

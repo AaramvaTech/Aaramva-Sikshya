@@ -44,6 +44,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
+    "expo-server-sdk": "^6.1.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.0",
     "joi": "^18.2.3",
@@ -105,7 +106,8 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^bs-calendar$": "<rootDir>/../../../packages/bs-calendar/src/index.ts"
+      "^bs-calendar$": "<rootDir>/../../../packages/bs-calendar/src/index.ts",
+      "^expo-server-sdk$": "<rootDir>/testing/expo-server-sdk.jest.ts"
     }
   }
 }

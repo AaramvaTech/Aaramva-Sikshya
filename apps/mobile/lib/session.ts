@@ -12,6 +12,7 @@ import {
   type PersistedSession,
 } from './secureStore';
 import { useAuthStore } from '../store/auth';
+import { getPushTokenSafe } from './notifications';
 
 interface MeResponse {
   id: string;
@@ -251,12 +252,15 @@ export async function logout(): Promise<void> {
   // Update Zustand
   useAuthStore.getState().removeSession(activeId ?? '');
 
-  // Best-effort server-side logout (fire and forget)
+  // Best-effort server-side logout (fire and forget). Includes this device's
+  // push token (when resolvable without prompting) so the API drops the
+  // device_tokens row for THIS tenant — R3: no stale tokens after logout.
   if (refreshToken && accessToken && slug) {
     try {
+      const expoPushToken = await getPushTokenSafe();
       await rawApi.post(
         '/auth/logout',
-        { refreshToken },
+        { refreshToken, ...(expoPushToken ? { expoPushToken } : {}) },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

@@ -10,7 +10,7 @@ import { useBranding } from '../../lib/theme/provider';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import {
-  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, type TodayPeriod,
+  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, HeaderBell, type TodayPeriod,
 } from '../../components/ui';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
@@ -158,15 +158,7 @@ export default function ParentDashboard() {
               </View>
             </View>
             <View style={styles.bandActions}>
-              <TouchableOpacity
-                onPress={() => router.push('/(parent)/notices')}
-                hitSlop={10}
-                accessibilityLabel="Notices"
-                style={styles.bellWrap}
-              >
-                <Ionicons name="notifications-outline" size={22} color={c.primary} />
-                <View style={[styles.badge, { backgroundColor: c.danger, borderColor: c.brandSurface }]} />
-              </TouchableOpacity>
+              <HeaderBell inboxRoute="/(parent)/inbox" />
               {guardianInitials ? (
                 <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: c.surface }]}>
                   <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{guardianInitials}</Text>
@@ -265,11 +257,9 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1.5 },
   chipText: { fontFamily: FONT.bold, fontSize: 12 },
 
-  // Right side of band top: notification bell (with static badge dot) + guardian avatar.
+  // Right side of band top: notification bell (HeaderBell, live unread count) + guardian avatar.
   // Mirrors the student home treatment for cross-screen parity (comp lines 612–613).
   bandActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bellWrap: { position: 'relative' },
-  badge: { position: 'absolute', top: -1, right: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   avatarCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   avatarText: { fontFamily: FONT.extrabold, fontSize: 14 },
 

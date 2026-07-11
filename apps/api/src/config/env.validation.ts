@@ -64,6 +64,10 @@ export const envValidationSchema = Joi.object({
   SPARROW_SMS_TOKEN: Joi.string().optional().allow(''),
   SPARROW_SMS_SENDER: Joi.string().optional().allow(''),
 
+  // Expo push (PUSH-1) — Expo's push API needs no secret; the access token is
+  // only for EAS projects with enhanced push security enabled.
+  EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
+
   // Cloud / payment placeholders — optional until configured.
   AWS_BUCKET_NAME: Joi.string().optional().allow(''),
   AWS_REGION: Joi.string().optional().allow(''),

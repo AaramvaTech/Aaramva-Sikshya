@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/auth';
 import { useBootSession } from '../lib/session';
 import { ThemeProvider } from '../lib/theme/provider';
 import ThemeSync from '../components/ThemeSync';
+import PushBootstrap from '../components/PushBootstrap';
 import { useFonts } from 'expo-font';
 import { APP_FONTS } from '../lib/theme/fonts';
 
@@ -51,6 +52,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ThemeSync />
+        <PushBootstrap />
         <Stack screenOptions={{ headerShown: false }} />
         {showLoader && (
           <View
