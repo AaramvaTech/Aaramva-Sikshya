@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GuardianService } from '../guardian.service';
@@ -62,6 +62,42 @@ describe('GuardianService', () => {
 
     expect(result).toEqual({ userId: 'new-user-uuid', guardianId, email: dto.email, linked: true });
     expect(mockTenantPrisma.run).toHaveBeenCalledTimes(1);
+  });
+
+  // POL-1 T4: an OMITTED password means a generated temp password is emailed —
+  // the new users row must carry must_change_password = true.
+  it('sets must_change_password on the new user when the password was generated', async () => {
+    const studentId = 'student-uuid';
+    const guardianId = 'guardian-uuid';
+
+    mockTenantPrisma.query.mockResolvedValueOnce([{ id: studentId }]);
+
+    let userInsertArgs: unknown[] = [];
+    mockTenantPrisma.run.mockImplementationOnce(async (fn: (tx: any) => Promise<any>) => {
+      const tx = {
+        $queryRawUnsafe: jest.fn((sql: string, ...args: unknown[]) => {
+          if (sql.includes('FROM guardians')) {
+            return Promise.resolve([{
+              id: guardianId, student_id: studentId, relation: 'FATHER',
+              first_name: 'Ram', last_name: 'Shrestha', phone: null,
+              email: null, is_primary: true, user_id: null,
+            }]);
+          }
+          if (sql.includes('INSERT INTO users')) {
+            userInsertArgs = args;
+            expect(sql).toContain('must_change_password');
+            return Promise.resolve([{ id: 'new-user-uuid', email: args[0], role: Role.PARENT, first_name: 'Ram', last_name: 'Shrestha' }]);
+          }
+          return Promise.resolve([]); // existing-user lookup → none
+        }),
+        $executeRawUnsafe: jest.fn().mockResolvedValueOnce(1),
+      };
+      return fn(tx);
+    });
+
+    await service.createGuardianAccount(studentId, guardianId, { email: 'parent@test.com' } as CreateGuardianAccountDto);
+
+    expect(userInsertArgs[userInsertArgs.length - 1]).toBe(true); // generated → flag set
   });
 
   it('throws ConflictException when guardian already has a linked user', async () => {
@@ -160,6 +196,85 @@ describe('GuardianService', () => {
     const result = await service.getMyChildren('parent-uuid');
 
     expect(result).toEqual([]);
+  });
+
+  // ── getMyProfile (POL-1 T2 — GET /guardians/me) ───────────────────────────
+
+  describe('getMyProfile', () => {
+    const userId = 'parent-user-uuid';
+
+    const guardianJoinRow = (over: Record<string, unknown> = {}) => ({
+      guardian_id: 'g-1', relation: 'FATHER', is_primary: true,
+      g_first_name: 'Ramesh', g_last_name: 'Shrestha',
+      g_phone: '9841000001', g_email: 'ramesh@home.np',
+      student_pk: 'stu-1', admission_number: '2082-0001',
+      first_name: 'Aarav', last_name: 'Shrestha', photo_url: null,
+      class_name: 'Class 8', section_name: 'B', roll_number: 12,
+      ...over,
+    });
+
+    it('returns profile from the primary guardian row + children summary', async () => {
+      mockTenantPrisma.query
+        .mockResolvedValueOnce([
+          guardianJoinRow(),
+          guardianJoinRow({
+            guardian_id: 'g-2', is_primary: false, relation: 'FATHER',
+            student_pk: 'stu-2', admission_number: '2082-0044',
+            first_name: 'Anish', class_name: 'Class 5', section_name: 'A', roll_number: 3,
+          }),
+        ]) // guardian rows JOIN students
+        .mockResolvedValueOnce([
+          { email: 'ramesh.shrestha@gmail.com', phone: null, first_name: 'Ramesh', last_name: 'Shrestha' },
+        ]); // users row
+
+      const result = await service.getMyProfile(userId);
+
+      expect(result).toEqual({
+        userId,
+        firstName: 'Ramesh',
+        lastName: 'Shrestha',
+        relation: 'FATHER',
+        phone: '9841000001',
+        email: 'ramesh.shrestha@gmail.com',
+        children: [
+          {
+            id: 'stu-1', admissionNumber: '2082-0001',
+            firstName: 'Aarav', lastName: 'Shrestha', photoUrl: null,
+            relation: 'FATHER', isPrimary: true,
+            className: 'Class 8', sectionName: 'B', rollNumber: 12,
+          },
+          {
+            id: 'stu-2', admissionNumber: '2082-0044',
+            firstName: 'Anish', lastName: 'Shrestha', photoUrl: null,
+            relation: 'FATHER', isPrimary: false,
+            className: 'Class 5', sectionName: 'A', rollNumber: 3,
+          },
+        ],
+      });
+    });
+
+    it('falls back to the users row when guardian fields are null', async () => {
+      mockTenantPrisma.query
+        .mockResolvedValueOnce([
+          guardianJoinRow({ g_first_name: null, g_last_name: null, g_phone: null }),
+        ])
+        .mockResolvedValueOnce([
+          { email: 'login@mail.np', phone: '9860000000', first_name: 'Sita', last_name: 'Rai' },
+        ]);
+
+      const result = await service.getMyProfile(userId);
+
+      expect(result.firstName).toBe('Sita');
+      expect(result.lastName).toBe('Rai');
+      expect(result.phone).toBe('9860000000');
+      expect(result.email).toBe('login@mail.np');
+    });
+
+    it('throws ForbiddenException when no guardian record is linked to the account', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+
+      await expect(service.getMyProfile('unlinked-user')).rejects.toThrow(ForbiddenException);
+    });
   });
 
   // ── insertGuardiansTx (MIG-2 normalized write path) ───────────────────────

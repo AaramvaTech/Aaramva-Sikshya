@@ -414,11 +414,12 @@ export class StudentService {
       }
 
       const userRows = await tx.$queryRawUnsafe<{ id: string; email: string }[]>(
-        `INSERT INTO users (email, password_hash, role, first_name, last_name)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO users (email, password_hash, role, first_name, last_name, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, email`,
         dto.email, passwordHash, Role.STUDENT,
         student.first_name, student.last_name,
+        generated, // POL-1 T4: emailed temp password → force change on first login
       );
       const userId = userRows[0].id;
 
@@ -467,7 +468,8 @@ export class StudentService {
     const passwordHash = await bcrypt.hash(password, 10);
     await this.tenantPrisma.run(async (tx) => {
       await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+         WHERE id = $2::uuid`,
         passwordHash, userId,
       );
       await tx.$executeRawUnsafe(

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { examinationApi } from '@/lib/api/examination.api';
 import { useTenantStore } from '@/store/tenant.store';
-import type { CreateExamTypeData, BulkCreateScheduleData, BulkMarksData } from '@/types/api.types';
+import type { CreateExamTypeData, CreateGradingScaleData, BulkCreateScheduleData, BulkMarksData } from '@/types/api.types';
 
 export function useExamTypes(academicYearId: string) {
   const slug = useTenantStore((s) => s.slug);
@@ -65,6 +65,45 @@ export function useGradingScales() {
     queryFn: () =>
       examinationApi.listGradingScales().then((r) => r.data.data),
     enabled: !!slug,
+  });
+}
+
+// POL-1 T6 — grading-scale CRUD (rename-only edit; thresholds immutable)
+export function useGradingScale(id: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['grading-scales', id],
+    queryFn: () => examinationApi.getGradingScale(id).then((r) => r.data.data),
+    enabled: !!slug && !!id,
+  });
+}
+
+export function useCreateGradingScale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateGradingScaleData) =>
+      examinationApi.createGradingScale(data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['grading-scales'] }),
+  });
+}
+
+export function useRenameGradingScale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      examinationApi.renameGradingScale(id, { name }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['grading-scales'] }),
+  });
+}
+
+export function useSetDefaultGradingScale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => examinationApi.setDefaultGradingScale(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['grading-scales'] }),
   });
 }
 

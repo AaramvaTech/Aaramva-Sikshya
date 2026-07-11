@@ -54,12 +54,19 @@ export default function LoginPage() {
       setAuth(token, data.data.user);
       setTenant(data.data.tenant);
       let role = data.data.user.role;
+      let mustChange = data.data.user.mustChangePassword === true;
       try {
         const meRes = await authApi.me();
         setAuth(token, meRes.data.data);
         role = meRes.data.data.role;
+        mustChange = meRes.data.data.mustChangePassword === true;
       } catch {
         // non-critical
+      }
+      // POL-1 T4: a temp-password login goes straight to the forced change page.
+      if (mustChange) {
+        router.push('/change-password');
+        return;
       }
       // Role-aware landing (D4): accountant → /finance, librarian → /library,
       // everyone else → /dashboard. Avoids dropping a role onto a page it can't see.

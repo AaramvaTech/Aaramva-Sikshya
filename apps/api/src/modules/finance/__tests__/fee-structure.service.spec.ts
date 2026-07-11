@@ -95,11 +95,32 @@ describe('FeeStructureService', () => {
         expect.any(String), // fee_structure_id
         'cat-1',            // fee_category_id
         2000,               // amount
-        undefined,          // due_day_of_month
+        null,               // due_day_of_month (undefined → null in impl)
         null,               // due_date (undefined → null in impl)
         5,                  // fine_per_day
         3,                  // grace_period_days
       );
+    });
+
+    // POL-1 T1 regression: due_date is a DATE column; Prisma raw params ship JS strings
+    // as text, so the INSERT must cast $5::date or Postgres rejects with 42804.
+    it('accepts a dueDate string (casts due_date param to ::date)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([mockStructureRow]);
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+
+      await service.createFeeStructure(
+        {
+          classId: 'class-1',
+          academicYearId: 'year-1',
+          items: [{ feeCategoryId: 'cat-1', amount: 2000, dueDate: '2026-08-15' }],
+        },
+        'user-1',
+      );
+
+      const [sql, ...params] = mockTx.$executeRawUnsafe.mock.calls[0] as [string, ...unknown[]];
+      expect(sql).toContain('$5::date');
+      expect(params[4]).toBe('2026-08-15');
     });
 
     it('throws ConflictException if structure already exists for class+year', async () => {
@@ -116,6 +137,26 @@ describe('FeeStructureService', () => {
           'user-1',
         ),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('updateItems()', () => {
+    it('accepts a dueDate string on replace (casts due_date param to ::date)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([mockStructureRow])   // updateItems existence check
+        .mockResolvedValueOnce([mockStructureRow])   // findOne structure
+        .mockResolvedValueOnce([mockItemRow]);       // findOne items
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+
+      await service.updateItems('fs-1', {
+        items: [{ feeCategoryId: 'cat-1', amount: 2500, dueDate: '2026-09-01' }],
+      });
+
+      const insertCall = mockTx.$executeRawUnsafe.mock.calls.find(
+        ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO fee_structure_items'),
+      ) as [string, ...unknown[]];
+      expect(insertCall[0]).toContain('$5::date');
+      expect(insertCall[5]).toBe('2026-09-01');
     });
   });
 

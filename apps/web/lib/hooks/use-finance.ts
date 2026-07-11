@@ -220,8 +220,13 @@ export function useDefaulters(academicYearId: string) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['finance', 'defaulters', academicYearId],
+    // POL-1 T5: the endpoint returns a DefaulterReport ({ students, totals… }),
+    // but every consumer treats this as the student array (.map/.length/.slice).
+    // Unwrap .students here so the shape matches — the old code returned the whole
+    // object, so the defaulters tab AND the finance overview threw on any tenant
+    // that actually had defaulters.
     queryFn: () =>
-      financeApi.getDefaulters({ academicYearId }).then((r) => r.data.data),
+      financeApi.getDefaulters({ academicYearId }).then((r) => r.data.data.students),
     enabled: !!slug && !!academicYearId,
   });
 }

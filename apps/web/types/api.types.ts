@@ -34,6 +34,9 @@ export interface AuthUser {
   role: Role;
   tenantId: string | null;
   tenantSlug: string | null;
+  // POL-1 T4: true while an emailed temporary password is in effect — the
+  // shell keeps the user on /change-password until it clears.
+  mustChangePassword?: boolean;
 }
 
 export interface LoginResponse {
@@ -750,6 +753,18 @@ export interface GradingScale {
     maxPercent: number;
     gpaPoint: number | null;
     remarks: string | null;
+  }[];
+}
+
+// POL-1 T6: grading-scale create payload (thresholds immutable after create)
+export interface CreateGradingScaleData {
+  name: string;
+  thresholds: {
+    grade: string;
+    minPercent: number;
+    maxPercent: number;
+    gpaPoint?: number;
+    remarks?: string;
   }[];
 }
 

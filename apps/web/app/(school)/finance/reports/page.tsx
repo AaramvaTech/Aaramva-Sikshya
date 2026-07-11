@@ -13,6 +13,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { BsDate } from '@/components/shared/bs-date';
+import { exportToCsv } from '@/lib/export';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { InvoiceStatusBadge } from '@/components/finance/invoice-status-badge';
 import {
@@ -132,6 +133,24 @@ function CollectionTab({ academicYearId }: { academicYearId: string }) {
 function DefaultersTab({ academicYearId }: { academicYearId: string }) {
   const { data: defaulters, isLoading } = useDefaulters(academicYearId);
 
+  // POL-1 T5 — CSV of the table exactly as displayed (BS dates via the same
+  // `.bs` value the BsDate cell renders; amounts as plain numbers).
+  function exportDefaulters() {
+    if (!defaulters?.length) return;
+    exportToCsv(
+      'defaulters',
+      defaulters.map((d) => ({
+        Name: d.fullName,
+        Admission: d.admissionNumber,
+        Class: d.className,
+        'Overdue Invoices': d.overdueInvoices,
+        'Total Due': d.totalDue,
+        'Oldest Due (BS)': d.oldestDueDate?.bs ?? '',
+        Guardian: d.guardianPhone,
+      })),
+    );
+  }
+
   if (!academicYearId)
     return <p className="text-sm text-gray-400 mt-6 text-center">Select an academic year.</p>;
 
@@ -147,7 +166,8 @@ function DefaultersTab({ academicYearId }: { academicYearId: string }) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => console.log('Export defaulters:', defaulters)}
+          disabled={!defaulters?.length}
+          onClick={exportDefaulters}
         >
           Export
         </Button>

@@ -73,6 +73,7 @@ export class TenantAdminService {
       adminFirstName: dto.adminFirstName,
       adminLastName: dto.adminLastName,
       adminPassword,
+      mustChangePassword: generated, // POL-1 T4: emailed temp password → force change
       planId: dto.planId,
       phone: dto.phone,
       address: dto.address,
@@ -125,7 +126,8 @@ export class TenantAdminService {
       const passwordHash = await bcrypt.hash(password, 10);
       await this.tenantPrisma.run(async (tx) => {
         await tx.$executeRawUnsafe(
-          `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+          `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+           WHERE id = $2::uuid`,
           passwordHash, rows[0].id,
         );
         await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, rows[0].id);

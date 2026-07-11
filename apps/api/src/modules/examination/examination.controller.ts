@@ -15,7 +15,7 @@ import { ExamScheduleService } from './exam-schedule.service';
 import { MarksService } from './marks.service';
 import { ResultService } from './result.service';
 import {
-  CreateGradingScaleDto,
+  CreateGradingScaleDto, UpdateGradingScaleDto,
   CreateExamTypeDto, UpdateExamTypeDto, ExamTypeQueryDto, PublishExamTypeDto,
   CreateExamScheduleDto, BulkCreateScheduleDto, UpdateExamScheduleDto, ExamScheduleQueryDto,
   MyExamScheduleQueryDto,
@@ -59,6 +59,16 @@ export class ExaminationController {
   @Roles(...TEACHER_AND_ABOVE)
   getGradingScale(@Param('id', ParseUUIDPipe) id: string) {
     return this.gradingScaleService.findOne(id);
+  }
+
+  // POL-1 T6: rename only — thresholds are immutable (see GradingScaleService.rename)
+  @Patch('grading-scales/:id')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  renameGradingScale(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateGradingScaleDto,
+  ) {
+    return this.gradingScaleService.rename(id, dto);
   }
 
   @Patch('grading-scales/:id/set-default')

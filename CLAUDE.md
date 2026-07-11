@@ -421,6 +421,51 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   test-admin.khalti.com (NO shared public test key; payer creds 9800000000-5 / MPIN 1111 /
   OTP 987654) — live sandbox proofs pend that key. 404 api tests passing.
 
+- [x] POL-1 polish sweep (api + web, `docs/api-contracts/POL-1-api-web-polish.md`) — seven
+  independent fixes, each Step-0-confirmed live before touching:
+  **T1** `POST /finance/fee-structures` rejected `dueDate` (Postgres 42804: DATE column, text
+  param) — added `$5::date` cast in BOTH the create and updateItems INSERTs (fee-structure.service.ts);
+  also `dueDayOfMonth ?? null` for the SMALLINT. `dueDayOfMonth` workaround still works. Live 201 +
+  SELECT read-back; regression tests.
+  **T2** `GET /guardians/me` (PARENT, self-scoped, `guardian.controller.ts` + `GuardianService.getMyProfile`)
+  — name/relation/phone/email (guardian row primary-preferred, falls back to users row) + linked
+  children summary; resolves ONLY from token.userId → guardians.user_id (no id param), same
+  discipline as /students/me. POL-2 mobile consumes it (kills the `nameFromEmail` synth).
+  **T3** parent report-card PDF: the existing `GET /exams/results/report-card/:studentId/pdf` ALREADY
+  allowed PARENT (buildReportCardPdf → getReportCard hard-scope via `assertGuardianOwnsStudent`);
+  Step 0 found it present, so T3 = adversarial coverage — added the cross-family 403 PDF probe test.
+  Live: own-child PDF 200 + `%PDF-1.3` magic bytes; another family's child → 403.
+  **T4** force-change-temp-password-on-first-login (MAIL-1 R2): tenant migration **0006_must_change_password**
+  (`users.must_change_password BOOLEAN NOT NULL DEFAULT false`) applied canary(demo)→all-6 via the
+  runner (identical checksums verified). Flag set TRUE at every generated-temp-password site
+  (provisioning: guardian/student/staff/owner INSERTs pass `generated`; every resend UPDATE sets
+  true); cleared by change-password AND reset-password (`must_change_password = false`). login + /auth/me
+  responses carry `mustChangePassword`. WEB: login routes flagged users to `/change-password`
+  (new page in the **(auth)** group so the school shell — which redirects flagged users there —
+  can't loop); school-shell effect enforces it; the page's change → clears flag → logout →
+  re-login. The flag never blocks change-password/logout (proven: logout HTTP 200 while flagged).
+  Live browser proof: temp login → redirect + amber banner → change → SELECT flag `f` → normal
+  nav to /dashboard.
+  **T5** defaulter CSV export: replaced the `console.log` stub with a real client-side CSV
+  (`exportToCsv`, BS dates as displayed). **Found + fixed a pre-existing crash**: `useDefaulters`
+  returned the whole `DefaulterReport` object but every consumer treated it as the student array —
+  `defaulters.map` threw on ANY tenant with defaulters (the defaulters tab AND the finance overview
+  were both dead). Fix = unwrap `.students` in the hook queryFn (matches the `DefaulterStudent[]`
+  contract). Live: 9 motherland defaulters render + CSV downloaded (rows pasted in the PR).
+  **T6** grading-scale CRUD UI (`app/(school)/exams/grading-scales/page.tsx` + sidebar entry): list
+  / create (name + threshold rows) / rename. **Thresholds are immutable by design** — computed
+  grades derive from them, so editing bands under published results would disagree with issued
+  report cards; the only edit is rename (`PATCH /exams/grading-scales/:id` → new `GradingScaleService.rename`,
+  `UpdateGradingScaleDto`). Radix computed-span convention followed. Live UI: POST 201 create,
+  GET :id 200 thresholds on expand, PATCH 200 rename.
+  **T7** query error boundaries: shared `QueryErrorState` (role="alert", message + Try-again→refetch)
+  wired into the highest-traffic list pages (students/finance/attendance/exams) via `isError` +
+  `refetch`, plus a route-level `app/(school)/error.tsx` (Next 16 `unstable_retry` preferred over
+  `reset`). Live: killed the API mid-session → students page shows the error state (not blank);
+  the route boundary independently caught the T5 defaulters crash before it was fixed.
+  Suites: **415 api tests** (was 404; +11 across fee-structure/guardian/result/auth/grading-scale),
+  web `tsc` clean. Backlog cleared: MAIL-1 R2 (force-change) is now DONE.
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
@@ -431,7 +476,7 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `isPushSupported()`.
 - CLASS-audience notices are not visible in GET /notices to STUDENT/PARENT roles
   (ROLE_AUDIENCES gap) even though PUSH-1 now notifies class students+parents about them.
-- Force-change-on-first-login for emailed temp passwords (carried from MAIL-1 R2).
+- ~~Force-change-on-first-login for emailed temp passwords~~ — DONE in POL-1 T4.
 
 > Update this checklist as modules are completed.
 

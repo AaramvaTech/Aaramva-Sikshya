@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // ─── Grading Scale ─────────────────────────────────────────────────────────────
@@ -14,6 +14,12 @@ export class GradeThresholdDto {
 export class CreateGradingScaleDto {
   @IsString() name: string;
   @IsArray() @Type(() => GradeThresholdDto) thresholds: GradeThresholdDto[];
+}
+
+// POL-1 T6: name is the only editable field — thresholds are immutable
+// (computed grades derive from them; create a new scale to change bands).
+export class UpdateGradingScaleDto {
+  @IsString() @IsNotEmpty() @MaxLength(50) name: string;
 }
 
 // ─── Exam Type ─────────────────────────────────────────────────────────────────

@@ -416,5 +416,16 @@ describe('ResultService', () => {
         service.getReportCard('550e8400-e29b-41d4-a716-446655440000', 'parent-uuid', Role.PARENT),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    // POL-1 T3: the PDF variant shares getReportCard's hard-scope — a PARENT
+    // probing another family's child gets 403 before any PDF work happens.
+    it('buildReportCardPdf throws ForbiddenException for a cross-family PARENT probe', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+
+      await expect(
+        service.buildReportCardPdf('550e8400-e29b-41d4-a716-446655440000', 'parent-uuid', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+      expect(pdf.renderReportCard).not.toHaveBeenCalled();
+    });
   });
 });

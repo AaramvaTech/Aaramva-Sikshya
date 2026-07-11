@@ -17,6 +17,8 @@ export interface ProvisionInput {
   adminFirstName: string;
   adminLastName: string;
   adminPassword: string;
+  /** POL-1 T4: true when adminPassword was generated (not chosen by the owner). */
+  mustChangePassword?: boolean;
   planId?: string; // if omitted, picks cheapest active plan
   phone?: string;
   address?: string;
@@ -107,14 +109,15 @@ export class TenantProvisioningService {
           last_name: string;
           role: string;
         }>(
-          `INSERT INTO users (email, password_hash, first_name, last_name, role)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO users (email, password_hash, first_name, last_name, role, must_change_password)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, email, first_name, last_name, role`,
           input.adminEmail,
           passwordHash,
           input.adminFirstName,
           input.adminLastName,
           Role.SCHOOL_OWNER,
+          input.mustChangePassword ?? false,
         );
         const user = rows[0];
 

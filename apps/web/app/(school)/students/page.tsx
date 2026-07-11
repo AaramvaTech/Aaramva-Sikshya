@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, Search } from 'lucide-react';
 import { useStudents, useClasses } from '@/lib/hooks/use-students';
 import { DataTable } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
+import { QueryErrorState } from '@/components/shared/query-error-state';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { StudentActionMenu } from '@/components/students/student-action-menu';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,7 @@ export default function StudentsPage() {
   const [searchInput, setSearchInput] = useState(search);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: response, isLoading } = useStudents({
+  const { data: response, isLoading, isError, refetch } = useStudents({
     page,
     limit: 20,
     search: search || undefined,
@@ -275,6 +276,9 @@ export default function StudentsPage() {
         }
       />
 
+      {isError ? (
+        <QueryErrorState onRetry={() => refetch()} />
+      ) : (
       <DataTable
         columns={columns}
         data={students}
@@ -305,6 +309,7 @@ export default function StudentsPage() {
             : undefined
         }
       />
+      )}
     </div>
   );
 }

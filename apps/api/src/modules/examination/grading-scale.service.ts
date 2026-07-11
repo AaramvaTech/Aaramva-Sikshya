@@ -6,7 +6,7 @@ import {
   GradingScaleResponseDto,
   toGradingScaleResponse,
 } from './entities/examination.entity';
-import { CreateGradingScaleDto } from './dto/examination.dto';
+import { CreateGradingScaleDto, UpdateGradingScaleDto } from './dto/examination.dto';
 
 @Injectable()
 export class GradingScaleService {
@@ -64,6 +64,23 @@ export class GradingScaleService {
       id,
     );
     return toGradingScaleResponse(rows[0], thresholds);
+  }
+
+  /**
+   * POL-1 T6: rename only. Thresholds are deliberately immutable — computed
+   * grades derive from them, so changing bands under published results would
+   * silently disagree with issued report cards. Create a new scale instead.
+   */
+  async rename(id: string, dto: UpdateGradingScaleDto): Promise<GradingScaleResponseDto> {
+    const rows = await this.tenantPrisma.query<GradingScaleRow>(
+      `UPDATE grading_scales SET name = $1
+       WHERE id = $2::uuid AND deleted_at IS NULL
+       RETURNING *`,
+      dto.name,
+      id,
+    );
+    if (!rows[0]) throw new NotFoundException(`GradingScale ${id} not found`);
+    return toGradingScaleResponse(rows[0]);
   }
 
   async setDefault(id: string): Promise<GradingScaleResponseDto> {

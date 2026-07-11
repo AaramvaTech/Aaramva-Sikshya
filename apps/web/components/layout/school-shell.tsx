@@ -45,6 +45,15 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
     }
   }, [isInitialized, accessToken, user?.role, router]);
 
+  // POL-1 T4 — a user on an emailed temporary password cannot use the portal
+  // until they set their own. /change-password lives in the (auth) group (no
+  // shell), so this effect cannot loop; logout stays reachable from that page.
+  useEffect(() => {
+    if (isInitialized && accessToken && user?.mustChangePassword) {
+      router.replace('/change-password');
+    }
+  }, [isInitialized, accessToken, user?.mustChangePassword, router]);
+
   // Route a new SCHOOL_OWNER into the setup wizard on login when setup isn't
   // complete — once per session, so the owner can still navigate away afterward
   // (the sidebar "Setup" entry keeps it obvious until done).
