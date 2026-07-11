@@ -6,11 +6,12 @@ import { adToBs, formatBs } from 'bs-calendar';
 
 import { useMyChildren, useChildLedger } from '../../hooks/useParentChild';
 import { useInitiateEsewaPayment } from '../../hooks/useEsewaPayment';
+import { useInitiateKhaltiPayment, usePaymentGateways } from '../../hooks/usePayments';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import { API_BASE_URL } from '../../lib/api';
 import {
-  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, PrimaryButton,
+  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, PayChooser, type PayGateway,
 } from '../../components/ui';
 import Skeleton from '../../components/Skeleton';
 import type { Invoice } from '../../types';
@@ -38,12 +39,15 @@ function invoiceTitle(inv: Invoice): string {
 
 function InvoiceCard({
   inv,
+  gateways,
   onPay,
-  paying,
+  payingWith,
 }: {
   inv: Invoice;
-  onPay: (inv: Invoice) => void;
-  paying: boolean;
+  gateways: { esewa: boolean; khalti: boolean };
+  onPay: (inv: Invoice, gateway: PayGateway) => void;
+  /** Gateway currently initiating for THIS invoice, or null. */
+  payingWith: PayGateway | null;
 }) {
   const c = useThemeColors();
   const cfg = feeStatus(inv.status);
@@ -72,12 +76,11 @@ function InvoiceCard({
         </View>
       </View>
       {inv.balance > 0 && inv.status !== 'WAIVED' && (
-        <PrimaryButton
-          label={`Pay ${formatNPR(inv.balance)} with eSewa`}
-          icon="wallet-outline"
-          variant="soft"
-          loading={paying}
-          onPress={() => onPay(inv)}
+        <PayChooser
+          balanceLabel={formatNPR(inv.balance)}
+          gateways={gateways}
+          payingWith={payingWith}
+          onPay={(gw) => onPay(inv, gw)}
           style={styles.payButton}
         />
       )}
@@ -103,8 +106,12 @@ export default function ParentFees() {
   const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
 
   const slug = useAuthStore((s) => s.slug);
-  const initiatePayment = useInitiateEsewaPayment();
-  const [payingId, setPayingId] = useState<string | null>(null);
+  const initiateEsewa = useInitiateEsewaPayment();
+  const initiateKhalti = useInitiateKhaltiPayment();
+  // Until the server answers, fall back to eSewa-only (pre-PAY-2 behavior).
+  const gatewaysQuery = usePaymentGateways();
+  const gateways = gatewaysQuery.data ?? { esewa: true, khalti: false };
+  const [paying, setPaying] = useState<{ invoiceId: string; gateway: PayGateway } | null>(null);
   const paymentLaunched = useRef(false);
 
   // The payment happens in the system browser; when the payer comes back to
@@ -120,24 +127,33 @@ export default function ParentFees() {
     return () => sub.remove();
   }, [refetchLedger]);
 
-  const handlePay = async (inv: Invoice) => {
-    if (!slug || payingId) return;
-    setPayingId(inv.id);
+  const handlePay = async (inv: Invoice, gateway: PayGateway) => {
+    if (!slug || paying) return;
+    setPaying({ invoiceId: inv.id, gateway });
     try {
-      const init = await initiatePayment.mutateAsync(inv.id);
-      // Build the pay-page URL against OUR working API base (mirrors
-      // init.paymentPageUrl): in dev the server doesn't know the LAN host this
-      // phone actually reaches it on; in prod both resolve identically.
-      const payUrl = `${API_BASE_URL}/finance/payments/esewa/public/pay/${slug}/${init.transactionUuid}`;
+      let payUrl: string;
+      if (gateway === 'KHALTI') {
+        // Khalti hosts the payment page — the initiate response's absolute
+        // payment_url is opened directly in the system browser.
+        const init = await initiateKhalti.mutateAsync(inv.id);
+        payUrl = init.paymentUrl;
+      } else {
+        const init = await initiateEsewa.mutateAsync(inv.id);
+        // Build the pay-page URL against OUR working API base (mirrors
+        // init.paymentPageUrl): in dev the server doesn't know the LAN host this
+        // phone actually reaches it on; in prod both resolve identically.
+        payUrl = `${API_BASE_URL}/finance/payments/esewa/public/pay/${slug}/${init.transactionUuid}`;
+      }
       paymentLaunched.current = true;
       await Linking.openURL(payUrl);
     } catch (err: unknown) {
+      const gwName = gateway === 'KHALTI' ? 'Khalti' : 'eSewa';
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message ?? 'Could not start the eSewa payment. Please try again.';
+          ?.message ?? `Could not start the ${gwName} payment. Please try again.`;
       Alert.alert('Online payment', msg);
     } finally {
-      setPayingId(null);
+      setPaying(null);
     }
   };
 
@@ -200,7 +216,13 @@ export default function ParentFees() {
           <Card><EmptyState icon="card-outline" title="No fee records" subtitle="Invoices will appear here once raised by the school." /></Card>
         ) : (
           invoices.map((inv) => (
-            <InvoiceCard key={inv.id} inv={inv} onPay={handlePay} paying={payingId === inv.id} />
+            <InvoiceCard
+              key={inv.id}
+              inv={inv}
+              gateways={gateways}
+              onPay={handlePay}
+              payingWith={paying?.invoiceId === inv.id ? paying.gateway : null}
+            />
           ))
         )}
         <View style={styles.bottomSpace} />

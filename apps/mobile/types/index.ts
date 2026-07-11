@@ -368,3 +368,21 @@ export interface NotificationItem {
   data: { route?: string; [key: string]: unknown } | null;
   createdAt: string;
 }
+
+// ─── Online payments (PAY-2) ──────────────────────────────────────────────────
+
+export interface PaymentGateways {
+  esewa: boolean;
+  khalti: boolean;
+}
+
+export interface KhaltiInitiateResponse {
+  transactionUuid: string;
+  pidx: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  amount: number;
+  /** Khalti's hosted payment page — absolute URL, open directly. */
+  paymentUrl: string;
+  paymentPageUrl: string;
+}

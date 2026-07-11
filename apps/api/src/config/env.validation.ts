@@ -68,10 +68,15 @@ export const envValidationSchema = Joi.object({
   // only for EAS projects with enhanced push security enabled.
   EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
 
-  // Cloud / payment placeholders — optional until configured.
+  // Cloud placeholders — optional until configured.
   AWS_BUCKET_NAME: Joi.string().optional().allow(''),
   AWS_REGION: Joi.string().optional().allow(''),
+
+  // Khalti KPG-2 (PAY-2) — gateway enabled only when the secret key is set;
+  // otherwise disabled with a boot notice (initiate → 503). Base URL default
+  // is the sandbox; going live = swapping these two.
   KHALTI_SECRET_KEY: Joi.string().optional().allow(''),
+  KHALTI_BASE_URL: Joi.string().uri().default('https://dev.khalti.com/api/v2'),
 
   // eSewa ePay v2 (PAY-1) — gateway is enabled only when BOTH product code and
   // secret are set; otherwise disabled with a boot notice (initiate → 503).

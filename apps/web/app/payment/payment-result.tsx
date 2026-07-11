@@ -8,16 +8,19 @@ import { formatNPR } from '@/components/finance/amount-display';
 import type { EsewaPublicReceipt } from '@/types/api.types';
 
 /**
- * Landing page body for the eSewa browser flow (mobile-initiated). Public by
- * design: it renders only what the public receipt lookup exposes — invoice
- * ref, amount, gateway ref — no student PII. The receipt state comes from OUR
- * server (which trusts only its own status-check), never from query params.
+ * Landing page body for the gateway browser flows (mobile-initiated; eSewa and
+ * Khalti — PAY-2 made it gateway-aware via the ?gw= param). Public by design:
+ * it renders only what the public receipt lookup exposes — invoice ref,
+ * amount, gateway ref — no student PII. The receipt state comes from OUR
+ * server (which trusts only its own status-check/lookup), never from query
+ * params.
  */
 export function PaymentResult({ kind }: { kind: 'success' | 'failure' }) {
   const params = useSearchParams();
   const txn = params.get('txn') ?? '';
   const tenant = params.get('tenant') ?? '';
   const reason = params.get('reason') ?? '';
+  const gw = params.get('gw') === 'khalti' ? 'khalti' : 'esewa';
 
   const school = useQuery({
     queryKey: ['tenant-verify', tenant],
@@ -31,12 +34,16 @@ export function PaymentResult({ kind }: { kind: 'success' | 'failure' }) {
   });
 
   const receipt = useQuery({
-    queryKey: ['esewa-receipt', tenant, txn],
+    queryKey: ['gateway-receipt', gw, tenant, txn],
     queryFn: async () =>
-      (await rawApi.get(`/finance/payments/esewa/public/receipt/${tenant}/${txn}`)).data
+      (await rawApi.get(`/finance/payments/${gw}/public/receipt/${tenant}/${txn}`)).data
         .data as EsewaPublicReceipt,
     enabled: Boolean(tenant && txn),
   });
+
+  // Display name from the receipt's own gateway field, falling back to ?gw=.
+  const gatewayName =
+    receipt.data?.gateway === 'KHALTI' || (!receipt.data && gw === 'khalti') ? 'Khalti' : 'eSewa';
 
   const verified = receipt.data?.status === 'VERIFIED';
   const showSuccess = kind === 'success' && verified;
@@ -76,8 +83,8 @@ export function PaymentResult({ kind }: { kind: 'success' | 'failure' }) {
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             {receipt.data?.status === 'INITIATED'
-              ? 'The payment has not been confirmed by eSewa yet. If money was deducted, open the app and use "Check status" — it will be verified automatically.'
-              : 'No money was received for this transaction. If your eSewa account was debited, it will be reversed by eSewa.'}
+              ? `The payment has not been confirmed by ${gatewayName} yet. If money was deducted, open the app and use "Check status" — it will be verified automatically.`
+              : `No money was received for this transaction. If your ${gatewayName} account was debited, it will be reversed by ${gatewayName}.`}
           </p>
           {(receipt.data?.failureReason || reason) && (
             <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
@@ -99,7 +106,7 @@ export function PaymentResult({ kind }: { kind: 'success' | 'failure' }) {
           </div>
           {receipt.data.gatewayRef && (
             <div className="flex justify-between">
-              <dt className="text-gray-500 dark:text-gray-400">eSewa ref</dt>
+              <dt className="text-gray-500 dark:text-gray-400">{gatewayName} ref</dt>
               <dd className="font-medium text-black dark:text-white">{receipt.data.gatewayRef}</dd>
             </div>
           )}

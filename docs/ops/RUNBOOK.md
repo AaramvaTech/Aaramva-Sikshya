@@ -140,3 +140,38 @@ Disputes: `payment_transactions.raw_payload` keeps the redirect payload and
 every status-check response; `gateway_ref` is eSewa's reference id shown to
 the payer. Rows in this table are an audit trail — never delete or soft-delete
 them from application code.
+
+## Khalti online payments (PAY-2)
+
+Same table (`payment_transactions`), same four invariants, same result pages
+as eSewa — only the gateway leg differs (server-to-server initiate returning a
+hosted `payment_url`; verification via `POST /epayment/lookup/` by `pidx`).
+
+| Var | Sandbox (default when unset) | Production |
+|---|---|---|
+| `KHALTI_SECRET_KEY` | your sandbox merchant key from `https://test-admin.khalti.com/#/join/merchant` (no shared public test key exists) | live secret from `https://admin.khalti.com/` (NEVER commit) |
+| `KHALTI_BASE_URL` | `https://dev.khalti.com/api/v2` | `https://khalti.com/api/v2` |
+
+`KHALTI_SECRET_KEY` unset = gateway disabled: boot notice, initiate returns
+503, the mobile chooser hides the Khalti button (`GET
+/finance/payment-gateways`).
+
+**Amounts are PAISA on the wire** (`amount` in initiate, `total_amount` in
+lookup): integer rupees×100 via `khalti.util.ts` only. A lookup `Completed`
+whose `total_amount` differs from the row's amount×100 FAILS the transaction
+and never credits (off-by-100 guard).
+
+**Trust model (do not weaken):** identical to eSewa — the `return_url`
+redirect is a hint; money is recognized only after the server's own lookup
+returns `Completed` with matching paisa, inside the one-transaction
+INITIATED→VERIFIED claim (replay-safe; `pidx` lives in `gateway_ref`).
+
+**Stuck payments:** `GET /finance/payments/khalti/status/:uuid` re-runs the
+idempotent verification. Lookup `Pending`/`Initiated` keeps the row INITIATED;
+`Expired` marks it EXPIRED (a late `Completed` still credits exactly once);
+`User canceled`/`Refunded` are terminal FAILED. Sandbox payer credentials:
+Khalti IDs 9800000000–9800000005, MPIN 1111, OTP 987654.
+
+**Reconciliation:** the PAY-1 queries above cover Khalti by swapping
+`p.method = 'ESEWA'` for `p.method = 'KHALTI'` (the VERIFIED-without-payment
+query is already gateway-agnostic).

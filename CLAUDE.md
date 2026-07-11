@@ -261,7 +261,8 @@ ESEWA_STATUS_URL=                ← optional; defaults to rc/UAT sandbox
 EXPO_ACCESS_TOKEN=               ← optional (PUSH-1); only for EAS enhanced push security
 API_PUBLIC_URL=                  ← public API origin for gateway browser redirects
 WEB_BASE_URL=                    ← web origin for payment result pages (dev: localhost:3000)
-KHALTI_SECRET_KEY=
+KHALTI_SECRET_KEY=               ← set = Khalti gateway enabled (PAY-2); sandbox key needs merchant signup at test-admin.khalti.com
+KHALTI_BASE_URL=                 ← optional; defaults to https://dev.khalti.com/api/v2 (sandbox)
 APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 ```
 
@@ -400,6 +401,25 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   (mark-read on open, mark-all-read, BS-aware timestamps), teacher notices screen (reuses
   NoticeFeed; entry: teacher Profile → School notices), logout now sends expoPushToken (R3).
   `EXPO_PUBLIC_PROJECT_ID` documented in apps/mobile/.env — 377 unit tests passing.
+
+- [x] Khalti online fee payment (PAY-2, `apps/api/src/modules/finance/khalti/`) — KPG-2/ePayment
+  (contract verified against docs.khalti.com 2026-07-12): same `payment_transactions` table
+  (gateway VARCHAR unconstrained — NO migration), same four invariants and result pages as PAY-1.
+  Structural difference honored: initiation is a **server-to-server POST** (`Authorization: Key …`)
+  returning a hosted `payment_url` — no signed client form, no CSP carve-out; the public pay page
+  is a plain 302. **Amounts are integer PAISA on the wire** (`khalti.util.ts` toPaisa/paisaToRupees,
+  own spec with the 19.99-float-trap vectors; a Completed lookup with mismatched paisa FAILS and
+  never credits). Our `transaction_uuid` = Khalti's `purchase_order_id`; `pidx` in `gateway_ref`;
+  ONE `return_url` callback (no success/failure pair) → mandatory `/epayment/lookup/` →
+  Completed→creditOnce via the shared `recordPaymentInTx` rail; Pending/Initiated→PENDING,
+  Expired→EXPIRED (late Completed still claims once), User canceled/Refunded→FAILED.
+  `GET /finance/payment-gateways` (enabled map; NOT under payments/ — FinanceController's
+  `payments/:id` would shadow it) drives the mobile `PayChooser` (two-option when
+  both gateways on, single otherwise, hidden when none — render-proven in
+  `apps/mobile/__tests__/PayChooser.test.js`, the first mobile jest test); web result pages are
+  gateway-aware via `?gw=` + receipt.gateway. Sandbox key requires merchant signup at
+  test-admin.khalti.com (NO shared public test key; payer creds 9800000000-5 / MPIN 1111 /
+  OTP 987654) — live sandbox proofs pend that key. 404 api tests passing.
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision

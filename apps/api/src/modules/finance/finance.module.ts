@@ -8,9 +8,20 @@ import { ReportService } from './report.service';
 import { EsewaService } from './esewa/esewa.service';
 import { EsewaController } from './esewa/esewa.controller';
 import { EsewaPublicController } from './esewa/esewa-public.controller';
+import { KhaltiService } from './khalti/khalti.service';
+import { KhaltiController } from './khalti/khalti.controller';
+import { KhaltiPublicController } from './khalti/khalti-public.controller';
+import { PaymentGatewaysController } from './payment-gateways.controller';
 
 @Module({
-  controllers: [FinanceController, EsewaController, EsewaPublicController],
+  controllers: [
+    FinanceController,
+    EsewaController,
+    EsewaPublicController,
+    KhaltiController,
+    KhaltiPublicController,
+    PaymentGatewaysController,
+  ],
   providers: [
     FeeCategoryService,
     FeeStructureService,
@@ -18,6 +29,7 @@ import { EsewaPublicController } from './esewa/esewa-public.controller';
     PaymentService,
     ReportService,
     EsewaService,
+    KhaltiService,
   ],
   exports: [InvoiceService, PaymentService],
 })

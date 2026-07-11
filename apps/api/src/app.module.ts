@@ -73,10 +73,11 @@ export class AppModule {
       .exclude(
         { path: 'api/v1/super-admin/(.*)', method: RequestMethod.ALL },
         { path: 'api/v1/tenants/verify/(.*)', method: RequestMethod.ALL },
-        // eSewa browser-facing routes (pay page, callbacks, receipt): no auth
+        // Gateway browser-facing routes (pay page, callbacks, receipt): no auth
         // header, no X-Tenant-Slug — tenant comes from the path and is
-        // resolved programmatically in EsewaPublicController.
+        // resolved programmatically in the gateway's public controller.
         { path: 'api/v1/finance/payments/esewa/public/(.*)', method: RequestMethod.ALL },
+        { path: 'api/v1/finance/payments/khalti/public/(.*)', method: RequestMethod.ALL },
         { path: 'health', method: RequestMethod.ALL },
       )
       .forRoutes('*');
