@@ -20,6 +20,11 @@ concurrency:
 jobs:
   api:
     runs-on: ubuntu-latest
+    env:
+      # The 298-test baseline has always run under Nepal time; two
+      # import.service tests fail under the runner's UTC (BS→AD conversion
+      # uses local-time Date components — see FIX-2 in CLAUDE.md dev-notes).
+      TZ: Asia/Kathmandu
     defaults:
       run:
         working-directory: apps/api
