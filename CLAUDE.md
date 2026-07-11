@@ -318,6 +318,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   **dollar-quote aware** ($$…$$ / $tag$…$tag$ bodies stay one statement), so migrations may
   use DO blocks — but keep dollar-quoted bodies free of `--` comment lines (still stripped).
   Migration files are LF-pinned via root `.gitattributes` (ledger checksums are byte-checksums).
+- **FIX-2 (open):** `import.service.ts` BS→AD conversion uses local-time Date components — make
+  TZ-independent with regression tests that run under forced UTC. Found by CI's first run
+  (2 import.service tests fail under UTC runners). Interim mitigations: api CI job pins
+  `TZ: Asia/Kathmandu`; api Docker runtime image sets `ENV TZ=Asia/Kathmandu` (which is also
+  the platform convention — all dates are Nepal-local).
 - Run tests: `cd apps/api && npm test`
 
 > Update this checklist as modules are completed.
