@@ -349,8 +349,9 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `POST /super-admin/jobs/recalculate-fines` (PLATFORM_ADMIN). NOTE: recalculateFine skips
   invoices whose items have fine_per_day=0 — stale nonzero fines are never zeroed (pre-existing,
   out of OPS-1 scope). Backups: `scripts/backup-db.sh` (pg_dump -Fc) + `docs/ops/RUNBOOK.md`
-  (restore IS the rollback). Platform-admin password rotation:
-  `apps/api/scripts/set-platform-admin-password.ts` (operator-run; no UI exists yet).
+  (restore IS the rollback). Platform-admin password: rotated 2026-07-11 (G1 closed, 401
+  proven); the one-off rotation script was removed after use — recover from git history at
+  `427149f` if needed; proper change-password endpoint+UI is a backlog item.
   App connects as postgres SUPERUSER in dev — prod must use a non-superuser role (runbook).
 
 > Update this checklist as modules are completed.

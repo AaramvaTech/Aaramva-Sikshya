@@ -84,9 +84,10 @@ S3/R2 (`aws s3 cp` / `rclone`) after each run; keep at least 14 daily dumps +
 
 ## Platform-admin password
 
-No self-service change UI exists yet. Rotate with the operator script (run it
-yourself; the password is typed hidden and never leaves your terminal):
-
-```bash
-cd apps/api && npx ts-node scripts/set-platform-admin-password.ts
-```
+No self-service change UI exists yet (backlog: authenticated change-password
+endpoint + super-admin profile UI). The one-off rotation script used during
+OPS-1 was deliberately removed after use; if a rotation is ever needed before
+the proper feature ships, recover it from git history
+(`git show 427149f:apps/api/scripts/set-platform-admin-password.ts`) — it
+masks input, validates the admin email first, and blocklists known-exposed
+passwords.
