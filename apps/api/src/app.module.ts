@@ -23,9 +23,7 @@ import { LibraryModule } from './modules/library/library.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
-
-const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
-  !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -46,7 +44,10 @@ const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
     AttendanceModule,
     FinanceModule,
     HrModule,
-    ...(redisAvailable ? [JobsModule] : []),
+    // OPS-1 T4: unconditional — the fine cron runs on @nestjs/schedule now
+    // (in-process, no Redis). The old Redis-gated conditional was one of the
+    // two layers of the silently-dead-cron bug.
+    JobsModule,
     ExaminationModule,
     CommunicationModule,
     DashboardModule,
@@ -54,6 +55,7 @@ const redisAvailable = process.env.REDIS_ENABLED !== 'false' &&
     SuperAdminModule,
     SettingsModule,
     OnboardingModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
@@ -69,6 +71,7 @@ export class AppModule {
       .exclude(
         { path: 'api/v1/super-admin/(.*)', method: RequestMethod.ALL },
         { path: 'api/v1/tenants/verify/(.*)', method: RequestMethod.ALL },
+        { path: 'health', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }

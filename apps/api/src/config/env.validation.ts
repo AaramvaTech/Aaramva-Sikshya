@@ -43,6 +43,9 @@ export const envValidationSchema = Joi.object({
   REDIS_URL: Joi.string().optional(),
   REDIS_HOST: Joi.string().optional(),
 
+  // Error tracking — optional (absent = Sentry disabled, boot notice logged).
+  SENTRY_DSN: Joi.string().uri().optional().allow(''),
+
   // SMS / integrations — optional (mock path when disabled).
   SPARROW_SMS_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
   SPARROW_SMS_TOKEN: Joi.string().optional().allow(''),

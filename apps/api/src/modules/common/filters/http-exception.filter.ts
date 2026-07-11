@@ -6,7 +6,8 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import * as Sentry from '@sentry/nestjs';
+import type { Request, Response } from 'express';
 
 interface ErrorBody {
   success: false;
@@ -53,6 +54,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
       this.logger.error(
         exception instanceof Error ? exception.stack : String(exception),
       );
+      // OPS-1 T2: forward to Sentry (no-op when SENTRY_DSN is absent). Tags:
+      // tenant slug + route; user id only — no bodies, headers, or other PII.
+      const req = ctx.getRequest<Request & { user?: { userId?: string } }>();
+      Sentry.withScope((scope) => {
+        scope.setTag('route', `${req.method} ${req.path}`);
+        const slug = req.headers['x-tenant-slug'];
+        if (typeof slug === 'string' && slug) scope.setTag('tenant', slug);
+        if (req.user?.userId) scope.setUser({ id: req.user.userId });
+        Sentry.captureException(exception);
+      });
       // Expose message in dev so errors are debuggable without reading terminal
       if (process.env.NODE_ENV !== 'production') {
         message = exception instanceof Error ? exception.message : String(exception);
