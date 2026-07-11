@@ -46,6 +46,19 @@ export const envValidationSchema = Joi.object({
   // Error tracking — optional (absent = Sentry disabled, boot notice logged).
   SENTRY_DSN: Joi.string().uri().optional().allow(''),
 
+  // Mail (MAIL-1) — all optional: no SMTP_HOST and no MAIL_ETHEREAL means mail
+  // is disabled (MOCK status, boot notice, sends logged and skipped).
+  SMTP_HOST: Joi.string().optional().allow(''),
+  SMTP_PORT: Joi.number().default(587),
+  SMTP_SECURE: Joi.boolean().truthy('true').falsy('false').default(false),
+  SMTP_USER: Joi.string().optional().allow(''),
+  SMTP_PASS: Joi.string().optional().allow(''),
+  MAIL_FROM: Joi.string().optional().allow(''),
+  MAIL_FROM_NAME: Joi.string().optional().allow(''),
+  // Dev-proof mode: auto-provisions a nodemailer Ethereal test inbox; every
+  // send logs a preview URL. Ignored when SMTP_HOST is set.
+  MAIL_ETHEREAL: Joi.boolean().truthy('true').falsy('false').default(false),
+
   // SMS / integrations — optional (mock path when disabled).
   SPARROW_SMS_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
   SPARROW_SMS_TOKEN: Joi.string().optional().allow(''),

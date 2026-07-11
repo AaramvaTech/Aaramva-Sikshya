@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { TenantAdminService } from '../tenant-admin.service';
 import { PublicPrismaService } from '../public-prisma.service';
@@ -34,6 +35,7 @@ describe('TenantAdminService', () => {
     const module = await Test.createTestingModule({
       providers: [
         TenantAdminService,
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         {
           provide: PublicPrismaService,
           useValue: { query: jest.fn(), execute: jest.fn() },

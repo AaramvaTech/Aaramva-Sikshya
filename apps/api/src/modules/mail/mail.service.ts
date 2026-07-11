@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
@@ -16,45 +17,99 @@ export interface SendMailInput {
 export interface SendMailResult {
   status: 'SENT' | 'FAILED' | 'MOCK';
   logId: string;
+  /** Ethereal dev mode only: message preview URL (live-proof evidence). */
+  previewUrl?: string;
 }
 
+type MailMode = 'smtp' | 'ethereal' | 'disabled';
+
+/**
+ * Cherry-picked from feat/credential-emails, adapted for MAIL-1:
+ * config via ConfigService (vars registered in the SEC-1 Joi schema),
+ * Ethereal dev-proof mode, OPS-1-style boot notice. Behavior contract
+ * unchanged: always records an email_log row, never throws to the caller.
+ */
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
+  private etherealUser: string | null = null;
 
-  constructor(private readonly publicPrisma: PublicPrismaService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly publicPrisma: PublicPrismaService,
+  ) {}
 
-  private get isConfigured(): boolean {
-    return !!process.env.SMTP_HOST;
+  get mode(): MailMode {
+    if (this.config.get<string>('SMTP_HOST')) return 'smtp';
+    if (this.config.get<boolean>('MAIL_ETHEREAL')) return 'ethereal';
+    return 'disabled';
   }
 
-  private getTransporter(): Transporter {
-    if (!this.transporter) {
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: process.env.SMTP_USER
-          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-          : undefined,
-      });
+  onModuleInit(): void {
+    const mode = this.mode;
+    if (mode === 'smtp') {
+      this.logger.log(`Mail ENABLED via SMTP (${this.config.get<string>('SMTP_HOST')})`);
+    } else if (mode === 'ethereal') {
+      this.logger.log('Mail in ETHEREAL dev mode — sends go to a nodemailer test inbox with preview URLs');
+    } else {
+      this.logger.log('Mail disabled (no SMTP_HOST, MAIL_ETHEREAL off) — sends are logged as MOCK and skipped');
     }
+  }
+
+  private async getTransporter(): Promise<Transporter> {
+    if (this.transporter) return this.transporter;
+    if (this.mode === 'ethereal') {
+      const account = await nodemailer.createTestAccount();
+      this.etherealUser = account.user;
+      this.transporter = nodemailer.createTransport({
+        host: account.smtp.host,
+        port: account.smtp.port,
+        secure: account.smtp.secure,
+        auth: { user: account.user, pass: account.pass },
+      });
+      this.logger.log(`Ethereal test inbox provisioned: ${account.user}`);
+      return this.transporter;
+    }
+    this.transporter = nodemailer.createTransport({
+      host: this.config.get<string>('SMTP_HOST'),
+      port: this.config.get<number>('SMTP_PORT', 587),
+      secure: this.config.get<boolean>('SMTP_SECURE', false),
+      auth: this.config.get<string>('SMTP_USER')
+        ? {
+            user: this.config.get<string>('SMTP_USER'),
+            pass: this.config.get<string>('SMTP_PASS'),
+          }
+        : undefined,
+    });
     return this.transporter;
   }
 
-  /** Actual network delivery. Separated so tests can stub it. Returns provider message id. */
-  private async deliver(input: SendMailInput): Promise<string | null> {
-    const fromName = process.env.MAIL_FROM_NAME ?? 'Aaramva Shikshya';
-    const fromAddr = process.env.MAIL_FROM ?? 'no-reply@aaramvashikshya.com';
-    const info = await this.getTransporter().sendMail({
+  /** Actual network delivery. Separated so tests can stub it. */
+  private async deliver(
+    input: SendMailInput,
+  ): Promise<{ messageId: string | null; previewUrl?: string }> {
+    const fromName = this.config.get<string>('MAIL_FROM_NAME') || 'Aaramva Shikshya';
+    const fromAddr =
+      this.config.get<string>('MAIL_FROM') ||
+      (this.mode === 'ethereal' && this.etherealUser ? this.etherealUser : 'no-reply@aaramvashikshya.com');
+    const transporter = await this.getTransporter();
+    const info = await transporter.sendMail({
       from: `"${fromName}" <${fromAddr}>`,
       to: input.to,
       subject: input.subject,
       text: input.text,
       html: input.html,
     });
-    return info?.messageId ?? null;
+    let previewUrl: string | undefined;
+    if (this.mode === 'ethereal') {
+      const url = nodemailer.getTestMessageUrl(info);
+      if (url) {
+        previewUrl = url;
+        this.logger.log(`[ETHEREAL PREVIEW] ${input.type} to ${input.to}: ${url}`);
+      }
+    }
+    return { messageId: info?.messageId ?? null, previewUrl };
   }
 
   /**
@@ -80,16 +135,16 @@ export class MailService {
       return { status: 'FAILED', logId: '' };
     }
 
-    if (!this.isConfigured) {
+    if (this.mode === 'disabled') {
       this.logger.log(`[MAIL MOCK] To: ${input.to} | ${input.subject}`);
       await this.updateStatus(logId, 'MOCK', null, null);
       return { status: 'MOCK', logId };
     }
 
     try {
-      const messageId = await this.deliver(input);
+      const { messageId, previewUrl } = await this.deliver(input);
       await this.updateStatus(logId, 'SENT', messageId, null);
-      return { status: 'SENT', logId };
+      return { status: 'SENT', logId, previewUrl };
     } catch (err) {
       const message = (err as Error)?.message ?? 'Unknown email error';
       this.logger.error(`Email send failed to ${input.to}: ${message}`);

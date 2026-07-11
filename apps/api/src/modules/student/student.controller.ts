@@ -13,6 +13,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -194,5 +195,26 @@ export class StudentController {
     @Body() dto: CreateGuardianAccountDto,
   ) {
     return this.guardianService.createGuardianAccount(studentId, guardianId, dto);
+  }
+
+  // MAIL-1 resend endpoints: regenerate a temp password + email it. Throttled —
+  // each call invalidates the person's sessions, so abuse is a lockout vector.
+  @Post(':id/account/resend')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  resendStudentCredentials(@Param('id', ParseUUIDPipe) id: string) {
+    return this.studentService.resendStudentCredentials(id);
+  }
+
+  @Post(':studentId/guardians/:guardianId/account/resend')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  resendGuardianCredentials(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('guardianId', ParseUUIDPipe) guardianId: string,
+  ) {
+    return this.guardianService.resendGuardianCredentials(studentId, guardianId);
   }
 }

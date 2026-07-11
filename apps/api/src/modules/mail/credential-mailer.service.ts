@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MailService } from './mail.service';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 
@@ -31,6 +32,7 @@ export class CredentialMailer {
   constructor(
     private readonly mail: MailService,
     private readonly publicPrisma: PublicPrismaService,
+    private readonly config: ConfigService,
   ) {}
 
   private async resolveSchool(tenantId: string): Promise<{ name: string; slug: string }> {
@@ -42,7 +44,7 @@ export class CredentialMailer {
   }
 
   private loginUrl(slug: string): string {
-    const domain = process.env.APP_DOMAIN ?? 'aaramvashikshya.com';
+    const domain = this.config.get<string>('APP_DOMAIN') || 'aaramvashikshya.com';
     return slug ? `https://${slug}.${domain}` : `https://${domain}`;
   }
 
@@ -90,6 +92,35 @@ export class CredentialMailer {
       <p>Please change your password after your first login.</p>`;
     await this.mail.send({
       to: p.to, subject, html, text, type, tenantId: p.tenantId, relatedUserId: p.relatedUserId,
+    });
+  }
+
+  /** MAIL-1 T3: password-reset link (token-based self-service, not a temp password). */
+  async sendPasswordResetLink(p: {
+    tenantId: string;
+    to: string;
+    resetUrl: string;
+    relatedUserId: string;
+  }): Promise<void> {
+    const school = await this.resolveSchool(p.tenantId);
+    const subject = `Reset your ${school.name} password`;
+    const text = [
+      `Hello,`,
+      ``,
+      `A password reset was requested for your ${school.name} account on Aaramva Shikshya.`,
+      ``,
+      `Reset link (valid for 30 minutes, single use):`,
+      p.resetUrl,
+      ``,
+      `If you did not request this, you can ignore this email — your password is unchanged.`,
+    ].join('\n');
+    const html = `
+      <p>Hello,</p>
+      <p>A password reset was requested for your <strong>${escapeHtml(school.name)}</strong> account on Aaramva Shikshya.</p>
+      <p><a href="${p.resetUrl}">Reset your password</a> (valid for 30 minutes, single use).</p>
+      <p>If you did not request this, you can ignore this email — your password is unchanged.</p>`;
+    await this.mail.send({
+      to: p.to, subject, html, text, type: 'PASSWORD_RESET_LINK', tenantId: p.tenantId, relatedUserId: p.relatedUserId,
     });
   }
 

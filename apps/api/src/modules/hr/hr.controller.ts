@@ -2,6 +2,7 @@ import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
   Patch, Post, Query, UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -108,6 +109,15 @@ export class HrController {
   @Roles(...PRINCIPAL_AND_ABOVE)
   createStaff(@Body() dto: CreateStaffDto) {
     return this.staffService.createStaff(dto);
+  }
+
+  // MAIL-1 resend: regenerate temp password + email. Throttled (session-revoking).
+  @Post('staff/:id/resend-credentials')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  resendStaffCredentials(@Param('id', ParseUUIDPipe) id: string) {
+    return this.staffService.resendStaffCredentials(id);
   }
 
   @Get('staff')

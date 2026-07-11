@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { StudentService } from '../student.service';
 import { GuardianService } from '../guardian.service';
@@ -96,6 +97,7 @@ describe('StudentService', () => {
           },
         },
         { provide: GuardianService, useValue: mockGuardianService },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 

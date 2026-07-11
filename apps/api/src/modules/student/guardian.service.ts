@@ -1,5 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
+import { TenantContextService } from '../tenant/tenant-context.service';
+import { generateTemporaryPassword } from '../mail/password.util';
+import { MAIL_EVENTS } from '../mail/mail.events';
+import type { CredentialsIssuedEvent } from '../mail/mail.events';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
 import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
@@ -40,7 +45,11 @@ interface StudentRow {
 
 @Injectable()
 export class GuardianService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly tenantContext: TenantContextService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   async createGuardianAccount(
     studentId: string,
@@ -53,10 +62,13 @@ export class GuardianService {
     );
     if (!studentRows[0]) throw new NotFoundException('Student not found');
 
+    // MAIL-1: omitted password → generate + email (only if a NEW user is created).
+    const generated = !dto.password;
+    const password = dto.password ?? generateTemporaryPassword();
     // Hash before the transaction to keep the DB lock duration short
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    return this.tenantPrisma.run(async (tx) => {
+    const outcome = await this.tenantPrisma.run(async (tx) => {
       // Lock the guardian row to prevent concurrent account creation
       const guardianRows = await tx.$queryRawUnsafe<GuardianRow[]>(
         `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
@@ -78,6 +90,7 @@ export class GuardianService {
       const existingUser = existingUserRows[0] ?? null;
 
       let userId: string;
+      let createdNewUser = false;
 
       if (existingUser) {
         if (existingUser.role !== Role.PARENT) {
@@ -85,6 +98,7 @@ export class GuardianService {
         }
         userId = existingUser.id;
       } else {
+        createdNewUser = true;
         const newUserRows = await tx.$queryRawUnsafe<UserRow[]>(
           `INSERT INTO users (email, password_hash, role, first_name, last_name)
            VALUES ($1, $2, $3, $4, $5)
@@ -109,8 +123,56 @@ export class GuardianService {
         throw new ConflictException('Guardian already has a linked account');
       }
 
-      return { userId, guardianId, email: dto.email, linked: true };
+      return { userId, guardianId, email: dto.email, linked: true as const, createdNewUser };
     });
+
+    if (generated && outcome.createdNewUser) {
+      this.events.emit(MAIL_EVENTS.credentialsIssued, {
+        tenantId: this.tenantContext.getOrThrow().tenantId,
+        to: dto.email, loginEmail: dto.email,
+        password, relatedUserId: outcome.userId, kind: 'new',
+      } satisfies CredentialsIssuedEvent);
+    }
+    const { createdNewUser: _omit, ...result } = outcome;
+    return result;
+  }
+
+  /**
+   * MAIL-1 resend: regenerates a temporary password for the guardian's linked
+   * PARENT login and emails it. Existing sessions are revoked.
+   */
+  async resendGuardianCredentials(
+    studentId: string,
+    guardianId: string,
+  ): Promise<{ userId: string; email: string; sent: true }> {
+    const rows = await this.tenantPrisma.query<{ user_id: string | null; email: string | null }>(
+      `SELECT g.user_id, u.email
+       FROM guardians g LEFT JOIN users u ON u.id = g.user_id
+       WHERE g.id = $1::uuid AND g.student_id = $2::uuid`,
+      guardianId, studentId,
+    );
+    if (!rows[0]) throw new NotFoundException('Guardian not found');
+    if (!rows[0].user_id || !rows[0].email) {
+      throw new BadRequestException('Guardian has no linked login account');
+    }
+    const { user_id: userId, email } = rows[0] as { user_id: string; email: string };
+
+    const password = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.tenantPrisma.run(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        passwordHash, userId,
+      );
+      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
+    });
+
+    this.events.emit(MAIL_EVENTS.credentialsIssued, {
+      tenantId: this.tenantContext.getOrThrow().tenantId,
+      to: email, loginEmail: email,
+      password, relatedUserId: userId, kind: 'reset',
+    } satisfies CredentialsIssuedEvent);
+    return { userId, email, sent: true };
   }
 
   /**

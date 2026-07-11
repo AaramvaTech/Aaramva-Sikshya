@@ -123,6 +123,18 @@ export class SuperAdminController {
     return this.tenantAdmin.listTenants(query);
   }
 
+  // MAIL-1 resend: regenerate the school owner's temp password + email it.
+  @Post('tenants/:id/resend-owner-credentials')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PLATFORM_ADMIN)
+  resendOwnerCredentials(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tenantAdmin.resendOwnerCredentials(id, user.userId);
+  }
+
   @Get('tenants/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PLATFORM_ADMIN)

@@ -1,8 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail.service';
 import { PublicPrismaService } from '../../super-admin/public-prisma.service';
 
 const mockPublicPrisma = { query: jest.fn(), execute: jest.fn() };
+// MAIL-1 adaptation: config-driven. Tests mutate this map per case.
+const configValues: Record<string, unknown> = {};
+const mockConfig = {
+  get: jest.fn((key: string, def?: unknown) => configValues[key] ?? def),
+};
 
 describe('MailService', () => {
   let service: MailService;
@@ -12,11 +18,12 @@ describe('MailService', () => {
       providers: [
         MailService,
         { provide: PublicPrismaService, useValue: mockPublicPrisma },
+        { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
     service = module.get(MailService);
     jest.clearAllMocks();
-    delete process.env.SMTP_HOST;
+    for (const k of Object.keys(configValues)) delete configValues[k];
     // INSERT ... RETURNING id, then UPDATE status
     mockPublicPrisma.query.mockResolvedValue([{ id: 'log-1' }]);
     mockPublicPrisma.execute.mockResolvedValue(1);
@@ -54,7 +61,7 @@ describe('MailService', () => {
   });
 
   it('never throws and records FAILED when the transport throws', async () => {
-    process.env.SMTP_HOST = 'smtp.example.com';
+    configValues['SMTP_HOST'] = 'smtp.example.com';
     // Force the transporter to fail by stubbing the private send.
     jest.spyOn(service as any, 'deliver').mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
     const res = await service.send({

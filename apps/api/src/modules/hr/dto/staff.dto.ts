@@ -17,9 +17,11 @@ export class CreateStaffDto {
   @IsEmail()
   email: string;
 
+  // MAIL-1: omitted = temp password generated + emailed; provided = no email.
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  password: string;
+  password?: string;
 
   @IsString()
   @IsNotEmpty()

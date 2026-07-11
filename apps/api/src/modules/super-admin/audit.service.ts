@@ -10,7 +10,8 @@ export type AuditAction =
   | 'PLAN_UPDATED'
   | 'PLAN_DEACTIVATED'
   | 'SUBSCRIPTION_CHANGED'
-  | 'IMPERSONATION';
+  | 'IMPERSONATION'
+  | 'OWNER_CREDENTIALS_RESENT';
 
 @Injectable()
 export class AuditService {

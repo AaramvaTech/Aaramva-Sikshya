@@ -1,6 +1,8 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GuardianService } from '../guardian.service';
+import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { CreateGuardianAccountDto } from '../dto/create-guardian-account.dto';
 import { Role } from '../../common/enums/role.enum';
@@ -18,6 +20,11 @@ describe('GuardianService', () => {
       providers: [
         GuardianService,
         { provide: TenantPrismaService, useValue: mockTenantPrisma },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: TenantContextService,
+          useValue: { getOrThrow: () => ({ tenantId: 'tenant-1', slug: 'demo', schemaName: 'tenant_demo' }) },
+        },
       ],
     }).compile();
 

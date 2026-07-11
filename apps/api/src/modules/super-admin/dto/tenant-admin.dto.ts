@@ -31,9 +31,11 @@ export class ManualOnboardTenantDto {
   @IsString()
   adminLastName: string;
 
+  // MAIL-1: omitted = temp password generated + emailed to the owner.
+  @IsOptional()
   @IsString()
   @MinLength(8)
-  adminPassword: string;
+  adminPassword?: string;
 
   @IsUUID()
   planId: string;

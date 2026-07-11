@@ -1,7 +1,13 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import * as bcrypt from 'bcrypt';
+import { generateTemporaryPassword } from '../mail/password.util';
+import { MAIL_EVENTS } from '../mail/mail.events';
+import type { CredentialsIssuedEvent } from '../mail/mail.events';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -53,16 +59,20 @@ export class TenantAdminService {
     private readonly tenantService: TenantService,
     private readonly audit: AuditService,
     private readonly brandingColor: BrandingColorService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async onboardTenant(dto: ManualOnboardTenantDto, adminId: string) {
+    // MAIL-1: omitted password → generate + email the owner; provided → no email.
+    const generated = !dto.adminPassword;
+    const adminPassword = dto.adminPassword ?? generateTemporaryPassword();
     const result = await this.provisioning.provision({
       schoolName: dto.schoolName,
       slug: dto.slug,
       adminEmail: dto.adminEmail,
       adminFirstName: dto.adminFirstName,
       adminLastName: dto.adminLastName,
-      adminPassword: dto.adminPassword,
+      adminPassword,
       planId: dto.planId,
       phone: dto.phone,
       address: dto.address,
@@ -75,7 +85,63 @@ export class TenantAdminService {
       planId: dto.planId,
     });
 
+    if (generated) {
+      this.events.emit(MAIL_EVENTS.credentialsIssued, {
+        tenantId: result.tenant.id,
+        to: dto.adminEmail, loginEmail: dto.adminEmail,
+        password: adminPassword, relatedUserId: result.user.id, kind: 'new',
+      } satisfies CredentialsIssuedEvent);
+    }
     return result;
+  }
+
+  /**
+   * MAIL-1 resend: regenerates a temporary password for the school owner's
+   * login (in the tenant schema) and emails it. Existing sessions are revoked.
+   */
+  async resendOwnerCredentials(
+    tenantId: string,
+    adminId: string,
+  ): Promise<{ userId: string; email: string; sent: true }> {
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: tenantId, deletedAt: null },
+      select: { id: true, slug: true },
+    });
+    if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
+
+    const ctx = {
+      tenantId: tenant.id,
+      slug: tenant.slug,
+      schemaName: TenantService.schemaNameFor(tenant.slug),
+    };
+    const owner = await this.tenantContext.run(ctx, async () => {
+      const rows = await this.tenantPrisma.query<{ id: string; email: string }>(
+        `SELECT id, email FROM users
+         WHERE role = 'SCHOOL_OWNER' AND deleted_at IS NULL
+         ORDER BY created_at ASC LIMIT 1`,
+      );
+      if (!rows[0]) throw new BadRequestException('No school-owner account found for this tenant');
+      const password = generateTemporaryPassword();
+      const passwordHash = await bcrypt.hash(password, 10);
+      await this.tenantPrisma.run(async (tx) => {
+        await tx.$executeRawUnsafe(
+          `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+          passwordHash, rows[0].id,
+        );
+        await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, rows[0].id);
+      });
+      return { ...rows[0], password };
+    });
+
+    await this.audit.log(adminId, 'OWNER_CREDENTIALS_RESENT', 'TENANT', tenant.id, {
+      slug: tenant.slug,
+    });
+    this.events.emit(MAIL_EVENTS.credentialsIssued, {
+      tenantId: tenant.id,
+      to: owner.email, loginEmail: owner.email,
+      password: owner.password, relatedUserId: owner.id, kind: 'reset',
+    } satisfies CredentialsIssuedEvent);
+    return { userId: owner.id, email: owner.email, sent: true };
   }
 
   async listTenants(query: ListTenantsQueryDto) {

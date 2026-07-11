@@ -24,6 +24,7 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { HealthModule } from './modules/health/health.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { HealthModule } from './modules/health/health.module';
     SettingsModule,
     OnboardingModule,
     HealthModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [

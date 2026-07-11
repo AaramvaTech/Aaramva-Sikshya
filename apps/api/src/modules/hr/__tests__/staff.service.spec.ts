@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { StaffService } from '../staff.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -65,6 +66,7 @@ describe('StaffService', () => {
     const module = await Test.createTestingModule({
       providers: [
         StaffService,
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         {
           provide: TenantPrismaService,
           useValue: {

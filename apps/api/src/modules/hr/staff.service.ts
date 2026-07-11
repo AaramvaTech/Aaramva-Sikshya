@@ -1,6 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
 import { getBsYear } from 'bs-calendar';
+import { generateTemporaryPassword } from '../mail/password.util';
+import { MAIL_EVENTS } from '../mail/mail.events';
+import type { CredentialsIssuedEvent } from '../mail/mail.events';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import {
@@ -20,9 +24,14 @@ export class StaffService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async createStaff(dto: CreateStaffDto): Promise<StaffResponseDto> {
+    // MAIL-1: omitted password → generate + email; provided → no email.
+    const generated = !dto.password;
+    const password = dto.password ?? generateTemporaryPassword();
+
     const profile = await this.tenantPrisma.run(async (tx) => {
       const bsYear = getBsYear(new Date());
       const seqKey = `emp_seq_${bsYear}`;
@@ -35,7 +44,7 @@ export class StaffService {
       );
       const employeeId = `EMP-${bsYear}-${String(Number(seqRow.value)).padStart(4, '0')}`;
 
-      const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
       let user: { id: string };
       try {
@@ -99,7 +108,49 @@ export class StaffService {
       };
     });
 
+    if (generated) {
+      this.events.emit(MAIL_EVENTS.credentialsIssued, {
+        tenantId: this.tenantContext.getOrThrow().tenantId,
+        to: dto.email, loginEmail: dto.email,
+        password, relatedUserId: profile.user_id, kind: 'new',
+      } satisfies CredentialsIssuedEvent);
+    }
     return toStaffResponse(profile);
+  }
+
+  /**
+   * MAIL-1 resend: regenerates a temporary password for the staff login and
+   * emails it. Existing sessions are revoked.
+   */
+  async resendStaffCredentials(
+    staffProfileId: string,
+  ): Promise<{ userId: string; email: string; sent: true }> {
+    const rows = await this.tenantPrisma.query<{ user_id: string; email: string | null }>(
+      `SELECT sp.user_id, u.email
+       FROM staff_profiles sp JOIN users u ON u.id = sp.user_id
+       WHERE sp.id = $1::uuid AND sp.deleted_at IS NULL`,
+      staffProfileId,
+    );
+    if (!rows[0]) throw new NotFoundException(`Staff ${staffProfileId} not found`);
+    if (!rows[0].email) throw new BadRequestException('Staff login has no email');
+    const { user_id: userId, email } = rows[0] as { user_id: string; email: string };
+
+    const password = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await this.tenantPrisma.run(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid`,
+        passwordHash, userId,
+      );
+      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
+    });
+
+    this.events.emit(MAIL_EVENTS.credentialsIssued, {
+      tenantId: this.tenantContext.getOrThrow().tenantId,
+      to: email, loginEmail: email,
+      password, relatedUserId: userId, kind: 'reset',
+    } satisfies CredentialsIssuedEvent);
+    return { userId, email, sent: true };
   }
 
   async listStaff(query: StaffQueryDto): Promise<{

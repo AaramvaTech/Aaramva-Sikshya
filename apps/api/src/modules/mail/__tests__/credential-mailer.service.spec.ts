@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { CredentialMailer } from '../credential-mailer.service';
 import { MailService } from '../mail.service';
 import { PublicPrismaService } from '../../super-admin/public-prisma.service';
@@ -17,6 +18,7 @@ describe('CredentialMailer', () => {
         CredentialMailer,
         { provide: MailService, useValue: mockMail },
         { provide: PublicPrismaService, useValue: mockPublicPrisma },
+        { provide: ConfigService, useValue: { get: jest.fn(() => undefined) } },
       ],
     }).compile();
     mailer = module.get(CredentialMailer);
