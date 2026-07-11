@@ -350,8 +350,23 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   invoices whose items have fine_per_day=0 — stale nonzero fines are never zeroed (pre-existing,
   out of OPS-1 scope). Backups: `scripts/backup-db.sh` (pg_dump -Fc) + `docs/ops/RUNBOOK.md`
   (restore IS the rollback). Platform-admin password: rotated 2026-07-11 (G1 closed, 401
-  proven); the one-off rotation script was removed after use — recover from git history at
-  `427149f` if needed; proper change-password endpoint+UI is a backlog item.
+  proven); change-password is now a real feature (MAIL-1) — super-admin settings page + POST
+  /super-admin/auth/change-password.
+- MAIL-1 (email + password reset, 2026-07-11): `modules/mail/` — MailService (SMTP via Joi-
+  registered SMTP_*/MAIL_* env vars, ALL optional: disabled = MOCK + boot notice; MAIL_ETHEREAL=true
+  = dev test inbox with logged preview URLs), CredentialMailer (HTML-escaped templates),
+  `email_log` table (PUBLIC schema, Prisma migration, nullable tenant_id, no bodies/passwords
+  stored). Fire-and-forget: services emit MAIL_EVENTS via EventEmitter2; MailListener sends off
+  the request path. Credential delivery: student/guardian/staff/owner provisioning with password
+  OMITTED → temp password generated (`modules/mail/password.util.ts`) + emailed; resend endpoints
+  (throttled 5/h, revoke sessions). Password reset: tenant migration 0004_password_reset_tokens
+  (hashed tokens, 30-min, single-use via atomic claim); POST /auth/forgot-password (3/h/IP,
+  oracle-free) + /auth/reset-password + /auth/change-password; web pages /forgot-password +
+  /reset-password (tenant via ?tenant= in the email link) + ChangePasswordCard on both settings
+  shells. GOTCHA: public-schema `tenants.id`/`subscriptions` columns are TEXT + camelCase (Prisma-
+  managed) — never `::uuid`-cast or snake_case them in raw SQL (bit both MIG-3's cron fix and
+  MAIL-1's resolveSchool). Backlog: force-change-on-first-login for emailed temp passwords
+  (change-password exists; forcing it is a future nicety — MAIL-1 R2).
   App connects as postgres SUPERUSER in dev — prod must use a non-superuser role (runbook).
 
 > Update this checklist as modules are completed.

@@ -37,7 +37,9 @@ export class CredentialMailer {
 
   private async resolveSchool(tenantId: string): Promise<{ name: string; slug: string }> {
     const rows = await this.publicPrisma.query<{ name: string; slug: string }>(
-      `SELECT name, slug FROM tenants WHERE id = $1::uuid`,
+      // tenants.id is TEXT in the Prisma-managed public schema (uuid() default
+      // stores as text) — a ::uuid cast makes the comparison text = uuid and 42883s.
+      `SELECT name, slug FROM tenants WHERE id = $1`,
       tenantId,
     );
     return rows[0] ?? { name: 'your school', slug: '' };
