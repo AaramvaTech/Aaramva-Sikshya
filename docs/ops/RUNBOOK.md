@@ -281,3 +281,98 @@ base64 …`) go quiet in production, shrink it to ~1 MB. Migration of the ~5
 existing base64 blobs in dev (motherland ×4, jorden-donovan logo) is a
 follow-up — count them with:
 `SELECT count(*) FROM <schema>.students WHERE photo_url LIKE 'data:%'` (etc.).
+
+## Mobile builds & release — Android (EAS-1)
+
+EAS project: **`@aaramva-nepal-technology/aaramva-shikshya`**
+(projectId `54147e05-403e-4185-9d0c-67dd5d1f6a74`, in `app.json` → `extra.eas`).
+Android package (permanent): **`com.aaramvashikshya.mobile`**.
+iOS is not set up (needs a paid Apple account — future session).
+
+### Cut an installable preview APK (internal distribution)
+
+```powershell
+cd apps/mobile
+eas build --platform android --profile preview      # add --no-wait to queue and return
+```
+
+Requires the EAS CLI (`npm i -g eas-cli`) and `eas login` under an account with
+access to the `aaramva-nepal-technology` org. The build runs in Expo's cloud;
+when it finishes the build page hosts the APK (download link + QR for direct
+device install — no Play Store). The signing keystore is **EAS-managed**
+(generated in the cloud on first build, reused after; never downloaded).
+
+`eas.json` profiles:
+
+| Profile | Distribution | Artifact | Use |
+|---|---|---|---|
+| `development` | internal | dev-client APK | needs `npx expo install expo-dev-client` first (unused today) |
+| `preview` | internal | **installable APK** | on-device testing / QA — this is the one to cut |
+| `production` | store | AAB | Play Store submission (configured, not yet used) |
+
+### Version / build numbers
+
+`cli.appVersionSource` = **`local`** → `app.json` is the source of truth.
+- `expo.version` ("1.0.0") = user-facing `versionName`.
+- `expo.android.versionCode` (integer) = Play Store's monotonic build number.
+  Bump it by 1 for every build you upload to Play. The `production` profile has
+  `"autoIncrement": true`, so store builds bump it automatically; `preview`
+  builds don't need a unique code.
+
+### ⚠️ Dev-API reachability from a physical phone (LAN, not localhost)
+
+A standalone APK has no Metro dev host, so it **cannot** auto-derive the API
+URL and **cannot** reach `localhost` (that's the phone itself). The `preview`
+profile therefore bakes `EXPO_PUBLIC_API_URL` at the **dev laptop's LAN IP** in
+`eas.json`. To test against a laptop-hosted API:
+
+1. **Same Wi-Fi** — phone and laptop on the same network.
+2. **Find the laptop's current LAN IP** (DHCP — it changes):
+   ```powershell
+   Get-NetIPAddress -AddressFamily IPv4 |
+     Where-Object { $_.InterfaceAlias -like 'Wi-Fi*' } |
+     Select-Object IPAddress
+   ```
+   If it differs from the value in `eas.json` (`build.preview.env.EXPO_PUBLIC_API_URL`),
+   update it and **rebuild** — the URL is compiled into the APK.
+3. **API listens on all interfaces already** — `apps/api/src/main.ts` calls
+   `app.listen(PORT ?? 3000)` with no host arg, so Express binds `::`/`0.0.0.0`.
+   `PORT=3001`. No code change needed. (`ALLOWED_ORIGINS`/CORS is irrelevant to
+   the native app — React Native doesn't enforce CORS.)
+4. **Windows Firewall** — allow inbound TCP 3001 once (elevated PowerShell):
+   ```powershell
+   New-NetFirewallRule -DisplayName "Aaramva API 3001 (dev LAN)" `
+     -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3001 -Profile Private
+   ```
+   Or click **Allow access** on the Defender popup the first time Node serves an
+   external request.
+
+For staging/production the app should point at a real hostname instead
+(`https://api.aaramvashikshya.com/api/v1`, the `production` profile placeholder —
+confirm when the domain is live), removing the LAN dance entirely.
+
+### Push (FCM V1) credentials
+
+Two separate Firebase artifacts, handled differently:
+
+- **`google-services.json`** — `apps/mobile/google-services.json`, **committed**
+  (public client identifiers only; EAS cloud builds exclude gitignored files, so
+  it must be in git). Referenced by `app.json` → `android.googleServicesFile`.
+  Regenerate: Firebase console → project `aaramva-shikshya` → Project settings →
+  your Android app → download `google-services.json`, replace the file, commit.
+- **Service-account private key** — the real secret. **Never committed**
+  (`.gitignore` blocks `*-firebase-adminsdk-*.json` / `*service-account*.json`).
+  It's uploaded to EAS and used by Expo's push service to talk to FCM V1.
+  Rotate:
+  1. Firebase console → Project settings → **Service accounts** → **Generate new
+     private key** (downloads a JSON).
+  2. `cd apps/mobile && eas credentials` → Android → **Google Service Account**
+     → **Manage … Push Notifications (FCM V1)** → **Set up / upload** the JSON.
+  3. **Delete the local JSON** immediately and confirm it isn't tracked
+     (`git status`). Revoke the old key in the Firebase console.
+
+`EXPO_PUBLIC_PROJECT_ID` (the EAS projectId) must be set for push registration
+to run at all (`lib/notifications.ts` no-ops without it) — the cloud build gets
+it from `eas.json` `env`; local dev-client builds read it from
+`apps/mobile/.env`. Expo Go on Android cannot receive remote push (SDK 53+); a
+dev/preview/production build is required.
