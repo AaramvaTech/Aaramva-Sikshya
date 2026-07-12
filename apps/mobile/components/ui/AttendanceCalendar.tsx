@@ -1,4 +1,6 @@
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import NpText from '../NpText';
 import { useMemo } from 'react';
 import { todayBs, daysInBsMonth, bsToAd } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
@@ -10,7 +12,7 @@ import Skeleton from '../Skeleton';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // 16px screen padding + 16px card padding, each side = 64px total.
 const CELL_SIZE = Math.floor((SCREEN_WIDTH - 64) / 7);
-const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 
 /** Minimum shape this calendar needs from a status config entry. */
 export interface CalendarStatusStyle {
@@ -33,6 +35,8 @@ interface AttendanceCalendarProps {
  * Neutral surfaces are token-driven; status colours are caller-provided.
  */
 export function AttendanceCalendar({ viewMonth, recordMap, statusConfig, isLoading = false }: AttendanceCalendarProps) {
+  const { t } = useTranslation('common');
+  const dayHeaders = t('days.short', { returnObjects: true }) as string[];
   const c = useThemeColors();
   const today = todayBs();
   const { year, month } = viewMonth;
@@ -71,13 +75,13 @@ export function AttendanceCalendar({ viewMonth, recordMap, statusConfig, isLoadi
     <View>
       {/* Day headers */}
       <View style={styles.row}>
-        {DAY_HEADERS.map((d, i) => (
+        {dayHeaders.map((d, i) => (
           <View key={d} style={styles.dayHeader}>
-            <Text
+            <NpText
               style={[styles.dayHeaderText, { color: i === 6 ? SATURDAY_HIGHLIGHT.text : c.mutedForeground }]}
             >
               {d}
-            </Text>
+            </NpText>
           </View>
         ))}
       </View>

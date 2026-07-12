@@ -2,6 +2,9 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
+import { bsMonthName } from '../../lib/i18n/date';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useEffect } from 'react';
 import { router } from 'expo-router';
@@ -14,7 +17,6 @@ import { useThemeColors } from '../../lib/theme/colors';
 import {
   ScreenHeader, ChildPicker, Card, CardLabel, PrimaryButton, HeaderIconButton, MonthNav,
 } from '../../components/ui';
-import NpText from '../../components/NpText';
 import { localDateKey } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
 import {
@@ -61,6 +63,7 @@ function BsDatePicker({
   minBs?: BsDate;
 }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
   const [viewMonth, setViewMonth] = useState<BsDate>({ year: value.year, month: value.month, day: 1 });
 
   // Keep the picker on the month of the current value when it changes externally.
@@ -78,7 +81,7 @@ function BsDatePicker({
       <View style={styles.pickerNav}>
         <MonthNav
           variant="card"
-          label={`${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`}
+          label={`${bsMonthName(viewMonth.month, locale)} ${viewMonth.year}`}
           onPrev={() => setViewMonth(prevMonth(viewMonth))}
           onNext={() => setViewMonth(nextMonth(viewMonth))}
         />
@@ -118,6 +121,7 @@ type SubmitStatus = 'idle' | 'submitting' | 'success' | 'error';
 
 export default function ParentRequestLeave() {
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
   const today = todayBs();
   const queryClient = useQueryClient();
 
@@ -189,7 +193,7 @@ export default function ParentRequestLeave() {
   };
 
   const submitting = status === 'submitting';
-  const buttonLabel = status === 'error' ? 'Try again' : 'Submit request';
+  const buttonLabel = status === 'error' ? t('requestLeave.tryAgain') : t('requestLeave.submit');
 
   return (
     <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -200,10 +204,10 @@ export default function ParentRequestLeave() {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader
-          eyebrow="Attendance"
-          title="Request leave"
+          eyebrow={t('requestLeave.eyebrow')}
+          title={t('requestLeave.title')}
           overlap
-          right={<HeaderIconButton icon="close" label="Close" color={c.primaryForeground} onPress={() => router.back()} />}
+          right={<HeaderIconButton icon="close" label={t('requestLeave.close')} color={c.primaryForeground} onPress={() => router.back()} />}
         >
           <ChildPicker children={children} selectedId={effectiveChildId} onSelect={(id) => { setSelectedChildId(id); resetStatus(); }} />
         </ScreenHeader>
@@ -211,7 +215,7 @@ export default function ParentRequestLeave() {
         <View style={styles.body}>
           {/* Who the leave is for */}
           <Card elevated padded>
-            <CardLabel>Filing leave for</CardLabel>
+            <CardLabel>{t('requestLeave.filingFor')}</CardLabel>
             <View style={styles.childRow}>
               <View style={[styles.childAvatar, { backgroundColor: c.primary }]}>
                 <Text style={[styles.childInitial, { color: c.primaryForeground }]}>
@@ -236,11 +240,11 @@ export default function ParentRequestLeave() {
 
           {/* Date range */}
           <Card padded style={styles.gap}>
-            <CardLabel>From</CardLabel>
+            <CardLabel>{t('requestLeave.from')}</CardLabel>
             <BsDatePicker value={fromBs} onChange={handleFrom} />
           </Card>
           <Card padded style={styles.gap}>
-            <CardLabel>To</CardLabel>
+            <CardLabel>{t('requestLeave.to')}</CardLabel>
             <BsDatePicker value={toBs} onChange={handleTo} minBs={fromBs} />
           </Card>
 
@@ -253,19 +257,19 @@ export default function ParentRequestLeave() {
                 <Text style={{ color: c.mutedForeground }}>{`  ·  ${totalDays} day${totalDays !== 1 ? 's' : ''}`}</Text>
               </Text>
             ) : (
-              <Text style={[styles.summaryText, { color: c.danger }]}>End date can’t be before the start date.</Text>
+              <NpText style={[styles.summaryText, { color: c.danger }]}>{t('requestLeave.endBeforeStart')}</NpText>
             )}
           </View>
 
           {/* Reason */}
           <Card padded style={styles.gap}>
-            <CardLabel>Reason</CardLabel>
+            <CardLabel>{t('requestLeave.reason')}</CardLabel>
             <TextInput
               value={reason}
               onChangeText={handleReason}
               multiline
               numberOfLines={4}
-              placeholder="e.g. Out of town for a family function…"
+              placeholder={t('requestLeave.reasonPlaceholder')}
               placeholderTextColor={c.mutedForeground}
               style={[styles.reasonInput, { color: c.foreground, backgroundColor: c.surfaceMuted, borderColor: c.border }]}
               accessibilityLabel="Reason for leave"
@@ -276,22 +280,22 @@ export default function ParentRequestLeave() {
           {status === 'success' ? (
             <View style={[styles.banner, { backgroundColor: `${c.success}1A`, borderColor: `${c.success}55` }]}>
               <Ionicons name="checkmark-circle" size={18} color={c.success} />
-              <Text style={[styles.bannerText, { color: c.success }]}>
-                Leave request submitted. Your school will review it.
-              </Text>
+              <NpText style={[styles.bannerText, { color: c.success }]}>
+                {t('requestLeave.successBanner')}
+              </NpText>
             </View>
           ) : null}
           {status === 'error' ? (
             <View style={[styles.banner, { backgroundColor: `${c.danger}14`, borderColor: `${c.danger}40` }]}>
               <Ionicons name="alert-circle" size={18} color={c.danger} />
-              <Text style={[styles.bannerText, { color: c.danger }]}>
-                Couldn’t submit the request. Check your connection and try again.
-              </Text>
+              <NpText style={[styles.bannerText, { color: c.danger }]}>
+                {t('requestLeave.errorBanner')}
+              </NpText>
             </View>
           ) : null}
 
           <PrimaryButton
-            label={submitting ? 'Submitting…' : buttonLabel}
+            label={submitting ? t('requestLeave.submitting') : buttonLabel}
             icon={status === 'error' ? 'refresh-outline' : 'send-outline'}
             loading={submitting}
             disabled={!canSubmit && status !== 'error'}

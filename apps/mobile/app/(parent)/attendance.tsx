@@ -6,12 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMyChildren, useChildAttendanceSummary, useChildAttendanceHistory } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
+import { useLocale } from '../../hooks/useLocale';
+import { bsMonthName } from '../../lib/i18n/date';
+import NpText from '../../components/NpText';
 import { useThemeColors, SATURDAY_HIGHLIGHT, brandSurface, brandMuted } from '../../lib/theme/colors';
 import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
-import NpText from '../../components/NpText';
-import { todayBs, daysInBsMonth, bsToAd, adToBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { todayBs, daysInBsMonth, bsToAd, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import type { AttendanceHistoryItem } from '../../types';
 
@@ -35,6 +37,7 @@ export default function ParentAttendance() {
     return { year: t.year, month: t.month, day: 1 };
   });
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
 
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -80,9 +83,9 @@ export default function ParentAttendance() {
   };
 
   const s = summaryQuery.data;
-  const t = todayBs();
-  const isCurrentMonth = viewMonth.year === t.year && viewMonth.month === t.month;
-  const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
+  const tbs = todayBs();
+  const isCurrentMonth = viewMonth.year === tbs.year && viewMonth.month === tbs.month;
+  const monthLabel = `${bsMonthName(viewMonth.month, locale)} ${viewMonth.year}`;
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
 
   // Derived brand-tinted header colours (no raw hex — all derived from school primary)
@@ -90,8 +93,8 @@ export default function ParentAttendance() {
   const subtitleColor = brandMuted(c.primary);
 
   const legendItems = [
-    ...STATUS_KEYS.map((k) => ({ label: STATUS_CONFIG[k].label, bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
-    { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
+    ...STATUS_KEYS.map((k) => ({ label: t(STATUS_CONFIG[k].labelKey), bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
+    { label: t('common:attendance.saturday'), bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
   ];
 
   // Recent activity: last 5 records from current month data, sorted newest-first
@@ -115,9 +118,9 @@ export default function ParentAttendance() {
         <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={18}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
-              <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
+              <NpText style={[styles.headerTitle, { color: c.foreground }]}>{t('attendance.title')}</NpText>
               <NpText style={[styles.headerSub, { color: subtitleColor }]}>
-                {childName ? `${childName} · ` : ''}{s?.academicYearName ?? 'This academic year'}
+                {childName ? `${childName} · ` : ''}{s?.academicYearName ?? t('attendance.academicYearThis')}
               </NpText>
 
               {/* 3 stat tiles */}
@@ -129,7 +132,7 @@ export default function ParentAttendance() {
                     return (
                       <View key={key} style={[styles.statTile, { backgroundColor: c.surface }]}>
                         <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
-                        <Text style={[styles.statLabel, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                        <NpText style={[styles.statLabel, { color: cfg.color }]}>{t(cfg.labelKey).toUpperCase()}</NpText>
                       </View>
                     );
                   })}
@@ -142,7 +145,7 @@ export default function ParentAttendance() {
               <View style={[styles.ringOuter, { backgroundColor: STATUS_CONFIG.PRESENT.dot + '33' }]}>
                 <View style={[styles.ringInner, { backgroundColor: bandBg }]}>
                   <Text style={[styles.ringPercent, { color: c.foreground }]}>{s.attendancePercent}%</Text>
-                  <Text style={[styles.ringLabel, { color: subtitleColor }]}>PRESENT</Text>
+                  <NpText style={[styles.ringLabel, { color: subtitleColor }]}>{t('common:attendance.present').toUpperCase()}</NpText>
                 </View>
               </View>
             )}
@@ -168,7 +171,7 @@ export default function ParentAttendance() {
             </View>
             {historyQuery.isError && !historyQuery.isLoading && (
               <View style={{ marginTop: 8 }}>
-                <ErrorState compact title="Couldn't load this month." subtitle="" onRetry={() => historyQuery.refetch()} />
+                <ErrorState compact title={t('attendance.errorMonth')} subtitle="" onRetry={() => historyQuery.refetch()} />
               </View>
             )}
             {/* Legend inside card with top separator */}
@@ -186,21 +189,21 @@ export default function ParentAttendance() {
             style={[styles.leaveBtn, { borderColor: c.primary }]}
           >
             <Ionicons name="add-circle-outline" size={18} color={c.primary} />
-            <Text style={[styles.leaveBtnText, { color: c.primary }]}>Request leave</Text>
+            <NpText style={[styles.leaveBtnText, { color: c.primary }]}>{t('attendance.requestLeave')}</NpText>
           </TouchableOpacity>
 
           {/* Recent activity */}
           {recentActivity.length > 0 && (
             <>
-              <Text style={[styles.recentLabel, { color: c.mutedForeground }]}>Recent activity</Text>
+              <NpText style={[styles.recentLabel, { color: c.mutedForeground }]}>{t('attendance.recentActivity')}</NpText>
               <View style={[styles.recentCard, styles.recentShadow, { backgroundColor: c.surface }]}>
                 {recentActivity.map((item, idx) => {
                   const cfg = STATUS_CONFIG[item.status as AttendanceStatus];
                   if (!cfg) return null;
                   const adDate = new Date(item.dateAd + 'T00:00:00');
                   const bsDate = adToBs(adDate);
-                  const bsLabel = `${BS_MONTH_NAMES_EN[bsDate.month - 1]} ${bsDate.day}, ${bsDate.year}`;
-                  const dowLabel = DOW_SHORT[adDate.getDay()];
+                  const bsLabel = `${bsMonthName(bsDate.month, locale)} ${bsDate.day}, ${bsDate.year}`;
+                  const dowLabel = (t('common:days.short', { returnObjects: true }) as string[])[adDate.getDay()];
                   const isLast = idx === recentActivity.length - 1;
                   return (
                     <View

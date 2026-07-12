@@ -1,4 +1,5 @@
-import { Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import NpText from '../NpText';
 
 interface CardLabelProps {
   children: string;
@@ -8,9 +9,9 @@ interface CardLabelProps {
 /** Small uppercase muted section label used at the top of every card. */
 export function CardLabel({ children, style }: CardLabelProps) {
   return (
-    <Text className="text-muted-foreground" style={[styles.label, style]}>
+    <NpText className="text-muted-foreground" style={[styles.label, style]}>
       {children}
-    </Text>
+    </NpText>
   );
 }
 

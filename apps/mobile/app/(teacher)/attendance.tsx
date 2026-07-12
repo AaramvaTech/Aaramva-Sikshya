@@ -1,6 +1,8 @@
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, Alert, RefreshControl, StyleSheet,
 } from 'react-native';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
@@ -112,6 +114,7 @@ export default function TeacherAttendance() {
   const [showAllSections, setShowAllSections] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
 
   const [selectedBs, setSelectedBs] = useState<BsDate>(todayBs());
   const selectedDateAd = useMemo(() => adStringFromBs(selectedBs), [selectedBs]);
@@ -161,13 +164,13 @@ export default function TeacherAttendance() {
   const handleSubmit = useCallback(async () => {
     if (!selectedSection || !studentsResult.data) return;
     const academicYearId = studentsResult.data[0]?.currentEnrollment?.academicYearId;
-    if (!academicYearId) { Alert.alert('Error', 'No active academic year found for this section.'); return; }
+    if (!academicYearId) { Alert.alert(t('attendance.alertErrorTitle'), t('attendance.alertNoYear')); return; }
     const records = studentsResult.data.map((s) => ({ studentId: s.id, status: statusMap[s.id] ?? 'PRESENT' }));
     try {
       await markMutation.mutateAsync({ sectionId: selectedSection, academicYearId, date: selectedDateAd, records });
       setSubmitted(true);
     } catch {
-      Alert.alert('Failed', 'Could not save attendance. Please try again.');
+      Alert.alert(t('attendance.alertFailedTitle'), t('attendance.alertSaveFailed'));
     }
   }, [selectedSection, studentsResult.data, statusMap, selectedDateAd, markMutation]);
 
@@ -210,22 +213,22 @@ export default function TeacherAttendance() {
         <>
           <ScreenHeader
             variant="solid"
-            title="Mark attendance"
-            subtitle={`${selectedSec ? `${selectedSec.className} · ${selectedSec.sectionName} — ` : ''}${formatBs(selectedBs, 'en')}`}
+            title={t('attendance.title')}
+            subtitle={`${selectedSec ? `${selectedSec.className} · ${selectedSec.sectionName} — ` : ''}${formatBs(selectedBs, bsLang(locale))}`}
           >
             {selectedSection && students.length > 0 && (
               <View style={styles.headerStats}>
                 <View style={styles.headerStat}>
                   <Text style={styles.headerStatNum}>{presentCount}</Text>
-                  <Text style={styles.headerStatLabel}>Present</Text>
+                  <NpText style={styles.headerStatLabel}>{t('attendance.present')}</NpText>
                 </View>
                 <View style={styles.headerStat}>
                   <Text style={styles.headerStatNum}>{absentCount}</Text>
-                  <Text style={styles.headerStatLabel}>Absent</Text>
+                  <NpText style={styles.headerStatLabel}>{t('attendance.absent')}</NpText>
                 </View>
                 <View style={styles.headerStat}>
                   <Text style={styles.headerStatNum}>{students.length}</Text>
-                  <Text style={styles.headerStatLabel}>Total</Text>
+                  <NpText style={styles.headerStatLabel}>{t('attendance.total')}</NpText>
                 </View>
               </View>
             )}
@@ -238,7 +241,7 @@ export default function TeacherAttendance() {
               {sectionsLoading ? (
                 <LoadingBlock />
               ) : sectionsError ? (
-                <ErrorState compact title="Couldn't load sections" onRetry={() => void refetchSections()} />
+                <ErrorState compact title={t('attendance.errorSections')} onRetry={() => void refetchSections()} />
               ) : sections.length === 0 && !showAllSections ? (
                 <Text className="text-muted-foreground" style={styles.hint}>
                   No sections assigned. Use "Mark a different section" below.
@@ -281,21 +284,21 @@ export default function TeacherAttendance() {
                 ]}
               >
                 <View className="border-b border-border" style={styles.listHeader}>
-                  <CardLabel>Students</CardLabel>
+                  <CardLabel>{t('attendance.students')}</CardLabel>
                   <TouchableOpacity onPress={markAllPresent} style={styles.allPresentBtn} accessibilityLabel="Mark all present">
-                    <Text style={styles.allPresentText}>All Present</Text>
+                    <NpText style={styles.allPresentText}>{t('attendance.allPresent')}</NpText>
                   </TouchableOpacity>
                 </View>
                 {rosterLoading ? (
-                  <LoadingBlock label="Loading students…" />
+                  <LoadingBlock label={t('attendance.loadingStudents')} />
                 ) : rosterError ? (
                   <ErrorState
                     compact
-                    title="Couldn't load students"
+                    title={t('attendance.errorStudents')}
                     onRetry={() => { void studentsResult.refetch(); void existingResult.refetch(); }}
                   />
                 ) : students.length === 0 ? (
-                  <EmptyState compact icon="people-outline" title="No students found in this section." />
+                  <EmptyState compact icon="people-outline" title={t('attendance.noStudents')} />
                 ) : null}
               </View>
             )}
@@ -314,7 +317,7 @@ export default function TeacherAttendance() {
                       <View style={[styles.legendSwatch, { backgroundColor: cfg.bg }]}>
                         <Text style={[styles.legendCode, { color: cfg.color }]}>{cfg.shortCode}</Text>
                       </View>
-                      <Text className="text-muted-foreground" style={styles.legendLabel}>{cfg.label}</Text>
+                      <NpText className="text-muted-foreground" style={styles.legendLabel}>{t(cfg.labelKey)}</NpText>
                     </View>
                   );
                 })}
@@ -327,11 +330,11 @@ export default function TeacherAttendance() {
               {submitted ? (
                 <View style={styles.savedBanner}>
                   <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
-                  <Text style={styles.savedText}>Attendance saved successfully</Text>
+                  <NpText style={styles.savedText}>{t('attendance.saved')}</NpText>
                 </View>
               ) : (
                 <PrimaryButton
-                  label={markMutation.isPending ? 'Saving…' : `Save Attendance (${students.length})`}
+                  label={markMutation.isPending ? t('attendance.saving') : t('attendance.saveWithCount', { count: students.length })}
                   icon="save-outline"
                   loading={markMutation.isPending}
                   onPress={handleSubmit}

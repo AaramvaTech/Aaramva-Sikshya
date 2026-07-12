@@ -7,23 +7,26 @@ import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, SelectChip, StatusB
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { SUBMISSION_CHIPS, isPastDue } from '../../lib/assignmentStatus';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { FONT } from '../../lib/theme/fonts';
 import type { ChildAssignments } from '../../types';
 
-function dueBs(dueDate: string): string {
-  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), 'en');
+function dueBs(dueDate: string, locale: 'en' | 'np'): string {
+  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), bsLang(locale));
 }
 
 function ChildAssignmentList({ child }: { child: ChildAssignments }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
   if (child.assignments.length === 0) {
     return (
       <EmptyState
         icon="clipboard-outline"
         chip
         compact
-        title="No assignments"
-        subtitle={`${child.studentName.split(' ')[0]} has no homework right now.`}
+        title={t('assignments.childEmpty')}
+        subtitle={t('assignments.childNoHomework', { name: child.studentName.split(' ')[0] })}
       />
     );
   }
@@ -39,19 +42,19 @@ function ChildAssignmentList({ child }: { child: ChildAssignments }) {
           <View key={a.id} style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}>
             <View style={styles.cardTop}>
               <Text style={[styles.subject, { color: c.primary }]}>{a.subjectName}</Text>
-              <StatusBadge label={chip.label} bg={chip.bg} color={chip.color} />
+              <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
             </View>
             <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>{a.title}</Text>
             <View style={styles.metaRow}>
               <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
-              <Text style={[styles.meta, { color: c.mutedForeground }]}>Due {dueBs(a.dueDate)}</Text>
+              <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
               {a.submission?.marks != null && (
-                <Text style={[styles.marks, { color: c.primary }]}>{a.submission.marks} marks</Text>
+                <NpText style={[styles.marks, { color: c.primary }]}>{t('common:common.marks', { value: a.submission.marks })}</NpText>
               )}
             </View>
             {a.submission?.feedback ? (
               <View style={[styles.feedback, { backgroundColor: c.background }]}>
-                <Text style={[styles.feedbackLabel, { color: c.mutedForeground }]}>TEACHER FEEDBACK</Text>
+                <NpText style={[styles.feedbackLabel, { color: c.mutedForeground }]}>{t('common:common.teacherFeedback')}</NpText>
                 <Text style={[styles.feedbackText, { color: c.foreground }]}>{a.submission.feedback}</Text>
               </View>
             ) : null}
@@ -66,6 +69,7 @@ export default function ParentAssignments() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useChildrenAssignments();
   const c = useThemeColors();
+  const { t } = useLocale('parent');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = useMemo(() => {
@@ -91,8 +95,8 @@ export default function ParentAssignments() {
           compact
           padTop={12}
           padBottom={12}
-          title="Assignments"
-          subtitle="Homework across your children"
+          title={t('assignments.title')}
+          subtitle={t('assignments.subtitle')}
         />
 
         <View style={styles.body}>
@@ -104,8 +108,8 @@ export default function ParentAssignments() {
             <EmptyState
               icon="clipboard-outline"
               chip
-              title="No assignments"
-              subtitle="Homework for your children will show up here."
+              title={t('assignments.emptyTitle')}
+              subtitle={t('assignments.emptySubtitle')}
             />
           ) : (
             <>

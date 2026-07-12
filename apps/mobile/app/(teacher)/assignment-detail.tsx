@@ -10,6 +10,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import NpText from '../../components/NpText';
 import { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,12 +25,14 @@ import { SUBMISSION_CHIPS } from '../../lib/assignmentStatus';
 import { EmptyState, ErrorState, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale, bsLang } from '../../hooks/useLocale';
 import { FONT } from '../../lib/theme/fonts';
 import type { TeacherSubmissionRow } from '../../types';
 
 /** Opens a student's submission file via its scoped presigned GET. */
 function SubmissionFileLink({ fileKey }: { fileKey: string }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const url = useFileUrl(fileKey);
   return (
     <TouchableOpacity
@@ -39,7 +42,7 @@ function SubmissionFileLink({ fileKey }: { fileKey: string }) {
       activeOpacity={0.7}
     >
       <Ionicons name="document-attach-outline" size={15} color={c.primary} />
-      <Text style={[styles.fileLinkText, { color: c.primary }]}>Open file</Text>
+      <Text style={[styles.fileLinkText, { color: c.primary }]}>{t('assignmentDetail.openFile')}</Text>
     </TouchableOpacity>
   );
 }
@@ -54,6 +57,7 @@ function ReviewForm({
   onDone: () => void;
 }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const review = useReviewSubmission(assignmentId);
   const [marks, setMarks] = useState(submission.marks != null ? String(submission.marks) : '');
   const [feedback, setFeedback] = useState(submission.feedback ?? '');
@@ -61,11 +65,11 @@ function ReviewForm({
   async function save() {
     const parsed = marks.trim() === '' ? undefined : Number(marks);
     if (parsed !== undefined && (Number.isNaN(parsed) || parsed < 0)) {
-      Alert.alert('Invalid marks', 'Marks must be a non-negative number.');
+      Alert.alert(t('assignmentDetail.alertInvalidTitle'), t('assignmentDetail.alertInvalidBody'));
       return;
     }
     if (parsed === undefined && !feedback.trim()) {
-      Alert.alert('Nothing to save', 'Provide marks, feedback, or both.');
+      Alert.alert(t('assignmentDetail.alertNothingTitle'), t('assignmentDetail.alertNothingBody'));
       return;
     }
     try {
@@ -76,7 +80,7 @@ function ReviewForm({
       });
       onDone();
     } catch {
-      Alert.alert('Failed', 'Could not save the review — try again.');
+      Alert.alert(t('assignmentDetail.alertFailedTitle'), t('assignmentDetail.alertFailedBody'));
     }
   }
 
@@ -84,7 +88,7 @@ function ReviewForm({
     <View style={[styles.reviewForm, { backgroundColor: c.background }]}>
       <TextInput
         style={[styles.marksInput, { color: c.foreground, borderColor: c.border }]}
-        placeholder="Marks"
+        placeholder={t('assignmentDetail.marksPlaceholder')}
         placeholderTextColor={c.mutedForeground}
         keyboardType="decimal-pad"
         value={marks}
@@ -92,14 +96,14 @@ function ReviewForm({
       />
       <TextInput
         style={[styles.feedbackInput, { color: c.foreground, borderColor: c.border }]}
-        placeholder="Feedback for the student…"
+        placeholder={t('assignmentDetail.feedbackPlaceholder')}
         placeholderTextColor={c.mutedForeground}
         multiline
         value={feedback}
         onChangeText={setFeedback}
       />
       <PrimaryButton
-        label={submission.status === 'REVIEWED' ? 'Update review' : 'Save review'}
+        label={submission.status === 'REVIEWED' ? t('assignmentDetail.updateReview') : t('assignmentDetail.saveReview')}
         loading={review.isPending}
         onPress={save}
       />
@@ -110,6 +114,7 @@ function ReviewForm({
 export default function TeacherAssignmentDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const [refreshing, setRefreshing] = useState(false);
   const [openReviewId, setOpenReviewId] = useState<string | null>(null);
 
@@ -133,14 +138,14 @@ export default function TeacherAssignmentDetail() {
   if (view.isError || !assignment) {
     return (
       <View style={[styles.root, { backgroundColor: c.background }]}>
-        <ScreenHeader variant="plain" compact padTop={12} padBottom={12} title="Assignment" />
+        <ScreenHeader variant="plain" compact padTop={12} padBottom={12} title={t('assignmentDetail.title')} />
         <ErrorState onRetry={() => view.refetch()} />
       </View>
     );
   }
 
   const data = view.data!;
-  const dueBs = formatBs(adToBs(new Date(`${assignment.dueDate}T00:00:00`)), 'en');
+  const dueBs = formatBs(adToBs(new Date(`${assignment.dueDate}T00:00:00`)), bsLang(locale));
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -157,16 +162,16 @@ export default function TeacherAssignmentDetail() {
           padBottom={12}
           eyebrow={`${assignment.className}${assignment.sectionName ? ` · ${assignment.sectionName}` : ''} — ${assignment.subjectName}`}
           title={assignment.title}
-          subtitle={`Due ${dueBs}`}
+          subtitle={t('assignmentDetail.due', { date: dueBs })}
         />
 
         <View style={styles.body}>
           {/* Submissions */}
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>
-            Submissions ({data.submissions.length})
-          </Text>
+          <NpText style={[styles.sectionLabel, { color: c.foreground }]}>
+            {t('assignmentDetail.submissionsCount', { count: data.submissions.length })}
+          </NpText>
           {data.submissions.length === 0 ? (
-            <EmptyState icon="documents-outline" compact title="No submissions yet" />
+            <EmptyState icon="documents-outline" compact title={t('assignmentDetail.noSubmissions')} />
           ) : (
             data.submissions.map((s) => {
               const chip = SUBMISSION_CHIPS[s.status];
@@ -177,7 +182,7 @@ export default function TeacherAssignmentDetail() {
                     <Text style={[styles.student, { color: c.foreground }]}>
                       {s.rollNumber != null ? `${s.rollNumber} · ` : ''}{s.studentName}
                     </Text>
-                    <StatusBadge label={chip.label} bg={chip.bg} color={chip.color} />
+                    <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
                   </View>
                   {s.textAnswer ? (
                     <Text style={[styles.answer, { color: c.mutedForeground }]} numberOfLines={open ? undefined : 2}>
@@ -188,11 +193,11 @@ export default function TeacherAssignmentDetail() {
                     {s.fileKey ? <SubmissionFileLink fileKey={s.fileKey} /> : <View />}
                     <View style={styles.rowRight}>
                       {s.marks != null && (
-                        <Text style={[styles.marks, { color: c.primary }]}>{s.marks} marks</Text>
+                        <NpText style={[styles.marks, { color: c.primary }]}>{t('common:common.marks', { value: s.marks })}</NpText>
                       )}
                       <TouchableOpacity onPress={() => setOpenReviewId(open ? null : s.id)} hitSlop={8}>
                         <Text style={[styles.reviewToggle, { color: c.primary }]}>
-                          {open ? 'Cancel' : s.status === 'REVIEWED' ? 'Re-review' : 'Review'}
+                          {open ? t('common:action.cancel') : s.status === 'REVIEWED' ? t('assignmentDetail.reReview') : t('assignmentDetail.review')}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -210,13 +215,13 @@ export default function TeacherAssignmentDetail() {
           )}
 
           {/* Missing — enrolled minus submitted */}
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>
-            Missing ({data.missing.length})
-          </Text>
+          <NpText style={[styles.sectionLabel, { color: c.foreground }]}>
+            {t('assignmentDetail.missingCount', { count: data.missing.length })}
+          </NpText>
           {data.missing.length === 0 ? (
-            <Text style={[styles.allDone, { color: c.mutedForeground }]}>
-              Everyone targeted has submitted.
-            </Text>
+            <NpText style={[styles.allDone, { color: c.mutedForeground }]}>
+              {t('assignmentDetail.everyoneSubmitted')}
+            </NpText>
           ) : (
             <View style={styles.missingWrap}>
               {data.missing.map((m) => (

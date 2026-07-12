@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import NpText from '../../components/NpText';
 import { useAttendanceHistory, useMyAttendanceSummary, useMyProfile } from '../../hooks/useStudentMe';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
-import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN, adToBs } from 'bs-calendar';
+import { todayBs, daysInBsMonth, bsToAd, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { localDateKey } from '../../lib/time';
 import { SATURDAY_HIGHLIGHT, useThemeColors, brandMuted } from '../../lib/theme/colors';
 import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
+import { useLocale } from '../../hooks/useLocale';
+import { bsMonthName } from '../../lib/i18n/date';
 import { FONT } from '../../lib/theme/fonts';
 import type { AttendanceHistoryItem } from '../../types';
 
@@ -32,6 +34,7 @@ export default function StudentAttendance() {
     return { year: t.year, month: t.month, day: 1 };
   });
   const c = useThemeColors();
+  const { t, locale } = useLocale('student');
 
   const profileResult = useMyProfile();
   const summaryResult = useMyAttendanceSummary();
@@ -56,9 +59,9 @@ export default function StudentAttendance() {
     setRefreshing(false);
   };
 
-  const t = todayBs();
-  const isCurrentMonth = viewMonth.year === t.year && viewMonth.month === t.month;
-  const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
+  const tbs = todayBs();
+  const isCurrentMonth = viewMonth.year === tbs.year && viewMonth.month === tbs.month;
+  const monthLabel = `${bsMonthName(viewMonth.month, locale)} ${viewMonth.year}`;
   const summary = summaryResult.data;
   const profile = profileResult.data;
   const enrollment = profile?.currentEnrollment;
@@ -67,8 +70,8 @@ export default function StudentAttendance() {
   const subtitleColor = brandMuted(c.primary);
 
   const legendItems = [
-    ...STATUS_KEYS.map((k) => ({ label: STATUS_CONFIG[k].label, bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
-    { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
+    ...STATUS_KEYS.map((k) => ({ label: t(STATUS_CONFIG[k].labelKey), bg: STATUS_CONFIG[k].bg, border: STATUS_CONFIG[k].dot })),
+    { label: t('common:attendance.saturday'), bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
   ];
 
   // Recent activity: last 5 records from current month data, sorted newest-first
@@ -89,10 +92,10 @@ export default function StudentAttendance() {
       >
         {/* Brand-tinted header band */}
         <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={18}>
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>Attendance</Text>
+          <NpText style={[styles.headerTitle, { color: c.foreground }]}>{t('attendance.title')}</NpText>
           <NpText style={[styles.headerSub, { color: subtitleColor }]}>
-            {enrollment ? `Class ${enrollment.className}${enrollment.sectionName} · ` : ''}
-            {summary?.academicYearName ?? 'This academic year'}
+            {enrollment ? `${t('attendance.classPrefix', { label: `${enrollment.className}${enrollment.sectionName}` })} · ` : ''}
+            {summary?.academicYearName ?? t('attendance.academicYearThis')}
           </NpText>
 
           {/* 3 stat tiles */}
@@ -104,7 +107,7 @@ export default function StudentAttendance() {
                 return (
                   <View key={key} style={[styles.statTile, { backgroundColor: c.surface }]}>
                     <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
-                    <Text style={[styles.statLabel, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                    <NpText style={[styles.statLabel, { color: cfg.color }]}>{t(cfg.labelKey).toUpperCase()}</NpText>
                   </View>
                 );
               })}
@@ -132,7 +135,7 @@ export default function StudentAttendance() {
             </View>
             {historyResult.isError && !historyResult.isLoading && (
               <View style={{ marginTop: 8 }}>
-                <ErrorState compact title="Couldn't load this month." subtitle="" onRetry={() => historyResult.refetch()} />
+                <ErrorState compact title={t('attendance.errorMonth')} subtitle="" onRetry={() => historyResult.refetch()} />
               </View>
             )}
             {/* Legend inside card with top separator */}
@@ -145,15 +148,15 @@ export default function StudentAttendance() {
           {/* Recent activity */}
           {recentActivity.length > 0 && (
             <>
-              <Text style={[styles.recentLabel, { color: c.mutedForeground }]}>Recent activity</Text>
+              <NpText style={[styles.recentLabel, { color: c.mutedForeground }]}>{t('attendance.recentActivity')}</NpText>
               <View style={[styles.recentCard, styles.recentShadow, { backgroundColor: c.surface }]}>
                 {recentActivity.map((item, idx) => {
                   const cfg = STATUS_CONFIG[item.status as AttendanceStatus];
                   if (!cfg) return null;
                   const adDate = new Date(item.dateAd + 'T00:00:00');
                   const bsDate = adToBs(adDate);
-                  const bsLabel = `${BS_MONTH_NAMES_EN[bsDate.month - 1]} ${bsDate.day}, ${bsDate.year}`;
-                  const dowLabel = DOW_SHORT[adDate.getDay()];
+                  const bsLabel = `${bsMonthName(bsDate.month, locale)} ${bsDate.day}, ${bsDate.year}`;
+                  const dowLabel = (t('common:days.short', { returnObjects: true }) as string[])[adDate.getDay()];
                   const isLast = idx === recentActivity.length - 1;
                   return (
                     <View

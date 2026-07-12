@@ -14,14 +14,35 @@ import { useBranding } from '../../lib/theme/provider';
 import { todayBs, formatBs } from 'bs-calendar';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import type { TFunction } from 'i18next';
 
-function getGreeting(): string {
+function greetingKey(): string {
   // Asia/Kathmandu is UTC+5:45 — read the Nepal wall-clock hour regardless of device TZ.
   const hour = new Date(Date.now() + 345 * 60 * 1000).getUTCHours();
-  if (hour < 12) return 'Good morning 👋';
-  if (hour < 17) return 'Good afternoon 👋';
-  return 'Good evening 👋';
+  if (hour < 12) return 'dashboard.greetingMorning';
+  if (hour < 17) return 'dashboard.greetingAfternoon';
+  return 'dashboard.greetingEvening';
 }
+
+function enrollmentLine(
+  t: TFunction,
+  enrollment: { className: string; sectionName: string; rollNumber: number | null } | null,
+): string {
+  if (!enrollment) return t('dashboard.notEnrolled');
+  const parts = [enrollment.className, t('dashboard.section', { name: enrollment.sectionName })];
+  if (enrollment.rollNumber !== null) parts.push(t('dashboard.roll', { number: enrollment.rollNumber }));
+  return parts.join(' · ');
+}
+
+const QUICK_KEYS: Record<string, string> = {
+  Attendance: 'quick.attendance',
+  Routine: 'quick.routine',
+  Results: 'quick.results',
+  Assignments: 'quick.assignments',
+  Notices: 'quick.notices',
+  Profile: 'quick.profile',
+};
 
 // "Gyan Jyoti Secondary School" -> { head: "Gyan Jyoti", tail: "Secondary School" }
 function splitName(name: string): { head: string; tail: string } {
@@ -44,6 +65,7 @@ export default function StudentDashboard() {
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const c = useThemeColors();
+  const { t, locale } = useLocale('student');
 
   const profile = useMyProfile();
   const timetable = useMyTimetable();
@@ -74,7 +96,7 @@ export default function StudentDashboard() {
     return (
       <View style={[styles.centerFill, { backgroundColor: c.background }]}>
         <ErrorState
-          title="Couldn't load your dashboard"
+          title={t('dashboard.errorTitle')}
           onRetry={() => { void profile.refetch(); void timetable.refetch(); void summary.refetch(); }}
         />
       </View>
@@ -82,7 +104,7 @@ export default function StudentDashboard() {
   }
 
   const p = profile.data;
-  const t = timetable.data;
+  const tt = timetable.data;
   const s = summary.data;
 
   const fullName = p ? `${p.firstName} ${p.lastName}` : '';
@@ -90,18 +112,13 @@ export default function StudentDashboard() {
     ? [p.firstName, p.lastName].filter(Boolean).map((n) => n[0]?.toUpperCase() ?? '').join('')
     : '';
   const enrollment = p?.currentEnrollment ?? null;
-  let enrollmentLine = 'Not enrolled';
-  if (enrollment) {
-    const parts = [enrollment.className, `Section ${enrollment.sectionName}`];
-    if (enrollment.rollNumber !== null) parts.push(`Roll ${enrollment.rollNumber}`);
-    enrollmentLine = parts.join(' · ');
-  }
+  const enrollLine = enrollmentLine(t, enrollment);
 
   const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
   const { head, tail } = splitName(schoolName);
   const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
-  const todayPeriods: TodayPeriod[] = (t?.periods ?? []).map((period) => ({
+  const todayPeriods: TodayPeriod[] = (tt?.periods ?? []).map((period) => ({
     slotId: period.slotId,
     periodNumber: period.periodNumber,
     startTime: period.startTime,
@@ -146,12 +163,12 @@ export default function StudentDashboard() {
             </View>
           </View>
 
-          <Text style={[styles.todayBs, { color: c.brandMuted }]}>
-            Today · {formatBs(todayBs(), 'en')}
-          </Text>
-          <Text style={[styles.greeting, { color: c.mutedForeground }]}>{getGreeting()}</Text>
+          <NpText style={[styles.todayBs, { color: c.brandMuted }]}>
+            {t('common:common.today')} · {formatBs(todayBs(), bsLang(locale))}
+          </NpText>
+          <NpText style={[styles.greeting, { color: c.mutedForeground }]}>{t(greetingKey())}</NpText>
           <NpText style={[styles.name, { color: c.foreground }]}>{fullName}</NpText>
-          <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
+          <NpText style={[styles.enroll, { color: c.mutedForeground }]}>{enrollLine}</NpText>
         </ScreenHeader>
 
         <View style={styles.body}>
@@ -167,7 +184,7 @@ export default function StudentDashboard() {
           )}
 
           {/* Quick access */}
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Quick access</Text>
+          <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('dashboard.quickAccess')}</NpText>
           <View style={styles.quickGrid}>
             {QUICK.map((q) => (
               <TouchableOpacity
@@ -179,26 +196,26 @@ export default function StudentDashboard() {
                 <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
                   <Ionicons name={q.icon} size={23} color={c.primary} />
                 </View>
-                <Text style={[styles.quickLabel, { color: c.foreground }]}>{q.label}</Text>
+                <NpText style={[styles.quickLabel, { color: c.foreground }]}>{t(QUICK_KEYS[q.label] ?? q.label)}</NpText>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Today's classes */}
           <View style={styles.sectionRow}>
-            <Text style={[styles.sectionLabel, { color: c.foreground, marginTop: 0 }]}>Today&apos;s classes</Text>
+            <NpText style={[styles.sectionLabel, { color: c.foreground, marginTop: 0 }]}>{t('dashboard.todaysClasses')}</NpText>
             <TouchableOpacity
               style={styles.routineLink}
               onPress={() => router.push('/(student)/timetable')}
               activeOpacity={0.7}
             >
-              <Text style={[styles.routineLinkText, { color: c.primary }]}>Routine</Text>
+              <NpText style={[styles.routineLinkText, { color: c.primary }]}>{t('dashboard.routine')}</NpText>
               <Ionicons name="chevron-forward" size={15} color={c.primary} />
             </TouchableOpacity>
           </View>
           <TodayClasses
             periods={todayPeriods}
-            isSchoolDay={t?.isSchoolDay ?? false}
+            isSchoolDay={tt?.isSchoolDay ?? false}
             style={styles.lastCard}
           />
         </View>

@@ -12,6 +12,8 @@ import {
   Alert,
   StyleSheet,
 } from 'react-native';
+import { useLocale } from '../hooks/useLocale';
+import NpText from '../components/NpText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +35,7 @@ const MIN_LENGTH = 8;
  */
 export default function ChangePasswordScreen() {
   const c = useThemeColors();
+  const { t } = useLocale('auth');
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
 
@@ -48,15 +51,15 @@ export default function ChangePasswordScreen() {
 
   const submit = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('All fields are required.');
+      setError(t('changePassword.errorAllRequired'));
       return;
     }
     if (newPassword.length < MIN_LENGTH) {
-      setError(`New password must be at least ${MIN_LENGTH} characters.`);
+      setError(t('changePassword.errorMinLength', { count: MIN_LENGTH }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match.');
+      setError(t('changePassword.errorMismatch'));
       return;
     }
     setLoading(true);
@@ -65,7 +68,7 @@ export default function ChangePasswordScreen() {
       await api.post('/auth/change-password', { currentPassword, newPassword });
       // Server cleared must_change_password AND revoked all refresh tokens; sign
       // out locally and route back to login for a clean re-entry.
-      Alert.alert('Password changed', 'Please sign in with your new password.');
+      Alert.alert(t('changePassword.successTitle'), t('changePassword.successBody'));
       await logout();
     } catch (err: unknown) {
       let msg = 'Could not change password. Please try again.';
@@ -118,34 +121,34 @@ export default function ChangePasswordScreen() {
           <View style={[styles.iconChip, { backgroundColor: c.primary, shadowColor: c.primary }]}>
             <Ionicons name="key" size={26} color={c.primaryForeground} />
           </View>
-          <Text style={[styles.title, { color: c.foreground }]}>Set your password</Text>
-          <Text style={[styles.bandSub, { color: c.brandMuted }]}>
-            You signed in with a temporary password
-          </Text>
+          <NpText style={[styles.title, { color: c.foreground }]}>{t('changePassword.title')}</NpText>
+          <NpText style={[styles.bandSub, { color: c.brandMuted }]}>
+            {t('changePassword.subtitle')}
+          </NpText>
         </View>
 
         <View style={styles.body}>
           <View style={[styles.notice, { backgroundColor: `${c.primary}12`, borderColor: c.brandBorder }]}>
             <Ionicons name="information-circle-outline" size={16} color={c.primary} style={{ marginTop: 1 }} />
-            <Text style={[styles.noticeText, { color: c.foreground }]}>
-              Choose your own password to continue. The rest of the app stays locked until you do.
-            </Text>
+            <NpText style={[styles.noticeText, { color: c.foreground }]}>
+              {t('changePassword.notice')}
+            </NpText>
           </View>
 
           {!!user?.email && (
-            <Text style={[styles.account, { color: c.mutedForeground }]}>Signed in as {user.email}</Text>
+            <NpText style={[styles.account, { color: c.mutedForeground }]}>{t('changePassword.signedInAs', { email: user.email })}</NpText>
           )}
 
-          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Current (temporary) password</Text>
-          {inputRow(currentPassword, setCurrentPassword, 'Temporary password')}
-          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>New password</Text>
-          {inputRow(newPassword, setNewPassword, `At least ${MIN_LENGTH} characters`)}
-          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Repeat new password</Text>
-          {inputRow(confirmPassword, setConfirmPassword, 'Repeat new password')}
+          <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('changePassword.currentLabel')}</NpText>
+          {inputRow(currentPassword, setCurrentPassword, t('changePassword.currentPlaceholder'))}
+          <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('changePassword.newLabel')}</NpText>
+          {inputRow(newPassword, setNewPassword, t('changePassword.newPlaceholder', { count: MIN_LENGTH }))}
+          <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('changePassword.repeatLabel')}</NpText>
+          {inputRow(confirmPassword, setConfirmPassword, t('changePassword.repeatPlaceholder'))}
 
           <TouchableOpacity onPress={() => setShow((v) => !v)} style={styles.showToggle} activeOpacity={0.7}>
             <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={16} color={c.brandMuted} />
-            <Text style={[styles.showToggleText, { color: c.brandMuted }]}>{show ? 'Hide' : 'Show'} passwords</Text>
+            <NpText style={[styles.showToggleText, { color: c.brandMuted }]}>{show ? t('changePassword.hidePasswords') : t('changePassword.showPasswords')}</NpText>
           </TouchableOpacity>
 
           {error !== null && (
@@ -165,14 +168,14 @@ export default function ChangePasswordScreen() {
               {loading ? (
                 <ActivityIndicator color={c.primaryForeground} />
               ) : (
-                <Text style={[styles.ctaText, { color: c.primaryForeground }]}>Change password</Text>
+                <NpText style={[styles.ctaText, { color: c.primaryForeground }]}>{t('changePassword.submit')}</NpText>
               )}
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.signOut} onPress={signOut} activeOpacity={0.7}>
             <Ionicons name="log-out-outline" size={17} color={c.danger} style={{ marginRight: 6 }} />
-            <Text style={[styles.signOutText, { color: c.danger }]}>Sign out instead</Text>
+            <NpText style={[styles.signOutText, { color: c.danger }]}>{t('changePassword.signOutInstead')}</NpText>
           </TouchableOpacity>
         </View>
       </ScrollView>

@@ -5,15 +5,17 @@ import type { MyAssignment, SubmissionStatus } from '../types';
  * NOT brand-coupled literals (documented exception to "tokens only"):
  * OPEN neutral, SUBMITTED green, LATE amber, REVIEWED blue, OVERDUE red.
  */
+/** `labelKey` is a `common` namespace key (I18N-1): screens render
+ *  `t(chip.labelKey)`. `label` stays as the English fallback for tests/tools. */
 export const SUBMISSION_CHIPS: Record<
   SubmissionStatus | 'OPEN' | 'OVERDUE',
-  { label: string; bg: string; color: string }
+  { label: string; labelKey: string; bg: string; color: string }
 > = {
-  OPEN: { label: 'To do', bg: '#F1F5F9', color: '#475569' },
-  OVERDUE: { label: 'Overdue', bg: '#FEE2E2', color: '#DC2626' },
-  SUBMITTED: { label: 'Submitted', bg: '#DCFCE7', color: '#15803D' },
-  LATE: { label: 'Late', bg: '#FEF3C7', color: '#B45309' },
-  REVIEWED: { label: 'Reviewed', bg: '#DBEAFE', color: '#1D4ED8' },
+  OPEN: { label: 'To do', labelKey: 'common:submission.toDo', bg: '#F1F5F9', color: '#475569' },
+  OVERDUE: { label: 'Overdue', labelKey: 'common:submission.overdue', bg: '#FEE2E2', color: '#DC2626' },
+  SUBMITTED: { label: 'Submitted', labelKey: 'common:submission.submitted', bg: '#DCFCE7', color: '#15803D' },
+  LATE: { label: 'Late', labelKey: 'common:submission.late', bg: '#FEF3C7', color: '#B45309' },
+  REVIEWED: { label: 'Reviewed', labelKey: 'common:submission.reviewed', bg: '#DBEAFE', color: '#1D4ED8' },
 };
 
 /** True when the due date's calendar day is already behind the device's day.

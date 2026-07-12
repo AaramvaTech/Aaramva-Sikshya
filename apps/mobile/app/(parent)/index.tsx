@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { todayBs, formatBs } from 'bs-calendar';
+import { useLocale, bsLang } from '../../hooks/useLocale';
 
 import { useMyChildren, useChildAttendanceSummary, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
 import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
@@ -24,6 +25,10 @@ const QUICK = [
   { icon: 'clipboard-outline', label: 'Homework', route: '/(parent)/assignments' },
 ] as const;
 
+const QUICK_KEYS: Record<string, string> = {
+  Results: 'quick.results', Attendance: 'quick.attendance', Notices: 'quick.notices', Fees: 'quick.fees', Homework: 'quick.homework',
+};
+
 function splitName(name: string): { head: string; tail: string } {
   const words = name.trim().split(/\s+/);
   if (words.length <= 2) return { head: name, tail: 'Parent portal' };
@@ -33,6 +38,7 @@ function splitName(name: string): { head: string; tail: string } {
 export default function ParentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
   const tenant = useAuthStore((s) => s.tenant);
   const user = useAuthStore((s) => s.user);
   const { branding } = useBranding();
@@ -77,7 +83,7 @@ export default function ParentDashboard() {
   if (childrenQuery.isError) {
     return (
       <View style={[styles.fill, { backgroundColor: c.background }]}>
-        <ErrorState title="Couldn't load" onRetry={() => void childrenQuery.refetch()} />
+        <ErrorState title={t('dashboard.errorTitle')} onRetry={() => void childrenQuery.refetch()} />
       </View>
     );
   }
@@ -86,8 +92,8 @@ export default function ParentDashboard() {
       <View style={[styles.fill, { backgroundColor: c.background, justifyContent: 'center' }]}>
         <EmptyState
           icon="people-outline"
-          title="No children linked"
-          subtitle="Ask your school to link your guardian account to your child's profile."
+          title={t('dashboard.noChildrenTitle')}
+          subtitle={t('dashboard.noChildrenSubtitle')}
         />
       </View>
     );
@@ -160,8 +166,8 @@ export default function ParentDashboard() {
             </View>
           </View>
 
-          <Text style={[styles.todayBs, { color: c.brandMuted }]}>Today · {formatBs(todayBs(), 'en')}</Text>
-          <Text style={[styles.viewing, { color: c.mutedForeground }]}>Viewing child</Text>
+          <NpText style={[styles.todayBs, { color: c.brandMuted }]}>{t('common:common.today')} · {formatBs(todayBs(), bsLang(locale))}</NpText>
+          <NpText style={[styles.viewing, { color: c.mutedForeground }]}>{t('dashboard.viewingChild')}</NpText>
           <NpText style={[styles.name, { color: c.foreground }]}>{childName}</NpText>
           <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
 
@@ -204,11 +210,11 @@ export default function ParentDashboard() {
           ) : summaryQuery.isLoading ? (
             <Skeleton style={{ height: 150 }} className="rounded-2xl" />
           ) : (
-            <EmptyState compact icon="stats-chart-outline" title="Attendance data unavailable" />
+            <EmptyState compact icon="stats-chart-outline" title={t('dashboard.attendanceUnavailable')} />
           )}
 
           {/* Quick access (4 tiles) */}
-          <Text style={[styles.sectionLabel, styles.sectionLabelFirst, { color: c.foreground }]}>Quick access</Text>
+          <NpText style={[styles.sectionLabel, styles.sectionLabelFirst, { color: c.foreground }]}>{t('dashboard.quickAccess')}</NpText>
           <View style={styles.quickGrid}>
             {QUICK.map((q) => (
               <TouchableOpacity
@@ -220,20 +226,20 @@ export default function ParentDashboard() {
                 <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
                   <Ionicons name={q.icon} size={21} color={c.primary} />
                 </View>
-                <Text style={[styles.quickLabel, { color: c.foreground }]}>{q.label}</Text>
+                <NpText style={[styles.quickLabel, { color: c.foreground }]}>{t(QUICK_KEYS[q.label] ?? q.label)}</NpText>
               </TouchableOpacity>
             ))}
           </View>
 
           <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionLabel, styles.sectionLabelInline, { color: c.foreground }]}>Today&apos;s classes</Text>
+            <NpText style={[styles.sectionLabel, styles.sectionLabelInline, { color: c.foreground }]}>{t('dashboard.todaysClasses')}</NpText>
             <TouchableOpacity
               onPress={() => router.push('/(parent)/timetable')}
               activeOpacity={0.7}
               style={styles.fullRoutineLink}
               accessibilityRole="button"
             >
-              <Text style={[styles.fullRoutineText, { color: c.primary }]}>Full routine</Text>
+              <NpText style={[styles.fullRoutineText, { color: c.primary }]}>{t('dashboard.fullRoutine')}</NpText>
               <Ionicons name="chevron-forward" size={13} color={c.primary} />
             </TouchableOpacity>
           </View>

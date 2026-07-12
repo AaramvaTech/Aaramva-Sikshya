@@ -7,8 +7,9 @@ import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { logout } from '../../lib/session';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale } from '../../hooks/useLocale';
 import { FONT } from '../../lib/theme/fonts';
-import { ErrorState, ScreenHeader } from '../../components/ui';
+import { ErrorState, ScreenHeader, LanguageToggle } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
@@ -16,6 +17,7 @@ import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
 
 export default function ParentProfile() {
   const c = useThemeColors();
+  const { t } = useLocale('parent');
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
@@ -84,19 +86,19 @@ export default function ParentProfile() {
             activeOpacity={0.8}
           >
             <Ionicons name="person-circle-outline" size={18} color={c.primary} />
-            <Text style={[styles.detailsRowLabel, { color: c.foreground }]}>View profile details</Text>
+            <NpText style={[styles.detailsRowLabel, { color: c.foreground }]}>{t('profile.viewDetails')}</NpText>
             <Ionicons name="chevron-forward" size={16} color={c.mutedForeground} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
 
           {/* My children */}
-          <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>My children</Text>
+          <NpText style={[styles.sectionLabel, { color: c.mutedForeground }]}>{t('profile.myChildren')}</NpText>
           {childrenQuery.isLoading ? (
             <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 14, gap: 10 }]}>
               {[0, 1].map((i) => <Skeleton key={i} style={{ height: 44 }} className="rounded-xl" />)}
             </View>
           ) : childrenQuery.isError ? (
             <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
-              <ErrorState compact title="Couldn't load children" onRetry={() => void childrenQuery.refetch()} />
+              <ErrorState compact title={t('profile.errorTitle')} onRetry={() => void childrenQuery.refetch()} />
             </View>
           ) : (
             <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface }]}>
@@ -123,6 +125,12 @@ export default function ParentProfile() {
             </View>
           )}
 
+          {/* I18N-1: language selector */}
+          <View style={{ marginTop: 16 }}>
+            <NpText style={[styles.langLabel, { color: c.mutedForeground }]}>{t('common:settings.language')}</NpText>
+            <LanguageToggle />
+          </View>
+
           {/* Sign out */}
           <TouchableOpacity
             style={[styles.signOut, { backgroundColor: `${c.danger}14`, borderColor: `${c.danger}40` }]}
@@ -130,7 +138,7 @@ export default function ParentProfile() {
             activeOpacity={0.85}
           >
             <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
-            <Text style={[styles.signOutText, { color: c.danger }]}>Sign out</Text>
+            <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -139,6 +147,7 @@ export default function ParentProfile() {
 }
 
 const styles = StyleSheet.create({
+  langLabel: { fontFamily: FONT.bold, fontSize: 12, marginBottom: 8 },
   root: { flex: 1 },
 
   schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },

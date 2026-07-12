@@ -1,0 +1,115 @@
+{
+  "dashboard": {
+    "greetingMorning": "Good morning 👋",
+    "greetingAfternoon": "Good afternoon 👋",
+    "greetingEvening": "Good evening 👋",
+    "notEnrolled": "Not enrolled",
+    "section": "Section {{name}}",
+    "roll": "Roll {{number}}",
+    "quickAccess": "Quick access",
+    "todaysClasses": "Today's classes",
+    "routine": "Routine",
+    "errorTitle": "Couldn't load your dashboard"
+  },
+  "quick": {
+    "attendance": "Attendance",
+    "routine": "Routine",
+    "results": "Results",
+    "assignments": "Assignments",
+    "notices": "Notices",
+    "profile": "Profile"
+  },
+  "assignments": {
+    "title": "Assignments",
+    "subtitle": "Homework from your teachers",
+    "emptyTitle": "No assignments yet",
+    "emptySubtitle": "New homework from your teachers will show up here.",
+    "toSubmit": "To submit",
+    "submitted": "Submitted"
+  },
+  "assignmentDetail": {
+    "title": "Assignment",
+    "instructions": "INSTRUCTIONS",
+    "materials": "MATERIALS",
+    "mySubmission": "MY SUBMISSION",
+    "teacherFeedback": "TEACHER FEEDBACK",
+    "submitYourWork": "SUBMIT YOUR WORK",
+    "resubmit": "RESUBMIT",
+    "writeAnswer": "Write your answer…",
+    "attachHint": "Attach a file (image, PDF or Word — max 10 MB)",
+    "attachmentN": "Attachment {{number}}",
+    "submit": "Submit",
+    "resubmitBtn": "Resubmit",
+    "uploading": "Uploading file…",
+    "submitting": "Submitting…",
+    "reviewedLock": "This submission has been reviewed — it can no longer be changed.",
+    "closedLock": "This assignment is closed and no longer accepts submissions.",
+    "dueBy": "Due {{date}}",
+    "alertFileNotAcceptedTitle": "File not accepted",
+    "alertNothingTitle": "Nothing to submit",
+    "alertNothingBody": "Write an answer, attach a file, or both.",
+    "alertSubmittedTitle": "Submitted",
+    "alertSubmittedBody": "Your work has been handed in.",
+    "alertLockedTitle": "Submission locked",
+    "alertFailedTitle": "Submission failed",
+    "notFound": "Not found",
+    "notFoundBody": "This assignment is no longer available.",
+    "couldNotSubmit": "Could not submit — try again.",
+    "dueTeacher": "Due {{date}} — {{teacher}}"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "recentActivity": "Recent activity",
+    "errorTitle": "Couldn't load attendance",
+    "academicYearThis": "This academic year",
+    "errorMonth": "Couldn't load this month.",
+    "classPrefix": "Class {{label}}"
+  },
+  "notices": {
+    "title": "Notices",
+    "subtitle": "Announcements from your school"
+  },
+  "results": {
+    "title": "Exam results",
+    "gpa": "GPA",
+    "grade": "Grade",
+    "annualResult": "Annual result",
+    "emptyTitle": "No results published yet",
+    "emptySubtitle": "Your report card will appear here once the school publishes exam results.",
+    "errorTitle": "Couldn't load results",
+    "gradeRank": "Grade · Rank",
+    "fullMarks": "Full marks {{value}}",
+    "downloadPdf": "Download report card PDF",
+    "downloading": "Downloading…"
+  },
+  "profile": {
+    "errorTitle": "Couldn't load your profile"
+  },
+  "profileDetails": {
+    "title": "Profile details",
+    "personalInfo": "Personal information",
+    "enrollment": "Enrollment",
+    "errorTitle": "Couldn't load details",
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "phone": "Phone",
+      "gender": "Gender",
+      "admissionNo": "Admission no.",
+      "classSection": "Class / Section",
+      "rollNumber": "Roll number",
+      "academicYear": "Academic year"
+    }
+  },
+  "timetable": {
+    "title": "Class routine",
+    "weekly": "Weekly timetable",
+    "errorTitle": "Couldn't load your timetable",
+    "emptyDay": "Nothing scheduled for {{day}}."
+  },
+  "settingsRow": {
+    "notifications": "Notifications",
+    "privacy": "Privacy & security",
+    "help": "Help & support"
+  }
+}

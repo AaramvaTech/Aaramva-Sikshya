@@ -1,5 +1,8 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocaleStore } from '../../store/locale';
+import { bsLang } from '../../hooks/useLocale';
 import NpText from '../NpText';
 import Skeleton from '../Skeleton';
 import { EmptyState, ErrorState } from './StateViews';
@@ -19,26 +22,28 @@ export interface NoticeFeedItem {
 }
 
 // Notice type → accent palette (matches the design's notice tags). Semantic, not brand.
-const TYPE_CONFIG: Record<string, { tint: string; accent: string; label: string }> = {
-  GENERAL:   { tint: '#FEF3E2', accent: '#D9892B', label: 'Notice' },
-  EXAM:      { tint: '#FCE9E9', accent: '#E5484D', label: 'Exam' },
-  HOLIDAY:   { tint: '#EAF0FE', accent: '#5B7FE0', label: 'Holiday' },
-  FEE:       { tint: '#FEF3E2', accent: '#D9892B', label: 'Fee' },
-  EVENT:     { tint: '#E4F6F1', accent: '#0E9F77', label: 'Event' },
-  EMERGENCY: { tint: '#FCE9E9', accent: '#E5484D', label: 'Emergency' },
+const TYPE_CONFIG: Record<string, { tint: string; accent: string; label: string; labelKey: string }> = {
+  GENERAL:   { tint: '#FEF3E2', accent: '#D9892B', label: 'Notice', labelKey: 'noticeType.general' },
+  EXAM:      { tint: '#FCE9E9', accent: '#E5484D', label: 'Exam', labelKey: 'noticeType.exam' },
+  HOLIDAY:   { tint: '#EAF0FE', accent: '#5B7FE0', label: 'Holiday', labelKey: 'noticeType.holiday' },
+  FEE:       { tint: '#FEF3E2', accent: '#D9892B', label: 'Fee', labelKey: 'noticeType.fee' },
+  EVENT:     { tint: '#E4F6F1', accent: '#0E9F77', label: 'Event', labelKey: 'noticeType.event' },
+  EMERGENCY: { tint: '#FCE9E9', accent: '#E5484D', label: 'Emergency', labelKey: 'noticeType.emergency' },
 };
 
 function typeConfig(type: string) {
   return TYPE_CONFIG[type?.toUpperCase()] ?? TYPE_CONFIG['GENERAL'];
 }
 
-function bsDateLabel(dateStr: string): string {
-  return formatBs(adToBs(new Date(dateStr)), 'en');
+function bsDateLabel(dateStr: string, locale: 'en' | 'np'): string {
+  return formatBs(adToBs(new Date(dateStr)), bsLang(locale));
 }
 
 function NoticeCard({ notice }: { notice: NoticeFeedItem }) {
   const [expanded, setExpanded] = useState(false);
   const c = useThemeColors();
+  const { t } = useTranslation('common');
+  const locale = useLocaleStore((s) => s.locale);
   const cfg = typeConfig(notice.type);
   const date = notice.publishedAt ?? notice.createdAt;
 
@@ -50,9 +55,9 @@ function NoticeCard({ notice }: { notice: NoticeFeedItem }) {
     >
       <View style={styles.cardTop}>
         <View style={[styles.tag, { backgroundColor: cfg.tint }]}>
-          <Text style={[styles.tagText, { color: cfg.accent }]}>{cfg.label}</Text>
+          <NpText style={[styles.tagText, { color: cfg.accent }]}>{t(cfg.labelKey)}</NpText>
         </View>
-        <Text style={styles.date}>{bsDateLabel(date)}</Text>
+        <NpText style={styles.date}>{bsDateLabel(date, locale)}</NpText>
       </View>
       <NpText style={[styles.title, { color: c.foreground }]}>{notice.title}</NpText>
       <NpText numberOfLines={expanded ? undefined : 3} style={[styles.body, { color: c.mutedForeground }]}>
@@ -71,6 +76,7 @@ interface NoticeFeedProps {
 
 /** Shared notice list + states (no header / scroll container). Used by student + parent. */
 export function NoticeFeed({ notices, isLoading, isError, onRetry }: NoticeFeedProps) {
+  const { t } = useTranslation('common');
   if (isLoading) {
     return (
       <View style={{ gap: 11 }}>
@@ -81,7 +87,7 @@ export function NoticeFeed({ notices, isLoading, isError, onRetry }: NoticeFeedP
   if (isError) {
     return (
       <View style={{ paddingTop: 40 }}>
-        <ErrorState title="Couldn't load notices" onRetry={onRetry} />
+        <ErrorState title={t('noticesFeed.errorTitle')} onRetry={onRetry} />
       </View>
     );
   }
@@ -91,8 +97,8 @@ export function NoticeFeed({ notices, isLoading, isError, onRetry }: NoticeFeedP
         <EmptyState
           chip
           icon="notifications-off-outline"
-          title="No notices yet"
-          subtitle="When your school posts an update, you'll see it here."
+          title={t('noticesFeed.emptyTitle')}
+          subtitle={t('noticesFeed.emptySubtitle')}
         />
       </View>
     );

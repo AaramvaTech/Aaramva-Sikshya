@@ -1,7 +1,10 @@
 import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
+import { bsMonthName } from '../../lib/i18n/date';
+import NpText from '../../components/NpText';
 import { useState, useMemo } from 'react';
 import { useMyStaffSummary, useMyStaffAttendance } from '../../hooks/useTeacher';
-import { todayBs, daysInBsMonth, bsToAd, BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { todayBs, daysInBsMonth, bsToAd } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import type { StaffAttendanceRecord } from '../../types';
 import { useThemeColors, SATURDAY_HIGHLIGHT } from '../../lib/theme/colors';
@@ -14,12 +17,12 @@ import {
 type StaffStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE' | 'HOLIDAY';
 
 // Semantic staff-attendance palette (not brand-coupled).
-const STAFF_STATUS: Record<StaffStatus, CalendarStatusStyle & { dot: string; label: string }> = {
-  PRESENT: { bg: '#d1fae5', color: '#065f46', dot: '#059669', shortCode: 'P', label: 'Present' },
-  ABSENT:  { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', shortCode: 'A', label: 'Absent' },
-  LATE:    { bg: '#fef3c7', color: '#92400e', dot: '#d97706', shortCode: 'L', label: 'Late' },
-  LEAVE:   { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', shortCode: 'LV', label: 'Leave' },
-  HOLIDAY: { bg: '#f3f4f6', color: '#6b7280', dot: '#9ca3af', shortCode: 'H', label: 'Holiday' },
+const STAFF_STATUS: Record<StaffStatus, CalendarStatusStyle & { dot: string; label: string; labelKey: string }> = {
+  PRESENT: { bg: '#d1fae5', color: '#065f46', dot: '#059669', shortCode: 'P', label: 'Present', labelKey: 'common:attendance.present' },
+  ABSENT:  { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', shortCode: 'A', label: 'Absent', labelKey: 'common:attendance.absent' },
+  LATE:    { bg: '#fef3c7', color: '#92400e', dot: '#d97706', shortCode: 'L', label: 'Late', labelKey: 'common:attendance.late' },
+  LEAVE:   { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', shortCode: 'LV', label: 'Leave', labelKey: 'common:attendance.leave' },
+  HOLIDAY: { bg: '#f3f4f6', color: '#6b7280', dot: '#9ca3af', shortCode: 'H', label: 'Holiday', labelKey: 'common:attendance.holiday' },
 };
 
 function prevMonthOf(curr: BsDate): BsDate {
@@ -38,6 +41,7 @@ export default function TeacherMyAttendance() {
     return { year: t.year, month: t.month, day: 1 };
   });
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
 
   const summaryResult = useMyStaffSummary(viewMonth.year, viewMonth.month);
 
@@ -73,15 +77,15 @@ export default function TeacherMyAttendance() {
     setRefreshing(false);
   };
 
-  const t = todayBs();
-  const isCurrentMonth = viewMonth.year === t.year && viewMonth.month === t.month;
-  const monthLabel = `${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`;
+  const tbs = todayBs();
+  const isCurrentMonth = viewMonth.year === tbs.year && viewMonth.month === tbs.month;
+  const monthLabel = `${bsMonthName(viewMonth.month, locale)} ${viewMonth.year}`;
 
   const legendItems = [
     ...(Object.keys(STAFF_STATUS) as StaffStatus[]).map((k) => ({
       label: STAFF_STATUS[k].label, bg: STAFF_STATUS[k].bg, border: STAFF_STATUS[k].dot,
     })),
-    { label: 'Saturday', bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
+    { label: t('common:attendance.saturday'), bg: SATURDAY_HIGHLIGHT.bg, border: SATURDAY_HIGHLIGHT.text },
   ];
 
   return (
@@ -91,7 +95,7 @@ export default function TeacherMyAttendance() {
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
-      <ScreenHeader title="My Attendance">
+      <ScreenHeader title={t('myAttendance.title')}>
         <View style={styles.navWrap}>
           <MonthNav
             label={monthLabel}
@@ -108,7 +112,7 @@ export default function TeacherMyAttendance() {
           <Card padded>
             <ErrorState
               compact
-              title="Couldn't load attendance"
+              title={t('myAttendance.errorTitle')}
               onRetry={() => { void summaryResult.refetch(); void historyResult.refetch(); }}
             />
           </Card>
@@ -117,7 +121,7 @@ export default function TeacherMyAttendance() {
         {/* Summary */}
         {summaryResult.data && (
           <Card padded>
-            <CardLabel>Monthly Summary</CardLabel>
+            <CardLabel>{t('myAttendance.monthlySummary')}</CardLabel>
             <View style={styles.summaryRow}>
               {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((s) => {
                 const cfg = STAFF_STATUS[s];
@@ -125,7 +129,7 @@ export default function TeacherMyAttendance() {
                 return (
                   <View key={s} style={styles.summaryItem}>
                     <Text style={[styles.summaryNum, { color: cfg.color }]}>{value}</Text>
-                    <Text className="text-muted-foreground" style={styles.summaryLabel}>{cfg.label}</Text>
+                    <NpText className="text-muted-foreground" style={styles.summaryLabel}>{t(cfg.labelKey)}</NpText>
                   </View>
                 );
               })}
@@ -135,7 +139,7 @@ export default function TeacherMyAttendance() {
 
         {/* Calendar */}
         <Card padded>
-          <CardLabel>Attendance Calendar</CardLabel>
+          <CardLabel>{t('myAttendance.attendanceCalendar')}</CardLabel>
           <AttendanceCalendar
             viewMonth={viewMonth}
             recordMap={recordMap}
@@ -146,7 +150,7 @@ export default function TeacherMyAttendance() {
 
         {/* Legend */}
         <Card padded>
-          <CardLabel>Legend</CardLabel>
+          <CardLabel>{t('myAttendance.legend')}</CardLabel>
           <Legend items={legendItems} />
         </Card>
         </>

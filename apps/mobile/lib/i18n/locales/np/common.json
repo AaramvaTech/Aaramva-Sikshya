@@ -1,0 +1,126 @@
+{
+  "action": {
+    "tryAgain": "फेरि प्रयास गर्नुहोस्",
+    "save": "सुरक्षित गर्नुहोस्",
+    "cancel": "रद्द गर्नुहोस्",
+    "submit": "पेश गर्नुहोस्",
+    "signOut": "साइन आउट",
+    "signOutInstead": "बरु साइन आउट गर्नुहोस्",
+    "retry": "पुनः प्रयास",
+    "close": "बन्द गर्नुहोस्",
+    "seeAll": "सबै हेर्नुहोस्",
+    "refresh": "ताजा गर्नुहोस्"
+  },
+  "state": {
+    "loading": "लोड हुँदैछ…",
+    "errorTitle": "लोड गर्न सकिएन",
+    "errorSubtitle": "आफ्नो इन्टरनेट जाँच गरी फेरि प्रयास गर्नुहोस्।",
+    "notFound": "फेला परेन",
+    "empty": "अहिलेसम्म केही छैन"
+  },
+  "attendance": {
+    "present": "हाजिर",
+    "absent": "अनुपस्थित",
+    "late": "ढिलो",
+    "leave": "बिदा",
+    "percent": "{{value}}%",
+    "rate": "हाजिरी दर",
+    "saturday": "शनिबार",
+    "holiday": "बिदा"
+  },
+  "submission": {
+    "toDo": "गर्न बाँकी",
+    "overdue": "म्याद नाघेको",
+    "submitted": "पेश गरियो",
+    "reviewed": "जाँच भयो",
+    "closed": "बन्द भयो",
+    "late": "ढिलो"
+  },
+  "settings": {
+    "language": "भाषा",
+    "languageEnglish": "Language · English",
+    "languageNepali": "भाषा · नेपाली"
+  },
+  "common": {
+    "today": "आज",
+    "due": "म्याद {{date}}",
+    "marks": "{{value}} अंक",
+    "noSchoolToday": "आज विद्यालय छैन",
+    "saturdayRest": "शनिबार — बिदाको दिन",
+    "class": "कक्षा",
+    "section": "सेक्सन",
+    "roll": "रोल",
+    "subject": "विषय",
+    "teacher": "शिक्षक",
+    "teacherFeedback": "शिक्षकको प्रतिक्रिया"
+  },
+  "notifications": {
+    "title": "सूचनाहरू",
+    "markAllRead": "सबै पढेको चिन्ह लगाउनुहोस्",
+    "empty": "अहिलेसम्म कुनै सूचना छैन"
+  },
+  "days": {
+    "long": [
+      "आइतबार",
+      "सोमबार",
+      "मंगलबार",
+      "बुधबार",
+      "बिहीबार",
+      "शुक्रबार",
+      "शनिबार"
+    ],
+    "short": [
+      "आइत",
+      "सोम",
+      "मंगल",
+      "बुध",
+      "बिही",
+      "शुक्र",
+      "शनि"
+    ]
+  },
+  "noticesFeed": {
+    "errorTitle": "सूचनाहरू लोड गर्न सकिएन",
+    "emptyTitle": "अहिलेसम्म कुनै सूचना छैन",
+    "emptySubtitle": "तपाईंको विद्यालयले कुनै जानकारी राख्दा यहाँ देखिनेछ।"
+  },
+  "inbox": {
+    "title": "सूचनाहरू",
+    "subtitle": "तपाईंको विद्यालयका अपडेटहरू",
+    "markAllRead": "सबै पढेको चिन्ह लगाउनुहोस्",
+    "markAllReadA11y": "सबै पढेको चिन्ह लगाउनुहोस्",
+    "errorTitle": "सूचनाहरू लोड गर्न सकिएन",
+    "emptyTitle": "अहिलेसम्म कुनै सूचना छैन",
+    "emptySubtitle": "अनुपस्थिति, नतिजा, शुल्क र सूचनाहरू यहाँ देखिनेछन्।"
+  },
+  "attendanceCard": {
+    "title": "यस वर्षको हाजिरी",
+    "days": "{{count}} दिन",
+    "presentRate": "उपस्थिति दर"
+  },
+  "noticeType": {
+    "general": "सूचना",
+    "exam": "परीक्षा",
+    "holiday": "बिदा",
+    "fee": "शुल्क",
+    "event": "कार्यक्रम",
+    "emergency": "आकस्मिक"
+  },
+  "feeStatus": {
+    "paid": "भुक्तानी भयो",
+    "partial": "आंशिक",
+    "unpaid": "बाँकी",
+    "overdue": "म्याद नाघेको",
+    "waived": "छुट"
+  },
+  "pay": {
+    "payWith": "{{gateway}} बाट {{amount}} तिर्नुहोस्",
+    "due": "म्याद: {{value}}",
+    "onlinePayment": "अनलाइन भुक्तानी"
+  },
+  "assignmentStatus": {
+    "draft": "मस्यौदा",
+    "published": "प्रकाशित",
+    "closed": "बन्द"
+  }
+}

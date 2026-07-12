@@ -9,6 +9,7 @@
     "@expo-google-fonts/noto-sans-devanagari": "^0.4.1",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@tanstack/react-query": "^5.101.0",
     "axios": "^1.17.0",
     "bs-calendar": "file:../../packages/bs-calendar",
@@ -20,6 +21,7 @@
     "expo-font": "~56.0.6",
     "expo-linear-gradient": "^56.0.4",
     "expo-linking": "~56.0.14",
+    "expo-localization": "~56.0.6",
     "expo-notifications": "~56.0.18",
     "expo-router": "~56.2.11",
     "expo-secure-store": "~56.0.4",
@@ -28,9 +30,11 @@
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
     "expo-web-browser": "~56.0.5",
+    "i18next": "^26.3.6",
     "nativewind": "^4.2.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-i18next": "^17.0.9",
     "react-native": "0.85.3",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
@@ -61,6 +65,9 @@
     "preset": "jest-expo",
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*)"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.ts"
     ]
   },
   "private": true

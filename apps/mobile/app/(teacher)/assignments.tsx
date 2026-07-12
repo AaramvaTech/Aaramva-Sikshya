@@ -5,19 +5,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useTeacherAssignments } from '../../hooks/useAssignments';
 import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, SelectChip, StatusBadge } from '../../components/ui';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import type { AssignmentStatus } from '../../types';
 
-const STATUS_CHIPS: Record<AssignmentStatus, { label: string; bg: string; color: string }> = {
-  DRAFT: { label: 'Draft', bg: '#F1F5F9', color: '#475569' },
-  PUBLISHED: { label: 'Published', bg: '#DCFCE7', color: '#15803D' },
-  CLOSED: { label: 'Closed', bg: '#FEF3C7', color: '#B45309' },
+const STATUS_CHIPS: Record<AssignmentStatus, { label: string; labelKey: string; bg: string; color: string }> = {
+  DRAFT: { label: 'Draft', labelKey: 'common:assignmentStatus.draft', bg: '#F1F5F9', color: '#475569' },
+  PUBLISHED: { label: 'Published', labelKey: 'common:assignmentStatus.published', bg: '#DCFCE7', color: '#15803D' },
+  CLOSED: { label: 'Closed', labelKey: 'common:assignmentStatus.closed', bg: '#FEF3C7', color: '#B45309' },
 };
 
-function dueBs(dueDate: string): string {
-  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), 'en');
+function dueBs(dueDate: string, locale: 'en' | 'np'): string {
+  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), bsLang(locale));
 }
 
 export default function TeacherAssignments() {
@@ -25,6 +27,7 @@ export default function TeacherAssignments() {
   const [classFilter, setClassFilter] = useState<string | null>(null);
   const { data, isLoading, isError, refetch } = useTeacherAssignments({});
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
 
   // Class filter chips derived from the loaded list (mobile is read+review —
   // creation and richer filtering stay on the web portal).
@@ -52,8 +55,8 @@ export default function TeacherAssignments() {
           compact
           padTop={12}
           padBottom={12}
-          title="Assignments"
-          subtitle="Review submissions on the go — create on the web portal"
+          title={t('assignments.title')}
+          subtitle={t('assignments.subtitle')}
         />
 
         <View style={styles.body}>
@@ -65,14 +68,14 @@ export default function TeacherAssignments() {
             <EmptyState
               icon="clipboard-outline"
               chip
-              title="No assignments"
-              subtitle="Assignments created on the web portal will show up here."
+              title={t('assignments.emptyTitle')}
+              subtitle={t('assignments.emptySubtitle')}
             />
           ) : (
             <>
               {classNames.length > 1 && (
                 <View style={styles.chipsRow}>
-                  <SelectChip label="All" selected={!classFilter} onPress={() => setClassFilter(null)} />
+                  <SelectChip label={t('assignments.all')} selected={!classFilter} onPress={() => setClassFilter(null)} />
                   {classNames.map((name) => (
                     <SelectChip
                       key={name}
@@ -98,17 +101,17 @@ export default function TeacherAssignments() {
                       <Text style={[styles.subject, { color: c.primary }]}>
                         {a.className}{a.sectionName ? ` · ${a.sectionName}` : ''} — {a.subjectName}
                       </Text>
-                      <StatusBadge label={chip.label} bg={chip.bg} color={chip.color} />
+                      <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
                     </View>
                     <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>{a.title}</Text>
                     <View style={styles.metaRow}>
                       <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
-                      <Text style={[styles.meta, { color: c.mutedForeground }]}>Due {dueBs(a.dueDate)}</Text>
+                      <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
                       <View style={styles.metaItem}>
                         <Ionicons name="people-outline" size={13} color={c.mutedForeground} />
-                        <Text style={[styles.meta, { color: c.mutedForeground }]}>
-                          {a.submissionCount ?? 0} submitted
-                        </Text>
+                        <NpText style={[styles.meta, { color: c.mutedForeground }]}>
+                          {t('assignments.submittedCount', { count: a.submissionCount ?? 0 })}
+                        </NpText>
                       </View>
                     </View>
                   </TouchableOpacity>
