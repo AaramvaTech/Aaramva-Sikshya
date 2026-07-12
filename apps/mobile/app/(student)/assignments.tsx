@@ -5,18 +5,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useMyAssignments } from '../../hooks/useAssignments';
 import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, StatusBadge } from '../../components/ui';
+import NpText from '../../components/NpText';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import type { AppLocale } from '../../lib/i18n';
+import type { TFunction } from 'i18next';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { chipFor } from '../../lib/assignmentStatus';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import type { MyAssignment } from '../../types';
 
-function dueBs(dueDate: string): string {
-  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), 'en');
+function dueBs(dueDate: string, locale: AppLocale): string {
+  return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), bsLang(locale));
 }
 
 function AssignmentCard({ a }: { a: MyAssignment }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('student');
   const chip = chipFor(a);
   return (
     <TouchableOpacity
@@ -28,7 +33,7 @@ function AssignmentCard({ a }: { a: MyAssignment }) {
     >
       <View style={styles.cardTop}>
         <Text style={[styles.subject, { color: c.primary }]}>{a.subjectName}</Text>
-        <StatusBadge label={chip.label} bg={chip.bg} color={chip.color} />
+        <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
       </View>
       <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>
         {a.title}
@@ -36,7 +41,7 @@ function AssignmentCard({ a }: { a: MyAssignment }) {
       <View style={styles.cardBottom}>
         <View style={styles.metaItem}>
           <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
-          <Text style={[styles.meta, { color: c.mutedForeground }]}>Due {dueBs(a.dueDate)}</Text>
+          <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
         </View>
         {a.attachmentKeys.length > 0 && (
           <View style={styles.metaItem}>
@@ -47,7 +52,7 @@ function AssignmentCard({ a }: { a: MyAssignment }) {
           </View>
         )}
         {a.mySubmission?.marks != null && (
-          <Text style={[styles.marks, { color: c.primary }]}>{a.mySubmission.marks} marks</Text>
+          <NpText style={[styles.marks, { color: c.primary }]}>{t('common:common.marks', { value: a.mySubmission.marks })}</NpText>
         )}
       </View>
     </TouchableOpacity>
@@ -58,6 +63,7 @@ export default function StudentAssignments() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyAssignments();
   const c = useThemeColors();
+  const { t } = useLocale('student');
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -80,8 +86,8 @@ export default function StudentAssignments() {
           compact
           padTop={12}
           padBottom={16}
-          title="Assignments"
-          subtitle="Homework from your teachers"
+          title={t('assignments.title')}
+          subtitle={t('assignments.subtitle')}
         />
 
         <View style={styles.body}>
@@ -93,20 +99,20 @@ export default function StudentAssignments() {
             <EmptyState
               icon="clipboard-outline"
               chip
-              title="No assignments yet"
-              subtitle="New homework from your teachers will show up here."
+              title={t('assignments.emptyTitle')}
+              subtitle={t('assignments.emptySubtitle')}
             />
           ) : (
             <>
               {pending.length > 0 && (
                 <>
-                  <Text style={[styles.sectionLabel, { color: c.foreground }]}>To submit</Text>
+                  <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('assignments.toSubmit')}</NpText>
                   {pending.map((a) => <AssignmentCard key={a.id} a={a} />)}
                 </>
               )}
               {done.length > 0 && (
                 <>
-                  <Text style={[styles.sectionLabel, { color: c.foreground }]}>Submitted</Text>
+                  <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('assignments.submitted')}</NpText>
                   {done.map((a) => <AssignmentCard key={a.id} a={a} />)}
                 </>
               )}

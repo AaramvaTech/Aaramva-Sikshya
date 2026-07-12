@@ -12,6 +12,7 @@ import Skeleton from '../../components/Skeleton';
 import { Card, EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
 import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
+import { useLocale } from '../../hooks/useLocale';
 import { FONT } from '../../lib/theme/fonts';
 import { gradeColors } from '../../lib/gradeColors';
 import type { ExamTermResult, ResultSubject } from '../../types';
@@ -27,6 +28,7 @@ function gradeSectionLine(grade: string, section: string): string {
 
 // Subject row — matches comp sResults rows (subject name, "Full marks X", obtained, grade chip).
 function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boolean }) {
+  const { t } = useLocale('student');
   const c = useThemeColors();
   const gc = gradeColors(subject.grade);
   const fullMarks = subject.fullMarks;
@@ -35,9 +37,9 @@ function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boole
     <View style={[styles.subjectRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}>
       <View style={styles.subjectInfo}>
         <NpText style={[styles.subjectName, { color: c.foreground }]}>{subject.name}</NpText>
-        <Text style={[styles.subjectFullMarks, { color: c.mutedForeground }]}>
-          Full marks {fullMarks > 0 ? fullMarks : '—'}
-        </Text>
+        <NpText style={[styles.subjectFullMarks, { color: c.mutedForeground }]}>
+          {t('results.fullMarks', { value: fullMarks > 0 ? fullMarks : '—' })}
+        </NpText>
       </View>
       <Text style={[styles.totalValue, { color: c.foreground }]}>{subject.total}</Text>
       <View style={[styles.gradeChip, { backgroundColor: gc.bg }]}>
@@ -51,6 +53,7 @@ function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boole
 // Layout mirrors comp sResults: GPA on the left, Grade · Rank on the right.
 function SummaryCard({ term }: { term: ExamTermResult }) {
   const c = useThemeColors();
+  const { t } = useLocale('student');
   const ramp = headerGradient(c.primary);
   return (
     <LinearGradient
@@ -60,11 +63,11 @@ function SummaryCard({ term }: { term: ExamTermResult }) {
       style={[styles.summaryCard, { shadowColor: c.primary }]}
     >
       <View style={styles.summaryLeft}>
-        <Text style={styles.summaryLabel}>GPA</Text>
+        <NpText style={styles.summaryLabel}>{t('results.gpa')}</NpText>
         <Text style={styles.summaryGpaValue}>{term.gpa.toFixed(2)}</Text>
       </View>
       <View style={styles.summaryRight}>
-        <Text style={styles.summaryLabel}>Grade · Rank</Text>
+        <NpText style={styles.summaryLabel}>{t('results.gradeRank')}</NpText>
         <Text style={styles.summaryGradeRank}>{term.grade} · #{term.rank}</Text>
       </View>
     </LinearGradient>
@@ -76,6 +79,7 @@ export default function StudentResults() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const c = useThemeColors();
 
+  const { t } = useLocale('student');
   const { data, isLoading, isError, refetch } = useMyResults();
   const { download, downloading } = useReportCardDownload();
 
@@ -90,7 +94,7 @@ export default function StudentResults() {
     <ScreenHeader
       variant="bar"
       onBack={() => router.back()}
-      title="Exam results"
+      title={t('results.title')}
       subtitle={examName}
       padBottom={16}
     />
@@ -116,7 +120,7 @@ export default function StudentResults() {
         <StatusBar barStyle="dark-content" />
         <Header />
         <View style={[styles.body, { paddingTop: 24 }]}>
-          <ErrorState title="Couldn't load your results" onRetry={() => void refetch()} />
+          <ErrorState title={t('results.errorTitle')} onRetry={() => void refetch()} />
         </View>
       </View>
     );
@@ -147,8 +151,8 @@ export default function StudentResults() {
               <EmptyState
                 chip
                 icon="ribbon-outline"
-                title="No results published yet"
-                subtitle="Your report card will appear here once the school publishes exam results."
+                title={t('results.emptyTitle')}
+                subtitle={t('results.emptySubtitle')}
               />
             </Card>
           ) : (
@@ -200,20 +204,20 @@ export default function StudentResults() {
               {/* Annual aggregate — comp sReport style; only once the year is closed */}
               {annualResult && (
                 <View style={[styles.annualCard, { backgroundColor: c.surface }]}>
-                  <Text style={[styles.annualEyebrow, { color: c.mutedForeground }]}>Annual result</Text>
+                  <NpText style={[styles.annualEyebrow, { color: c.mutedForeground }]}>{t('results.annualResult')}</NpText>
                   <View style={styles.annualStats}>
                     <View style={styles.annualStat}>
                       <Text style={[styles.annualStatValue, { color: c.primary }]}>
                         {annualResult.gpa.toFixed(2)}
                       </Text>
-                      <Text style={[styles.annualStatLabel, { color: c.mutedForeground }]}>GPA</Text>
+                      <NpText style={[styles.annualStatLabel, { color: c.mutedForeground }]}>{t('results.gpa')}</NpText>
                     </View>
                     <View style={[styles.annualDivider, { backgroundColor: c.border }]} />
                     <View style={styles.annualStat}>
                       <Text style={[styles.annualStatValue, { color: c.primary }]}>
                         {annualResult.grade}
                       </Text>
-                      <Text style={[styles.annualStatLabel, { color: c.mutedForeground }]}>Grade</Text>
+                      <NpText style={[styles.annualStatLabel, { color: c.mutedForeground }]}>{t('results.grade')}</NpText>
                     </View>
                   </View>
                 </View>
@@ -227,9 +231,9 @@ export default function StudentResults() {
                 style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
               >
                 <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
-                <Text style={[styles.downloadBtnText, { color: c.primary }]}>
-                  {downloading ? 'Downloading…' : 'Download report card PDF'}
-                </Text>
+                <NpText style={[styles.downloadBtnText, { color: c.primary }]}>
+                  {downloading ? t('results.downloading') : t('results.downloadPdf')}
+                </NpText>
               </TouchableOpacity>
             </>
           )}

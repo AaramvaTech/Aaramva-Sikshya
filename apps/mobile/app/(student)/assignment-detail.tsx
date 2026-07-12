@@ -21,12 +21,15 @@ import { chipFor, SUBMISSION_CHIPS } from '../../lib/assignmentStatus';
 import { ErrorState, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { FONT } from '../../lib/theme/fonts';
 
 /** Teacher attachment row — resolves the FILE-1 key to a presigned GET and
  *  opens it in the system browser/viewer. */
 function AttachmentRow({ fileKey, index }: { fileKey: string; index: number }) {
   const c = useThemeColors();
+  const { t } = useLocale('student');
   const url = useFileUrl(fileKey);
   return (
     <TouchableOpacity
@@ -36,7 +39,7 @@ function AttachmentRow({ fileKey, index }: { fileKey: string; index: number }) {
       activeOpacity={0.7}
     >
       <Ionicons name="document-attach-outline" size={18} color={c.primary} />
-      <Text style={[styles.attachText, { color: c.foreground }]}>Attachment {index + 1}</Text>
+      <NpText style={[styles.attachText, { color: c.foreground }]}>{t('assignmentDetail.attachmentN', { number: index + 1 })}</NpText>
       <Ionicons name="open-outline" size={16} color={c.mutedForeground} />
     </TouchableOpacity>
   );
@@ -45,6 +48,7 @@ function AttachmentRow({ fileKey, index }: { fileKey: string; index: number }) {
 export default function AssignmentDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = useThemeColors();
+  const { t, locale } = useLocale('student');
   const [refreshing, setRefreshing] = useState(false);
 
   const assignments = useMyAssignments();
@@ -68,14 +72,14 @@ export default function AssignmentDetail() {
       const file = await pickSubmissionFile();
       if (file) setPicked(file);
     } catch (err) {
-      Alert.alert('File not accepted', (err as Error).message);
+      Alert.alert(t('assignmentDetail.alertFileNotAcceptedTitle'), (err as Error).message);
     }
   }
 
   async function onSubmit() {
     if (!id) return;
     if (!textAnswer.trim() && !picked) {
-      Alert.alert('Nothing to submit', 'Write an answer, attach a file, or both.');
+      Alert.alert(t('assignmentDetail.alertNothingTitle'), t('assignmentDetail.alertNothingBody'));
       return;
     }
     try {
@@ -92,14 +96,14 @@ export default function AssignmentDetail() {
       setTextAnswer('');
       setPicked(null);
       await Promise.all([assignments.refetch(), submission.refetch()]);
-      Alert.alert('Submitted', 'Your work has been handed in.');
+      Alert.alert(t('assignmentDetail.alertSubmittedTitle'), t('assignmentDetail.alertSubmittedBody'));
     } catch (err) {
       const resp = (err as { response?: { status?: number; data?: { error?: { message?: string } } } }).response;
       // The after-review 409 is a designed state, not an error — surface it honestly.
       const msg = resp?.data?.error?.message
         ?? (err as Error).message
-        ?? 'Could not submit — try again.';
-      Alert.alert(resp?.status === 409 ? 'Submission locked' : 'Submission failed', msg);
+        ?? t('assignmentDetail.couldNotSubmit');
+      Alert.alert(resp?.status === 409 ? t('assignmentDetail.alertLockedTitle') : t('assignmentDetail.alertFailedTitle'), msg);
       await submission.refetch();
     } finally {
       setPhase('idle');
@@ -116,10 +120,10 @@ export default function AssignmentDetail() {
   if (assignments.isError || !assignment) {
     return (
       <View style={[styles.root, { backgroundColor: c.background }]}>
-        <ScreenHeader variant="plain" compact padTop={12} padBottom={12} title="Assignment" />
+        <ScreenHeader variant="plain" compact padTop={12} padBottom={12} title={t('assignmentDetail.title')} />
         <ErrorState
-          title={assignments.isError ? "Couldn't load" : 'Not found'}
-          subtitle={assignments.isError ? undefined : 'This assignment is no longer available.'}
+          title={assignments.isError ? t('common:state.errorTitle') : t('assignmentDetail.notFound')}
+          subtitle={assignments.isError ? undefined : t('assignmentDetail.notFoundBody')}
           onRetry={() => (assignments.isError ? assignments.refetch() : router.back())}
         />
       </View>
@@ -131,7 +135,7 @@ export default function AssignmentDetail() {
   const reviewed = sub?.status === 'REVIEWED';
   const closed = assignment.status === 'CLOSED';
   const canSubmit = !reviewed && !closed;
-  const dueBs = formatBs(adToBs(new Date(`${assignment.dueDate}T00:00:00`)), 'en');
+  const dueBs = formatBs(adToBs(new Date(`${assignment.dueDate}T00:00:00`)), bsLang(locale));
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -148,25 +152,25 @@ export default function AssignmentDetail() {
           padBottom={12}
           eyebrow={assignment.subjectName}
           title={assignment.title}
-          subtitle={`Due ${dueBs} — ${assignment.teacherName ?? ''}`}
+          subtitle={t('assignmentDetail.dueTeacher', { date: dueBs, teacher: assignment.teacherName ?? '' })}
         />
 
         <View style={styles.body}>
           <View style={styles.statusRow}>
-            <StatusBadge label={chip.label} bg={chip.bg} color={chip.color} />
-            {closed && <StatusBadge label="Closed" bg="#FEF3C7" color="#B45309" />}
+            <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
+            {closed && <StatusBadge label={t('common:submission.closed')} bg="#FEF3C7" color="#B45309" />}
           </View>
 
           {assignment.description ? (
             <View style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}>
-              <Text style={[styles.cardLabel, { color: c.mutedForeground }]}>INSTRUCTIONS</Text>
+              <NpText style={[styles.cardLabel, { color: c.mutedForeground }]}>{t('assignmentDetail.instructions')}</NpText>
               <Text style={[styles.description, { color: c.foreground }]}>{assignment.description}</Text>
             </View>
           ) : null}
 
           {assignment.attachmentKeys.length > 0 && (
             <View style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}>
-              <Text style={[styles.cardLabel, { color: c.mutedForeground }]}>MATERIALS</Text>
+              <NpText style={[styles.cardLabel, { color: c.mutedForeground }]}>{t('assignmentDetail.materials')}</NpText>
               {assignment.attachmentKeys.map((k, i) => (
                 <AttachmentRow key={k} fileKey={k} index={i} />
               ))}
@@ -176,15 +180,15 @@ export default function AssignmentDetail() {
           {/* My submission */}
           {sub && (
             <View style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}>
-              <Text style={[styles.cardLabel, { color: c.mutedForeground }]}>MY SUBMISSION</Text>
+              <NpText style={[styles.cardLabel, { color: c.mutedForeground }]}>{t('assignmentDetail.mySubmission')}</NpText>
               <View style={styles.statusRow}>
                 <StatusBadge
-                  label={SUBMISSION_CHIPS[sub.status].label}
+                  label={t(SUBMISSION_CHIPS[sub.status].labelKey)}
                   bg={SUBMISSION_CHIPS[sub.status].bg}
                   color={SUBMISSION_CHIPS[sub.status].color}
                 />
                 {sub.marks != null && (
-                  <Text style={[styles.marksBig, { color: c.primary }]}>{sub.marks} marks</Text>
+                  <NpText style={[styles.marksBig, { color: c.primary }]}>{t('common:common.marks', { value: sub.marks })}</NpText>
                 )}
               </View>
               {sub.textAnswer ? (
@@ -193,7 +197,7 @@ export default function AssignmentDetail() {
               {sub.fileKey ? <AttachmentRow fileKey={sub.fileKey} index={0} /> : null}
               {reviewed && sub.feedback ? (
                 <View style={[styles.feedback, { backgroundColor: c.background }]}>
-                  <Text style={[styles.cardLabel, { color: c.mutedForeground }]}>TEACHER FEEDBACK</Text>
+                  <NpText style={[styles.cardLabel, { color: c.mutedForeground }]}>{t('assignmentDetail.teacherFeedback')}</NpText>
                   <Text style={[styles.description, { color: c.foreground }]}>{sub.feedback}</Text>
                 </View>
               ) : null}
@@ -204,25 +208,25 @@ export default function AssignmentDetail() {
           {reviewed ? (
             <View style={[styles.note, { backgroundColor: c.surface }]}>
               <Ionicons name="lock-closed-outline" size={16} color={c.mutedForeground} />
-              <Text style={[styles.noteText, { color: c.mutedForeground }]}>
-                This submission has been reviewed — it can no longer be changed.
-              </Text>
+              <NpText style={[styles.noteText, { color: c.mutedForeground }]}>
+                {t('assignmentDetail.reviewedLock')}
+              </NpText>
             </View>
           ) : closed ? (
             <View style={[styles.note, { backgroundColor: c.surface }]}>
               <Ionicons name="lock-closed-outline" size={16} color={c.mutedForeground} />
-              <Text style={[styles.noteText, { color: c.mutedForeground }]}>
-                This assignment is closed and no longer accepts submissions.
-              </Text>
+              <NpText style={[styles.noteText, { color: c.mutedForeground }]}>
+                {t('assignmentDetail.closedLock')}
+              </NpText>
             </View>
           ) : (
             <View style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}>
-              <Text style={[styles.cardLabel, { color: c.mutedForeground }]}>
-                {sub ? 'RESUBMIT' : 'SUBMIT YOUR WORK'}
-              </Text>
+              <NpText style={[styles.cardLabel, { color: c.mutedForeground }]}>
+                {sub ? t('assignmentDetail.resubmit') : t('assignmentDetail.submitYourWork')}
+              </NpText>
               <TextInput
                 style={[styles.input, { color: c.foreground, borderColor: c.border }]}
-                placeholder="Write your answer…"
+                placeholder={t('assignmentDetail.writeAnswer')}
                 placeholderTextColor={c.mutedForeground}
                 multiline
                 value={textAnswer}
@@ -231,7 +235,7 @@ export default function AssignmentDetail() {
               <TouchableOpacity style={[styles.attachRow, { borderColor: c.border }]} onPress={onPickFile} activeOpacity={0.7}>
                 <Ionicons name={picked ? 'document-attach' : 'attach-outline'} size={18} color={c.primary} />
                 <Text style={[styles.attachText, { color: picked ? c.foreground : c.mutedForeground }]} numberOfLines={1}>
-                  {picked ? picked.name : 'Attach a file (image, PDF or Word — max 10 MB)'}
+                  {picked ? picked.name : t('assignmentDetail.attachHint')}
                 </Text>
                 {picked && (
                   <TouchableOpacity onPress={() => setPicked(null)} hitSlop={8}>
@@ -242,12 +246,12 @@ export default function AssignmentDetail() {
               <PrimaryButton
                 label={
                   phase === 'uploading'
-                    ? 'Uploading file…'
+                    ? t('assignmentDetail.uploading')
                     : phase === 'submitting'
-                      ? 'Submitting…'
+                      ? t('assignmentDetail.submitting')
                       : sub
-                        ? 'Resubmit'
-                        : 'Submit'
+                        ? t('assignmentDetail.resubmitBtn')
+                        : t('assignmentDetail.submit')
                 }
                 loading={phase !== 'idle'}
                 onPress={onSubmit}

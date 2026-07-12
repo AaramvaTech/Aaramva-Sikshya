@@ -1,1 +1,115 @@
-{}
+{
+  "dashboard": {
+    "greetingMorning": "शुभ प्रभात 👋",
+    "greetingAfternoon": "शुभ दिन 👋",
+    "greetingEvening": "शुभ सन्ध्या 👋",
+    "notEnrolled": "भर्ना भएको छैन",
+    "section": "सेक्सन {{name}}",
+    "roll": "रोल {{number}}",
+    "quickAccess": "छिटो पहुँच",
+    "todaysClasses": "आजका कक्षाहरू",
+    "routine": "रुटिन",
+    "errorTitle": "तपाईंको ड्यासबोर्ड लोड गर्न सकिएन"
+  },
+  "quick": {
+    "attendance": "हाजिरी",
+    "routine": "रुटिन",
+    "results": "नतिजा",
+    "assignments": "गृहकार्य",
+    "notices": "सूचना",
+    "profile": "प्रोफाइल"
+  },
+  "assignments": {
+    "title": "गृहकार्य",
+    "subtitle": "तपाईंका शिक्षकहरूबाट गृहकार्य",
+    "emptyTitle": "अहिलेसम्म कुनै गृहकार्य छैन",
+    "emptySubtitle": "तपाईंका शिक्षकहरूले दिनुभएको नयाँ गृहकार्य यहाँ देखिनेछ।",
+    "toSubmit": "पेश गर्न बाँकी",
+    "submitted": "पेश गरिएको"
+  },
+  "assignmentDetail": {
+    "title": "गृहकार्य",
+    "instructions": "निर्देशन",
+    "materials": "सामग्री",
+    "mySubmission": "मैले पेश गरेको",
+    "teacherFeedback": "शिक्षकको प्रतिक्रिया",
+    "submitYourWork": "आफ्नो काम पेश गर्नुहोस्",
+    "resubmit": "पुनः पेश गर्नुहोस्",
+    "writeAnswer": "आफ्नो उत्तर लेख्नुहोस्…",
+    "attachHint": "फाइल संलग्न गर्नुहोस् (फोटो, PDF वा Word — बढीमा १० MB)",
+    "attachmentN": "संलग्न फाइल {{number}}",
+    "submit": "पेश गर्नुहोस्",
+    "resubmitBtn": "पुनः पेश गर्नुहोस्",
+    "uploading": "फाइल अपलोड हुँदैछ…",
+    "submitting": "पेश हुँदैछ…",
+    "reviewedLock": "यो पेश गरिएको काम जाँच भइसक्यो — अब परिवर्तन गर्न मिल्दैन।",
+    "closedLock": "यो गृहकार्य बन्द भइसक्यो र अब पेश गर्न मिल्दैन।",
+    "dueBy": "म्याद {{date}}",
+    "alertFileNotAcceptedTitle": "फाइल स्वीकार भएन",
+    "alertNothingTitle": "पेश गर्न केही छैन",
+    "alertNothingBody": "उत्तर लेख्नुहोस्, फाइल संलग्न गर्नुहोस्, वा दुवै गर्नुहोस्।",
+    "alertSubmittedTitle": "पेश गरियो",
+    "alertSubmittedBody": "तपाईंको काम पेश भयो।",
+    "alertLockedTitle": "पेश गर्न बन्द छ",
+    "alertFailedTitle": "पेश गर्न सकिएन",
+    "notFound": "फेला परेन",
+    "notFoundBody": "यो गृहकार्य अब उपलब्ध छैन।",
+    "couldNotSubmit": "पेश गर्न सकिएन — फेरि प्रयास गर्नुहोस्।",
+    "dueTeacher": "म्याद {{date}} — {{teacher}}"
+  },
+  "attendance": {
+    "title": "हाजिरी",
+    "recentActivity": "हालैका गतिविधि",
+    "errorTitle": "हाजिरी लोड गर्न सकिएन",
+    "academicYearThis": "यस शैक्षिक सत्र",
+    "errorMonth": "यो महिना लोड गर्न सकिएन।",
+    "classPrefix": "कक्षा {{label}}"
+  },
+  "notices": {
+    "title": "सूचना",
+    "subtitle": "तपाईंको विद्यालयका सूचनाहरू"
+  },
+  "results": {
+    "title": "परीक्षाको नतिजा",
+    "gpa": "GPA",
+    "grade": "ग्रेड",
+    "annualResult": "वार्षिक नतिजा",
+    "emptyTitle": "अहिलेसम्म कुनै नतिजा प्रकाशित भएको छैन",
+    "emptySubtitle": "विद्यालयले परीक्षाको नतिजा प्रकाशित गरेपछि तपाईंको प्रगति-पत्र यहाँ देखिनेछ।",
+    "errorTitle": "नतिजा लोड गर्न सकिएन",
+    "gradeRank": "ग्रेड · र्‍याङ्क",
+    "fullMarks": "पूर्णाङ्क {{value}}",
+    "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
+    "downloading": "डाउनलोड हुँदैछ…"
+  },
+  "profile": {
+    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
+  },
+  "profileDetails": {
+    "title": "प्रोफाइल विवरण",
+    "personalInfo": "व्यक्तिगत जानकारी",
+    "enrollment": "भर्ना विवरण",
+    "errorTitle": "विवरण लोड गर्न सकिएन",
+    "fields": {
+      "firstName": "पहिलो नाम",
+      "lastName": "थर",
+      "phone": "फोन",
+      "gender": "लिङ्ग",
+      "admissionNo": "भर्ना नं.",
+      "classSection": "कक्षा / सेक्सन",
+      "rollNumber": "रोल नम्बर",
+      "academicYear": "शैक्षिक सत्र"
+    }
+  },
+  "timetable": {
+    "title": "कक्षा रुटिन",
+    "weekly": "साप्ताहिक रुटिन",
+    "errorTitle": "तपाईंको रुटिन लोड गर्न सकिएन",
+    "emptyDay": "{{day}} का लागि कुनै कक्षा तालिका छैन।"
+  },
+  "settingsRow": {
+    "notifications": "सूचना सेटिङ",
+    "privacy": "गोपनीयता र सुरक्षा",
+    "help": "सहयोग"
+  }
+}

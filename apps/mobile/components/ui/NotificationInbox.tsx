@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocaleStore } from '../../store/locale';
+import { bsLang } from '../../hooks/useLocale';
 import { View, Text, TouchableOpacity, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -33,13 +36,13 @@ const TYPE_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; tint: 
 };
 const DEFAULT_TYPE = { icon: 'notifications-outline' as const, tint: '#E4F6F1', accent: '#0E9F77' };
 
-function timeLabel(iso: string): string {
+function timeLabel(iso: string, locale: 'en' | 'np'): string {
   try {
     const d = new Date(iso);
     const hh = d.getHours();
     const mm = String(d.getMinutes()).padStart(2, '0');
     const h12 = hh % 12 === 0 ? 12 : hh % 12;
-    return `${formatBs(adToBs(d), 'en')} · ${h12}:${mm} ${hh < 12 ? 'AM' : 'PM'}`;
+    return `${formatBs(adToBs(d), bsLang(locale))} · ${h12}:${mm} ${hh < 12 ? 'AM' : 'PM'}`;
   } catch {
     return '';
   }
@@ -53,6 +56,7 @@ function InboxRow({
   onPress: (item: NotificationItem) => void;
 }) {
   const c = useThemeColors();
+  const locale = useLocaleStore((s) => s.locale);
   const cfg = TYPE_CONFIG[item.type?.toUpperCase()] ?? DEFAULT_TYPE;
 
   return (
@@ -81,7 +85,7 @@ function InboxRow({
         <NpText numberOfLines={2} style={[styles.body, { color: c.mutedForeground }]}>
           {item.body}
         </NpText>
-        <Text style={styles.time}>{timeLabel(item.createdAt)}</Text>
+        <Text style={styles.time}>{timeLabel(item.createdAt, locale)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -89,6 +93,7 @@ function InboxRow({
 
 export function NotificationInbox({ role }: { role: 'STUDENT' | 'PARENT' | 'TEACHER' }) {
   const c = useThemeColors();
+  const { t } = useTranslation('common');
   const [refreshing, setRefreshing] = useState(false);
   const { data: items, isLoading, isError, refetch } = useNotificationInbox();
   const markRead = useMarkNotificationRead();
@@ -119,16 +124,16 @@ export function NotificationInbox({ role }: { role: 'STUDENT' | 'PARENT' | 'TEAC
           compact
           padTop={12}
           padBottom={16}
-          title="Notifications"
-          subtitle="Updates from your school"
+          title={t('inbox.title')}
+          subtitle={t('inbox.subtitle')}
           right={
             unreadCount > 0 ? (
               <TouchableOpacity
                 onPress={() => markAllRead.mutate()}
                 hitSlop={8}
-                accessibilityLabel="Mark all as read"
+                accessibilityLabel={t('inbox.markAllReadA11y')}
               >
-                <Text style={[styles.markAll, { color: c.primary }]}>Mark all read</Text>
+                <NpText style={[styles.markAll, { color: c.primary }]}>{t('inbox.markAllRead')}</NpText>
               </TouchableOpacity>
             ) : undefined
           }
@@ -143,15 +148,15 @@ export function NotificationInbox({ role }: { role: 'STUDENT' | 'PARENT' | 'TEAC
             </View>
           ) : isError ? (
             <View style={{ paddingTop: 40 }}>
-              <ErrorState title="Couldn't load notifications" onRetry={() => refetch()} />
+              <ErrorState title={t('inbox.errorTitle')} onRetry={() => refetch()} />
             </View>
           ) : !items || items.length === 0 ? (
             <View style={{ paddingTop: 40 }}>
               <EmptyState
                 chip
                 icon="notifications-off-outline"
-                title="No notifications yet"
-                subtitle="Absences, results, fees and notices will show up here."
+                title={t('inbox.emptyTitle')}
+                subtitle={t('inbox.emptySubtitle')}
               />
             </View>
           ) : (

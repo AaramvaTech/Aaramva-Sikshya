@@ -24,14 +24,16 @@
     "late": "Late",
     "leave": "Leave",
     "percent": "{{value}}%",
-    "rate": "Attendance rate"
+    "rate": "Attendance rate",
+    "saturday": "Saturday"
   },
   "submission": {
     "toDo": "To do",
     "overdue": "Overdue",
     "submitted": "Submitted",
     "reviewed": "Reviewed",
-    "closed": "Closed"
+    "closed": "Closed",
+    "late": "Late"
   },
   "settings": {
     "language": "Language",
@@ -54,5 +56,52 @@
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "empty": "No notifications yet"
+  },
+  "days": {
+    "long": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "short": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ]
+  },
+  "noticesFeed": {
+    "errorTitle": "Couldn't load notices",
+    "emptyTitle": "No notices yet",
+    "emptySubtitle": "When your school posts an update, you'll see it here."
+  },
+  "inbox": {
+    "title": "Notifications",
+    "subtitle": "Updates from your school",
+    "markAllRead": "Mark all read",
+    "markAllReadA11y": "Mark all as read",
+    "errorTitle": "Couldn't load notifications",
+    "emptyTitle": "No notifications yet",
+    "emptySubtitle": "Absences, results, fees and notices will show up here."
+  },
+  "attendanceCard": {
+    "title": "Attendance this year",
+    "days": "{{count}} days",
+    "presentRate": "Present rate"
+  },
+  "noticeType": {
+    "general": "Notice",
+    "exam": "Exam",
+    "holiday": "Holiday",
+    "fee": "Fee",
+    "event": "Event",
+    "emergency": "Emergency"
   }
 }
