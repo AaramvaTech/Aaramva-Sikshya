@@ -25,7 +25,8 @@
     "leave": "Leave",
     "percent": "{{value}}%",
     "rate": "Attendance rate",
-    "saturday": "Saturday"
+    "saturday": "Saturday",
+    "holiday": "Holiday"
   },
   "submission": {
     "toDo": "To do",
@@ -116,5 +117,10 @@
     "payWith": "Pay {{amount}} with {{gateway}}",
     "due": "Due: {{value}}",
     "onlinePayment": "Online payment"
+  },
+  "assignmentStatus": {
+    "draft": "Draft",
+    "published": "Published",
+    "closed": "Closed"
   }
 }

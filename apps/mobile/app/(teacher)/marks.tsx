@@ -1,6 +1,8 @@
 import {
   View, Text, FlatList, TextInput, Alert, RefreshControl, Switch, StyleSheet,
 } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import {
@@ -55,6 +57,7 @@ const StudentMarkRow = memo(function StudentMarkRow({
   student: StudentProfile; state: MarkState; isSplit: boolean; schedule: ExamSchedule; onChange: (studentId: string, next: Partial<MarkState>) => void;
 }) {
   const c = useThemeColors();
+  const { t } = useLocale('teacher');
   const roll = student.currentEnrollment?.rollNumber;
   const validationError = validateMarks(student.id, state, schedule, isSplit);
   const disabled = state.isAbsent;
@@ -83,7 +86,7 @@ const StudentMarkRow = memo(function StudentMarkRow({
           <Text className="text-muted-foreground" style={styles.admission}>{student.admissionNumber}</Text>
         </View>
         <View style={styles.absentToggle}>
-          <Text style={[styles.absentLabel, { color: state.isAbsent ? c.danger : c.mutedForeground }]}>Absent</Text>
+          <NpText style={[styles.absentLabel, { color: state.isAbsent ? c.danger : c.mutedForeground }]}>{t('marks.absent')}</NpText>
           <Switch
             value={state.isAbsent}
             onValueChange={(val) => onChange(student.id, { isAbsent: val, theory: '', practical: '', marks: '' })}
@@ -106,7 +109,7 @@ const StudentMarkRow = memo(function StudentMarkRow({
                 <TextInput style={inputStyle} value={state.practical} onChangeText={(v) => onChange(student.id, { practical: v })} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={c.placeholderIcon} editable={!disabled} />
               </View>
               <View style={styles.totalCol}>
-                <Text className="text-muted-foreground" style={styles.inputLabel}>Total</Text>
+                <NpText className="text-muted-foreground" style={styles.inputLabel}>{t('marks.total')}</NpText>
                 <View className="bg-primary/10" style={styles.totalBox}>
                   <Text className="text-primary" style={styles.totalText}>
                     {(() => {
@@ -144,6 +147,7 @@ export default function TeacherMarks() {
   const [submitted, setSubmitted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
+  const { t } = useLocale('teacher');
 
   const { data: schedules, isLoading: schedulesLoading, isError: schedulesError, refetch: refetchSchedules } = useMyExamSchedules();
   const { data: allSections, isLoading: sectionsLoading, isError: sectionsError, refetch: refetchSections } = useMySections();
@@ -213,7 +217,7 @@ export default function TeacherMarks() {
       const err = validateMarks(studentId, state, selectedSchedule, isSplit);
       if (err) {
         const student = studentsResult.data.find((s) => s.id === studentId);
-        Alert.alert('Validation error', `${student ? `${student.firstName} ${student.lastName}` : studentId}: ${err}`);
+        Alert.alert(t('marks.alertValidationTitle'), `${student ? `${student.firstName} ${student.lastName}` : studentId}: ${err}`);
         return;
       }
     }
@@ -232,13 +236,13 @@ export default function TeacherMarks() {
         marks.push({ studentId, isAbsent: false, marksObtained: m, remarks: state.remarks || undefined });
       }
     }
-    if (marks.length === 0) { Alert.alert('Nothing to save', 'Make a change before submitting.'); return; }
+    if (marks.length === 0) { Alert.alert(t('marks.alertNothingTitle'), t('marks.alertNothingBody')); return; }
     try {
       await submitMutation.mutateAsync({ examScheduleId: selectedSchedule.examScheduleId, marks });
       setSubmitted(true);
       touchedRef.current.clear();
     } catch {
-      Alert.alert('Failed', 'Could not save marks. Please try again.');
+      Alert.alert(t('marks.alertFailedTitle'), t('marks.alertSaveFailed'));
     }
   }, [selectedSchedule, studentsResult.data, marksMap, isSplit, submitMutation]);
 
@@ -292,8 +296,8 @@ export default function TeacherMarks() {
         <>
           <ScreenHeader
             variant="plain"
-            eyebrow="Marks entry"
-            title={selectedSchedule ? `${selectedSchedule.examTypeName} · ${selectedSchedule.subjectName}` : 'Select an exam'}
+            eyebrow={t('marks.eyebrow')}
+            title={selectedSchedule ? `${selectedSchedule.examTypeName} · ${selectedSchedule.subjectName}` : t('marks.selectExam')}
             subtitle={
               selectedSchedule && selectedSec
                 ? `${selectedSec.className} · ${selectedSec.sectionName}${isSplit ? ` · Theory ${selectedSchedule.theoryMarks} + Practical ${selectedSchedule.practicalMarks}` : ` · Full marks ${selectedSchedule.fullMarks}`}`
@@ -308,9 +312,9 @@ export default function TeacherMarks() {
               {schedulesLoading ? (
                 <LoadingBlock />
               ) : schedulesError ? (
-                <ErrorState compact title="Couldn't load exams" onRetry={() => void refetchSchedules()} />
+                <ErrorState compact title={t('marks.errorExams')} onRetry={() => void refetchSchedules()} />
               ) : !schedules || schedules.length === 0 ? (
-                <EmptyState compact icon="calendar-outline" title="No exam schedules assigned to you." />
+                <EmptyState compact icon="calendar-outline" title={t('marks.noExams')} />
               ) : (
                 <View style={styles.pickerList}>
                   {schedules.map((s) => {
@@ -325,7 +329,7 @@ export default function TeacherMarks() {
                         right={
                           <View style={styles.fullMarksCol}>
                             <Text className="text-primary" style={styles.fullMarksNum}>{s.fullMarks}</Text>
-                            <Text className="text-muted-foreground" style={styles.fullMarksLabel}>Full</Text>
+                            <NpText className="text-muted-foreground" style={styles.fullMarksLabel}>{t('marks.full')}</NpText>
                           </View>
                         }
                       />
@@ -342,9 +346,9 @@ export default function TeacherMarks() {
                 {sectionsLoading ? (
                   <LoadingBlock />
                 ) : sectionsError ? (
-                  <ErrorState compact title="Couldn't load sections" onRetry={() => void refetchSections()} />
+                  <ErrorState compact title={t('marks.errorSections')} onRetry={() => void refetchSections()} />
                 ) : filteredSections.length === 0 ? (
-                  <Text className="text-muted-foreground" style={styles.hint}>You have no sections assigned to this class.</Text>
+                  <NpText className="text-muted-foreground" style={styles.hint}>{t('marks.noSectionsForClass')}</NpText>
                 ) : (
                   <View style={styles.pickerList}>
                     {filteredSections.map((s) => (
@@ -379,15 +383,15 @@ export default function TeacherMarks() {
                   )}
                 </View>
                 {rosterLoading ? (
-                  <LoadingBlock label="Loading students…" />
+                  <LoadingBlock label={t('marks.loadingStudents')} />
                 ) : rosterError ? (
                   <ErrorState
                     compact
-                    title="Couldn't load students"
+                    title={t('marks.errorStudents')}
                     onRetry={() => { void studentsResult.refetch(); void marksResult.refetch(); }}
                   />
                 ) : students.length === 0 ? (
-                  <EmptyState compact icon="people-outline" title="No students found in this section." />
+                  <EmptyState compact icon="people-outline" title={t('marks.noStudents')} />
                 ) : null}
               </View>
             )}
@@ -400,14 +404,14 @@ export default function TeacherMarks() {
             submitted ? (
               <View style={styles.savedBanner}>
                 <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
-                <Text style={styles.savedText}>Marks saved successfully</Text>
+                <NpText style={styles.savedText}>{t('marks.saved')}</NpText>
               </View>
             ) : (
               <PrimaryButton
                 label={
-                  submitMutation.isPending ? 'Saving…'
+                  submitMutation.isPending ? t('marks.saving')
                     : hasValidationErrors ? 'Fix errors above'
-                    : `Save Marks (${touchedRef.current.size} changed)`
+                    : t('marks.saveWithCount', { count: touchedRef.current.size })
                 }
                 icon="save-outline"
                 loading={submitMutation.isPending}

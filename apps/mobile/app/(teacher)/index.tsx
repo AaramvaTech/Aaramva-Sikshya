@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { todayBs, formatBs } from 'bs-calendar';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 
 import { useMyStaffProfile, useMyTimetable, useMySections } from '../../hooks/useTeacher';
 import { useAuthStore } from '../../store/auth';
@@ -14,7 +16,6 @@ import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
 import { EmptyState, ErrorState, ScreenHeader, HeaderBell } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
-import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -25,11 +26,11 @@ function nepalNow(): Date {
   return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + offset * 60000);
 }
 function todayDowNepal(): number { return nepalNow().getDay(); }
-function getGreeting(): string {
+function greetingKey(): string {
   const hour = nepalNow().getHours();
-  if (hour < 12) return 'Good morning 👋';
-  if (hour < 17) return 'Good afternoon 👋';
-  return 'Good evening 👋';
+  if (hour < 12) return 'dashboard.greetingMorning';
+  if (hour < 17) return 'dashboard.greetingAfternoon';
+  return 'dashboard.greetingEvening';
 }
 function splitName(name: string): string {
   const words = name.trim().split(/\s+/);
@@ -40,6 +41,7 @@ export default function TeacherHome() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
 
@@ -70,9 +72,9 @@ export default function TeacherHome() {
   const initials = schoolHead.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
   const stats = [
-    { num: sectionsResult.data?.length ?? 0, label: 'Classes', color: c.primary },
-    { num: todaySlots.length, label: 'Today', color: c.info },
-    { num: weeklyTotal, label: 'Weekly', color: c.warning },
+    { num: sectionsResult.data?.length ?? 0, label: t('dashboard.statClasses'), color: c.primary },
+    { num: todaySlots.length, label: t('dashboard.statToday'), color: c.info },
+    { num: weeklyTotal, label: t('dashboard.statWeekly'), color: c.warning },
   ];
 
   // Identity + stats come from profile/sections; gate the initial screen on those.
@@ -99,7 +101,7 @@ export default function TeacherHome() {
     return (
       <View style={[styles.root, { backgroundColor: c.background, justifyContent: 'center' }]}>
         <StatusBar barStyle="dark-content" />
-        <ErrorState title="Couldn't load your dashboard" onRetry={retryAll} />
+        <ErrorState title={t('dashboard.errorTitle')} onRetry={retryAll} />
       </View>
     );
   }
@@ -126,15 +128,15 @@ export default function TeacherHome() {
               )}
               <View style={{ flex: 1, minWidth: 0 }}>
                 <NpText numberOfLines={1} style={[styles.schoolHead, { color: c.foreground }]}>{schoolHead}</NpText>
-                <Text style={[styles.schoolTail, { color: c.brandMuted }]}>Teacher portal</Text>
+                <NpText style={[styles.schoolTail, { color: c.brandMuted }]}>{t('dashboard.teacherPortal')}</NpText>
               </View>
             </View>
             <HeaderBell inboxRoute="/(teacher)/inbox" />
           </View>
 
-          <Text style={[styles.greeting, { color: c.brandMuted }]}>{getGreeting()}</Text>
+          <NpText style={[styles.greeting, { color: c.brandMuted }]}>{t(greetingKey())}</NpText>
           <NpText style={[styles.name, { color: c.foreground }]}>{teacherName}</NpText>
-          <Text style={[styles.desig, { color: c.mutedForeground }]}>{desig} · {formatBs(todayBs(), 'en')}</Text>
+          <NpText style={[styles.desig, { color: c.mutedForeground }]}>{desig} · {formatBs(todayBs(), bsLang(locale))}</NpText>
         </ScreenHeader>
 
         <View style={styles.body}>
@@ -157,7 +159,7 @@ export default function TeacherHome() {
                 style={styles.actionFill}
               >
                 <Ionicons name="checkbox-outline" size={23} color="#fff" />
-                <Text style={styles.actionTextSolid}>Mark Attendance</Text>
+                <NpText style={styles.actionTextSolid}>{t('dashboard.markAttendance')}</NpText>
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
@@ -166,7 +168,7 @@ export default function TeacherHome() {
               onPress={() => router.push('/(teacher)/marks')}
             >
               <Ionicons name="create-outline" size={23} color={c.primary} />
-              <Text style={[styles.actionTextSoft, { color: c.primary }]}>Enter Marks</Text>
+              <NpText style={[styles.actionTextSoft, { color: c.primary }]}>{t('dashboard.enterMarks')}</NpText>
             </TouchableOpacity>
           </View>
 
@@ -177,12 +179,12 @@ export default function TeacherHome() {
             onPress={() => router.push('/(teacher)/assignments')}
           >
             <Ionicons name="clipboard-outline" size={20} color={c.primary} />
-            <Text style={[styles.actionTextSoft, { color: c.primary }]}>Assignments</Text>
+            <NpText style={[styles.actionTextSoft, { color: c.primary }]}>{t('dashboard.assignments')}</NpText>
             <Ionicons name="chevron-forward" size={16} color={c.primary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
 
           {/* Today's classes */}
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
+          <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('dashboard.todaysClasses')}</NpText>
           {timetableResult.isLoading ? (
             <View style={[styles.classCard, CARD_SHADOW, { backgroundColor: c.surface, paddingVertical: 14, gap: 10 }]}>
               {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 42 }} className="rounded-xl" />)}
@@ -192,7 +194,7 @@ export default function TeacherHome() {
               <EmptyState
                 compact
                 icon={isSaturday ? 'sunny-outline' : 'calendar-clear-outline'}
-                title={isSaturday ? 'Saturday — rest day' : 'No classes today'}
+                title={isSaturday ? t('dashboard.saturdayRest') : t('dashboard.noClassesToday')}
               />
             </View>
           ) : (

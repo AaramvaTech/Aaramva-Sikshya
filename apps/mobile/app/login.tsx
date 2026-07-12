@@ -21,6 +21,7 @@ import { registerPushToken } from '../lib/notifications';
 import { deleteSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 import NpText from '../components/NpText';
+import { useLocale } from '../hooks/useLocale';
 import { LanguageToggle } from '../components/ui';
 import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { useBranding } from '../lib/theme/provider';
@@ -52,6 +53,7 @@ export default function LoginScreen() {
   const { branding } = useBranding();
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
+  const { t } = useLocale('auth');
 
   const schoolName = branding?.name ?? slug ?? 'Aaramva Shikshya';
   // Design's Sign-In button darkens left→right; reuse the derived ramp's mid+dark stops.
@@ -61,7 +63,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
-      setError('Email and password are required.');
+      setError(t('login.errorRequired'));
       return;
     }
     setLoading(true);
@@ -92,7 +94,7 @@ export default function LoginScreen() {
       });
       void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
-      let msg = 'Login failed. Please try again.';
+      let msg = t('login.errorGeneric');
       if (err instanceof Error) {
         msg = err.message.includes(': ')
           ? err.message.split(': ').slice(1).join(': ')
@@ -143,22 +145,22 @@ export default function LoginScreen() {
           )}
 
           <NpText style={[styles.schoolName, { color: c.foreground }]}>{schoolName}</NpText>
-          <Text style={[styles.bandSub, { color: c.brandMuted }]}>Sign in to your account</Text>
+          <NpText style={[styles.bandSub, { color: c.brandMuted }]}>{t('login.subtitle')}</NpText>
         </View>
 
         {/* ---------------------------------------------------------------- */}
         {/* Body                                                              */}
         {/* ---------------------------------------------------------------- */}
         <View style={styles.body}>
-          <Text style={[styles.heading, { color: c.foreground }]}>Welcome back</Text>
+          <NpText style={[styles.heading, { color: c.foreground }]}>{t('login.welcomeBack')}</NpText>
 
           {/* Email */}
-          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Email address</Text>
+          <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('login.emailLabel')}</NpText>
           <View style={[styles.inputRow, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
             <Ionicons name="mail-outline" size={18} color={c.brandMuted} />
             <TextInput
               style={[styles.textInput, { color: c.foreground }]}
-              placeholder="you@school.edu.np"
+              placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={c.mutedForeground}
               value={email}
               onChangeText={setEmail}
@@ -170,7 +172,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Password */}
-          <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Password</Text>
+          <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('login.passwordLabel')}</NpText>
           <View style={[styles.inputRow, styles.inputRowLast, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
             <Ionicons name="lock-closed-outline" size={18} color={c.brandMuted} />
             <TextInput
@@ -213,7 +215,7 @@ export default function LoginScreen() {
                 <ActivityIndicator color={c.primaryForeground} />
               ) : (
                 <>
-                  <Text style={[styles.ctaText, { color: c.primaryForeground, marginRight: 8 }]}>Sign In</Text>
+                  <NpText style={[styles.ctaText, { color: c.primaryForeground, marginRight: 8 }]}>{t('login.signIn')}</NpText>
                   <Ionicons name="arrow-forward" size={19} color={c.primaryForeground} />
                 </>
               )}
@@ -222,7 +224,7 @@ export default function LoginScreen() {
 
           {/* Switch school */}
           <TouchableOpacity style={styles.switchLink} onPress={handleReset} activeOpacity={0.7}>
-            <Text style={[styles.switchText, { color: c.brandMuted }]}>Switch school</Text>
+            <NpText style={[styles.switchText, { color: c.brandMuted }]}>{t('login.switchSchool')}</NpText>
           </TouchableOpacity>
         </View>
 
@@ -237,9 +239,9 @@ export default function LoginScreen() {
         {/* ---------------------------------------------------------------- */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Ionicons name="lock-closed" size={12} color={c.mutedForeground} style={{ marginRight: 5 }} />
-          <Text style={[styles.footerText, { color: c.mutedForeground }]}>
-            Private to your school. Secured by Aaramva Shikshya.
-          </Text>
+          <NpText style={[styles.footerText, { color: c.mutedForeground }]}>
+            {t('login.footer')}
+          </NpText>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

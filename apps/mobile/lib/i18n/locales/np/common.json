@@ -25,7 +25,8 @@
     "leave": "बिदा",
     "percent": "{{value}}%",
     "rate": "हाजिरी दर",
-    "saturday": "शनिबार"
+    "saturday": "शनिबार",
+    "holiday": "बिदा"
   },
   "submission": {
     "toDo": "गर्न बाँकी",
@@ -116,5 +117,10 @@
     "payWith": "{{gateway}} बाट {{amount}} तिर्नुहोस्",
     "due": "म्याद: {{value}}",
     "onlinePayment": "अनलाइन भुक्तानी"
+  },
+  "assignmentStatus": {
+    "draft": "मस्यौदा",
+    "published": "प्रकाशित",
+    "closed": "बन्द"
   }
 }

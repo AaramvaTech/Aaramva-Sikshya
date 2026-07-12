@@ -2,6 +2,9 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Alert,
   RefreshControl, Modal, KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
+import { bsMonthName } from '../../lib/i18n/date';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo } from 'react';
 import { useMyLeaveRequests, useLeaveTypes, useApplyLeave } from '../../hooks/useTeacher';
@@ -51,6 +54,7 @@ function nextMonth(b: BsDate): BsDate {
 
 function BsDatePicker({ label, value, onChange }: { label: string; value: BsDate; onChange: (bs: BsDate) => void }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const [viewMonth, setViewMonth] = useState<BsDate>({ year: value.year, month: value.month, day: 1 });
   const days = useMemo(() => {
     const n = daysInBsMonth(viewMonth.year, viewMonth.month);
@@ -62,7 +66,7 @@ function BsDatePicker({ label, value, onChange }: { label: string; value: BsDate
       <Text className="text-muted-foreground" style={styles.fieldLabel}>{label}</Text>
       <View style={styles.pickerNav}>
         <MonthNav
-          label={`${BS_MONTH_NAMES_EN[viewMonth.month - 1]} ${viewMonth.year}`}
+          label={`${bsMonthName(viewMonth.month, locale)} ${viewMonth.year}`}
           onPrev={() => setViewMonth(prevMonth(viewMonth))}
           onNext={() => setViewMonth(nextMonth(viewMonth))}
         />
@@ -98,11 +102,12 @@ function BsDatePicker({ label, value, onChange }: { label: string; value: BsDate
 
 function LeaveCard({ req }: { req: LeaveRequest }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const st = STATUS_STYLE[req.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
   return (
     <Card padded style={styles.leaveCard}>
       <View style={styles.leaveTop}>
-        <Text className="text-foreground" style={styles.leaveTitle}>{req.leaveTypeName ?? 'Leave'}</Text>
+        <Text className="text-foreground" style={styles.leaveTitle}>{req.leaveTypeName ?? t('leave.leaveFallback')}</Text>
         <StatusBadge label={req.status} bg={st.bg} color={st.text} />
       </View>
       <View style={styles.leaveMeta}>
@@ -132,6 +137,7 @@ function LeaveCard({ req }: { req: LeaveRequest }) {
 
 function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; onClose: () => void; leaveTypes: LeaveType[] }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
   const applyMutation = useApplyLeave();
   const today = todayBs();
   const [selectedType, setSelectedType] = useState<string | null>(leaveTypes[0]?.id ?? null);
@@ -140,7 +146,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
   const [reason, setReason] = useState('');
 
   const handleSubmit = async () => {
-    if (!selectedType) { Alert.alert('Required', 'Please select a leave type.'); return; }
+    if (!selectedType) { Alert.alert(t('leave.alertRequiredTitle'), t('leave.alertRequiredBody')); return; }
     try {
       await applyMutation.mutateAsync({
         leaveTypeId: selectedType,
@@ -150,7 +156,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
       });
       onClose();
     } catch {
-      Alert.alert('Failed', 'Could not submit leave application. Please try again.');
+      Alert.alert(t('leave.alertFailedTitle'), t('leave.alertFailedBody'));
     }
   };
 
@@ -159,13 +165,13 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView className="bg-background" style={styles.fill} contentContainerStyle={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text className="text-foreground" style={styles.modalTitle}>Apply for Leave</Text>
+            <NpText className="text-foreground" style={styles.modalTitle}>{t('leave.applyForLeave')}</NpText>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close">
               <Ionicons name="close" size={24} color={c.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          <Text className="text-muted-foreground" style={styles.fieldLabel}>Leave Type</Text>
+          <NpText className="text-muted-foreground" style={styles.fieldLabel}>{t('leave.leaveType')}</NpText>
           <View style={styles.typeRow}>
             {leaveTypes.map((lt) => (
               <SelectChip key={lt.id} label={lt.name} selected={selectedType === lt.id} onPress={() => setSelectedType(lt.id)} />
@@ -173,10 +179,10 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
           </View>
 
           <Card padded style={styles.modalCard}>
-            <BsDatePicker label="From Date" value={fromBs} onChange={setFromBs} />
+            <BsDatePicker label={t('leave.fromDate')} value={fromBs} onChange={setFromBs} />
           </Card>
           <Card padded style={styles.modalCard}>
-            <BsDatePicker label="To Date" value={toBs} onChange={setToBs} />
+            <BsDatePicker label={t('leave.toDate')} value={toBs} onChange={setToBs} />
           </Card>
 
           <Card padded style={styles.modalCardLast}>
@@ -186,7 +192,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
               onChangeText={setReason}
               multiline
               numberOfLines={3}
-              placeholder="Enter reason for leave…"
+              placeholder={t('leave.reasonPlaceholder')}
               placeholderTextColor={c.mutedForeground}
               className="text-foreground"
               style={styles.reasonInput}
@@ -194,7 +200,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
           </Card>
 
           <PrimaryButton
-            label={applyMutation.isPending ? 'Submitting…' : 'Submit Application'}
+            label={applyMutation.isPending ? t('leave.submitting') : t('leave.submitApplication')}
             icon="send-outline"
             loading={applyMutation.isPending}
             onPress={handleSubmit}
@@ -211,6 +217,7 @@ export default function TeacherLeave() {
   const [refreshing, setRefreshing] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const c = useThemeColors();
+  const { t, locale } = useLocale('teacher');
 
   const leaveResult = useMyLeaveRequests();
   const typesResult = useLeaveTypes();
@@ -231,25 +238,25 @@ export default function TeacherLeave() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       <ScreenHeader
-        eyebrow="Leave Management"
-        title="My Leave"
-        subtitle={`${requests.length} request${requests.length !== 1 ? 's' : ''}`}
+        eyebrow={t('leave.eyebrow')}
+        title={t('leave.title')}
+        subtitle={t('leave.requestCount', { count: requests.length })}
       />
 
       <View style={styles.body}>
-        <PrimaryButton label="Apply for Leave" icon="add-circle-outline" onPress={() => setShowApplyModal(true)} />
+        <PrimaryButton label={t('leave.applyForLeave')} icon="add-circle-outline" onPress={() => setShowApplyModal(true)} />
 
         <View>
-          <CardLabel>Leave Requests</CardLabel>
+          <CardLabel>{t('leave.leaveRequests')}</CardLabel>
           {leaveResult.isLoading ? (
             <View style={{ gap: 10 }}>
               {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 88 }} className="rounded-2xl" />)}
             </View>
           ) : leaveResult.isError ? (
-            <Card><ErrorState title="Failed to load" onRetry={() => leaveResult.refetch()} /></Card>
+            <Card><ErrorState title={t('leave.errorTitle')} onRetry={() => leaveResult.refetch()} /></Card>
           ) : requests.length === 0 ? (
             <Card>
-              <EmptyState icon="document-outline" title="No leave requests yet" subtitle='Tap "Apply for Leave" to submit one.' />
+              <EmptyState icon="document-outline" title={t('leave.emptyTitle')} subtitle='Tap "Apply for Leave" to submit one.' />
             </Card>
           ) : (
             requests.map((req) => <LeaveCard key={req.id} req={req} />)

@@ -18,7 +18,7 @@ import { adToBs, formatBs } from 'bs-calendar';
 
 export default function TeacherProfile() {
   const c = useThemeColors();
-  const { t } = useLocale();
+  const { t } = useLocale('teacher');
   const router = useRouter();
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
@@ -43,7 +43,7 @@ export default function TeacherProfile() {
   if (isError || !p) {
     return (
       <View style={[styles.root, { backgroundColor: c.background, justifyContent: 'center' }]}>
-        <ErrorState title="Couldn't load your profile" onRetry={() => refetch()} />
+        <ErrorState title={t('profile.errorTitle')} onRetry={() => refetch()} />
       </View>
     );
   }
@@ -160,7 +160,7 @@ export default function TeacherProfile() {
             activeOpacity={0.85}
           >
             <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
-            <Text style={[styles.signOutText, { color: c.danger }]}>Sign out</Text>
+            <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
           </TouchableOpacity>
         </View>
       </ScrollView>

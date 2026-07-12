@@ -1,4 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useMyTimetable, useMyStaffProfile } from '../../hooks/useTeacher';
@@ -7,7 +9,6 @@ import { useThemeColors } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
-import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 
 // Sun–Sat abbreviated labels
@@ -24,6 +25,7 @@ export default function TeacherRoutine() {
   const { data, isLoading, isError, refetch } = useMyTimetable();
   const profileResult = useMyStaffProfile();
   const c = useThemeColors();
+  const { t } = useLocale('teacher');
   const todayDow = nepalNow().getDay();
   const [selectedDay, setSelectedDay] = useState<number>(todayDow);
 
@@ -60,7 +62,7 @@ export default function TeacherRoutine() {
         <ScreenHeader variant="hero" bare padTop={14} padBottom={16}>
           <View style={styles.bandTop}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.bandTitle, { color: c.foreground }]}>My routine</Text>
+              <NpText style={[styles.bandTitle, { color: c.foreground }]}>{t('timetable.title')}</NpText>
               <Text style={[styles.bandSub, { color: c.brandMuted }]}>
                 {desig} · {routineSummary}
               </Text>
@@ -122,14 +124,14 @@ export default function TeacherRoutine() {
             </View>
           ) : isError ? (
             <View style={{ paddingTop: 24 }}>
-              <ErrorState title="Couldn't load your routine" onRetry={() => refetch()} />
+              <ErrorState title={t('timetable.errorTitle')} onRetry={() => refetch()} />
             </View>
           ) : slots.length === 0 ? (
             <View style={{ paddingTop: 24 }}>
               <EmptyState
                 icon={selectedDay === 6 ? 'sunny-outline' : 'calendar-clear-outline'}
-                title={selectedDay === 6 ? 'Saturday — rest day' : 'No classes on this day'}
-                subtitle="Your schedule will appear here."
+                title={selectedDay === 6 ? t('timetable.saturdayRest') : t('timetable.emptyDay')}
+                subtitle={t('timetable.emptySubtitle')}
               />
             </View>
           ) : (
