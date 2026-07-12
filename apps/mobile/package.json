@@ -55,7 +55,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "cross-env TZ=Asia/Kathmandu jest"
+    "test": "cross-env TZ=Asia/Kathmandu jest",
+    "eas-build-pre-install": "cd ../../packages/bs-calendar && npm ci && npm run build"
   },
   "jest": {
     "preset": "jest-expo",

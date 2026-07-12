@@ -310,6 +310,16 @@ device install — no Play Store). The signing keystore is **EAS-managed**
 | `preview` | internal | **installable APK** | on-device testing / QA — this is the one to cut |
 | `production` | store | AAB | Play Store submission (configured, not yet used) |
 
+### Monorepo: bs-calendar is built during the EAS build
+
+`packages/bs-calendar/dist` is **not committed** (repo convention — CI and the
+API Dockerfile build it too). The cloud build compiles it via the
+`eas-build-pre-install` hook in `apps/mobile/package.json`
+(`cd ../../packages/bs-calendar && npm ci && npm run build`), which runs before
+`npm install`, so the `file:` dependency's `main` (`dist/index.js`) resolves when
+Metro bundles. If a build fails with **"Unable to resolve module bs-calendar"**,
+this hook (or its relative path) is the thing to check.
+
 ### Version / build numbers
 
 `cli.appVersionSource` = **`local`** → `app.json` is the source of truth.
