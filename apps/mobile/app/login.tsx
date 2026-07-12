@@ -21,6 +21,7 @@ import { registerPushToken } from '../lib/notifications';
 import { deleteSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 import NpText from '../components/NpText';
+import { LanguageToggle } from '../components/ui';
 import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { useBranding } from '../lib/theme/provider';
 import { FONT } from '../lib/theme/fonts';
@@ -225,6 +226,12 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* I18N-1: language toggle on the login screen — a parent who can't
+            read English must be able to switch before signing in. */}
+        <View style={styles.langRow}>
+          <LanguageToggle compact />
+        </View>
+
         {/* ---------------------------------------------------------------- */}
         {/* Trust footer                                                      */}
         {/* ---------------------------------------------------------------- */}
@@ -358,6 +365,7 @@ const styles = StyleSheet.create({
   switchText: { fontFamily: FONT.semibold, fontSize: 13.5 },
 
   // Footer
+  langRow: { alignItems: 'center', marginTop: 20 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

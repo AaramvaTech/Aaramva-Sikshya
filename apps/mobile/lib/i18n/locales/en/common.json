@@ -1,0 +1,58 @@
+{
+  "action": {
+    "tryAgain": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "signOut": "Sign out",
+    "signOutInstead": "Sign out instead",
+    "retry": "Retry",
+    "close": "Close",
+    "seeAll": "See all",
+    "refresh": "Refresh"
+  },
+  "state": {
+    "loading": "Loading…",
+    "errorTitle": "Couldn't load",
+    "errorSubtitle": "Check your connection and try again.",
+    "notFound": "Not found",
+    "empty": "Nothing here yet"
+  },
+  "attendance": {
+    "present": "Present",
+    "absent": "Absent",
+    "late": "Late",
+    "leave": "Leave",
+    "percent": "{{value}}%",
+    "rate": "Attendance rate"
+  },
+  "submission": {
+    "toDo": "To do",
+    "overdue": "Overdue",
+    "submitted": "Submitted",
+    "reviewed": "Reviewed",
+    "closed": "Closed"
+  },
+  "settings": {
+    "language": "Language",
+    "languageEnglish": "Language · English",
+    "languageNepali": "भाषा · नेपाली"
+  },
+  "common": {
+    "today": "Today",
+    "due": "Due {{date}}",
+    "marks": "{{value}} marks",
+    "noSchoolToday": "No school today",
+    "saturdayRest": "Saturday — rest day",
+    "class": "Class",
+    "section": "Section",
+    "roll": "Roll",
+    "subject": "Subject",
+    "teacher": "Teacher"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications yet"
+  }
+}

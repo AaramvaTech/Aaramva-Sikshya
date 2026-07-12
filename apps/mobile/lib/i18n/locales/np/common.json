@@ -1,0 +1,58 @@
+{
+  "action": {
+    "tryAgain": "फेरि प्रयास गर्नुहोस्",
+    "save": "सुरक्षित गर्नुहोस्",
+    "cancel": "रद्द गर्नुहोस्",
+    "submit": "पेश गर्नुहोस्",
+    "signOut": "साइन आउट",
+    "signOutInstead": "बरु साइन आउट गर्नुहोस्",
+    "retry": "पुनः प्रयास",
+    "close": "बन्द गर्नुहोस्",
+    "seeAll": "सबै हेर्नुहोस्",
+    "refresh": "ताजा गर्नुहोस्"
+  },
+  "state": {
+    "loading": "लोड हुँदैछ…",
+    "errorTitle": "लोड गर्न सकिएन",
+    "errorSubtitle": "आफ्नो इन्टरनेट जाँच गरी फेरि प्रयास गर्नुहोस्।",
+    "notFound": "फेला परेन",
+    "empty": "अहिलेसम्म केही छैन"
+  },
+  "attendance": {
+    "present": "हाजिर",
+    "absent": "अनुपस्थित",
+    "late": "ढिलो",
+    "leave": "बिदा",
+    "percent": "{{value}}%",
+    "rate": "हाजिरी दर"
+  },
+  "submission": {
+    "toDo": "गर्न बाँकी",
+    "overdue": "म्याद नाघेको",
+    "submitted": "पेश गरियो",
+    "reviewed": "जाँच भयो",
+    "closed": "बन्द भयो"
+  },
+  "settings": {
+    "language": "भाषा",
+    "languageEnglish": "Language · English",
+    "languageNepali": "भाषा · नेपाली"
+  },
+  "common": {
+    "today": "आज",
+    "due": "म्याद {{date}}",
+    "marks": "{{value}} अंक",
+    "noSchoolToday": "आज विद्यालय छैन",
+    "saturdayRest": "शनिबार — बिदाको दिन",
+    "class": "कक्षा",
+    "section": "सेक्सन",
+    "roll": "रोल",
+    "subject": "विषय",
+    "teacher": "शिक्षक"
+  },
+  "notifications": {
+    "title": "सूचनाहरू",
+    "markAllRead": "सबै पढेको चिन्ह लगाउनुहोस्",
+    "empty": "अहिलेसम्म कुनै सूचना छैन"
+  }
+}

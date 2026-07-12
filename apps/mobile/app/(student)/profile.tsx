@@ -6,7 +6,8 @@ import { useMyProfile } from '../../hooks/useStudentMe';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { ErrorState, ScreenHeader } from '../../components/ui';
+import { ErrorState, ScreenHeader , LanguageToggle } from '../../components/ui';
+import { useLocale } from '../../hooks/useLocale';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
@@ -16,13 +17,13 @@ import { FONT } from '../../lib/theme/fonts';
 
 const SETTINGS: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; label: string }[] = [
   { icon: 'notifications-outline', label: 'Notifications' },
-  { icon: 'language-outline', label: 'Language · English' },
   { icon: 'lock-closed-outline', label: 'Privacy & security' },
   { icon: 'help-circle-outline', label: 'Help & support' },
 ];
 
 export default function StudentProfile() {
   const c = useThemeColors();
+  const { t } = useLocale();
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const { data: p, isLoading, isError, refetch } = useMyProfile();
@@ -146,6 +147,12 @@ export default function StudentProfile() {
             ))}
           </View>
 
+          {/* I18N-1: language selector */}
+          <View style={{ marginTop: 16 }}>
+            <NpText style={[styles.langLabel, { color: c.mutedForeground }]}>{t('common:settings.language')}</NpText>
+            <LanguageToggle />
+          </View>
+
           {/* Sign out */}
           <TouchableOpacity
             style={[styles.signOut, { backgroundColor: `${c.danger}14`, borderColor: `${c.danger}40` }]}
@@ -162,6 +169,7 @@ export default function StudentProfile() {
 }
 
 const styles = StyleSheet.create({
+  langLabel: { fontFamily: FONT.bold, fontSize: 12, marginBottom: 8 },
   root: { flex: 1 },
 
   // Gear button positioned absolutely in the top-right of the hero band (comp sProfile line 408).

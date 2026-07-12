@@ -11,11 +11,20 @@ import ThemeSync from '../components/ThemeSync';
 import PushBootstrap from '../components/PushBootstrap';
 import { useFonts } from 'expo-font';
 import { APP_FONTS } from '../lib/theme/fonts';
+import { useLocaleStore } from '../store/locale';
 
 export default function RootLayout() {
   useBootSession();
   const { status, user, mustChangePassword } = useAuthStore();
   const [fontsLoaded] = useFonts(APP_FONTS);
+
+  // I18N-1: load the persisted locale (or device default) + init i18next once,
+  // before any UI copy renders.
+  const localeReady = useLocaleStore((s) => s.ready);
+  const hydrateLocale = useLocaleStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydrateLocale();
+  }, [hydrateLocale]);
 
   useEffect(() => {
     // Drive auth routing imperatively once boot + fonts resolve. We deliberately do
@@ -52,7 +61,7 @@ export default function RootLayout() {
     }
   }, [status, user?.role, mustChangePassword, fontsLoaded]);
 
-  const showLoader = status === 'booting' || !fontsLoaded;
+  const showLoader = status === 'booting' || !fontsLoaded || !localeReady;
 
   return (
     <QueryClientProvider client={queryClient}>

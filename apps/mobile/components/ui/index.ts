@@ -18,3 +18,4 @@ export { NoticeFeed, type NoticeFeedItem } from './NoticeFeed';
 export { HeaderBell } from './HeaderBell';
 export { NotificationInbox } from './NotificationInbox';
 export { PayChooser, type PayGateway } from './PayChooser';
+export { LanguageToggle } from './LanguageToggle';

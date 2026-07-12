@@ -1,5 +1,7 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import NpText from '../NpText';
 import { useThemeColors } from '../../lib/theme/colors';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -15,7 +17,9 @@ interface EmptyStateProps {
   compact?: boolean;
 }
 
-/** Neutral empty state — icon + title + optional helper line. */
+/** Neutral empty state — icon + title + optional helper line. Callers pass
+ *  already-translated strings (via t()); text renders through NpText so np
+ *  copy uses Noto Sans Devanagari. */
 export function EmptyState({ icon, title, subtitle, chip = false, compact = false }: EmptyStateProps) {
   const c = useThemeColors();
   return (
@@ -27,9 +31,9 @@ export function EmptyState({ icon, title, subtitle, chip = false, compact = fals
       ) : (
         <Ionicons name={icon} size={44} color={c.placeholderIcon} />
       )}
-      <Text className="text-foreground" style={styles.title}>{title}</Text>
+      <NpText className="text-foreground" style={styles.title}>{title}</NpText>
       {subtitle ? (
-        <Text className="text-muted-foreground" style={styles.subtitle}>{subtitle}</Text>
+        <NpText className="text-muted-foreground" style={styles.subtitle}>{subtitle}</NpText>
       ) : null}
     </View>
   );
@@ -44,20 +48,19 @@ interface ErrorStateProps {
   compact?: boolean;
 }
 
-/** Connection/error state with a token-driven Try again button. */
-export function ErrorState({
-  title = "Couldn't load",
-  subtitle = 'Check your connection and try again.',
-  onRetry,
-  compact = false,
-}: ErrorStateProps) {
+/** Connection/error state with a token-driven Try again button. Defaults come
+ *  from the common namespace so a bare <ErrorState onRetry> is localized. */
+export function ErrorState({ title, subtitle, onRetry, compact = false }: ErrorStateProps) {
   const c = useThemeColors();
+  const { t } = useTranslation('common');
+  const resolvedTitle = title ?? t('state.errorTitle');
+  const resolvedSubtitle = subtitle ?? t('state.errorSubtitle');
   return (
     <View style={[styles.center, { paddingVertical: compact ? 28 : 40 }]}>
       <Ionicons name="cloud-offline-outline" size={48} color={c.placeholderIcon} />
-      <Text className="text-foreground" style={styles.title}>{title}</Text>
-      {subtitle ? (
-        <Text className="text-muted-foreground" style={styles.subtitle}>{subtitle}</Text>
+      <NpText className="text-foreground" style={styles.title}>{resolvedTitle}</NpText>
+      {resolvedSubtitle ? (
+        <NpText className="text-muted-foreground" style={styles.subtitle}>{resolvedSubtitle}</NpText>
       ) : null}
       <TouchableOpacity
         onPress={onRetry}
@@ -65,9 +68,9 @@ export function ErrorState({
         style={styles.retryBtn}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="Try again"
+        accessibilityLabel={t('action.tryAgain')}
       >
-        <Text className="text-primary-foreground" style={styles.retryText}>Try again</Text>
+        <NpText className="text-primary-foreground" style={styles.retryText}>{t('action.tryAgain')}</NpText>
       </TouchableOpacity>
     </View>
   );
@@ -81,7 +84,7 @@ export function LoadingBlock({ label }: { label?: string }) {
     <View style={[styles.center, { paddingVertical: 32 }]}>
       <ActivityIndicator size="small" color={c.primary} />
       {label ? (
-        <Text className="text-muted-foreground" style={styles.loadingLabel}>{label}</Text>
+        <NpText className="text-muted-foreground" style={styles.loadingLabel}>{label}</NpText>
       ) : null}
     </View>
   );
