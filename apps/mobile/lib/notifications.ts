@@ -76,12 +76,14 @@ export interface PushTapData {
 export function routeForPush(role: string, route: string | undefined): Href {
   const r = (route ?? '').toLowerCase();
   if (role === 'STUDENT') {
+    if (r === 'assignments') return '/(student)/assignments';
     if (r === 'attendance') return '/(student)/attendance';
     if (r === 'results') return '/(student)/results';
     if (r === 'notices') return '/(student)/notices';
     return '/(student)';
   }
   if (role === 'PARENT') {
+    if (r === 'assignments') return '/(parent)/assignments';
     if (r === 'attendance') return '/(parent)/attendance';
     if (r === 'results') return '/(parent)/results';
     if (r === 'fees') return '/(parent)/fees';
@@ -89,6 +91,7 @@ export function routeForPush(role: string, route: string | undefined): Href {
     return '/(parent)';
   }
   if (role === 'TEACHER') {
+    if (r === 'assignments') return '/(teacher)/assignments';
     if (r === 'attendance') return '/(teacher)/attendance';
     if (r === 'notices') return '/(teacher)/notices';
     return '/(teacher)';

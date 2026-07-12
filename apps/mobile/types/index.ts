@@ -410,3 +410,78 @@ export interface KhaltiInitiateResponse {
   paymentUrl: string;
   paymentPageUrl: string;
 }
+
+// ── EDU-2 Assignments ────────────────────────────────────────────────────────
+
+export type AssignmentStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED';
+export type SubmissionStatus = 'SUBMITTED' | 'LATE' | 'REVIEWED';
+
+export interface MyAssignment {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: string;
+  attachmentKeys: string[];
+  status: AssignmentStatus;
+  publishedAt: string | null;
+  className?: string;
+  sectionName?: string | null;
+  subjectName?: string;
+  teacherName?: string;
+  mySubmission: {
+    status: SubmissionStatus;
+    submittedAt: string | null;
+    marks: number | null;
+  } | null;
+}
+
+export interface MySubmission {
+  id: string;
+  assignmentId: string;
+  textAnswer: string | null;
+  fileKey: string | null;
+  submittedAt: string;
+  status: SubmissionStatus;
+  marks: number | null;
+  feedback: string | null;
+}
+
+export interface ChildAssignments {
+  studentId: string;
+  studentName: string;
+  assignments: (Omit<MyAssignment, 'mySubmission'> & {
+    submission: { status: SubmissionStatus; marks: number | null; feedback: string | null } | null;
+  })[];
+}
+
+export interface TeacherAssignment {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: AssignmentStatus;
+  className?: string;
+  sectionName?: string | null;
+  subjectName?: string;
+  teacherName?: string;
+  submissionCount?: number;
+  attachmentKeys: string[];
+  description: string | null;
+}
+
+export interface TeacherSubmissionRow {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  rollNumber?: number | null;
+  textAnswer: string | null;
+  fileKey: string | null;
+  submittedAt: string;
+  status: SubmissionStatus;
+  marks: number | null;
+  feedback: string | null;
+}
+
+export interface AssignmentSubmissionsView {
+  submissions: TeacherSubmissionRow[];
+  missing: { studentId: string; studentName: string; rollNumber: number | null }[];
+}

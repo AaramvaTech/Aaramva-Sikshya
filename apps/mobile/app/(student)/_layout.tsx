@@ -99,6 +99,9 @@ export default function StudentLayout() {
       <Tabs.Screen name="profile-details" options={{ href: null }} />
       {/* Notification inbox — opened from the header bell, not a tab */}
       <Tabs.Screen name="inbox" options={{ href: null }} />
+      {/* EDU-2 assignments — reachable from Home → Quick access */}
+      <Tabs.Screen name="assignments" options={{ href: null }} />
+      <Tabs.Screen name="assignment-detail" options={{ href: null }} />
     </Tabs>
   );
 }

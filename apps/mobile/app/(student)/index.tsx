@@ -34,6 +34,7 @@ const QUICK = [
   { icon: 'calendar-number-outline', label: 'Attendance', route: '/(student)/attendance' },
   { icon: 'calendar-outline', label: 'Routine', route: '/(student)/timetable' },
   { icon: 'ribbon-outline', label: 'Results', route: '/(student)/results' },
+  { icon: 'clipboard-outline', label: 'Assignments', route: '/(student)/assignments' },
   { icon: 'megaphone-outline', label: 'Notices', route: '/(student)/notices' },
   { icon: 'person-outline', label: 'Profile', route: '/(student)/profile' },
 ] as const;

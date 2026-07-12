@@ -100,6 +100,8 @@ export default function ParentLayout() {
       <Tabs.Screen name="profile-details" options={{ href: null }} />
       {/* Notification inbox — opened from the header bell, not a tab */}
       <Tabs.Screen name="inbox" options={{ href: null }} />
+      {/* EDU-2 assignments — reachable from Home quick access */}
+      <Tabs.Screen name="assignments" options={{ href: null }} />
     </Tabs>
   );
 }
