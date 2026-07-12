@@ -71,6 +71,10 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   { prefix: '/assignments', roles: TEACHER_TIER, endpoint: 'POST /assignments' },
   { prefix: '/finance', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-structures' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
+  // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
+  // the attendance/exam tabs are coordinator-tier and hidden in-page for
+  // accountants (backend guard: GET /reports/attendance/trends).
+  { prefix: '/reports', roles: [...COORDINATOR_AND_ABOVE, 'ACCOUNTANT'], endpoint: 'GET /reports/finance/aging' },
   { prefix: '/library', roles: LIBRARIAN_AND_ABOVE, endpoint: 'POST /library/books' },
   { prefix: '/settings', roles: SETTINGS_VIEWERS, endpoint: 'GET /settings/profile' },
   { prefix: '/onboarding', roles: COORDINATOR_AND_ABOVE, endpoint: 'onboarding (setup wizard)' },
