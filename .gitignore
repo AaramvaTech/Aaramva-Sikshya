@@ -4,6 +4,13 @@ dist/
 build/
 coverage/
 
+# Next.js / Turbopack build output (apps/web). Also ignored in apps/web/.gitignore,
+# but listed at the repo ROOT so EAS Build's archive — which filters by the root
+# .gitignore only — excludes the multi-GB turbopack dev cache in this monorepo
+# (EAS-1: a 5 GB apps/web/.next was copied into the build tarball → ENOSPC).
+.next/
+.turbo/
+
 # Environment / secrets
 .env
 .env.*.local
