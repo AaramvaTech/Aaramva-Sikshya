@@ -10,6 +10,23 @@ export class UpdateProfileDto {
   @IsString()
   logoUrl?: string;
 
+  /** FILE-1: storage keys from POST /files/presign-upload. Each wins over its
+   *  legacy *Url twin; HEAD-verified against the kind policy before persist. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  logoFileKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  principalSignatureFileKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  schoolStampFileKey?: string;
+
   @IsOptional()
   @IsHexColor()
   primaryColor?: string;

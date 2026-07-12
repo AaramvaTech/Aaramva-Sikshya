@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -22,6 +23,7 @@ import {
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
+import { StorageService } from '../storage/storage.service';
 
 interface DbTenant {
   id: string;
@@ -50,6 +52,8 @@ interface DbSubscription {
 
 @Injectable()
 export class TenantAdminService {
+  private readonly logger = new Logger(TenantAdminService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly publicPrisma: PublicPrismaService,
@@ -60,6 +64,7 @@ export class TenantAdminService {
     private readonly audit: AuditService,
     private readonly brandingColor: BrandingColorService,
     private readonly events: EventEmitter2,
+    private readonly storage: StorageService,
   ) {}
 
   async onboardTenant(dto: ManualOnboardTenantDto, adminId: string) {
@@ -298,6 +303,25 @@ export class TenantAdminService {
   }
 
   async updateTenant(id: string, dto: UpdateTenantDto, adminId: string) {
+    // FILE-1: a verified storage key wins over the legacy base64 logoUrl. The
+    // key is verified against the TARGET tenant's slug (super-admin operates
+    // outside tenant context) and persisted as the public URL.
+    let logoBufferFromStorage: Buffer | null = null;
+    if (dto.logoFileKey !== undefined) {
+      const slugRows = await this.publicPrisma.query<{ slug: string }>(
+        `SELECT slug FROM tenants WHERE id = $1 AND "deletedAt" IS NULL`,
+        id,
+      );
+      if (!slugRows[0]) throw new NotFoundException(`Tenant ${id} not found`);
+      await this.storage.verifyConfirmedKey(dto.logoFileKey, 'school-logo', slugRows[0].slug);
+      dto.logoUrl = this.storage.publicUrlFor(dto.logoFileKey);
+      logoBufferFromStorage = await this.storage.getObjectBuffer(dto.logoFileKey);
+    } else if (dto.logoUrl?.startsWith('data:')) {
+      this.logger.warn(
+        '[FILE-1] deprecated base64 school logo received (super-admin) — switch to the presign flow (logoFileKey)',
+      );
+    }
+
     // slug is intentionally NOT updatable — it is the permanent subdomain + schema key.
     const columnFor: Record<string, string> = {
       schoolName: 'name',
@@ -352,7 +376,7 @@ export class TenantAdminService {
     if (dto.logoUrl !== undefined) {
       const colorSource = rows[0].color_source ?? 'auto';
       if (colorSource !== 'manual') {
-        const buffer = await fetchImageBuffer(dto.logoUrl);
+        const buffer = logoBufferFromStorage ?? (await fetchImageBuffer(dto.logoUrl));
         if (buffer) {
           const result = await this.brandingColor.deriveThemeFromLogo(buffer);
           if (result) {

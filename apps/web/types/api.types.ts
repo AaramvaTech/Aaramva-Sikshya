@@ -225,6 +225,8 @@ export interface CreateStudentData {
   bloodGroup?: string;
   religion?: string;
   photoUrl?: string;
+  /** FILE-1: storage key from the presign flow — wins over photoUrl */
+  photoFileKey?: string;
   classId?: string;
   sectionId?: string;
   academicYearId?: string;
@@ -912,6 +914,8 @@ export interface CreateStaffData {
   permanentAddress?: string; temporaryAddress?: string;
   emergencyContactName?: string; emergencyContactPhone?: string;
   photoUrl?: string;
+  /** FILE-1: storage key from the presign flow — wins over photoUrl */
+  photoFileKey?: string;
 }
 
 export interface ApplyLeaveData {
@@ -1090,6 +1094,8 @@ export interface TenantDetail extends TenantSummary {
 export interface UpdateTenantData {
   schoolName?: string;
   logoUrl?: string;
+  /** FILE-1: storage key from the presign flow — wins over logoUrl */
+  logoFileKey?: string;
   primaryColor?: string;
   description?: string;
   establishedYear?: number;
@@ -1202,6 +1208,10 @@ export interface UpdateProfileData {
   principalName?: string;
   principalSignatureUrl?: string;
   schoolStampUrl?: string;
+  /** FILE-1: storage keys from the presign flow — each wins over its *Url twin */
+  logoFileKey?: string;
+  principalSignatureFileKey?: string;
+  schoolStampFileKey?: string;
 }
 
 // ── Dashboard Module ─────────────────────────────────────────────────────────

@@ -23,6 +23,8 @@ import { useStudent, useAcademicYears, useCurrentAcademicYear } from '@/lib/hook
 import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
 import { useStudentLedger } from '@/lib/hooks/use-finance';
 import { studentsApi } from '@/lib/api/students.api';
+import { uploadFile } from '@/lib/upload';
+import { useFileUrl } from '@/lib/hooks/use-file-url';
 import { useStudentAssignments, useSetStudentAssignment } from '@/lib/hooks/use-finance';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -202,6 +204,7 @@ export default function StudentProfilePage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [showEnrollForm, setShowEnrollForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +218,9 @@ export default function StudentProfilePage() {
     enabled: activeTab === 'documents' && !!id,
   });
 
+  // FILE-1: storage keys resolve to presigned GETs; legacy values pass through.
+  const resolvedPhotoUrl = useFileUrl(student?.photoUrl);
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -226,21 +232,30 @@ export default function StudentProfilePage() {
       toast.error('Image must be less than 2 MB');
       return;
     }
+    setPendingPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setPendingPhoto(reader.result as string);
     reader.readAsDataURL(file);
   }
 
   async function handlePhotoSave() {
-    if (!pendingPhoto) return;
+    if (!pendingPhoto || !pendingPhotoFile) return;
     setPhotoLoading(true);
     try {
-      await studentsApi.update(id, { photoUrl: pendingPhoto });
+      // FILE-1: presign→PUT→photoFileKey; base64 only if storage is disabled.
+      const uploaded = await uploadFile(pendingPhotoFile, 'student-photo');
+      await studentsApi.update(
+        id,
+        uploaded.mode === 'key'
+          ? { photoFileKey: uploaded.key }
+          : { photoUrl: uploaded.dataUrl },
+      );
       await queryClient.invalidateQueries({ queryKey: ['student', id] });
       await queryClient.invalidateQueries({ queryKey: ['students'] });
       toast.success('Photo updated');
       setPhotoDialogOpen(false);
       setPendingPhoto(null);
+      setPendingPhotoFile(null);
     } catch {
       toast.error('Failed to update photo');
     } finally {
@@ -250,6 +265,7 @@ export default function StudentProfilePage() {
 
   function openPhotoDialog() {
     setPendingPhoto(null);
+    setPendingPhotoFile(null);
     setPhotoDialogOpen(true);
   }
 
@@ -334,7 +350,7 @@ export default function StudentProfilePage() {
                 {/* Avatar with upload */}
                 <div className="relative shrink-0 group mt-1">
                   <Avatar className="h-20 w-20 ring-2 ring-brand-100 ring-offset-2">
-                    <AvatarImage src={student.photoUrl ?? undefined} className="object-cover" />
+                    <AvatarImage src={resolvedPhotoUrl} className="object-cover" />
                     <AvatarFallback className="text-xl bg-brand-50 text-brand-500 font-bold">
                       {initials(student.fullName)}
                     </AvatarFallback>
@@ -662,7 +678,7 @@ export default function StudentProfilePage() {
             <div className="relative">
               <Avatar className="h-28 w-28 ring-2 ring-brand-100">
                 <AvatarImage
-                  src={pendingPhoto ?? student.photoUrl ?? undefined}
+                  src={pendingPhoto ?? resolvedPhotoUrl}
                   className="object-cover"
                 />
                 <AvatarFallback className="text-3xl bg-brand-50 text-brand-500">

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StorageAvatarImage } from '@/components/shared/storage-avatar-image';
 import {
   Dialog,
   DialogContent,
@@ -139,7 +140,7 @@ export default function StaffListPage() {
       header: 'Photo',
       cell: ({ row }) => (
         <Avatar className="h-8 w-8">
-          <AvatarImage src={row.original.photoUrl ?? undefined} />
+          <StorageAvatarImage value={row.original.photoUrl} />
           <AvatarFallback className="text-xs bg-brand-50 text-brand-500">
             {initials(row.original.fullName)}
           </AvatarFallback>

@@ -34,3 +34,6 @@ Thumbs.db
 
 # Local DB safety snapshots (MIG-2 pg_dump one-offs — never commit data dumps)
 backups/
+
+# FILE-1: local MinIO dev server (exes + object data — never commit)
+tools/minio/

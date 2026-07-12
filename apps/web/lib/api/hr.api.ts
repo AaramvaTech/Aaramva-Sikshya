@@ -31,7 +31,7 @@ export const hrApi = {
   deleteStaff: (id: string) => api.delete(`/hr/staff/${id}`),
   getStaffDocuments: (id: string) =>
     api.get<ApiResponse<StaffDocument[]>>(`/hr/staff/${id}/documents`),
-  addStaffDocument: (id: string, data: { documentType: string; fileUrl: string; fileName?: string }) =>
+  addStaffDocument: (id: string, data: { documentType: string; fileUrl?: string; fileKey?: string; fileName?: string }) =>
     api.post<ApiResponse<StaffDocument>>(`/hr/staff/${id}/documents`, data),
 
   listDepartments: () => api.get<ApiResponse<PaginatedResponse<Department>>>('/hr/departments'),

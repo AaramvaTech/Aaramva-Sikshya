@@ -121,6 +121,12 @@ export class CreateStudentDto {
   @IsOptional() @IsString() @MaxLength(255)
   previousSchool?: string;
 
+  /** Legacy base64 data-URI photo (deprecated — logged; use photoFileKey). */
   @IsOptional() @IsString()
   photoUrl?: string;
+
+  /** FILE-1: storage key from POST /files/presign-upload (kind student-photo).
+   *  Wins over photoUrl; HEAD-verified against the kind policy before persist. */
+  @IsOptional() @IsString() @MaxLength(512)
+  photoFileKey?: string;
 }

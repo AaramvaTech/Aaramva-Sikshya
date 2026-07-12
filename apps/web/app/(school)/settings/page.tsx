@@ -22,6 +22,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSchoolProfile, useUpdateSchoolProfile } from '@/lib/hooks/use-settings';
+import { uploadFile } from '@/lib/upload';
+import { useFileUrl } from '@/lib/hooks/use-file-url';
 import type { SchoolProfile, UpdateProfileData } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 
@@ -54,11 +56,14 @@ export default function SettingsPage() {
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editing, setEditing] = useState(false);
+  // FILE-1: files picked while editing — uploaded via presign on Save.
+  const [pendingFiles, setPendingFiles] = useState<{ logo?: File; signature?: File; stamp?: File }>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   function startEdit() {
     if (!profile) return;
     setForm(fromProfile(profile));
+    setPendingFiles({});
     setEditing(true);
   }
 
@@ -82,9 +87,28 @@ export default function SettingsPage() {
       logoUrl: form.logoUrl, principalSignatureUrl: form.principalSignatureUrl, schoolStampUrl: form.schoolStampUrl,
     };
     try {
+      // FILE-1: presign→PUT each picked file; the verified key replaces the
+      // legacy base64 field. uploadFile falls back to base64 only when the
+      // server has storage disabled (503) — then the preview data-URI in the
+      // form value is exactly what gets sent, as before.
+      const kinds = [
+        ['logo', 'school-logo', 'logoFileKey', 'logoUrl'],
+        ['signature', 'principal-signature', 'principalSignatureFileKey', 'principalSignatureUrl'],
+        ['stamp', 'school-stamp', 'schoolStampFileKey', 'schoolStampUrl'],
+      ] as const;
+      for (const [slot, kind, keyField, urlField] of kinds) {
+        const file = pendingFiles[slot];
+        if (!file) continue;
+        const uploaded = await uploadFile(file, kind);
+        if (uploaded.mode === 'key') {
+          payload[keyField] = uploaded.key;
+          delete payload[urlField];
+        }
+      }
       await update.mutateAsync(payload);
       toast.success('School profile updated');
       setEditing(false);
+      setPendingFiles({});
     } catch {
       toast.error('Failed to update profile');
     }
@@ -150,7 +174,7 @@ export default function SettingsPage() {
             <FieldTextarea label="Description" editing={editing} value={form.description} display={profile?.description} onChange={(v) => set('description', v)} placeholder="A short description / mission of your school" />
           </div>
           <div className="sm:col-span-2">
-            <ImageField label="School Logo" hint="Square image works best (PNG/JPG, max 2 MB)" editing={editing} value={editing ? form.logoUrl : (profile?.logoUrl ?? '')} onChange={(v) => set('logoUrl', v)} boxClass="h-20 w-20 rounded-lg" fallback={<Building2 className="h-6 w-6" />} />
+            <ImageField label="School Logo" hint="Square image works best (PNG/JPG, max 2 MB)" editing={editing} value={editing ? form.logoUrl : (profile?.logoUrl ?? '')} onChange={(v) => set('logoUrl', v)} onFile={(f) => setPendingFiles((p) => ({ ...p, logo: f }))} boxClass="h-20 w-20 rounded-lg" fallback={<Building2 className="h-6 w-6" />} />
           </div>
         </Grid>
       </Section>
@@ -196,6 +220,7 @@ export default function SettingsPage() {
             editing={editing}
             value={editing ? form.principalSignatureUrl : (profile?.principalSignatureUrl ?? '')}
             onChange={(v) => set('principalSignatureUrl', v)}
+            onFile={(f) => setPendingFiles((p) => ({ ...p, signature: f }))}
             boxClass="h-20 w-44 rounded-md"
             fallback={<PenLine className="h-6 w-6" />}
           />
@@ -205,6 +230,7 @@ export default function SettingsPage() {
             editing={editing}
             value={editing ? form.schoolStampUrl : (profile?.schoolStampUrl ?? '')}
             onChange={(v) => set('schoolStampUrl', v)}
+            onFile={(f) => setPendingFiles((p) => ({ ...p, stamp: f }))}
             boxClass="h-24 w-24 rounded-full"
             fallback={<Stamp className="h-6 w-6" />}
           />
@@ -304,12 +330,16 @@ function FieldColor({ value, display, onChange, editing }: { value: string; disp
 }
 
 function ImageField({
-  label, hint, value, onChange, editing, boxClass, fallback,
+  label, hint, value, onChange, onFile, editing, boxClass, fallback,
 }: {
   label: string; hint?: string; value: string; onChange: (v: string) => void;
+  onFile?: (file: File) => void;
   editing: boolean; boxClass: string; fallback: React.ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // FILE-1: saved signature/stamp values are storage keys — resolve them to a
+  // presigned GET for display. data-URI previews and public URLs pass through.
+  const displaySrc = useFileUrl(value) ?? '';
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -318,6 +348,8 @@ function ImageField({
       toast.error('Image must be less than 2 MB');
       return;
     }
+    onFile?.(file);
+    // Preview stays a local data-URI; the actual upload happens on Save.
     const reader = new FileReader();
     reader.onloadend = () => onChange(reader.result as string);
     reader.readAsDataURL(file);
@@ -329,7 +361,7 @@ function ImageField({
       <div className="flex items-center gap-3">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt={label} className={cn('border border-stroke bg-white object-contain dark:border-strokedark', boxClass)} />
+          <img src={displaySrc} alt={label} className={cn('border border-stroke bg-white object-contain dark:border-strokedark', boxClass)} />
         ) : (
           <div className={cn('flex items-center justify-center border border-dashed border-gray-300 text-gray-300 dark:border-strokedark', boxClass)}>{fallback}</div>
         )}
