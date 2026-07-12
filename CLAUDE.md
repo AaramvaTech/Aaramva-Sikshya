@@ -118,7 +118,7 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 10. ✅ **Library** — Books, issue/return, fines
 11. ⬜ **Inventory** — Assets, stock
 12. ✅ **Dashboard** — School dashboard (overview, weekly attendance, activity feed, upcoming exams, class-wise breakdown, quick actions)
-13. ⬜ **Reports** — Analytics dashboards, exports
+13. 🟨 **Reports** — Attendance/exam/fee-aging analytics + CSV (REP-1); PDF/scheduled exports pending
 13. ✅ **Super Admin** — Platform-level school management
 14. ✅ **Super Admin UI** — Platform admin portal (Session 17)
 
@@ -599,6 +599,33 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   leaked nothing cross-section; probes cleaned with read-backs, shims 401-proven dead.
   **Mobile jest 34 (was 19, +15: assignmentStatus 6, submissionUpload 9), mobile tsc clean**
   (typed-routes regen via brief `expo start` per the POL-2 gotcha).
+
+- [x] Reports module — cross-module analytics (REP-1, `docs/api-contracts/REP-1-reports.md`,
+  `apps/api/src/modules/reports/` + `apps/web/app/(school)/reports/`) — **read-only, ZERO
+  migrations** (still 7 tenant migrations; pure aggregation over existing data). Three report
+  families: **attendance** (`GET /reports/attendance/trends` day|bs-month buckets + class-comparison
+  + `/low` below-threshold list + `/staff` summary), **exams** (`/reports/exams/summary/:id` per-subject
+  avg/hi/lo/pass-rate + grade distribution, `/comparison/:id`, `/student-progress/:id`, `/published`),
+  **fee aging** (`/reports/finance/aging` 0-30/31-60/61-90/90+ buckets vs asOf, per-class + drill-down).
+  **BS-month bucketing** (`report.util.ts` `bsMonthBucket`): SQL aggregates per AD day (index-aligned),
+  the service folds day-rows into BS months via bs-calendar — NO SQL-side BS math (Step-0-verified:
+  1 Shrawan 2083 = 2026-07-16 boundary; year boundary 1 Baisakh 2083 = 2026-04-14; FIX-3 2070-era
+  caveat noted but operational data is current-era). **Publish boundary** = privacy gate: only
+  exam_types with results_published_at NOT NULL are visible (unpublished == 404, indistinguishable).
+  **Roles** (spec-fixed): attendance+exams → PRINCIPAL_AND_ABOVE+ACADEMIC_COORDINATOR; aging adds
+  ACCOUNTANT. **Bounded ranges** everywhere (`resolveRange`: default current BS year, 2yr cap) — no
+  unbounded scans. **Aging semantics** reconcile with the existing defaulters report (same
+  balance>0 population; aging adds the time dimension; web links to defaulters, doesn't duplicate).
+  Web `/reports`: 3 tabs (Attendance/Exams/Fees), recharts stacked bars (dashboard convention), BS
+  pickers, per-view CSV (POL-1 `exportToCsv`), QueryErrorState, sidebar + ROUTE_ACCESS row (aging
+  opens to ACCOUNTANT, attendance/exam tabs hidden in-page for them). Live proofs: 32-row crafted
+  attendance fixture → BS-month split (Ashadh 11P/3A/1L/1Lv=75%, Shrawan 12P/3A/1L=81.3%) matched
+  hand-computed EXACTLY; low-attendance roll-8=0% roll-7=25%; aging 30d→0-30(Rs1000) vs 31d→31-60
+  (PARTIAL at remaining Rs600); publish before(empty/404)→after(15 students/26.7% pass); ACCOUNTANT
+  aging 200 / exams 403 / attendance 403; **motherland timings 8-44ms all endpoints** (no index
+  needed — well under 1s); web 3 tabs render via SPA-nav. All crafted rows cleaned with read-backs
+  (attendance/invoices deleted, exam re-NULLed, 2 shim passwords restored + 401-proven).
+  **511 api tests (was 485, +26: util 20, attendance/exam/aging service specs 6), web tsc clean.**
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision

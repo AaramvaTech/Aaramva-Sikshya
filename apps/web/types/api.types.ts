@@ -1395,3 +1395,116 @@ export interface ReviewSubmissionData {
   marks?: number;
   feedback?: string;
 }
+
+// ── REP-1 Reports ────────────────────────────────────────────────────────────
+
+export interface AttendanceTrendBucket {
+  bucket: string;
+  label: string;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  total: number;
+  attendanceRate: number;
+}
+
+export interface AttendanceTrendsReport {
+  from: string;
+  to: string;
+  groupBy: 'day' | 'bs-month';
+  buckets: AttendanceTrendBucket[];
+}
+
+export interface SectionComparisonRow {
+  sectionId: string;
+  sectionName: string;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  total: number;
+  attendanceRate: number;
+}
+
+export interface LowAttendanceStudent {
+  studentId: string;
+  studentName: string;
+  rollNumber: number | null;
+  className: string | null;
+  sectionName: string | null;
+  markedDays: number;
+  attendanceRate: number;
+}
+
+export interface StaffAttendanceRow {
+  userId: string;
+  staffName: string;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  markedDays: number;
+  attendanceRate: number;
+}
+
+export interface PublishedExam {
+  id: string;
+  name: string;
+  academicYearId: string;
+  publishedAt: string;
+}
+
+export interface ExamSubjectStat {
+  subjectId: string;
+  subjectName: string;
+  appeared: number;
+  average: number | null;
+  highest: number | null;
+  lowest: number | null;
+  passRate: number;
+}
+
+export interface ExamSummaryReport {
+  examTypeId: string;
+  students: number;
+  passRate: number;
+  averagePercentage: number | null;
+  subjects: ExamSubjectStat[];
+  gradeDistribution: { grade: string; count: number }[];
+}
+
+export interface ExamComparisonRow {
+  className: string | null;
+  sectionName: string | null;
+  students: number;
+  passRate: number;
+  averagePercentage: number | null;
+}
+
+export interface AgingBucketTotal {
+  bucket: string;
+  amount: number;
+  invoices: number;
+}
+
+export interface AgingInvoiceRow {
+  bucket: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  studentId: string;
+  studentName: string;
+  className: string | null;
+  sectionName: string | null;
+  dueDate: string;
+  daysPastDue: number;
+  balance: number;
+}
+
+export interface FeeAgingReport {
+  asOf: string;
+  buckets: AgingBucketTotal[];
+  totalOutstanding: number;
+  byClass: ({ className: string; total: number } & Record<string, number | string>)[];
+  invoices: AgingInvoiceRow[];
+}

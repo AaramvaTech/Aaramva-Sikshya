@@ -27,6 +27,7 @@ import { HealthModule } from './modules/health/health.module';
 import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { AssignmentModule } from './modules/assignment/assignment.module';
     MailModule,
     StorageModule,
     AssignmentModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
+  BarChart3,
   ClipboardList,
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
@@ -85,6 +86,11 @@ const navItems: NavItem[] = [
       { name: 'Enter Marks', path: '/exams/marks' },
       { name: 'Results', path: '/exams/results' },
     ],
+  },
+  {
+    icon: <BarChart3 className="w-5 h-5" />,
+    name: 'Reports',
+    path: '/reports',
   },
   {
     icon: <UserCog className="w-5 h-5" />,
