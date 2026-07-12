@@ -1,1 +1,106 @@
-{}
+{
+  "dashboard": {
+    "errorTitle": "Couldn't load",
+    "noChildrenTitle": "No children linked",
+    "noChildrenSubtitle": "Ask your school to link your guardian account to your child's profile.",
+    "viewingChild": "Viewing child",
+    "attendanceUnavailable": "Attendance data unavailable",
+    "quickAccess": "Quick access",
+    "fullRoutine": "Full routine",
+    "todaysClasses": "Today's classes"
+  },
+  "quick": {
+    "attendance": "Attendance",
+    "results": "Results",
+    "fees": "Fees",
+    "notices": "Notices",
+    "assignments": "Assignments",
+    "routine": "Routine",
+    "homework": "Homework"
+  },
+  "assignments": {
+    "title": "Assignments",
+    "subtitle": "Homework across your children",
+    "emptyTitle": "No assignments",
+    "emptySubtitle": "Homework for your children will show up here.",
+    "childEmpty": "No assignments",
+    "childNoHomework": "{{name}} has no homework right now."
+  },
+  "attendance": {
+    "title": "Attendance",
+    "requestLeave": "Request leave",
+    "recentActivity": "Recent activity",
+    "errorMonth": "Couldn't load this month.",
+    "classPrefix": "Class {{label}}",
+    "academicYearThis": "This academic year"
+  },
+  "fees": {
+    "title": "Fee Status",
+    "totalFees": "Total Fees",
+    "paid": "Paid",
+    "outstanding": "Outstanding",
+    "errorTitle": "Failed to load fees",
+    "emptyTitle": "No fee records",
+    "emptySubtitle": "Invoices will appear here once raised by the school.",
+    "nMore": "{{first}} +{{count}} more",
+    "paidAmount": "Paid: {{amount}}",
+    "dueBalance": "Due: {{amount}}",
+    "paymentError": "Could not start the {{gateway}} payment. Please try again."
+  },
+  "notices": {
+    "title": "Notices",
+    "subtitle": "Announcements from your school"
+  },
+  "profile": {
+    "viewDetails": "View profile details",
+    "myChildren": "My children",
+    "errorTitle": "Couldn't load children"
+  },
+  "profileDetails": {
+    "title": "Profile details",
+    "guardianInfo": "Guardian information",
+    "linkedChildren": "Linked children",
+    "noChildren": "No children linked",
+    "errorTitle": "Couldn't load profile",
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "relation": "Relation"
+    }
+  },
+  "requestLeave": {
+    "eyebrow": "Attendance",
+    "title": "Request leave",
+    "filingFor": "Filing leave for",
+    "from": "From",
+    "to": "To",
+    "endBeforeStart": "End date can't be before the start date.",
+    "reason": "Reason",
+    "reasonPlaceholder": "e.g. Out of town for a family function…",
+    "submit": "Submit request",
+    "tryAgain": "Try again",
+    "submitting": "Submitting…",
+    "successBanner": "Leave request submitted. Your school will review it.",
+    "errorBanner": "Couldn't submit the request. Check your connection and try again.",
+    "close": "Close"
+  },
+  "results": {
+    "title": "Exam results",
+    "gpa": "GPA",
+    "errorTitle": "Failed to load results",
+    "emptyTitle": "No results yet",
+    "emptySubtitle": "Exam results will appear here once published.",
+    "gradeRank": "Grade · Rank",
+    "fullMarks": "Full marks {{value}}",
+    "downloadPdf": "Download report card PDF",
+    "downloading": "Downloading…"
+  },
+  "timetable": {
+    "title": "Timetable",
+    "errorTitle": "Couldn't load timetable",
+    "saturdayNoSchool": "Saturday — no school",
+    "emptyTitle": "No periods",
+    "dayPeriods": "{{day}} Periods"
+  }
+}

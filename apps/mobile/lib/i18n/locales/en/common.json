@@ -50,7 +50,8 @@
     "section": "Section",
     "roll": "Roll",
     "subject": "Subject",
-    "teacher": "Teacher"
+    "teacher": "Teacher",
+    "teacherFeedback": "Teacher feedback"
   },
   "notifications": {
     "title": "Notifications",
@@ -103,5 +104,17 @@
     "fee": "Fee",
     "event": "Event",
     "emergency": "Emergency"
+  },
+  "feeStatus": {
+    "paid": "Paid",
+    "partial": "Partial",
+    "unpaid": "Unpaid",
+    "overdue": "Overdue",
+    "waived": "Waived"
+  },
+  "pay": {
+    "payWith": "Pay {{amount}} with {{gateway}}",
+    "due": "Due: {{value}}",
+    "onlinePayment": "Online payment"
   }
 }

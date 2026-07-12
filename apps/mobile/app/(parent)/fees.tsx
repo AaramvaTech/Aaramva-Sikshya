@@ -1,4 +1,7 @@
 import { View, Text, ScrollView, RefreshControl, StyleSheet, Alert, AppState } from 'react-native';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import type { TFunction } from 'i18next';
+import NpText from '../../components/NpText';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
@@ -18,22 +21,22 @@ import type { Invoice } from '../../types';
 
 // Semantic fee-status palette (not brand-coupled). Mirrors the backend invoice
 // status values: UNPAID / PARTIAL / PAID / OVERDUE.
-const FEE_STATUS: Record<string, { bg: string; text: string; label: string }> = {
-  PAID:    { bg: '#d1fae5', text: '#065f46', label: 'Paid' },
-  PARTIAL: { bg: '#fef3c7', text: '#92400e', label: 'Partial' },
-  UNPAID:  { bg: '#fee2e2', text: '#dc2626', label: 'Unpaid' },
-  OVERDUE: { bg: '#fee2e2', text: '#991b1b', label: 'Overdue' },
-  WAIVED:  { bg: '#dbeafe', text: '#1d4ed8', label: 'Waived' },
+const FEE_STATUS: Record<string, { bg: string; text: string; label: string; labelKey: string }> = {
+  PAID:    { bg: '#d1fae5', text: '#065f46', label: 'Paid', labelKey: 'common:feeStatus.paid' },
+  PARTIAL: { bg: '#fef3c7', text: '#92400e', label: 'Partial', labelKey: 'common:feeStatus.partial' },
+  UNPAID:  { bg: '#fee2e2', text: '#dc2626', label: 'Unpaid', labelKey: 'common:feeStatus.unpaid' },
+  OVERDUE: { bg: '#fee2e2', text: '#991b1b', label: 'Overdue', labelKey: 'common:feeStatus.overdue' },
+  WAIVED:  { bg: '#dbeafe', text: '#1d4ed8', label: 'Waived', labelKey: 'common:feeStatus.waived' },
 };
 const feeStatus = (status: string) => FEE_STATUS[status?.toUpperCase()] ?? FEE_STATUS.UNPAID;
 const formatNPR = (amount: number) => `NPR ${amount.toLocaleString('en-IN')}`;
 
 // An invoice may bundle several fee categories; show the categories when known,
 // else fall back to the invoice number.
-function invoiceTitle(inv: Invoice): string {
+function invoiceTitle(inv: Invoice, t: TFunction): string {
   const items = inv.items ?? [];
   if (items.length === 1) return items[0].feeCategoryName;
-  if (items.length > 1) return `${items[0].feeCategoryName} +${items.length - 1} more`;
+  if (items.length > 1) return t('fees.nMore', { first: items[0].feeCategoryName, count: items.length - 1 });
   return inv.invoiceNumber;
 }
 
@@ -50,28 +53,29 @@ function InvoiceCard({
   payingWith: PayGateway | null;
 }) {
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
   const cfg = feeStatus(inv.status);
-  const bsDue = inv.dueDate?.ad ? formatBs(adToBs(new Date(inv.dueDate.ad)), 'en') : null;
+  const bsDue = inv.dueDate?.ad ? formatBs(adToBs(new Date(inv.dueDate.ad)), bsLang(locale)) : null;
   return (
     <Card padded style={styles.feeCard}>
       <View style={styles.feeTop}>
         <View style={styles.feeInfo}>
-          <Text className="text-foreground" style={styles.feeName}>{invoiceTitle(inv)}</Text>
+          <NpText className="text-foreground" style={styles.feeName}>{invoiceTitle(inv, t)}</NpText>
           {bsDue && (
             <View style={styles.dueRow}>
               <Ionicons name="time-outline" size={12} color={c.mutedForeground} />
-              <Text className="text-muted-foreground" style={styles.dueText}>Due: {bsDue}</Text>
+              <NpText className="text-muted-foreground" style={styles.dueText}>{t('common:pay.due', { value: bsDue })}</NpText>
             </View>
           )}
         </View>
         <View style={styles.feeRight}>
-          <StatusBadge label={cfg.label} bg={cfg.bg} color={cfg.text} />
+          <StatusBadge label={t(cfg.labelKey)} bg={cfg.bg} color={cfg.text} />
           <Text className="text-foreground" style={styles.amount}>{formatNPR(inv.totalAmount)}</Text>
           {inv.paidAmount > 0 && inv.paidAmount < inv.totalAmount && (
-            <Text className="text-muted-foreground" style={styles.subAmount}>Paid: {formatNPR(inv.paidAmount)}</Text>
+            <NpText className="text-muted-foreground" style={styles.subAmount}>{t('fees.paidAmount', { amount: formatNPR(inv.paidAmount) })}</NpText>
           )}
           {inv.balance > 0 && (
-            <Text className="text-danger" style={styles.balance}>Due: {formatNPR(inv.balance)}</Text>
+            <NpText className="text-danger" style={styles.balance}>{t('fees.dueBalance', { amount: formatNPR(inv.balance) })}</NpText>
           )}
         </View>
       </View>
@@ -150,13 +154,14 @@ export default function ParentFees() {
       const gwName = gateway === 'KHALTI' ? 'Khalti' : 'eSewa';
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message ?? `Could not start the ${gwName} payment. Please try again.`;
-      Alert.alert('Online payment', msg);
+          ?.message ?? t('fees.paymentError', { gateway: gwName });
+      Alert.alert(t('common:pay.onlinePayment'), msg);
     } finally {
       setPaying(null);
     }
   };
 
+  const { t } = useLocale('parent');
   const ledger = ledgerQuery.data;
   const invoices = ledger?.invoices ?? [];
   const totalFees = ledger?.summary.totalInvoiced ?? 0;
@@ -177,8 +182,8 @@ export default function ParentFees() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       <ScreenHeader
-        eyebrow={selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : 'Fees'}
-        title="Fee Status"
+        eyebrow={selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : t('quick.fees')}
+        title={t('fees.title')}
         overlap
       >
         <ChildPicker children={children} selectedId={effectiveChildId} onSelect={setSelectedChildId} />
@@ -189,15 +194,15 @@ export default function ParentFees() {
           <Card elevated padded={false} style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text className="text-muted-foreground" style={styles.summaryLabel}>Total Fees</Text>
+                <NpText className="text-muted-foreground" style={styles.summaryLabel}>{t('fees.totalFees')}</NpText>
                 <Text className="text-foreground" style={styles.summaryValue}>{formatNPR(totalFees)}</Text>
               </View>
               <View className="border-l border-border" style={styles.summaryItem}>
-                <Text className="text-muted-foreground" style={styles.summaryLabel}>Paid</Text>
+                <NpText className="text-muted-foreground" style={styles.summaryLabel}>{t('fees.paid')}</NpText>
                 <Text style={[styles.summaryValue, { color: c.success }]}>{formatNPR(totalPaid)}</Text>
               </View>
               <View className="border-l border-border" style={styles.summaryItem}>
-                <Text className="text-muted-foreground" style={styles.summaryLabel}>Outstanding</Text>
+                <NpText className="text-muted-foreground" style={styles.summaryLabel}>{t('fees.outstanding')}</NpText>
                 <Text style={[styles.summaryValue, { color: outstanding > 0 ? c.danger : c.success }]}>
                   {formatNPR(outstanding)}
                 </Text>
@@ -211,9 +216,9 @@ export default function ParentFees() {
             {[0, 1, 2].map((i) => <Skeleton key={i} style={{ height: 92 }} className="rounded-2xl" />)}
           </>
         ) : ledgerQuery.isError ? (
-          <Card><ErrorState compact title="Failed to load fees" onRetry={() => void ledgerQuery.refetch()} /></Card>
+          <Card><ErrorState compact title={t('fees.errorTitle')} onRetry={() => void ledgerQuery.refetch()} /></Card>
         ) : invoices.length === 0 ? (
-          <Card><EmptyState icon="card-outline" title="No fee records" subtitle="Invoices will appear here once raised by the school." /></Card>
+          <Card><EmptyState icon="card-outline" title={t('fees.emptyTitle')} subtitle={t('fees.emptySubtitle')} /></Card>
         ) : (
           invoices.map((inv) => (
             <InvoiceCard

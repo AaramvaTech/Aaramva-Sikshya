@@ -1,9 +1,10 @@
 import { View, Text, ScrollView, StatusBar, StyleSheet } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { router } from 'expo-router';
 
 import { useMyChildren, useGuardianProfile } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
-import NpText from '../../components/NpText';
 import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
@@ -37,6 +38,7 @@ function DetailRow({
 
 export default function ParentProfileDetails() {
   const c = useThemeColors();
+  const { t } = useLocale('parent');
   const user = useAuthStore((s) => s.user);
   const { data: children, isLoading, isError, refetch } = useMyChildren();
   const { data: guardian } = useGuardianProfile();
@@ -52,7 +54,7 @@ export default function ParentProfileDetails() {
     <ScreenHeader
       variant="bar"
       onBack={() => router.back()}
-      title="Profile details"
+      title={t('profileDetails.title')}
       padH={16}
       padBottom={14}
     />
@@ -84,7 +86,7 @@ export default function ParentProfileDetails() {
         <StatusBar barStyle="dark-content" />
         {Header}
         <View style={[styles.body, { justifyContent: 'center', flex: 1 }]}>
-          <ErrorState title="Couldn't load profile" onRetry={() => refetch()} />
+          <ErrorState title={t('profileDetails.errorTitle')} onRetry={() => refetch()} />
         </View>
       </View>
     );
@@ -95,10 +97,10 @@ export default function ParentProfileDetails() {
   // Phone now comes from GET /guardians/me (POL-2 T5); address/gender still have
   // no guardian endpoint.
   const guardianRows: { label: string; value: string }[] = [
-    { label: 'Name', value: guardianName },
-    { label: 'Email', value: email || '—' },
-    ...(guardian?.phone ? [{ label: 'Phone', value: guardian.phone }] : []),
-    { label: 'Relation', value: relation },
+    { label: t('profileDetails.fields.name'), value: guardianName },
+    { label: t('profileDetails.fields.email'), value: email || '—' },
+    ...(guardian?.phone ? [{ label: t('profileDetails.fields.phone'), value: guardian.phone }] : []),
+    { label: t('profileDetails.fields.relation'), value: relation },
   ];
 
   const childList = children ?? [];
@@ -119,7 +121,7 @@ export default function ParentProfileDetails() {
         </View>
 
         {/* Guardian information card */}
-        <CardLabel>Guardian information</CardLabel>
+        <CardLabel>{t('profileDetails.guardianInfo')}</CardLabel>
         <View style={[styles.infoCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
           {guardianRows.map((r, idx) => (
             <DetailRow
@@ -132,11 +134,11 @@ export default function ParentProfileDetails() {
         </View>
 
         {/* Linked children card */}
-        <CardLabel style={{ marginTop: 20 }}>Linked children</CardLabel>
+        <CardLabel style={{ marginTop: 20 }}>{t('profileDetails.linkedChildren')}</CardLabel>
         {childList.length === 0 ? (
           <View style={[styles.infoCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
             <View style={styles.row}>
-              <Text style={[styles.rowValue, { color: c.mutedForeground }]}>No children linked</Text>
+              <Text style={[styles.rowValue, { color: c.mutedForeground }]}>{t('profileDetails.noChildren')}</Text>
             </View>
           </View>
         ) : (

@@ -50,7 +50,8 @@
     "section": "सेक्सन",
     "roll": "रोल",
     "subject": "विषय",
-    "teacher": "शिक्षक"
+    "teacher": "शिक्षक",
+    "teacherFeedback": "शिक्षकको प्रतिक्रिया"
   },
   "notifications": {
     "title": "सूचनाहरू",
@@ -103,5 +104,17 @@
     "fee": "शुल्क",
     "event": "कार्यक्रम",
     "emergency": "आकस्मिक"
+  },
+  "feeStatus": {
+    "paid": "भुक्तानी भयो",
+    "partial": "आंशिक",
+    "unpaid": "बाँकी",
+    "overdue": "म्याद नाघेको",
+    "waived": "छुट"
+  },
+  "pay": {
+    "payWith": "{{gateway}} बाट {{amount}} तिर्नुहोस्",
+    "due": "म्याद: {{value}}",
+    "onlinePayment": "अनलाइन भुक्तानी"
   }
 }

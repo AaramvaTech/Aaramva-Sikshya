@@ -1,1 +1,106 @@
-{}
+{
+  "dashboard": {
+    "errorTitle": "लोड गर्न सकिएन",
+    "noChildrenTitle": "कुनै बालबालिका लिंक भएको छैन",
+    "noChildrenSubtitle": "तपाईंको अभिभावक खातालाई बच्चाको प्रोफाइलसँग जोड्न विद्यालयलाई अनुरोध गर्नुहोस्।",
+    "viewingChild": "हेर्दै हुनुहुन्छ",
+    "attendanceUnavailable": "हाजिरीको विवरण उपलब्ध छैन",
+    "quickAccess": "छिटो पहुँच",
+    "fullRoutine": "पूरा रुटिन",
+    "todaysClasses": "आजका कक्षाहरू"
+  },
+  "quick": {
+    "attendance": "हाजिरी",
+    "results": "नतिजा",
+    "fees": "शुल्क",
+    "notices": "सूचना",
+    "assignments": "गृहकार्य",
+    "routine": "रुटिन",
+    "homework": "गृहकार्य"
+  },
+  "assignments": {
+    "title": "गृहकार्य",
+    "subtitle": "तपाईंका बालबालिकाको गृहकार्य",
+    "emptyTitle": "कुनै गृहकार्य छैन",
+    "emptySubtitle": "तपाईंका बालबालिकाको गृहकार्य यहाँ देखिनेछ।",
+    "childEmpty": "कुनै गृहकार्य छैन",
+    "childNoHomework": "{{name}} लाई अहिले कुनै गृहकार्य छैन।"
+  },
+  "attendance": {
+    "title": "हाजिरी",
+    "requestLeave": "बिदाको अनुरोध",
+    "recentActivity": "हालैका गतिविधि",
+    "errorMonth": "यो महिना लोड गर्न सकिएन।",
+    "classPrefix": "कक्षा {{label}}",
+    "academicYearThis": "यस शैक्षिक सत्र"
+  },
+  "fees": {
+    "title": "शुल्क विवरण",
+    "totalFees": "जम्मा शुल्क",
+    "paid": "भुक्तानी भयो",
+    "outstanding": "बाँकी",
+    "errorTitle": "शुल्क लोड गर्न सकिएन",
+    "emptyTitle": "कुनै शुल्क विवरण छैन",
+    "emptySubtitle": "विद्यालयले शुल्क जारी गरेपछि यहाँ देखिनेछ।",
+    "nMore": "{{first}} + अन्य {{count}}",
+    "paidAmount": "भुक्तानी: {{amount}}",
+    "dueBalance": "बाँकी: {{amount}}",
+    "paymentError": "{{gateway}} भुक्तानी सुरु गर्न सकिएन। फेरि प्रयास गर्नुहोस्।"
+  },
+  "notices": {
+    "title": "सूचना",
+    "subtitle": "तपाईंको विद्यालयका सूचनाहरू"
+  },
+  "profile": {
+    "viewDetails": "प्रोफाइल विवरण हेर्नुहोस्",
+    "myChildren": "मेरा बालबालिका",
+    "errorTitle": "बालबालिका लोड गर्न सकिएन"
+  },
+  "profileDetails": {
+    "title": "प्रोफाइल विवरण",
+    "guardianInfo": "अभिभावकको जानकारी",
+    "linkedChildren": "लिंक भएका बालबालिका",
+    "noChildren": "कुनै बालबालिका लिंक भएको छैन",
+    "errorTitle": "प्रोफाइल लोड गर्न सकिएन",
+    "fields": {
+      "name": "नाम",
+      "email": "इमेल",
+      "phone": "फोन",
+      "relation": "नाता"
+    }
+  },
+  "requestLeave": {
+    "eyebrow": "हाजिरी",
+    "title": "बिदाको अनुरोध",
+    "filingFor": "जसको लागि बिदा माग्दै",
+    "from": "देखि",
+    "to": "सम्म",
+    "endBeforeStart": "अन्तिम मिति सुरु मिति भन्दा अगाडि हुन सक्दैन।",
+    "reason": "कारण",
+    "reasonPlaceholder": "जस्तै: पारिवारिक कार्यक्रमको लागि बाहिर जानुपर्ने…",
+    "submit": "अनुरोध पेश गर्नुहोस्",
+    "tryAgain": "फेरि प्रयास गर्नुहोस्",
+    "submitting": "पेश हुँदैछ…",
+    "successBanner": "बिदाको अनुरोध पेश भयो। तपाईंको विद्यालयले जाँच गर्नेछ।",
+    "errorBanner": "अनुरोध पेश गर्न सकिएन। आफ्नो इन्टरनेट जाँच गरी फेरि प्रयास गर्नुहोस्।",
+    "close": "बन्द गर्नुहोस्"
+  },
+  "results": {
+    "title": "परीक्षाको नतिजा",
+    "gpa": "GPA",
+    "errorTitle": "नतिजा लोड गर्न सकिएन",
+    "emptyTitle": "अहिलेसम्म कुनै नतिजा छैन",
+    "emptySubtitle": "प्रकाशित भएपछि परीक्षाको नतिजा यहाँ देखिनेछ।",
+    "gradeRank": "ग्रेड · र्‍याङ्क",
+    "fullMarks": "पूर्णाङ्क {{value}}",
+    "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
+    "downloading": "डाउनलोड हुँदैछ…"
+  },
+  "timetable": {
+    "title": "रुटिन",
+    "errorTitle": "रुटिन लोड गर्न सकिएन",
+    "saturdayNoSchool": "शनिबार — विद्यालय बिदा",
+    "emptyTitle": "कुनै कक्षा छैन",
+    "dayPeriods": "{{day}} का कक्षाहरू"
+  }
+}
