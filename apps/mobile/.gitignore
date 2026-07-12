@@ -18,6 +18,16 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Firebase / FCM credentials (EAS-1)
+# NOTE: google-services.json is intentionally NOT ignored — it holds only public
+# Firebase client identifiers and is committed so EAS cloud builds can read it.
+# The service-account PRIVATE KEY is the real secret: it is uploaded to EAS
+# credentials (FCM V1) and deleted locally — it must NEVER enter the repo.
+*-firebase-adminsdk-*.json
+service-account*.json
+*-service-account*.json
+google-service-account*.json
+
 # Metro
 .metro-health-check*
 

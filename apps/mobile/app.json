@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.aaramvashikshya.mobile"
+      "package": "com.aaramvashikshya.mobile",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -27,7 +28,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "color": "#0B6B43"
+        }
+      ],
       [
         "expo-splash-screen",
         {
