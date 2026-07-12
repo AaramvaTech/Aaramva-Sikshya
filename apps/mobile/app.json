@@ -18,7 +18,9 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.aaramvashikshya.mobile"
+      "package": "com.aaramvashikshya.mobile",
+      "versionCode": 1,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -27,7 +29,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "color": "#0B6B43"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -42,6 +50,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "54147e05-403e-4185-9d0c-67dd5d1f6a74"
+      }
+    },
+    "owner": "aaramva-nepal-technology"
   }
 }
