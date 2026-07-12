@@ -28,7 +28,7 @@ import { FONT } from '../lib/theme/fonts';
 type LoginResponse = {
   accessToken: string;
   refreshToken: string;
-  user: { id: string; email: string; role: string };
+  user: { id: string; email: string; role: string; mustChangePassword?: boolean };
   tenant: { name: string; slug: string; logoUrl: string | null };
 };
 
@@ -80,7 +80,15 @@ export default function LoginScreen() {
         schoolName: tenant.name,
         refreshToken,
       });
-      setSession({ accessToken, user, tenant, slug: effectiveSlug });
+      setSession({
+        accessToken,
+        user,
+        tenant,
+        slug: effectiveSlug,
+        // POL-2 T6: a temp-password login is routed to /change-password by the
+        // root layout before any role app (mirrors POL-1's web enforcement).
+        mustChangePassword: user.mustChangePassword === true,
+      });
       void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
       let msg = 'Login failed. Please try again.';

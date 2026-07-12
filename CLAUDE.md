@@ -472,6 +472,37 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   Suites: **415 api tests** (was 404; +11 across fee-structure/guardian/result/auth/grading-scale),
   web `tsc` clean. Backlog cleared: MAIL-1 R2 (force-change) is now DONE.
 
+- [x] POL-2 mobile polish sweep (`apps/mobile`, `docs/api-contracts/POL-2-mobile-polish.md`) —
+  consumes POL-1's endpoints (PR #1 merged to main first). Six items, each Step-0-confirmed:
+  **T1** parent weekly timetable was built but unreachable (`href: null`, no entry) — added a
+  "Full routine →" link on the parent dashboard's *Today's classes* header → `/(parent)/timetable`.
+  **T2** student timetable was today-only — rewrote to a **Sun–Fri weekly** day-selector grid
+  (reuses the parent day-selector UX + the shared `/timetable/section/:id` endpoint, STUDENT-allowed).
+  Needed one additive api change: `sectionId` exposed on `GET /students/me` currentEnrollment
+  (service already had it in scope; existing test assertion updated — **api stays 415, no new
+  endpoint**). New `useMyWeeklyTimetable(sectionId)` hook mirrors `useChildTimetable`.
+  **T3** removed the two orphan "Coming in Session 21" stubs (`app/(parent)/home.tsx` +
+  `app/(teacher)/home.tsx`) and their `href:null` layout registrations — **spec said "three" but
+  reality had two** (student home was already deleted in Session 22; inboxes already exist post-PUSH-1
+  so there was no notifications stub to convert). `grep "Session 21"` = 0.
+  **T4** parent results PDF — added the download button to `app/(parent)/results.tsx`; the shared
+  `useReportCardDownload(childId)` hook already routes to the parent-scoped endpoint + handles 403/409.
+  **T5** guardian real name — new `useGuardianProfile()` (`GET /guardians/me`) + shared
+  `lib/guardian.ts` (`guardianDisplayName`, email-synth kept only as loading fallback); wired into
+  parent index/profile/profile-details (also surfaces the guardian phone now that /guardians/me
+  provides it). **T6** must_change_password on mobile — login response flag → `store/auth.ts`
+  transient `mustChangePassword` → root `_layout.tsx` routes flagged sessions to a new
+  `app/change-password.tsx` (temp-password → change → revokes tokens → sign out → re-login);
+  "Sign out instead" always available. Cleared by change-password (server) + `clearMustChangePassword`.
+  **GOTCHA:** `expo-router` typed routes live in gitignored `.expo/types/router.d.ts` (regenerated
+  by `expo start`); a new route file makes LOCAL `tsc` fail until regenerated (CI has no such file →
+  permissive). Regenerate via a brief `npx expo start --offline` if local tsc rejects a new route.
+  Proofs (raw, mobile-shaped `X-Client-Type: mobile`): T5 /guardians/me → real "Dipak Sharma";
+  T4 own-child PDF `%PDF-` 200 + cross-family 403; T2 /students/me returns sectionId + section
+  endpoint returns Sun–Thu weekly; T6 mobile login `mustChangePassword:true` → change → DB flag `f`
+  → new-password re-login `false`. **Mobile jest 19 (was 10, +9 guardian helper), mobile tsc clean,
+  api 415 unchanged.** Shimmed student.demo password restored with read-back.
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +

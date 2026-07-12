@@ -17,6 +17,10 @@ interface AuthState {
   sessions: SchoolSession[];
   activeSessionId: string | null;
   selectedChildId: string | null;
+  // POL-2 T6: transient flag from the login response — true while an emailed
+  // temporary password is in effect. Not persisted; the root layout routes a
+  // flagged session to /change-password before any role app.
+  mustChangePassword: boolean;
   // Derived from active session — kept as top-level for backward compat:
   accessToken: string | null;
   slug: string | null;
@@ -50,12 +54,15 @@ interface AuthActions {
   removeSession: (sessionId: string) => void;
   // Parent: remember which child is selected for the active school
   setSelectedChildId: (id: string | null) => void;
+  // POL-2 T6: clear the first-login force flag (after a successful change).
+  clearMustChangePassword: () => void;
   // ─── Legacy compat (used by session.ts and login.tsx) ───────────────────────
   setSession: (params: {
     accessToken: string;
     user: { id: string; email: string; role: string };
     tenant: { name: string; slug: string; logoUrl: string | null };
     slug: string;
+    mustChangePassword?: boolean;
   }) => void;
   clearSession: () => void;
 }
@@ -66,6 +73,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   selectedChildId: null,
+  mustChangePassword: false,
   accessToken: null,
   slug: null,
   user: null,
@@ -94,6 +102,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         activeSessionId: sessionId,
         status: 'authed',
         selectedChildId: null, // reset child selection when switching school
+        mustChangePassword: false, // switching schools clears any stale flag
         ...deriveFromSession(session),
       };
     }),
@@ -118,6 +127,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
           activeSessionId: next.id,
           status: 'authed',
           selectedChildId: null,
+          mustChangePassword: false,
           ...deriveFromSession(next),
         };
       }
@@ -127,6 +137,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         activeSessionId: null,
         status: 'unauthed',
         selectedChildId: null,
+        mustChangePassword: false,
         accessToken: null,
         user: null,
         tenant: null,
@@ -136,8 +147,10 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   setSelectedChildId: (id) => set({ selectedChildId: id }),
 
+  clearMustChangePassword: () => set({ mustChangePassword: false }),
+
   // ── Legacy compat wrappers ──────────────────────────────────────────────────
-  setSession: ({ accessToken, user, tenant, slug }) => {
+  setSession: ({ accessToken, user, tenant, slug, mustChangePassword }) => {
     const id = `${slug}:${user.id}`;
     const session: SchoolSession = {
       id,
@@ -159,6 +172,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         activeSessionId: id,
         status: 'authed',
         selectedChildId: switching ? null : state.selectedChildId,
+        // POL-2 T6: login passes the flag; session restore omits it (→ false).
+        mustChangePassword: mustChangePassword ?? false,
         ...deriveFromSession(session),
       };
     });
@@ -174,6 +189,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
           activeSessionId: next.id,
           status: 'authed',
           selectedChildId: null,
+          mustChangePassword: false,
           ...deriveFromSession(next),
         };
       }
@@ -182,6 +198,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         activeSessionId: null,
         status: 'unauthed',
         selectedChildId: null,
+        mustChangePassword: false,
         accessToken: null,
         user: null,
         tenant: null,

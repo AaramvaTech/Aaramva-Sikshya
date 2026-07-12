@@ -10,6 +10,7 @@ export interface StudentProfile {
     className: string;
     sectionName: string;
     rollNumber: number | null;
+    sectionId: string; // POL-2 T2 — drives the weekly-timetable fetch
     academicYearId: string;
     academicYearName: string;
   } | null;
@@ -61,6 +62,29 @@ export interface NoticeItem {
 }
 
 // ─── Parent / Guardian types ─────────────────────────────────────────────────
+
+// POL-2 T5: GET /guardians/me — the parent's own profile (real name/relation/
+// phone/email), replacing the email-synthesized display name.
+export interface GuardianProfile {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  relation: string;
+  phone: string | null;
+  email: string;
+  children: {
+    id: string;
+    admissionNumber: string;
+    firstName: string;
+    lastName: string | null;
+    photoUrl: string | null;
+    relation: string;
+    isPrimary: boolean;
+    className: string | null;
+    sectionName: string | null;
+    rollNumber: number | null;
+  }[];
+}
 
 export interface MyChild {
   id: string;

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import type {
   MyChild,
+  GuardianProfile,
   ChildAttendanceSummary,
   AttendanceHistoryItem,
   SectionTimetableSlot,
@@ -9,6 +10,21 @@ import type {
   ReportCard,
   StudentLedger,
 } from '../types';
+
+// ─── Guardian profile (POL-2 T5) ───────────────────────────────────────────────
+
+// Self-scoped guardian profile — real name/relation/phone/email + children.
+// Resolves from the token (no id param), like the /students/me routes.
+export function useGuardianProfile() {
+  return useQuery<GuardianProfile>({
+    queryKey: ['parent', 'guardian', 'me'],
+    queryFn: async () => {
+      const res = await api.get('/guardians/me');
+      return res.data.data as GuardianProfile;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 // ─── Children list ────────────────────────────────────────────────────────────
 

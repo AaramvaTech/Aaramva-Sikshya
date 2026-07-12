@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { todayBs, formatBs } from 'bs-calendar';
 
-import { useMyChildren, useChildAttendanceSummary, useChildTimetable } from '../../hooks/useParentChild';
+import { useMyChildren, useChildAttendanceSummary, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
+import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { useThemeColors } from '../../lib/theme/colors';
@@ -28,16 +29,6 @@ function splitName(name: string): { head: string; tail: string } {
   return { head: words.slice(0, 2).join(' '), tail: 'Parent portal' };
 }
 
-// "ramesh.shrestha@gmail.com" -> "Ramesh Shrestha" (same derivation as (parent)/profile.tsx)
-function nameFromEmail(email: string): string {
-  const local = email.split('@')[0] ?? email;
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
 export default function ParentDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
@@ -49,6 +40,7 @@ export default function ParentDashboard() {
 
   const childrenQuery = useMyChildren();
   const children = childrenQuery.data ?? [];
+  const { data: guardian } = useGuardianProfile();
   const effectiveChildId: string | null = selectedChildId ?? (children[0]?.id ?? null);
 
   useEffect(() => {
@@ -127,10 +119,10 @@ export default function ParentDashboard() {
   const { head, tail } = splitName(schoolName);
   const initials = head.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
-  // Guardian avatar initials — derived from the login email (same pattern as (parent)/profile.tsx).
-  const guardianEmail = user?.email ?? '';
-  const guardianName = guardianEmail ? nameFromEmail(guardianEmail) : 'Parent';
-  const guardianInitials = guardianName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+  // Guardian avatar initials — real name from GET /guardians/me (POL-2 T5),
+  // falling back to the login email only while that profile loads.
+  const guardianName = guardianDisplayName(guardian, guardian?.email ?? user?.email ?? '');
+  const guardianAvatarInitials = guardianInitials(guardianName);
 
   return (
     <View style={[styles.fill, { backgroundColor: c.background }]}>
@@ -159,9 +151,9 @@ export default function ParentDashboard() {
             </View>
             <View style={styles.bandActions}>
               <HeaderBell inboxRoute="/(parent)/inbox" />
-              {guardianInitials ? (
+              {guardianAvatarInitials ? (
                 <View style={[styles.avatarCircle, { backgroundColor: c.primary, borderColor: c.surface }]}>
-                  <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{guardianInitials}</Text>
+                  <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{guardianAvatarInitials}</Text>
                 </View>
               ) : null}
             </View>
@@ -232,7 +224,18 @@ export default function ParentDashboard() {
             ))}
           </View>
 
-          <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionLabel, styles.sectionLabelInline, { color: c.foreground }]}>Today&apos;s classes</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(parent)/timetable')}
+              activeOpacity={0.7}
+              style={styles.fullRoutineLink}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.fullRoutineText, { color: c.primary }]}>Full routine</Text>
+              <Ionicons name="chevron-forward" size={13} color={c.primary} />
+            </TouchableOpacity>
+          </View>
           <TodayClasses periods={todayPeriods} isSchoolDay={isSchoolDay} style={styles.lastCard} />
         </View>
       </ScrollView>
@@ -267,6 +270,11 @@ const styles = StyleSheet.create({
   sectionLabel: { fontFamily: FONT.extrabold, fontSize: 12, marginTop: 22, marginBottom: 12, marginLeft: 2 },
   // "Quick access" sits 20px below the card (comp: margin-top 20px), vs 22px for "Today's classes"
   sectionLabelFirst: { marginTop: 20 },
+  // Today's classes header row: label on the left, "Full routine →" link on the right (T1 entry point)
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionLabelInline: { marginBottom: 12 },
+  fullRoutineLink: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 22, marginBottom: 12 },
+  fullRoutineText: { fontFamily: FONT.bold, fontSize: 12 },
 
   quickGrid: { flexDirection: 'row', gap: 9 },
   quickTile: {

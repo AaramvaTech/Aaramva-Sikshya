@@ -136,6 +136,7 @@ export class StudentMeService {
       className: string;
       sectionName: string;
       rollNumber: number | null;
+      sectionId: string;
       academicYearId: string;
       academicYearName: string;
     } | null = null;
@@ -159,6 +160,9 @@ export class StudentMeService {
           className: rows[0].class_name,
           sectionName: rows[0].section_name,
           rollNumber: student.roll_number,
+          // POL-2 T2: expose the section id so the student app can fetch the
+          // section's weekly timetable (GET /timetable/section/:id, STUDENT-allowed).
+          sectionId: student.section_id!,
           academicYearId: rows[0].academic_year_id,
           academicYearName: rows[0].academic_year_name,
         };

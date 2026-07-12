@@ -2,7 +2,7 @@ import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, StyleSheet 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { useMyChildren } from '../../hooks/useParentChild';
+import { useMyChildren, useGuardianProfile } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { logout } from '../../lib/session';
@@ -12,16 +12,7 @@ import { ErrorState, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-
-// "ramesh.shrestha@gmail.com" -> "Ramesh Shrestha"
-function nameFromEmail(email: string): string {
-  const local = email.split('@')[0] ?? email;
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
+import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
 
 export default function ParentProfile() {
   const c = useThemeColors();
@@ -30,15 +21,17 @@ export default function ParentProfile() {
   const { branding } = useBranding();
   const childrenQuery = useMyChildren();
   const children = childrenQuery.data ?? [];
+  const { data: guardian } = useGuardianProfile();
 
   const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
-  const email = user?.email ?? '';
-  const guardianName = email ? nameFromEmail(email) : 'Parent';
-  const initials = guardianName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
-  const relation = children[0]?.relation ?? 'Guardian';
+  const email = guardian?.email ?? user?.email ?? '';
+  const guardianName = guardianDisplayName(guardian, email);
+  const initials = guardianInitials(guardianName);
+  const relation = guardian?.relation ?? children[0]?.relation ?? 'Guardian';
 
   const info: { k: string; v: string }[] = [
     { k: 'Relation', v: relation },
+    ...(guardian?.phone ? [{ k: 'Phone', v: guardian.phone }] : []),
     { k: 'Email', v: email || '—' },
   ];
 
