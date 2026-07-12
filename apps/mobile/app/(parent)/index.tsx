@@ -21,6 +21,7 @@ const QUICK = [
   { icon: 'calendar-number-outline', label: 'Attendance', route: '/(parent)/attendance' },
   { icon: 'megaphone-outline', label: 'Notices', route: '/(parent)/notices' },
   { icon: 'card-outline', label: 'Fees', route: '/(parent)/fees' },
+  { icon: 'clipboard-outline', label: 'Homework', route: '/(parent)/assignments' },
 ] as const;
 
 function splitName(name: string): { head: string; tail: string } {

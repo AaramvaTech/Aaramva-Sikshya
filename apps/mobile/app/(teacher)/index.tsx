@@ -170,6 +170,17 @@ export default function TeacherHome() {
             </TouchableOpacity>
           </View>
 
+          {/* EDU-2: assignments — review submissions on the go */}
+          <TouchableOpacity
+            style={[styles.assignmentsBtn, { backgroundColor: c.brandSurface }]}
+            activeOpacity={0.85}
+            onPress={() => router.push('/(teacher)/assignments')}
+          >
+            <Ionicons name="clipboard-outline" size={20} color={c.primary} />
+            <Text style={[styles.actionTextSoft, { color: c.primary }]}>Assignments</Text>
+            <Ionicons name="chevron-forward" size={16} color={c.primary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+
           {/* Today's classes */}
           <Text style={[styles.sectionLabel, { color: c.foreground }]}>Today&apos;s classes</Text>
           {timetableResult.isLoading ? (
@@ -239,6 +250,10 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: FONT.bold, fontSize: 9.5, textTransform: 'uppercase', marginTop: 2 },
 
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  assignmentsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16, marginTop: 10,
+  },
   actionBtn: { flex: 1, borderRadius: 15, overflow: 'hidden' },
   actionFill: { paddingVertical: 14, alignItems: 'center', gap: 5,
     shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 5 },

@@ -100,6 +100,9 @@ export default function TeacherLayout() {
       {/* Notification inbox (header bell) + notices (Profile → School notices) */}
       <Tabs.Screen name="inbox" options={{ href: null }} />
       <Tabs.Screen name="notices" options={{ href: null }} />
+      {/* EDU-2 assignments — reachable from Home */}
+      <Tabs.Screen name="assignments" options={{ href: null }} />
+      <Tabs.Screen name="assignment-detail" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -113,7 +113,7 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 5. ✅ **Finance** — Fee structure, invoices, payments
 6. ✅ **HR & Staff** — Staff profiles, leave, payroll
 7. ✅ **Examination** — Exams, marks, report cards
-8. 🟨 **E-Learning** — Assignments ✅ (EDU-1); materials, online classes pending
+8. 🟨 **E-Learning** — Assignments ✅ (EDU-1 api+web, EDU-2 mobile); materials, online classes pending
 9. ✅ **Communication** — Notices, SMS, push notifications
 10. ✅ **Library** — Books, issue/return, fines
 11. ⬜ **Inventory** — Assets, stock
@@ -572,6 +572,33 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   200 + staff/student-route 403s, review→2 notification rows, all probe rows/objects cleaned with
   read-backs, shimmed passwords restored (401-proven). **485 api tests (was 450, +35: util 6,
   submission 17, assignment 8, storage +4), web tsc clean.**
+
+- [x] Assignments mobile (EDU-2, `docs/api-contracts/EDU-2-assignments-mobile.md`) — all three role
+  apps consume EDU-1's API; **api untouched (485, zero diff under apps/api)**. **Mobile's FIRST
+  upload path:** `lib/submissionUpload.ts` — expo-document-picker (newly installed, ~56.0.4) →
+  client-side policy pre-check (`validatePickedFile` mirrors the submission-file kind policy) →
+  the ASSIGNMENT-scoped presign (`POST /assignments/:id/submissions/presign-upload` — the generic
+  /files route 403s students by design) → `FileSystem.uploadAsync` raw PUT from
+  **`expo-file-system/legacy`** (established pattern: legacy has status codes + exact signed
+  headers) → confirm with fileKey. Student: `(student)/assignments` list (To submit / Submitted
+  sections, OPEN/OVERDUE/SUBMITTED/LATE/REVIEWED chips via `lib/assignmentStatus.ts` — semantic
+  literals like STATUS_CONFIG; `isPastDue` is display-only, the server's Kathmandu EOD rule is
+  authoritative) + `assignment-detail` (teacher attachments via useFileUrl→Linking, submit/resubmit
+  form, after-review + closed states surfaced as honest locked notes, 409 alert branch titled
+  "Submission locked" not an error); detail derives the assignment from the /me list cache (no
+  student-scoped GET /assignments/:id exists — staff-only). Parent: `(parent)/assignments`
+  (SelectChip child switcher, per-child statuses + marks/feedback, Homework quick tile). Teacher:
+  `(teacher)/assignments` (class-filter chips derived from the list; creation stays web-only) +
+  `assignment-detail` (submissions with inline review form matching web semantics, missing-list
+  chips; home entry button). Push route map: `assignments` added to all three roles in
+  `routeForPush` (one edit covers push-tap + inbox-tap). Screens registered as `href:null` hidden
+  routes; student/parent entries via Quick-access tiles. Live proofs mobile-shaped
+  (X-Client-Type: mobile): /me list excludes the section-B craft; presign→raw PUT→confirm
+  SUBMITTED with fileKey; due-yesterday LATE; missing 8−1=7; review → student sees marks 9 +
+  feedback + notification rows route=assignments; after-review resubmit raw 409; parent view
+  leaked nothing cross-section; probes cleaned with read-backs, shims 401-proven dead.
+  **Mobile jest 34 (was 19, +15: assignmentStatus 6, submissionUpload 9), mobile tsc clean**
+  (typed-routes regen via brief `expo start` per the POL-2 gotcha).
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
