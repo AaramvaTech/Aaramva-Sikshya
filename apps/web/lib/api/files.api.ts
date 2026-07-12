@@ -7,7 +7,9 @@ export type FileKind =
   | 'school-logo'
   | 'principal-signature'
   | 'school-stamp'
-  | 'staff-document';
+  | 'staff-document'
+  | 'assignment-attachment'
+  | 'submission-file';
 
 export interface PresignUploadResponse {
   key: string;

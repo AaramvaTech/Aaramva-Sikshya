@@ -138,6 +138,73 @@ export class FileAccessService {
         if (rows[0].user_id === user.userId) return;
         throw new ForbiddenException('Not allowed to view this file.');
       }
+
+      // EDU-1: teacher homework attachment — staff read freely; students and
+      // parents only when targeted by a non-DRAFT assignment referencing it.
+      case 'assignment-attachment': {
+        const rows = await this.tenantPrisma.query<{
+          class_id: string;
+          section_id: string | null;
+          status: string;
+        }>(
+          `SELECT class_id, section_id, status FROM assignments
+           WHERE attachment_keys @> jsonb_build_array($1::text) AND deleted_at IS NULL`,
+          key,
+        );
+        if (rows.length === 0) throw new NotFoundException('File not found.');
+        if (STAFF_READERS.includes(user.role)) return;
+        const visible = rows.filter((r) => r.status !== 'DRAFT');
+        if (visible.length === 0) throw new NotFoundException('File not found.');
+        if (user.role === Role.STUDENT || user.role === Role.PARENT) {
+          const ownJoin =
+            user.role === Role.STUDENT
+              ? `s.user_id = $3::uuid`
+              : `EXISTS (SELECT 1 FROM guardians g WHERE g.student_id = s.id AND g.user_id = $3::uuid)`;
+          for (const r of visible) {
+            const hit = await this.tenantPrisma.query<{ ok: number }>(
+              `SELECT 1 AS ok FROM students s
+               WHERE s.deleted_at IS NULL AND s.status = 'ACTIVE'
+                 AND s.class_id = $1::uuid
+                 AND ($2::uuid IS NULL OR s.section_id = $2::uuid)
+                 AND ${ownJoin}
+               LIMIT 1`,
+              r.class_id,
+              r.section_id,
+              user.userId,
+            );
+            if (hit.length > 0) return;
+          }
+        }
+        throw new ForbiddenException('Not allowed to view this file.');
+      }
+
+      // EDU-1: student submission file — staff (reviewers), the owning
+      // student, and that student's guardians.
+      case 'submission-file': {
+        const rows = await this.tenantPrisma.query<{
+          student_id: string;
+          user_id: string | null;
+        }>(
+          `SELECT sub.student_id, st.user_id
+           FROM assignment_submissions sub
+           JOIN students st ON st.id = sub.student_id
+           WHERE sub.file_key = $1`,
+          key,
+        );
+        if (rows.length === 0) throw new NotFoundException('File not found.');
+        if (STAFF_READERS.includes(user.role)) return;
+        if (user.role === Role.STUDENT && rows[0].user_id === user.userId) return;
+        if (user.role === Role.PARENT) {
+          const link = await this.tenantPrisma.query<{ ok: number }>(
+            `SELECT 1 AS ok FROM guardians
+             WHERE student_id = $1::uuid AND user_id = $2::uuid`,
+            rows[0].student_id,
+            user.userId,
+          );
+          if (link.length > 0) return;
+        }
+        throw new ForbiddenException('Not allowed to view this file.');
+      }
     }
   }
 }

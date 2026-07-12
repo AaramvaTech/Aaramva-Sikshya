@@ -21,6 +21,7 @@ import { Role } from '../common/enums/role.enum';
 import {
   FILE_KIND_POLICIES,
   FileKind,
+  FileKindPolicy,
   parseStorageKey,
 } from './storage.policy';
 
@@ -121,12 +122,22 @@ export class StorageService implements OnModuleInit {
     size: number,
     slug: string,
     role: Role,
+    opts?: {
+      /** EDU-1: set ONLY by feature endpoints that performed the kind's
+       *  object-level eligibility check (e.g. assignment submission presign). */
+      eligibilityVerified?: boolean;
+    },
   ): Promise<PresignUploadResult> {
     const client = this.requireClient();
 
-    const policy = FILE_KIND_POLICIES[kind as FileKind];
+    const policy: FileKindPolicy | undefined = FILE_KIND_POLICIES[kind as FileKind];
     if (!policy) {
       throw new BadRequestException(`Unknown file kind "${kind}".`);
+    }
+    if (policy.scopedOnly && !opts?.eligibilityVerified) {
+      throw new ForbiddenException(
+        `${kind} uploads must be presigned through their feature endpoint.`,
+      );
     }
     if (!policy.uploadRoles.includes(role)) {
       throw new ForbiddenException(`Role ${role} may not upload ${kind} files.`);
@@ -261,7 +272,7 @@ export class StorageService implements OnModuleInit {
         `No uploaded file found for the given ${kind} key — upload before confirming.`,
       );
     }
-    const policy = FILE_KIND_POLICIES[kind];
+    const policy: FileKindPolicy = FILE_KIND_POLICIES[kind];
     if (info.size > policy.maxBytes || !policy.contentTypes[info.contentType]) {
       throw new BadRequestException(
         `The uploaded ${kind} object violates the size/type policy.`,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
+  ClipboardList,
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
   MessageSquare, ChevronDown, Settings, Rocket,
@@ -58,6 +59,11 @@ const navItems: NavItem[] = [
       { name: 'Subjects', path: '/academic/subjects' },
       { name: 'Timetable', path: '/academic/timetable' },
     ],
+  },
+  {
+    icon: <ClipboardList className="w-5 h-5" />,
+    name: 'Assignments',
+    path: '/assignments',
   },
   {
     icon: <CreditCard className="w-5 h-5" />,

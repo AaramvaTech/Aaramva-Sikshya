@@ -113,7 +113,7 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 5. ✅ **Finance** — Fee structure, invoices, payments
 6. ✅ **HR & Staff** — Staff profiles, leave, payroll
 7. ✅ **Examination** — Exams, marks, report cards
-8. ⬜ **E-Learning** — Assignments, materials, online classes
+8. 🟨 **E-Learning** — Assignments ✅ (EDU-1); materials, online classes pending
 9. ✅ **Communication** — Notices, SMS, push notifications
 10. ✅ **Library** — Books, issue/return, fines
 11. ⬜ **Inventory** — Assets, stock
@@ -539,6 +539,39 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   **450 api tests (was 415, +35), web tsc clean, mobile jest 19 + tsc clean.** Storage census at cutover:
   5 legacy base64 blobs (motherland ×4, jorden-donovan logo) — migration is a follow-up; body-limit shrink
   to ~1MB once `[FILE-1]` logs go quiet (runbook).
+
+- [x] Assignments & homework (EDU-1, `docs/api-contracts/EDU-1-assignments-api-web.md`,
+  `apps/api/src/modules/assignment/`) — Phase B's first module; api + web (mobile = EDU-2). Tenant
+  migration **0007** (assignments + assignment_submissions, UNIQUE (assignment_id, student_id)),
+  canary demo→all-6, identical checksums. **Late rule:** `assignment.util.ts` `endOfDayInNepal` /
+  `computeSubmissionStatus` — LATE strictly after due-date 23:59:59.999 **Asia/Kathmandu** (offset
+  arithmetic, NEPAL_OFFSET_MS pattern; boundary unit-tested both sides ±1ms; a 20:00Z same-UTC-date
+  submission is correctly LATE). **Scoping split:** teacher/admin writes soft-scoped with
+  accountability (any TEACHER may post to any class, created_by stamped — ASSIGNMENT_MANAGER_ROLES);
+  student/parent HARD-scoped via the /me discipline (`GET /assignments/me`, submit eligibility =
+  PUBLISHED + class match + (section match OR whole-class); `GET /assignments/my-children` via
+  guardians). **Events (edge-only, PUSH-1 rule):** `assignment.published` fires ONLY on the
+  DRAFT→PUBLISHED conditional UPDATE (re-publish 409s, live-proven no re-emit); `submission.reviewed`
+  only on the →REVIEWED transition (re-review updates marks silently, live-proven). AssignmentListener
+  (communication/listeners) mirrors NoticeListener: in-app rows first (`createNotificationsBulk`,
+  type ASSIGNMENT, route `assignments`), then push; audience = targeted section's (or class's) ACTIVE
+  students with accounts + their guardians' PARENT users — live-proven exactly {student, parent}, 0
+  rows outside the audience. **FILE-1 kinds added:** `assignment-attachment` (teacher, +TEACHER in
+  UPLOADER_ROLES, images+pdf+doc/docx 10MB) and `submission-file` (STUDENT) with NEW `scopedOnly`
+  policy flag — the generic /files/presign-upload REJECTS scopedOnly kinds; presign lives at
+  `POST /assignments/:id/submissions/presign-upload` AFTER the eligibility check (probed live:
+  generic route 403, assignment route 200). Resubmission UPDATEs the unique row (no history) but
+  409s after REVIEWED (never silently erases a review — design decision). Missing list = enrolled
+  ACTIVE minus submitters (NOT EXISTS; live: 8−1=7 with names). Web: `/assignments` list
+  (class/section/subject/status filters via useClassSubjects) + create dialog (BsDateInput, FILE-1
+  attachment upload, max 5×10MB) + `[id]` detail (publish/close, submissions table with
+  SUBMITTED/LATE/REVIEWED badges, FileDownloadLink for files, review dialog, missing chips);
+  sidebar entry + ROUTE_ACCESS `/assignments` = TEACHER_TIER citing `POST /assignments` (SEC-2
+  parity). Static `me`/`my-children` routes declared BEFORE `:id` (route-shadow lesson). Full live
+  proof chain on demo (Grade 9 A) incl. LATE/SUBMITTED at the boundary, wrong-section 403, parent
+  200 + staff/student-route 403s, review→2 notification rows, all probe rows/objects cleaned with
+  read-backs, shimmed passwords restored (401-proven). **485 api tests (was 450, +35: util 6,
+  submission 17, assignment 8, storage +4), web tsc clean.**
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision

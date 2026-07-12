@@ -6,7 +6,7 @@ import {
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from '../storage.service';
-import { isStorageKey, parseStorageKey } from '../storage.policy';
+import { isStorageKey, parseStorageKey, UPLOADER_ROLES } from '../storage.policy';
 import { Role } from '../../common/enums/role.enum';
 
 jest.mock('@aws-sdk/client-s3', () => {
@@ -249,6 +249,46 @@ describe('StorageService', () => {
         service.verifyConfirmedKey(GOOD_KEY, 'student-photo', 'demo'),
       ).resolves.toEqual({ size: 4096, contentType: 'image/jpeg' });
     });
+  });
+});
+
+describe('EDU-1 scopedOnly kinds (submission-file)', () => {
+  it('the generic presign path REJECTS submission-file even for a STUDENT', async () => {
+    const service = await makeService(ENABLED_ENV);
+    await expect(
+      service.presignUpload('submission-file', 'application/pdf', 1000, 'demo', Role.STUDENT),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('grants submission-file when the feature endpoint attests eligibility', async () => {
+    const service = await makeService(ENABLED_ENV);
+    const result = await service.presignUpload(
+      'submission-file',
+      'application/pdf',
+      1000,
+      'demo',
+      Role.STUDENT,
+      { eligibilityVerified: true },
+    );
+    expect(result.key).toMatch(/^tenant_demo\/submission-file\/.+\.pdf$/);
+  });
+
+  it('UPLOADER_ROLES (generic controller gate) excludes STUDENT but includes TEACHER', () => {
+    expect(UPLOADER_ROLES).not.toContain(Role.STUDENT);
+    expect(UPLOADER_ROLES).toContain(Role.TEACHER);
+  });
+
+  it('assignment-attachment presigns for TEACHER via the generic path', async () => {
+    const service = await makeService(ENABLED_ENV);
+    const result = await service.presignUpload(
+      'assignment-attachment',
+      'application/pdf',
+      1000,
+      'demo',
+      Role.TEACHER,
+    );
+    expect(result.key).toMatch(/^tenant_demo\/assignment-attachment\/.+\.pdf$/);
+    expect(result.publicUrl).toBeUndefined();
   });
 });
 
