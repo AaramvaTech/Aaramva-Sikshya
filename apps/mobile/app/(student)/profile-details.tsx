@@ -4,6 +4,7 @@ import {
 import { router } from 'expo-router';
 
 import { useMyProfile } from '../../hooks/useStudentMe';
+import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
@@ -38,6 +39,8 @@ function DetailRow({
 export default function StudentProfileDetails() {
   const c = useThemeColors();
   const { data: p, isLoading, isError, refetch } = useMyProfile();
+  // FILE-1: storage-key photos resolve to presigned GETs; legacy values pass through.
+  const photoSrc = useFileUrl(p?.photoUrl);
 
   // ── Header ────────────────────────────────────────────────────────────────
   // Plain white detail bar with back button — matches comp sEditProfile header bar.
@@ -110,8 +113,8 @@ export default function StudentProfileDetails() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
         {/* Avatar — comp line 512–516 (avatar circle + initials / photo) */}
         <View style={styles.avatarWrap}>
-          {p.photoUrl ? (
-            <Image source={{ uri: p.photoUrl }} style={styles.avatar} />
+          {photoSrc ? (
+            <Image source={{ uri: photoSrc }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: c.primary }]}>
               <Text style={[styles.avatarInitials, { color: c.primaryForeground }]}>{initials}</Text>

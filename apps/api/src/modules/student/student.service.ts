@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
 import { adToBs, getBsYear } from 'bs-calendar';
@@ -23,6 +23,7 @@ import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
 import { Role } from '../common/enums/role.enum';
+import { StorageService } from '../storage/storage.service';
 
 const SORT_WHITELIST: Record<string, string> = {
   created_at: 'created_at',
@@ -63,15 +64,44 @@ const UPDATE_FIELD_MAP: UpdateFieldSpec[] = [
 
 @Injectable()
 export class StudentService {
+  private readonly logger = new Logger(StudentService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly guardianService: GuardianService,
     private readonly events: EventEmitter2,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * FILE-1: a verified storage key (photoFileKey) wins over the legacy base64
+   * photoUrl, which keeps working through cutover but is logged as deprecated.
+   */
+  private async resolvePhotoValue(dto: {
+    photoUrl?: string;
+    photoFileKey?: string;
+  }): Promise<string | undefined> {
+    if (dto.photoFileKey !== undefined) {
+      const { slug } = this.tenantContext.getOrThrow();
+      await this.storage.verifyConfirmedKey(dto.photoFileKey, 'student-photo', slug);
+      return dto.photoFileKey;
+    }
+    if (dto.photoUrl?.startsWith('data:')) {
+      this.logger.warn(
+        '[FILE-1] deprecated base64 student photo received — switch to the presign flow (photoFileKey)',
+      );
+    }
+    return dto.photoUrl;
+  }
 
   async admitStudent(dto: CreateStudentDto, createdById: string): Promise<StudentResponseDto> {
     const { tenantId } = this.tenantContext.getOrThrow();
+
+    // FILE-1: resolve/verify the photo BEFORE the insert tx. Note the INSERT
+    // previously had no photo_url at all — admission photos were silently
+    // dropped; fixed here for both the key and the legacy base64 path.
+    const photoValue = await this.resolvePhotoValue(dto);
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -128,13 +158,13 @@ export class StudentService {
                blood_group, religion, ethnicity, nationality, mother_tongue,
                phone, email, permanent_address, temporary_address,
                class_id, section_id, class_name, section_name, roll_number,
-               admission_date, academic_year, previous_school, created_by
+               admission_date, academic_year, previous_school, created_by, photo_url
              ) VALUES (
                $1::uuid, $2, $3, $4, $5::date, $6,
                $7, $8, $9, $10, $11,
                $12, $13, $14::jsonb, $15::jsonb,
                $16::uuid, $17::uuid, $18, $19, $20,
-               $21::date, $22, $23, $24::uuid
+               $21::date, $22, $23, $24::uuid, $25
              ) RETURNING *`,
             tenantId, studentId,
             dto.firstName, dto.lastName, dto.dateOfBirth, dto.gender,
@@ -146,7 +176,7 @@ export class StudentService {
             classIdToInsert, sectionIdToInsert,
             classNameToInsert, sectionNameToInsert, dto.rollNumber ?? null,
             dto.admissionDate, academicYearToInsert,
-            dto.previousSchool ?? null, createdById,
+            dto.previousSchool ?? null, createdById, photoValue ?? null,
           );
 
           const student = rows[0];
@@ -233,6 +263,9 @@ export class StudentService {
 
   async updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentResponseDto> {
     const { tenantId } = this.tenantContext.getOrThrow();
+
+    // FILE-1: a verified photoFileKey rides the existing photoUrl column path.
+    dto.photoUrl = await this.resolvePhotoValue(dto);
 
     // MIG-2: guardians supplied on an update are written to the normalized
     // `guardians` table (find-or-create, additive — never wholesale-replaces or

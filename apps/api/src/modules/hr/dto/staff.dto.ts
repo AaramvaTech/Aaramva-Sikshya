@@ -146,9 +146,16 @@ export class UpdateStaffDto {
   @IsString()
   emergencyContactPhone?: string;
 
+  /** Legacy base64 data-URI photo (deprecated — logged; use photoFileKey). */
   @IsOptional()
   @IsString()
   photoUrl?: string;
+
+  /** FILE-1: storage key (kind staff-photo). Wins over photoUrl. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  photoFileKey?: string;
 }
 
 export class StaffQueryDto {
@@ -187,9 +194,17 @@ export class AddStaffDocumentDto {
   @IsNotEmpty()
   documentType: string;
 
+  /** Legacy base64 data-URI document (deprecated — logged; use fileKey).
+   *  Exactly one of fileUrl | fileKey is required (service-enforced). */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fileUrl: string;
+  fileUrl?: string;
+
+  /** FILE-1: storage key (kind staff-document). Wins over fileUrl. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  fileKey?: string;
 
   @IsOptional()
   @IsString()

@@ -175,3 +175,109 @@ Khalti IDs 9800000000–9800000005, MPIN 1111, OTP 987654.
 **Reconciliation:** the PAY-1 queries above cover Khalti by swapping
 `p.method = 'ESEWA'` for `p.method = 'KHALTI'` (the VERIFIED-without-payment
 query is already gateway-agnostic).
+
+## File storage (FILE-1) — S3-compatible presigned uploads
+
+Photos/logos/documents no longer travel as base64 JSON — clients presign
+(`POST /files/presign-upload`), PUT bytes straight to storage, then confirm the
+returned key to the feature endpoint (`photoFileKey` / `fileKey` / `logoFileKey`
+/ …). Reads go through `GET /files/presigned?key=` (object-scoped, short-lived)
+— except `school-logo`, the ONE public-read kind (stored as a public URL because
+the mobile school-code screen and the login page render it pre-auth).
+
+Storage is enabled when ALL FOUR of `S3_ENDPOINT`, `S3_ACCESS_KEY`,
+`S3_SECRET_KEY`, `S3_BUCKET` are set; otherwise presign endpoints 503 and the
+legacy base64 path keeps working (deprecated, logged with `[FILE-1]`).
+
+### Local dev setup — MinIO (single Windows exe, no Docker, no account)
+
+Exact commands used (binaries live in the gitignored `tools/minio/`):
+
+```powershell
+# 1. Download (≈110 MB + ≈30 MB)
+curl -sSL -o tools/minio/minio.exe https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+curl -sSL -o tools/minio/mc.exe    https://dl.min.io/client/mc/release/windows-amd64/mc.exe
+
+# 2. Start the server (API :9000, web console :9001; data dir is local)
+$env:MINIO_ROOT_USER = 'minioadmin'; $env:MINIO_ROOT_PASSWORD = 'minioadmin'
+tools/minio/minio.exe server tools/minio/data --console-address ":9001"
+
+# 3. One-time: bucket + dedicated access keys
+tools/minio/mc.exe alias set local http://127.0.0.1:9000 minioadmin minioadmin
+tools/minio/mc.exe mb local/aaramva-dev
+tools/minio/mc.exe admin user svcacct add local minioadmin `
+  --access-key aaramva-dev-access --secret-key <GENERATE-40-HEX>
+
+# 4. One-time: anonymous read for school logos ONLY (wildcard prefix policy)
+#    policy JSON: Action s3:GetObject on arn:aws:s3:::aaramva-dev/tenant_*/school-logo/*
+tools/minio/mc.exe anonymous set-json logo-public-policy.json local/aaramva-dev
+```
+
+Then in `apps/api/.env`:
+
+```
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_REGION=us-east-1
+S3_ACCESS_KEY=aaramva-dev-access
+S3_SECRET_KEY=<the generated secret>
+S3_BUCKET=aaramva-dev
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=http://127.0.0.1:9000/aaramva-dev   # optional; this IS the default
+```
+
+### Deployment swap table (env-only — no code changes)
+
+| Provider | S3_ENDPOINT | S3_FORCE_PATH_STYLE | Notes |
+|---|---|---|---|
+| MinIO (dev) | `http://127.0.0.1:9000` | `true` | root console at :9001 |
+| Cloudflare R2 | `https://<account-id>.r2.cloudflarestorage.com` | `true` | logo public-read via R2 "public bucket"/custom domain → set `S3_PUBLIC_URL` to that domain; R2 does NOT support the wildcard bucket policy |
+| Backblaze B2 | `https://s3.<region>.backblazeb2.com` | `true` | application key = S3 credentials |
+| AWS S3 | `https://s3.<region>.amazonaws.com` | `false` | apply the same wildcard `tenant_*/school-logo/*` GetObject policy |
+
+Because `tenants.logoUrl` stores the PUBLIC URL, a provider swap must rewrite
+stored logo URLs once (signature/stamp/photos/documents store keys — no-op):
+
+```sql
+UPDATE public.tenants
+SET "logoUrl" = replace("logoUrl", '<old S3_PUBLIC_URL>', '<new S3_PUBLIC_URL>')
+WHERE "logoUrl" LIKE '<old S3_PUBLIC_URL>/%';
+```
+
+### Orphaned objects (uploaded but never confirmed)
+
+Preferred long-term approach: a bucket **lifecycle rule** that expires
+unconfirmed uploads is not expressible directly (confirmation lives in our DB),
+so the pragmatic rule is: run the manual pruner during maintenance windows.
+
+```bash
+cd apps/api
+npm run prune-orphans              # DRY-RUN (default): lists orphans, deletes nothing
+npm run prune-orphans -- --delete  # actually delete
+npm run prune-orphans -- --grace-hours 48   # keep unreferenced objects newer than 48h
+```
+
+Objects newer than the grace window (default 24 h) are never touched — they may
+be uploads whose confirm request hasn't landed yet. No cron by design (FILE-1);
+revisit if orphan volume ever matters.
+
+### ⚠️ BACKUPS: object storage is OUTSIDE pg_dump
+
+`scripts/backup-db.sh` (pg_dump) does NOT back up uploaded files. A database
+restore brings back the KEYS but not the BYTES. Back up the bucket itself:
+
+```bash
+tools/minio/mc.exe mirror local/aaramva-dev <backup-target>   # dev
+# prod: provider-native versioning/replication (R2/B2/S3 all offer it) — enable it
+```
+
+Restore drill = restore DB dump AND re-point/restore the bucket; verify one
+student photo end-to-end before declaring recovery complete.
+
+### 5 MB JSON body limit (main.ts)
+
+The `json({ limit: '5mb' })` in `apps/api/src/main.ts` exists ONLY for the
+legacy base64 upload path. Once the deprecation logs (`[FILE-1] deprecated
+base64 …`) go quiet in production, shrink it to ~1 MB. Migration of the ~5
+existing base64 blobs in dev (motherland ×4, jorden-donovan logo) is a
+follow-up — count them with:
+`SELECT count(*) FROM <schema>.students WHERE photo_url LIKE 'data:%'` (etc.).

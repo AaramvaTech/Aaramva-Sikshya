@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
+import { StorageService } from '../storage/storage.service';
 
 interface TenantProfileRow {
   id: string;
@@ -80,10 +81,13 @@ const PROFILE_SELECT = `id, name, slug,
 
 @Injectable()
 export class SettingsService {
+  private readonly logger = new Logger(SettingsService.name);
+
   constructor(
     private readonly publicPrisma: PublicPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly brandingColor: BrandingColorService,
+    private readonly storage: StorageService,
   ) {}
 
   async getProfile() {
@@ -96,7 +100,38 @@ export class SettingsService {
   }
 
   async updateProfile(dto: UpdateProfileDto) {
-    const { tenantId } = this.tenantContext.getOrThrow();
+    const { tenantId, slug } = this.tenantContext.getOrThrow();
+
+    // FILE-1: verified storage keys win over their legacy base64 *Url twins.
+    // school-logo is the one public-read kind — its column gets the PUBLIC URL
+    // (pre-auth consumers: mobile school-code screen, login page); signature
+    // and stamp stay private and store the KEY (read via presigned GET).
+    let logoBufferFromStorage: Buffer | null = null;
+    if (dto.logoFileKey !== undefined) {
+      await this.storage.verifyConfirmedKey(dto.logoFileKey, 'school-logo', slug);
+      dto.logoUrl = this.storage.publicUrlFor(dto.logoFileKey);
+      logoBufferFromStorage = await this.storage.getObjectBuffer(dto.logoFileKey);
+    }
+    if (dto.principalSignatureFileKey !== undefined) {
+      await this.storage.verifyConfirmedKey(dto.principalSignatureFileKey, 'principal-signature', slug);
+      dto.principalSignatureUrl = dto.principalSignatureFileKey;
+    }
+    if (dto.schoolStampFileKey !== undefined) {
+      await this.storage.verifyConfirmedKey(dto.schoolStampFileKey, 'school-stamp', slug);
+      dto.schoolStampUrl = dto.schoolStampFileKey;
+    }
+    for (const [field, value] of [
+      ['logoUrl', dto.logoFileKey === undefined ? dto.logoUrl : undefined],
+      ['principalSignatureUrl', dto.principalSignatureFileKey === undefined ? dto.principalSignatureUrl : undefined],
+      ['schoolStampUrl', dto.schoolStampFileKey === undefined ? dto.schoolStampUrl : undefined],
+    ] as const) {
+      if (value?.startsWith('data:')) {
+        this.logger.warn(
+          `[FILE-1] deprecated base64 ${field} received — switch to the presign flow (*FileKey)`,
+        );
+      }
+    }
+
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -139,7 +174,9 @@ export class SettingsService {
     );
 
     if (dto.logoUrl !== undefined) {
-      const buffer = await fetchImageBuffer(dto.logoUrl);
+      // FILE-1: presign-flow logos read their bytes straight from storage;
+      // legacy values (data-URI / URL) still go through fetchImageBuffer.
+      const buffer = logoBufferFromStorage ?? (await fetchImageBuffer(dto.logoUrl));
       if (buffer && rows[0].color_source !== 'manual') {
         const result = await this.brandingColor.deriveThemeFromLogo(buffer);
         if (result) {

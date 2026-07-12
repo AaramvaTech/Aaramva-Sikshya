@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcrypt';
 import { getBsYear } from 'bs-calendar';
@@ -16,15 +16,19 @@ import {
   StaffDocumentResponseDto,
 } from './entities/hr.entity';
 import { CreateStaffDto, UpdateStaffDto, StaffQueryDto, AddStaffDocumentDto } from './dto/staff.dto';
+import { StorageService } from '../storage/storage.service';
 
 const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class StaffService {
+  private readonly logger = new Logger(StaffService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly events: EventEmitter2,
+    private readonly storage: StorageService,
   ) {}
 
   async createStaff(dto: CreateStaffDto): Promise<StaffResponseDto> {
@@ -239,6 +243,17 @@ export class StaffService {
     );
     if (!existing[0]) throw new NotFoundException(`Staff profile ${id} not found`);
 
+    // FILE-1: a verified photoFileKey rides the existing photoUrl column path.
+    if (dto.photoFileKey !== undefined) {
+      const { slug } = this.tenantContext.getOrThrow();
+      await this.storage.verifyConfirmedKey(dto.photoFileKey, 'staff-photo', slug);
+      dto.photoUrl = dto.photoFileKey;
+    } else if (dto.photoUrl?.startsWith('data:')) {
+      this.logger.warn(
+        '[FILE-1] deprecated base64 staff photo received — switch to the presign flow (photoFileKey)',
+      );
+    }
+
     const p = existing[0];
     const rows = await this.tenantPrisma.query<StaffProfileRow>(
       `UPDATE staff_profiles
@@ -302,6 +317,24 @@ export class StaffService {
   // ─── Staff Documents ────────────────────────────────────────────────────────
 
   async addDocument(staffId: string, dto: AddStaffDocumentDto): Promise<StaffDocumentResponseDto> {
+    // FILE-1: exactly one of fileKey (verified storage key, wins) | fileUrl
+    // (legacy base64, deprecated but still accepted through cutover).
+    let fileValue: string;
+    if (dto.fileKey !== undefined) {
+      const { slug } = this.tenantContext.getOrThrow();
+      await this.storage.verifyConfirmedKey(dto.fileKey, 'staff-document', slug);
+      fileValue = dto.fileKey;
+    } else if (dto.fileUrl) {
+      if (dto.fileUrl.startsWith('data:')) {
+        this.logger.warn(
+          '[FILE-1] deprecated base64 staff document received — switch to the presign flow (fileKey)',
+        );
+      }
+      fileValue = dto.fileUrl;
+    } else {
+      throw new BadRequestException('Either fileKey or fileUrl is required.');
+    }
+
     const prof = await this.tenantPrisma.query<StaffProfileRow>(
       `SELECT user_id FROM staff_profiles WHERE id = $1::uuid AND deleted_at IS NULL`,
       staffId,
@@ -314,7 +347,7 @@ export class StaffService {
          RETURNING *`,
       prof[0].user_id,
       dto.documentType,
-      dto.fileUrl,
+      fileValue,
       dto.fileName ?? null,
     );
     return toStaffDocumentResponse(rows[0]);

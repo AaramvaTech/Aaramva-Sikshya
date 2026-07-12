@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useMyProfile } from '../../hooks/useStudentMe';
+import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 import { ErrorState, ScreenHeader } from '../../components/ui';
@@ -25,6 +26,8 @@ export default function StudentProfile() {
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const { data: p, isLoading, isError, refetch } = useMyProfile();
+  // FILE-1: storage-key photos resolve to presigned GETs; legacy values pass through.
+  const photoSrc = useFileUrl(p?.photoUrl);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -104,8 +107,8 @@ export default function StudentProfile() {
             <NpText style={[styles.schoolName, { color: c.brandMuted }]}>{schoolName}</NpText>
           </View>
 
-          {p.photoUrl ? (
-            <Image source={{ uri: p.photoUrl }} style={styles.avatar} />
+          {photoSrc ? (
+            <Image source={{ uri: photoSrc }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: c.primary }]}>
               <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{initials}</Text>

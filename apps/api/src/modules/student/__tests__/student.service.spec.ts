@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { StudentService } from '../student.service';
 import { GuardianService } from '../guardian.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { StorageService } from '../../storage/storage.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 
 const mockTenantCtx = {
@@ -72,6 +73,7 @@ describe('StudentService', () => {
   let service: StudentService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let tenantContext: jest.Mocked<TenantContextService>;
+  let storage: jest.Mocked<StorageService>;
 
   const mockTx = {
     $queryRawUnsafe: jest.fn(),
@@ -82,6 +84,15 @@ describe('StudentService', () => {
     const module = await Test.createTestingModule({
       providers: [
         StudentService,
+        {
+          provide: StorageService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(true),
+            verifyConfirmedKey: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg' }),
+            publicUrlFor: jest.fn((key: string) => `http://storage.test/bucket/${key}`),
+            getObjectBuffer: jest.fn().mockResolvedValue(null),
+          },
+        },
         {
           provide: TenantPrismaService,
           useValue: {
@@ -104,6 +115,7 @@ describe('StudentService', () => {
     service = module.get(StudentService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     tenantContext = module.get(TenantContextService) as jest.Mocked<TenantContextService>;
+    storage = module.get(StorageService) as jest.Mocked<StorageService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -369,6 +381,36 @@ describe('StudentService', () => {
       const result = await service.updateStudent('sid-1', { firstName: 'Bikash' } as any);
 
       expect(result.firstName).toBe('Bikash');
+    });
+
+    it('FILE-1: HEAD-verifies photoFileKey and writes the KEY to photo_url', async () => {
+      const KEY = 'tenant_demo/student-photo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jpg';
+      (storage.verifyConfirmedKey as jest.Mock).mockResolvedValueOnce({
+        size: 1024,
+        contentType: 'image/jpeg',
+      });
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockStudentRow, photo_url: KEY },
+      ]);
+
+      const result = await service.updateStudent('sid-1', { photoFileKey: KEY } as any);
+
+      expect(storage.verifyConfirmedKey).toHaveBeenCalledWith(KEY, 'student-photo', expect.anything());
+      const updateSql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(updateSql).toContain('photo_url');
+      expect((tenantPrisma.query as jest.Mock).mock.calls[0]).toContain(KEY);
+      expect(result.photoUrl).toBe(KEY);
+    });
+
+    it('FILE-1: rejects the update when the key fails verification (never persists)', async () => {
+      (storage.verifyConfirmedKey as jest.Mock).mockRejectedValueOnce(
+        new BadRequestException('No uploaded file found'),
+      );
+
+      await expect(
+        service.updateStudent('sid-1', { photoFileKey: 'tenant_demo/student-photo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jpg' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(tenantPrisma.query).not.toHaveBeenCalled();
     });
   });
 

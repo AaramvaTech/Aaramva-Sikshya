@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { HrController } from './hr.controller';
 import { DepartmentService } from './department.service';
@@ -8,7 +9,7 @@ import { LeaveService } from './leave.service';
 import { PayrollService } from './payroll.service';
 
 @Module({
-  imports: [TenantModule],
+  imports: [TenantModule, StorageModule],
   controllers: [HrController],
   providers: [
     DepartmentService,

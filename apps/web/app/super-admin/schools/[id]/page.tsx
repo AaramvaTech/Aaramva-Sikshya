@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ExternalLink, ArrowLeft, Pencil, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { uploadFile } from '@/lib/upload';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -62,6 +63,7 @@ export default function SchoolDetailPage() {
   const { setTenant } = useTenantStore();
   const [changingPlan, setChangingPlan] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState({
     schoolName: '',
@@ -98,6 +100,8 @@ export default function SchoolDetailPage() {
       toast.error('Image must be less than 2 MB');
       return;
     }
+    setPendingLogoFile(file);
+    // Preview stays a local data-URI; the actual upload happens on Save.
     const reader = new FileReader();
     reader.onloadend = () => setEditForm((f) => ({ ...f, logoUrl: reader.result as string }));
     reader.readAsDataURL(file);
@@ -111,6 +115,18 @@ export default function SchoolDetailPage() {
       return;
     }
     try {
+      // FILE-1: presign→PUT→logoFileKey. The /files presign route is
+      // tenant-scoped, so the platform admin names the target school's slug.
+      let logoFields: { logoFileKey?: string; logoUrl?: string } = {
+        logoUrl: editForm.logoUrl || undefined,
+      };
+      if (pendingLogoFile) {
+        const uploaded = await uploadFile(pendingLogoFile, 'school-logo', { tenantSlug: school.slug });
+        logoFields =
+          uploaded.mode === 'key'
+            ? { logoFileKey: uploaded.key }
+            : { logoUrl: uploaded.dataUrl };
+      }
       await updateTenant.mutateAsync({
         id: school.id,
         data: {
@@ -122,11 +138,12 @@ export default function SchoolDetailPage() {
           description: editForm.description || undefined,
           establishedYear: year,
           website: editForm.website || undefined,
-          logoUrl: editForm.logoUrl || undefined,
+          ...logoFields,
         },
       });
       toast.success('School updated');
       setEditOpen(false);
+      setPendingLogoFile(null);
       router.refresh();
     } catch {
       toast.error('Failed to update school');

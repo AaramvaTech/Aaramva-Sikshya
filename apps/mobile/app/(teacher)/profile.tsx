@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 
 import { useMyStaffProfile } from '../../hooks/useTeacher';
+import { useFileUrl } from '../../hooks/useFileUrl';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
 import { logout } from '../../lib/session';
@@ -20,6 +21,8 @@ export default function TeacherProfile() {
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const { data: p, isLoading, isError, refetch } = useMyStaffProfile();
+  // FILE-1: storage-key photos resolve to presigned GETs; legacy values pass through.
+  const photoSrc = useFileUrl(p?.photoUrl);
 
   const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
 
@@ -101,8 +104,8 @@ export default function TeacherProfile() {
             <NpText style={[styles.schoolName, { color: c.brandMuted }]}>{schoolName}</NpText>
           </View>
 
-          {p.photoUrl ? (
-            <Image source={{ uri: p.photoUrl }} style={styles.avatar} />
+          {photoSrc ? (
+            <Image source={{ uri: photoSrc }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: c.primary }]}>
               <Text style={[styles.avatarText, { color: c.primaryForeground }]}>{initials}</Text>

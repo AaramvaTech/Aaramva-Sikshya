@@ -12,6 +12,7 @@ import {
   type CreateStudentFormValues,
 } from '@/lib/schemas/student.schema';
 import { useCreateStudent, useClasses, useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { uploadFile } from '@/lib/upload';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { todayBs } from '@/lib/bs-calendar';
 import { BsDate } from '@/components/shared/bs-date';
@@ -50,7 +51,8 @@ const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 export default function NewStudentPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null); // local data-URI preview only
+  const [photoFile, setPhotoFile] = useState<File | null>(null); // FILE-1: uploaded on submit
   const photoInputRef = useRef<HTMLInputElement>(null);
   const createStudent = useCreateStudent();
   const todayBsYear = todayBs().year;
@@ -63,6 +65,7 @@ export default function NewStudentPage() {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
     if (file.size > 2 * 1024 * 1024) { toast.error('Image must be less than 2 MB'); return; }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setPhotoUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -130,6 +133,16 @@ export default function NewStudentPage() {
 
   async function onSubmit(values: CreateStudentFormValues) {
     try {
+      // FILE-1: presign→PUT→photoFileKey; legacy base64 only when storage is
+      // disabled server-side (uploadFile falls back on 503).
+      let photoFields: { photoFileKey?: string; photoUrl?: string } = {};
+      if (photoFile) {
+        const uploaded = await uploadFile(photoFile, 'student-photo');
+        photoFields =
+          uploaded.mode === 'key'
+            ? { photoFileKey: uploaded.key }
+            : { photoUrl: uploaded.dataUrl };
+      }
       const payload = {
         ...values,
         middleName: values.middleName || undefined,
@@ -138,7 +151,7 @@ export default function NewStudentPage() {
         address: values.address || undefined,
         bloodGroup: values.bloodGroup || undefined,
         religion: values.religion || undefined,
-        photoUrl: photoUrl || undefined,
+        ...photoFields,
         classId: values.classId || undefined,
         sectionId: values.sectionId || undefined,
         academicYearId: values.academicYearId || undefined,

@@ -5,6 +5,7 @@ import { TenantAdminService } from '../tenant-admin.service';
 import { PublicPrismaService } from '../public-prisma.service';
 import { TenantProvisioningService } from '../tenant-provisioning.service';
 import { AuditService } from '../audit.service';
+import { StorageService } from '../../storage/storage.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantService } from '../../tenant/tenant.service';
@@ -35,6 +36,15 @@ describe('TenantAdminService', () => {
     const module = await Test.createTestingModule({
       providers: [
         TenantAdminService,
+        {
+          provide: StorageService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(true),
+            verifyConfirmedKey: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg' }),
+            publicUrlFor: jest.fn((key: string) => `http://storage.test/bucket/${key}`),
+            getObjectBuffer: jest.fn().mockResolvedValue(null),
+          },
+        },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         {
           provide: PublicPrismaService,

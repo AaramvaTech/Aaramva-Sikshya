@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSchoolProfile, useUpdateSchoolProfile } from '@/lib/hooks/use-settings';
+import { uploadFile } from '@/lib/upload';
 
 export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
   const { data: profile, isLoading } = useSchoolProfile();
@@ -38,19 +39,19 @@ export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
       toast.error('Image must be less than 2 MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const dataUri = reader.result as string;
-      try {
-        // Logo only → server runs node-vibrant and stores the auto-derived theme colour.
-        await update.mutateAsync({ logoUrl: dataUri });
-        toast.success('Logo uploaded — theme colour derived from it');
-        onChanged?.();
-      } catch {
-        toast.error('Could not upload the logo');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      // FILE-1: presign→PUT→logoFileKey (base64 only if storage is disabled).
+      // Either way the server runs node-vibrant on the logo bytes and stores
+      // the auto-derived theme colour.
+      const uploaded = await uploadFile(file, 'school-logo');
+      await update.mutateAsync(
+        uploaded.mode === 'key' ? { logoFileKey: uploaded.key } : { logoUrl: uploaded.dataUrl },
+      );
+      toast.success('Logo uploaded — theme colour derived from it');
+      onChanged?.();
+    } catch {
+      toast.error('Could not upload the logo');
+    }
   }
 
   async function saveName() {

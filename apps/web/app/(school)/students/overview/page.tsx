@@ -25,6 +25,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StorageAvatarImage } from '@/components/shared/storage-avatar-image';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -361,7 +362,7 @@ export default function StudentsOverviewPage() {
                 className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
               >
                 <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarImage src={s.photoUrl ?? undefined} className="object-cover" />
+                  <StorageAvatarImage value={s.photoUrl} className="object-cover" />
                   <AvatarFallback className="text-xs bg-brand-50 text-brand-500 font-semibold">
                     {initials(s.fullName)}
                   </AvatarFallback>

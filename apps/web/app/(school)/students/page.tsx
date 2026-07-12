@@ -20,6 +20,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StorageAvatarImage } from '@/components/shared/storage-avatar-image';
 import type { StudentSummary } from '@/types/api.types';
 
 function initials(name: string) {
@@ -135,7 +136,7 @@ export default function StudentsPage() {
       header: '',
       cell: ({ row }) => (
         <Avatar className="h-8 w-8">
-          <AvatarImage src={row.original.photoUrl ?? undefined} />
+          <StorageAvatarImage value={row.original.photoUrl} />
           <AvatarFallback className="text-xs bg-brand-50 text-brand-500">
             {initials(row.original.fullName)}
           </AvatarFallback>

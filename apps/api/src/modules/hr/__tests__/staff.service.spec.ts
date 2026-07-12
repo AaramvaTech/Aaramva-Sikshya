@@ -1,9 +1,10 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { StaffService } from '../staff.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { StorageService } from '../../storage/storage.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -61,11 +62,21 @@ const baseProfileRow = {
 describe('StaffService', () => {
   let service: StaffService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let storage: jest.Mocked<StorageService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         StaffService,
+        {
+          provide: StorageService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(true),
+            verifyConfirmedKey: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg' }),
+            publicUrlFor: jest.fn((key: string) => `http://storage.test/bucket/${key}`),
+            getObjectBuffer: jest.fn().mockResolvedValue(null),
+          },
+        },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         {
           provide: TenantPrismaService,
@@ -89,6 +100,7 @@ describe('StaffService', () => {
     }).compile();
 
     service = module.get(StaffService);
+    storage = module.get(StorageService) as jest.Mocked<StorageService>;
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
 
     jest.clearAllMocks();
@@ -182,6 +194,73 @@ describe('StaffService', () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
 
       await expect(service.getMyProfile('not-a-staff-user')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+
+  describe('addDocument() — FILE-1 cutover', () => {
+    const KEY = 'tenant_demo/staff-document/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf';
+
+    it('HEAD-verifies fileKey and inserts the KEY as file_url', async () => {
+      (storage.verifyConfirmedKey as jest.Mock).mockResolvedValueOnce({
+        size: 2048,
+        contentType: 'application/pdf',
+      });
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ user_id: 'user-1' }]) // staff profile lookup
+        .mockResolvedValueOnce([
+          {
+            id: 'doc-1',
+            user_id: 'user-1',
+            document_type: 'CV',
+            file_url: KEY,
+            file_name: 'cv.pdf',
+            uploaded_at: new Date(),
+            deleted_at: null,
+          },
+        ]);
+
+      const result = await service.addDocument('staff-1', {
+        documentType: 'CV',
+        fileKey: KEY,
+        fileName: 'cv.pdf',
+      } as any);
+
+      expect(storage.verifyConfirmedKey).toHaveBeenCalledWith(KEY, 'staff-document', expect.anything());
+      const insertCall = (tenantPrisma.query as jest.Mock).mock.calls[1];
+      expect(insertCall).toContain(KEY);
+      expect(result.fileUrl).toBe(KEY);
+    });
+
+    it('rejects when neither fileKey nor fileUrl is provided', async () => {
+      await expect(
+        service.addDocument('staff-1', { documentType: 'CV' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(tenantPrisma.query).not.toHaveBeenCalled();
+    });
+
+    it('still accepts a legacy base64 fileUrl (deprecated path)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ user_id: 'user-1' }])
+        .mockResolvedValueOnce([
+          {
+            id: 'doc-2',
+            user_id: 'user-1',
+            document_type: 'CV',
+            file_url: 'data:application/pdf;base64,AAAA',
+            file_name: null,
+            uploaded_at: new Date(),
+            deleted_at: null,
+          },
+        ]);
+
+      const result = await service.addDocument('staff-1', {
+        documentType: 'CV',
+        fileUrl: 'data:application/pdf;base64,AAAA',
+      } as any);
+
+      expect(storage.verifyConfirmedKey).not.toHaveBeenCalled();
+      expect(result.fileUrl).toBe('data:application/pdf;base64,AAAA');
     });
   });
 

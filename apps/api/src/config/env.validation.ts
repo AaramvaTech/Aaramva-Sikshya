@@ -72,6 +72,21 @@ export const envValidationSchema = Joi.object({
   AWS_BUCKET_NAME: Joi.string().optional().allow(''),
   AWS_REGION: Joi.string().optional().allow(''),
 
+  // File storage (FILE-1) — S3-compatible presigned uploads (MinIO dev,
+  // R2/B2/AWS prod). ALL optional: any of the four core vars missing =
+  // storage disabled with a boot notice (presign endpoints 503; the legacy
+  // base64 path keeps working until cutover completes).
+  S3_ENDPOINT: Joi.string().uri().optional().allow(''),
+  S3_REGION: Joi.string().default('us-east-1'),
+  S3_ACCESS_KEY: Joi.string().optional().allow(''),
+  S3_SECRET_KEY: Joi.string().optional().allow(''),
+  S3_BUCKET: Joi.string().optional().allow(''),
+  // Path-style (bucket in the path) — required by MinIO and R2.
+  S3_FORCE_PATH_STYLE: Joi.boolean().truthy('true').falsy('false').default(true),
+  // Public base for public-read kinds (school-logo). Defaults to
+  // {S3_ENDPOINT}/{S3_BUCKET}; set explicitly behind a CDN/custom domain.
+  S3_PUBLIC_URL: Joi.string().uri().optional().allow(''),
+
   // Khalti KPG-2 (PAY-2) — gateway enabled only when the secret key is set;
   // otherwise disabled with a boot notice (initiate → 503). Base URL default
   // is the sandbox; going live = swapping these two.

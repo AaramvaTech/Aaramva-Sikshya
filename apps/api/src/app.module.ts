@@ -25,6 +25,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { HealthModule } from './modules/health/health.module';
 import { MailModule } from './modules/mail/mail.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { MailModule } from './modules/mail/mail.module';
     OnboardingModule,
     HealthModule,
     MailModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

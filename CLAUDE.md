@@ -269,6 +269,13 @@ API_PUBLIC_URL=                  ← public API origin for gateway browser redir
 WEB_BASE_URL=                    ← web origin for payment result pages (dev: localhost:3000)
 KHALTI_SECRET_KEY=               ← set = Khalti gateway enabled (PAY-2); sandbox key needs merchant signup at test-admin.khalti.com
 KHALTI_BASE_URL=                 ← optional; defaults to https://dev.khalti.com/api/v2 (sandbox)
+S3_ENDPOINT=                     ← FILE-1: ALL FOUR of endpoint/access/secret/bucket set = storage enabled; any missing = disabled + boot notice (presign 503, legacy base64 still accepted)
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_BUCKET=
+S3_REGION=                       ← optional; defaults us-east-1
+S3_FORCE_PATH_STYLE=             ← optional; defaults true (MinIO/R2); false for AWS
+S3_PUBLIC_URL=                   ← optional public base for school logos; defaults {S3_ENDPOINT}/{S3_BUCKET}
 APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 ```
 
@@ -502,6 +509,36 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   endpoint returns Sun–Thu weekly; T6 mobile login `mustChangePassword:true` → change → DB flag `f`
   → new-password re-login `false`. **Mobile jest 19 (was 10, +9 guardian helper), mobile tsc clean,
   api 415 unchanged.** Shimmed student.demo password restored with read-back.
+
+- [x] Real file storage — S3-compatible presigned uploads (FILE-1, `docs/api-contracts/FILE-1-file-storage.md`,
+  `apps/api/src/modules/storage/`) — kills audit P1-13 (base64 in 5MB JSON bodies). **StorageService**
+  (@aws-sdk/client-s3 + presigner; `requestChecksumCalculation: 'WHEN_REQUIRED'` — the SDK default embeds
+  an empty-body CRC32 in presigned URLs that real AWS would reject, MinIO merely ignores) + kind-policy
+  table (`storage.policy.ts`: student-photo/staff-photo/school-logo/principal-signature/school-stamp/
+  staff-document — per-kind max bytes, content-type→extension map, uploadRoles, publicRead). Keys are
+  ALWAYS server-generated `tenant_<slug>/<kind>/<uuid>.<ext>` (client "key" stripped by whitelist pipe —
+  raw-proven). `POST /files/presign-upload` (per-kind role narrowing) + `GET /files/presigned?key=`
+  (query param, not :key — keys contain slashes) with object-level scoping in `FileAccessService`:
+  row-reference required (unreferenced keys 404 for everyone), PARENT via guardians link (cross-family
+  403 raw-proven), STUDENT via students.user_id, staff-document owner-or-manager, cross-tenant keys 404.
+  **Confirm flow:** feature endpoints take `photoFileKey`/`fileKey`/`logoFileKey`/`principalSignatureFileKey`/
+  `schoolStampFileKey` alongside legacy base64 (deprecated, `[FILE-1]`-logged) → `verifyConfirmedKey`
+  (shape+tenant+kind+HEAD+size/type) → KEY stored in the column. **school-logo is the ONE public-read kind**
+  (pre-auth consumers) — bucket policy `tenant_*/school-logo/*` GetObject, column stores the PUBLIC URL,
+  brand-color extraction now reads bytes from storage (`getObjectBuffer`), rederive untouched. FIXED in
+  passing: admitStudent INSERT had no photo_url — admission photos were silently dropped. Web:
+  `lib/upload.ts` presign→PUT→key with base64 fallback ONLY on 503 (disabled mode keeps working),
+  `useFileUrl`/`StorageAvatarImage`/`FileDownloadLink` resolve stored keys (4-min staleTime vs 5-min URLs);
+  all 7 upload sites cut over (super-admin logo presigns with explicit `X-Tenant-Slug` of the target school).
+  Mobile: display-only — `hooks/useFileUrl.ts` + 4 profile screens. Orphans: `npm run prune-orphans`
+  (dry-run DEFAULT, `--delete`, `--grace-hours`, 24h grace) — no cron by design. MinIO dev setup + provider
+  swap table + logo-URL rewrite SQL + "object storage is OUTSIDE pg_dump" in RUNBOOK. Live proofs: full
+  round-trip byte-identical (cmp exit 0), oversize/bad-type/unknown-kind 400s, logo → `#12d989` derived
+  server-side + anon public fetch 200, disabled-mode 503 + boot WARN + legacy base64 200 + deprecation log,
+  orphan dry-run→delete with read-backs; ALL probe data cleaned (bucket 0 objects, hashes restored, shim 401s).
+  **450 api tests (was 415, +35), web tsc clean, mobile jest 19 + tsc clean.** Storage census at cutover:
+  5 legacy base64 blobs (motherland ×4, jorden-donovan logo) — migration is a follow-up; body-limit shrink
+  to ~1MB once `[FILE-1]` logs go quiet (runbook).
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision

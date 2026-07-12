@@ -14,6 +14,9 @@ import {
   useStaffDocuments,
 } from '@/lib/hooks/use-hr';
 import { hrApi } from '@/lib/api/hr.api';
+import { uploadFile } from '@/lib/upload';
+import { useFileUrl } from '@/lib/hooks/use-file-url';
+import { FileDownloadLink } from '@/components/shared/file-download-link';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -63,6 +66,7 @@ export default function StaffProfilePage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [docType, setDocType] = useState('');
@@ -92,21 +96,29 @@ export default function StaffProfilePage() {
       toast.error('Image must be less than 2 MB');
       return;
     }
+    setPendingPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setPendingPhoto(reader.result as string);
     reader.readAsDataURL(file);
   }
 
   async function handlePhotoSave() {
-    if (!pendingPhoto) return;
+    if (!pendingPhoto || !pendingPhotoFile) return;
     setPhotoLoading(true);
     try {
-      await updateStaff.mutateAsync({ photoUrl: pendingPhoto });
+      // FILE-1: presign→PUT→photoFileKey; base64 only if storage is disabled.
+      const uploaded = await uploadFile(pendingPhotoFile, 'staff-photo');
+      await updateStaff.mutateAsync(
+        uploaded.mode === 'key'
+          ? { photoFileKey: uploaded.key }
+          : { photoUrl: uploaded.dataUrl },
+      );
       await queryClient.invalidateQueries({ queryKey: ['hr', 'staff', id] });
       await queryClient.invalidateQueries({ queryKey: ['hr', 'staff'] });
       toast.success('Profile photo updated');
       setPhotoDialogOpen(false);
       setPendingPhoto(null);
+      setPendingPhotoFile(null);
     } catch {
       toast.error('Failed to update photo');
     } finally {
@@ -116,6 +128,7 @@ export default function StaffProfilePage() {
 
   function openPhotoDialog() {
     setPendingPhoto(null);
+    setPendingPhotoFile(null);
     setPhotoDialogOpen(true);
   }
 
@@ -137,32 +150,29 @@ export default function StaffProfilePage() {
     }
     setDocUploading(true);
     try {
-      // Read file as data URL and store in DB (same base64 pattern as student)
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          await hrApi.addStaffDocument(id, {
-            documentType: docType,
-            fileUrl: reader.result as string,
-            fileName: docFile.name,
-          });
-          await queryClient.invalidateQueries({ queryKey: ['hr', 'staff-documents', id] });
-          toast.success('Document uploaded');
-          setDocDialogOpen(false);
-          setDocType('');
-          setDocFile(null);
-        } catch {
-          toast.error('Failed to upload document');
-        } finally {
-          setDocUploading(false);
-        }
-      };
-      reader.readAsDataURL(docFile);
+      // FILE-1: presign→PUT→fileKey; base64 only if storage is disabled.
+      const uploaded = await uploadFile(docFile, 'staff-document');
+      await hrApi.addStaffDocument(id, {
+        documentType: docType,
+        ...(uploaded.mode === 'key'
+          ? { fileKey: uploaded.key }
+          : { fileUrl: uploaded.dataUrl }),
+        fileName: docFile.name,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['hr', 'staff-documents', id] });
+      toast.success('Document uploaded');
+      setDocDialogOpen(false);
+      setDocType('');
+      setDocFile(null);
     } catch {
       toast.error('Failed to upload document');
+    } finally {
       setDocUploading(false);
     }
   }
+
+  // FILE-1: storage keys resolve to presigned GETs; legacy values pass through.
+  const resolvedPhotoUrl = useFileUrl(staff?.photoUrl);
 
   // ── Loading state ─────────────────────────────────────────────────────
   if (isLoading) {
@@ -244,7 +254,7 @@ export default function StaffProfilePage() {
               <div className="relative shrink-0 group">
                 <Avatar className="h-24 w-24 ring-2 ring-brand-100">
                   <AvatarImage
-                    src={staff.photoUrl ?? undefined}
+                    src={resolvedPhotoUrl}
                     className="object-cover"
                   />
                   <AvatarFallback className="text-2xl bg-brand-50 text-brand-500">
@@ -473,14 +483,12 @@ export default function StaffProfilePage() {
                         <BsDate date={doc.uploadedAt} />
                       </td>
                       <td className="py-2 text-right">
-                        <a
-                          href={doc.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <FileDownloadLink
+                          value={doc.fileUrl}
                           className="text-brand-500 hover:underline text-xs"
                         >
                           Download
-                        </a>
+                        </FileDownloadLink>
                       </td>
                     </tr>
                   ))}
@@ -582,7 +590,7 @@ export default function StaffProfilePage() {
             <div className="relative">
               <Avatar className="h-28 w-28 ring-2 ring-brand-100">
                 <AvatarImage
-                  src={pendingPhoto ?? staff.photoUrl ?? undefined}
+                  src={pendingPhoto ?? resolvedPhotoUrl}
                   className="object-cover"
                 />
                 <AvatarFallback className="text-3xl bg-brand-50 text-brand-500">

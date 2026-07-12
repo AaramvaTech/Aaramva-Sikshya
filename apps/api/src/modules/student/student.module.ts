@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
 import { StudentController } from './student.controller';
 import { GuardianController } from './guardian.controller';
 import { ImportController } from './import.controller';
@@ -9,7 +10,7 @@ import { ImportService } from './import.service';
 import { ExaminationModule } from '../examination/examination.module';
 
 @Module({
-  imports: [ExaminationModule], // ResultService for /students/me/results + report-card
+  imports: [ExaminationModule, StorageModule], // ResultService for /students/me/results + report-card
   controllers: [StudentController, GuardianController, ImportController],
   providers: [StudentService, StudentMeService, GuardianService, ImportService],
   exports: [StudentService],
