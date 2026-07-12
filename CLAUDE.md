@@ -627,14 +627,43 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   (attendance/invoices deleted, exam re-NULLed, 2 shim passwords restored + 401-proven).
   **511 api tests (was 485, +26: util 20, attendance/exam/aging service specs 6), web tsc clean.**
 
+- [x] Android EAS build + first on-device push (EAS-1, `docs/mobile/EAS-1-android-build.md`,
+  `apps/mobile/`) — EAS project `@aaramva-nepal-technology/aaramva-shikshya`
+  (`EXPO_PUBLIC_PROJECT_ID` 54147e05-…); `eas.json` 3 profiles (development / **preview** installable
+  APK, internal / production AAB, configured-unused). android package `com.aaramvashikshya.mobile`,
+  v1.0.0 vc1. `google-services.json` committed (public ids only); FCM V1 service-account key uploaded
+  to EAS creds then deleted locally (never committed). **The real find: the preview APK could not
+  reach the LAN dev API at all** — Android 9+ blocks cleartext HTTP by default (expo-build-properties
+  `usesCleartextTraffic` defaults false), so every `http://<lan-ip>:3001` request died on-device
+  before hitting the server even though the device *browser* reached `/health` fine. Fix: added
+  `expo-build-properties` via a dynamic **`app.config.ts`** that layers `usesCleartextTraffic:true`
+  onto app.json **scoped to non-production only** (gated on `EAS_BUILD_PROFILE !== 'production'`) —
+  dev + preview get cleartext, the prod AAB stays cleartext-free (HTTPS; clean Play data-safety
+  posture). Verified via `expo config` for both profiles. **T5 on-device proof (preview APK, commit
+  `ecc7ba9`, fingerprint `cfb0376d…`, on a real motorola edge 60 pro):** first real `device_tokens`
+  row in platform history (ANDROID, `ExponentPushToken[…]`); absence (`POST /attendance/students/bulk`)
+  → `attendance.absent` → parent push → tap → `/(parent)/attendance`; notice (audience PARENTS,
+  publish) → `notice.posted` → parent push → tap → `/(parent)/notices`; Expo delivered (token
+  survived, no `DeviceNotRegistered`). **Buzz gotcha (not a bug):** the foreground handler in
+  `lib/notifications.ts` sets `shouldPlaySound:false` and the `default` channel importance is DEFAULT,
+  so pushes buzz/sound only when the app is **backgrounded/closed** — silent in-foreground by design.
+  **Dev-API LAN note:** preview env bakes `EXPO_PUBLIC_API_URL=http://<lan-ip>:3001/api/v1`; the API
+  must bind 0.0.0.0 (it does) and the laptop Wi-Fi IP must stay put — an IP change requires a rebuild
+  (or a router DHCP reservation). On Windows, node.exe already had inbound-Allow firewall rules
+  (Public+Private) so no per-port rule was needed; the Wi-Fi was on the **Public** profile (a rule
+  scoped to Private would silently not apply). T6 docs: RUNBOOK mobile build/release section +
+  `docs/mobile/store-submission-checklist.md`. All crafted rows (absence/notice/notifications) + the
+  device token cleaned with read-backs; parent+owner shim passwords byte-exact restored. **apps/api
+  untouched (511); mobile jest 34, tsc clean.** iOS + store submission/listing out of scope.
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
   invoice.overdue cover finance meanwhile.
-- On-device push receipt: needs the EAS/FCM session — EAS project (`EXPO_PUBLIC_PROJECT_ID`),
-  Android dev build + Firebase FCM V1 credentials uploaded to Expo. Expo Go on Android cannot
-  receive remote push since SDK 53; the entire receive path ships dormant-ready behind
-  `isPushSupported()`.
+- ~~On-device push receipt~~ — **DONE in EAS-1**: the preview APK on a real Android device
+  (motorola edge 60 pro) received both the absence and notice pushes with correct tap-routing;
+  first real device token registered; Expo delivered (no `DeviceNotRegistered`). Required the
+  cleartext fix (Android 9+ blocks `http://` by default) — see the EAS-1 entry above.
 - CLASS-audience notices are not visible in GET /notices to STUDENT/PARENT roles
   (ROLE_AUDIENCES gap) even though PUSH-1 now notifies class students+parents about them.
 - ~~Force-change-on-first-login for emailed temp passwords~~ — DONE in POL-1 T4.
