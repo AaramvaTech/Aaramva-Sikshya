@@ -6,7 +6,8 @@ import { useMyProfile } from '../../hooks/useStudentMe';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { ErrorState, ScreenHeader } from '../../components/ui';
+import { ErrorState, ScreenHeader , LanguageToggle } from '../../components/ui';
+import { useLocale } from '../../hooks/useLocale';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
@@ -14,15 +15,15 @@ import { logout } from '../../lib/session';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 
-const SETTINGS: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; label: string }[] = [
-  { icon: 'notifications-outline', label: 'Notifications' },
-  { icon: 'language-outline', label: 'Language · English' },
-  { icon: 'lock-closed-outline', label: 'Privacy & security' },
-  { icon: 'help-circle-outline', label: 'Help & support' },
+const SETTINGS: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; label: string; key: string }[] = [
+  { icon: 'notifications-outline', label: 'Notifications', key: 'settingsRow.notifications' },
+  { icon: 'lock-closed-outline', label: 'Privacy & security', key: 'settingsRow.privacy' },
+  { icon: 'help-circle-outline', label: 'Help & support', key: 'settingsRow.help' },
 ];
 
 export default function StudentProfile() {
   const c = useThemeColors();
+  const { t } = useLocale('student');
   const tenant = useAuthStore((s) => s.tenant);
   const { branding } = useBranding();
   const { data: p, isLoading, isError, refetch } = useMyProfile();
@@ -52,7 +53,7 @@ export default function StudentProfile() {
   if (isError || !p) {
     return (
       <View style={[styles.root, { backgroundColor: c.background, justifyContent: 'center' }]}>
-        <ErrorState title="Couldn't load your profile" onRetry={() => refetch()} />
+        <ErrorState title={t('profile.errorTitle')} onRetry={() => refetch()} />
       </View>
     );
   }
@@ -140,10 +141,16 @@ export default function StudentProfile() {
                 style={[styles.settingRow, idx < SETTINGS.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}
               >
                 <Ionicons name={s.icon} size={20} color={c.primary} />
-                <Text style={[styles.settingLabel, { color: c.foreground }]}>{s.label}</Text>
+                <NpText style={[styles.settingLabel, { color: c.foreground }]}>{t(s.key)}</NpText>
                 <Ionicons name="chevron-forward" size={18} color={c.border} />
               </View>
             ))}
+          </View>
+
+          {/* I18N-1: language selector */}
+          <View style={{ marginTop: 16 }}>
+            <NpText style={[styles.langLabel, { color: c.mutedForeground }]}>{t('common:settings.language')}</NpText>
+            <LanguageToggle />
           </View>
 
           {/* Sign out */}
@@ -153,7 +160,7 @@ export default function StudentProfile() {
             activeOpacity={0.85}
           >
             <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
-            <Text style={[styles.signOutText, { color: c.danger }]}>Sign out</Text>
+            <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -162,6 +169,7 @@ export default function StudentProfile() {
 }
 
 const styles = StyleSheet.create({
+  langLabel: { fontFamily: FONT.bold, fontSize: 12, marginBottom: 8 },
   root: { flex: 1 },
 
   // Gear button positioned absolutely in the top-right of the hero band (comp sProfile line 408).

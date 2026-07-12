@@ -1,8 +1,10 @@
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import { CARD_SHADOW } from './Card';
+import NpText from '../NpText';
 
 interface AttendanceSummaryCardProps {
   present: number;
@@ -22,9 +24,11 @@ interface AttendanceSummaryCardProps {
  */
 export function AttendanceSummaryCard({
   present, absent, late, leave, percent, totalWorkingDays,
-  label = 'Attendance this year', style,
+  label, style,
 }: AttendanceSummaryCardProps) {
   const c = useThemeColors();
+  const { t } = useTranslation('common');
+  const heading = label ?? t('attendanceCard.title');
   const chips: { key: AttendanceStatus; count: number }[] = [
     { key: 'PRESENT', count: present },
     { key: 'ABSENT', count: absent },
@@ -35,14 +39,14 @@ export function AttendanceSummaryCard({
   return (
     <View style={[styles.card, CARD_SHADOW, style]}>
       <View style={styles.head}>
-        <Text style={[styles.label, { color: c.mutedForeground }]}>{label.toUpperCase()}</Text>
-        <Text style={[styles.days, { color: c.primary }]}>{totalWorkingDays} days</Text>
+        <NpText style={[styles.label, { color: c.mutedForeground }]}>{heading.toUpperCase()}</NpText>
+        <NpText style={[styles.days, { color: c.primary }]}>{t('attendanceCard.days', { count: totalWorkingDays })}</NpText>
       </View>
 
       <View style={styles.row}>
         <View style={styles.percentBox}>
           <Text style={[styles.percent, { color: c.primary }]}>{percent}%</Text>
-          <Text style={[styles.rate, { color: c.mutedForeground }]}>Present rate</Text>
+          <NpText style={[styles.rate, { color: c.mutedForeground }]}>{t('attendanceCard.presentRate')}</NpText>
         </View>
 
         <View style={styles.chipsGrid}>
@@ -51,7 +55,7 @@ export function AttendanceSummaryCard({
             return (
               <View key={key} style={[styles.chip, { backgroundColor: cfg.bg }]}>
                 <Text style={[styles.chipCount, { color: cfg.color }]}>{count}</Text>
-                <Text style={[styles.chipLabel, { color: cfg.color }]}>{cfg.label}</Text>
+                <NpText style={[styles.chipLabel, { color: cfg.color }]}>{t(cfg.labelKey)}</NpText>
               </View>
             );
           })}

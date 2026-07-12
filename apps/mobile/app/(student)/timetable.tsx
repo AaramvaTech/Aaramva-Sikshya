@@ -7,6 +7,8 @@ import { Card, EmptyState, ErrorState, SubjectSlot, ScreenHeader } from '../../c
 import { subjectColor } from '../../lib/subjects';
 import type { SectionTimetableSlot } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale, bsLang } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { FONT } from '../../lib/theme/fonts';
 import { formatBs, todayBs } from 'bs-calendar';
 
@@ -28,6 +30,9 @@ function endMinutes(t: string): number {
 
 export default function StudentTimetable() {
   const c = useThemeColors();
+  const { t, locale } = useLocale('student');
+  const shortDays = t('common:days.short', { returnObjects: true }) as string[];
+  const longDays = t('common:days.long', { returnObjects: true }) as string[];
   const [refreshing, setRefreshing] = useState(false);
 
   const todayDow = new Date().getDay(); // 0=Sun … 6=Sat
@@ -65,28 +70,28 @@ export default function StudentTimetable() {
         <ScreenHeader variant="hero" bare rounded padTop={14} padBottom={16}>
           <View style={styles.headerTop}>
             <View style={styles.headerText}>
-              <Text style={[styles.headerTitle, { color: c.foreground, fontFamily: FONT.extrabold }]}>
-                Class routine
-              </Text>
-              <Text style={[styles.headerSub, { color: c.brandMuted, fontFamily: FONT.semibold }]}>
-                {classLabel ? `${classLabel} · ` : ''}Weekly timetable
-              </Text>
+              <NpText style={[styles.headerTitle, { color: c.foreground, fontFamily: FONT.extrabold }]}>
+                {t('timetable.title')}
+              </NpText>
+              <NpText style={[styles.headerSub, { color: c.brandMuted, fontFamily: FONT.semibold }]}>
+                {classLabel ? `${classLabel} · ` : ''}{t('timetable.weekly')}
+              </NpText>
             </View>
             <View style={[styles.calendarChip, { backgroundColor: c.surface, shadowColor: c.foreground }]}>
               <Ionicons name="calendar-outline" size={20} color={c.primary} />
             </View>
           </View>
           <View style={[styles.datePill, { backgroundColor: c.surface }]}>
-            <Text style={[styles.datePillText, { color: c.foreground, fontFamily: FONT.bold }]}>
-              {formatBs(todayBs(), 'en')}
-            </Text>
+            <NpText style={[styles.datePillText, { color: c.foreground, fontFamily: FONT.bold }]}>
+              {formatBs(todayBs(), bsLang(locale))}
+            </NpText>
           </View>
         </ScreenHeader>
 
         <View style={styles.body}>
           {/* Day selector — Sun–Fri */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
-            {DAY_NAMES.map((name, dow) => {
+            {DAY_NAMES.map((_name, dow) => {
               const isSelected = dow === selectedDay;
               const isTodayChip = dow === todayDow;
               return (
@@ -102,7 +107,7 @@ export default function StudentTimetable() {
                     className={isSelected ? 'text-primary-foreground' : 'text-foreground'}
                     style={styles.dayChipText}
                   >
-                    {name.slice(0, 3)}
+                    {shortDays[dow]}
                   </Text>
                   {isTodayChip && (
                     <View style={styles.todayDot} className={isSelected ? 'bg-primary-foreground' : 'bg-primary'} />
@@ -119,11 +124,11 @@ export default function StudentTimetable() {
             </View>
           ) : isError ? (
             <Card elevated padded style={{ paddingVertical: 32, marginTop: 4 }}>
-              <ErrorState title="Couldn't load your timetable" onRetry={() => void refetch()} />
+              <ErrorState title={t('timetable.errorTitle')} onRetry={() => void refetch()} />
             </Card>
           ) : daySlots.length === 0 ? (
             <Card elevated padded style={{ paddingVertical: 32, marginTop: 4 }}>
-              <EmptyState icon="calendar-clear-outline" title={`Nothing scheduled for ${DAY_NAMES[selectedDay]}.`} />
+              <EmptyState icon="calendar-clear-outline" title={t('timetable.emptyDay', { day: longDays[selectedDay] })} />
             </Card>
           ) : (
             <View style={{ marginTop: 4 }}>

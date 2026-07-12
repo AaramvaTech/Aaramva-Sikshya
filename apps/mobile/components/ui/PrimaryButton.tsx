@@ -1,4 +1,5 @@
 import { Text, TouchableOpacity, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
+import NpText from '../NpText';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../lib/theme/colors';
 
@@ -52,7 +53,7 @@ export function PrimaryButton({
       ) : (
         <>
           {icon && !iconRight && <Ionicons name={icon} size={18} color={fg} style={styles.iconLeft} />}
-          <Text style={[styles.label, { color: fg }]}>{label}</Text>
+          <NpText style={[styles.label, { color: fg }]}>{label}</NpText>
           {icon && iconRight && <Ionicons name={icon} size={18} color={fg} style={styles.iconRight} />}
         </>
       )}

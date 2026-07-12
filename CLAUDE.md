@@ -656,6 +656,33 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   device token cleaned with read-backs; parent+owner shim passwords byte-exact restored. **apps/api
   untouched (511); mobile jest 34, tsc clean.** iOS + store submission/listing out of scope.
 
+- [x] Nepali language — mobile i18n (I18N-1, `docs/mobile/I18N-1-nepali-mobile.md`) — all three
+  role apps + auth screens are bilingual (English + नेपाली). **i18next + react-i18next +
+  expo-localization + AsyncStorage** (NOT hand-rolled — the engine is the library; only a thin
+  locale store + useLocale hook + LanguageToggle + date helpers are ours). Per-app-area namespaces
+  (`common`/`auth`/`student`/`parent`/`teacher`) at `apps/mobile/lib/i18n/locales/{en,np}/`; device
+  default (`ne*`→np), locale persisted to AsyncStorage (preference, not secret → NOT secure-store),
+  hydrated in the root layout before UI renders. **Language toggle** on the login screen + all three
+  profiles (a parent who can't read English must find it without hunting). **Dates:** `BS_MONTH_NAMES_NP`
+  finally earns its keep — BS dates render Nepali month names (२७ असार) when locale=np via
+  `formatBs(bs, 'np')` / `lib/i18n/date.ts`; numerals stay Arabic (0–9) in v1 (Devanagari numerals
+  ०–९ are a flagged future decision). **Font:** `NpText` auto-detects Devanagari → Noto Sans
+  Devanagari; the sweep routes every translated `<Text>` through NpText, and shared primitives
+  (StateViews/Badges/PrimaryButton/CardLabel/AttendanceSummaryCard/NoticeFeed/NotificationInbox/
+  AttendanceCalendar/PayChooser) render text via NpText so np copy always uses the bundled font.
+  Status/day/notice-type/fee/assignment-status labels carry a `labelKey` into the common namespace
+  (screens render `t(cfg.labelKey)`); all dynamic values use interpolation (never string concat —
+  Nepali word order differs), incl. i18next plurals. **HUMAN GATE (verification 4):** translations
+  were presented to Srijan for native-speaker review (`docs/mobile/I18N-1-review-translations.md`,
+  417 strings, two-column en→np); the session may NOT self-certify translation quality — Srijan said
+  "keep i18next and continue the sweep" (no corrections), and the PR stays open for his final read
+  before merge. Backend-originated strings (notification bodies, API errors, SMS/email) are OUT of
+  scope — flagged for a future backend-i18n decision (I18N-2 web + backend). `jest.setup.ts` inits
+  i18next(en) before component tests (t() renders real strings). **Mobile jest 45 (was 34, +11:
+  i18n switch/plural/fallback/BS-date + locale-store persistence), mobile tsc clean, api 511
+  UNCHANGED** (zero apps/api diff). GOTCHA: naming collision — screens that do `const t = todayBs()`
+  clash with the translation `t`; rename the date var to `tbs`. Web i18n is out of scope (I18N-2).
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +

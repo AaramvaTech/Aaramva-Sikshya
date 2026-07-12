@@ -1,4 +1,5 @@
 import { View, type ViewStyle } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { PrimaryButton } from './PrimaryButton';
 
 export type PayGateway = 'ESEWA' | 'KHALTI';
@@ -29,6 +30,7 @@ export function PayChooser({
   onPay: (gateway: PayGateway) => void;
   style?: ViewStyle;
 }) {
+  const { t } = useTranslation('common');
   const enabled: PayGateway[] = [
     ...(gateways.esewa ? (['ESEWA'] as const) : []),
     ...(gateways.khalti ? (['KHALTI'] as const) : []),
@@ -40,7 +42,7 @@ export function PayChooser({
       {enabled.map((gw) => (
         <PrimaryButton
           key={gw}
-          label={`Pay ${balanceLabel} with ${GATEWAY_NAMES[gw]}`}
+          label={t('pay.payWith', { amount: balanceLabel, gateway: GATEWAY_NAMES[gw] })}
           icon="wallet-outline"
           variant="soft"
           loading={payingWith === gw}

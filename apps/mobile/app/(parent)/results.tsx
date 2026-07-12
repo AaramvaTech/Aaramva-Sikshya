@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
 import { useReportCardDownload } from '../../hooks/useReportCardDownload';
+import { useLocale } from '../../hooks/useLocale';
+import NpText from '../../components/NpText';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
@@ -12,11 +14,11 @@ import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 import { FONT } from '../../lib/theme/fonts';
 import { gradeColors } from '../../lib/gradeColors';
-import NpText from '../../components/NpText';
 import type { ExamResult } from '../../types';
 
 function ResultBlock({ result }: { result: ExamResult }) {
   const c = useThemeColors();
+  const { t } = useLocale('parent');
   const ramp = headerGradient(c.primary);
   const gpa = result.gpa != null ? result.gpa.toFixed(2) : '—';
   const rows = result.results ?? [];
@@ -33,11 +35,11 @@ function ResultBlock({ result }: { result: ExamResult }) {
         style={[styles.gpaCard, { shadowColor: c.primary }]}
       >
         <View>
-          <Text style={styles.gpaLabel}>GPA</Text>
+          <NpText style={styles.gpaLabel}>{t('results.gpa')}</NpText>
           <Text style={styles.gpaValue}>{gpa}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.gpaLabel}>Grade · Rank</Text>
+          <NpText style={styles.gpaLabel}>{t('results.gradeRank')}</NpText>
           <Text style={styles.gpaGrade}>
             {result.overallGrade ?? '—'} · #{result.rank ?? '—'}
           </Text>
@@ -56,7 +58,7 @@ function ResultBlock({ result }: { result: ExamResult }) {
             >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <NpText style={[styles.subject, { color: c.foreground }]}>{r.subjectName}</NpText>
-                <Text style={[styles.fullMark, { color: c.mutedForeground }]}>Full marks {r.fullMark}</Text>
+                <NpText style={[styles.fullMark, { color: c.mutedForeground }]}>{t('results.fullMarks', { value: r.fullMark })}</NpText>
               </View>
               <Text style={[styles.obtained, { color: c.foreground }]}>{r.marksObtained ?? '—'}</Text>
               <View style={[styles.gradeChip, { backgroundColor: gc.bg }]}>
@@ -71,6 +73,7 @@ function ResultBlock({ result }: { result: ExamResult }) {
 }
 
 export default function ParentResults() {
+  const { t } = useLocale('parent');
   const [refreshing, setRefreshing] = useState(false);
   const c = useThemeColors();
 
@@ -112,7 +115,7 @@ export default function ParentResults() {
           compact
           padTop={12}
           padBottom={16}
-          title="Exam results"
+          title={t('results.title')}
           subtitle={childName || undefined}
           npSubtitle
         />
@@ -125,11 +128,11 @@ export default function ParentResults() {
             </View>
           ) : resultsQuery.isError ? (
             <View style={{ paddingTop: 24 }}>
-              <ErrorState title="Failed to load results" onRetry={() => void resultsQuery.refetch()} />
+              <ErrorState title={t('results.errorTitle')} onRetry={() => void resultsQuery.refetch()} />
             </View>
           ) : results.length === 0 ? (
             <View style={{ paddingTop: 24 }}>
-              <EmptyState icon="ribbon-outline" title="No results yet" subtitle="Exam results will appear here once published." />
+              <EmptyState icon="ribbon-outline" title={t('results.emptyTitle')} subtitle={t('results.emptySubtitle')} />
             </View>
           ) : (
             <>
@@ -144,7 +147,7 @@ export default function ParentResults() {
               >
                 <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
                 <Text style={[styles.downloadBtnText, { color: c.primary }]}>
-                  {downloading ? 'Downloading…' : 'Download report card PDF'}
+                  {downloading ? t('results.downloading') : t('results.downloadPdf')}
                 </Text>
               </TouchableOpacity>
             </>

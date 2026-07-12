@@ -3,6 +3,7 @@
 export const STATUS_CONFIG = {
   PRESENT: {
     label: 'Present',
+    labelKey: 'common:attendance.present',
     color: '#0E9F77',
     bg: '#E4F6F1',
     dot: '#0E9F77',
@@ -11,6 +12,7 @@ export const STATUS_CONFIG = {
   },
   ABSENT: {
     label: 'Absent',
+    labelKey: 'common:attendance.absent',
     color: '#E5484D',
     bg: '#FCE9E9',
     dot: '#E5484D',
@@ -19,6 +21,7 @@ export const STATUS_CONFIG = {
   },
   LATE: {
     label: 'Late',
+    labelKey: 'common:attendance.late',
     color: '#D9892B',
     bg: '#FEF3E2',
     dot: '#D9892B',
@@ -27,6 +30,7 @@ export const STATUS_CONFIG = {
   },
   LEAVE: {
     label: 'Leave',
+    labelKey: 'common:attendance.leave',
     color: '#5B7FE0',
     bg: '#EAF0FE',
     dot: '#5B7FE0',

@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { useNotices } from '../../hooks/useStudentMe';
 import { NoticeFeed, ScreenHeader } from '../../components/ui';
 import { useThemeColors } from '../../lib/theme/colors';
+import { useLocale } from '../../hooks/useLocale';
 
 export default function StudentNotices() {
   const [refreshing, setRefreshing] = useState(false);
   const { data: notices, isLoading, isError, refetch } = useNotices();
   const c = useThemeColors();
+  const { t } = useLocale('student');
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -27,8 +29,8 @@ export default function StudentNotices() {
           compact
           padTop={12}
           padBottom={16}
-          title="Notices"
-          subtitle="Announcements from your school"
+          title={t('notices.title')}
+          subtitle={t('notices.subtitle')}
         />
 
         <View style={styles.body}>

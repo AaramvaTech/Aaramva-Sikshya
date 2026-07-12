@@ -1,4 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import NpText from '../components/NpText';
+import { useLocale } from '../hooks/useLocale';
 import { Ionicons } from '@expo/vector-icons';
 import BsDate from '../components/BsDate';
 import { logout } from '../lib/session';
@@ -7,13 +9,14 @@ import { FONT } from '../lib/theme/fonts';
 
 export default function WebPortalScreen() {
   const c = useThemeColors();
+  const { t } = useLocale('auth');
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
       <View style={[styles.iconWrap, { backgroundColor: `${c.primary}14` }]}>
         <Ionicons name="desktop-outline" size={30} color={c.primary} />
       </View>
-      <Text style={[styles.title, { color: c.foreground }]}>Use the Web Portal</Text>
+      <NpText style={[styles.title, { color: c.foreground }]}>{t('webPortal.title')}</NpText>
       <Text style={[styles.message, { color: c.mutedForeground }]}>
         Administrative features are available at{'\n'}aaramvashikshya.com
       </Text>
@@ -23,11 +26,11 @@ export default function WebPortalScreen() {
         style={[styles.signOut, { backgroundColor: `${c.danger}14`, borderColor: `${c.danger}40` }]}
         onPress={() => { void logout(); }}
         accessibilityRole="button"
-        accessibilityLabel="Sign out"
+        accessibilityLabel={t('common:action.signOut')}
         activeOpacity={0.85}
       >
         <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
-        <Text style={[styles.signOutText, { color: c.danger }]}>Sign out</Text>
+        <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
       </TouchableOpacity>
     </View>
   );

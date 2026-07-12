@@ -1,0 +1,126 @@
+{
+  "action": {
+    "tryAgain": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "signOut": "Sign out",
+    "signOutInstead": "Sign out instead",
+    "retry": "Retry",
+    "close": "Close",
+    "seeAll": "See all",
+    "refresh": "Refresh"
+  },
+  "state": {
+    "loading": "Loading…",
+    "errorTitle": "Couldn't load",
+    "errorSubtitle": "Check your connection and try again.",
+    "notFound": "Not found",
+    "empty": "Nothing here yet"
+  },
+  "attendance": {
+    "present": "Present",
+    "absent": "Absent",
+    "late": "Late",
+    "leave": "Leave",
+    "percent": "{{value}}%",
+    "rate": "Attendance rate",
+    "saturday": "Saturday",
+    "holiday": "Holiday"
+  },
+  "submission": {
+    "toDo": "To do",
+    "overdue": "Overdue",
+    "submitted": "Submitted",
+    "reviewed": "Reviewed",
+    "closed": "Closed",
+    "late": "Late"
+  },
+  "settings": {
+    "language": "Language",
+    "languageEnglish": "Language · English",
+    "languageNepali": "भाषा · नेपाली"
+  },
+  "common": {
+    "today": "Today",
+    "due": "Due {{date}}",
+    "marks": "{{value}} marks",
+    "noSchoolToday": "No school today",
+    "saturdayRest": "Saturday — rest day",
+    "class": "Class",
+    "section": "Section",
+    "roll": "Roll",
+    "subject": "Subject",
+    "teacher": "Teacher",
+    "teacherFeedback": "Teacher feedback"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications yet"
+  },
+  "days": {
+    "long": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "short": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ]
+  },
+  "noticesFeed": {
+    "errorTitle": "Couldn't load notices",
+    "emptyTitle": "No notices yet",
+    "emptySubtitle": "When your school posts an update, you'll see it here."
+  },
+  "inbox": {
+    "title": "Notifications",
+    "subtitle": "Updates from your school",
+    "markAllRead": "Mark all read",
+    "markAllReadA11y": "Mark all as read",
+    "errorTitle": "Couldn't load notifications",
+    "emptyTitle": "No notifications yet",
+    "emptySubtitle": "Absences, results, fees and notices will show up here."
+  },
+  "attendanceCard": {
+    "title": "Attendance this year",
+    "days": "{{count}} days",
+    "presentRate": "Present rate"
+  },
+  "noticeType": {
+    "general": "Notice",
+    "exam": "Exam",
+    "holiday": "Holiday",
+    "fee": "Fee",
+    "event": "Event",
+    "emergency": "Emergency"
+  },
+  "feeStatus": {
+    "paid": "Paid",
+    "partial": "Partial",
+    "unpaid": "Unpaid",
+    "overdue": "Overdue",
+    "waived": "Waived"
+  },
+  "pay": {
+    "payWith": "Pay {{amount}} with {{gateway}}",
+    "due": "Due: {{value}}",
+    "onlinePayment": "Online payment"
+  },
+  "assignmentStatus": {
+    "draft": "Draft",
+    "published": "Published",
+    "closed": "Closed"
+  }
+}

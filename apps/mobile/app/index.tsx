@@ -12,6 +12,8 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { useLocale } from '../hooks/useLocale';
+import NpText from '../components/NpText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -20,7 +22,6 @@ import axios from 'axios';
 import { rawApi } from '../lib/api';
 import { setSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
-import NpText from '../components/NpText';
 import { FONT } from '../lib/theme/fonts';
 
 // Aaramva onboarding brand surface. These are the exact design literals for the
@@ -72,6 +73,7 @@ export default function SchoolEntryScreen() {
   const [slug, setSlug] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLocale('auth');
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const { setSlug: storeSetSlug, setStatus } = useAuthStore();
   const insets = useSafeAreaInsets();
@@ -79,7 +81,7 @@ export default function SchoolEntryScreen() {
   const handleSearch = async () => {
     const trimmed = slug.trim().toLowerCase();
     if (!isValidSlugFormat(trimmed)) {
-      setError('Enter a valid school code (letters, numbers, hyphens).');
+      setError(t('schoolCode.errorInvalid'));
       return;
     }
     setLoading(true);
@@ -96,14 +98,14 @@ export default function SchoolEntryScreen() {
       if (axios.isAxiosError(err)) {
         if (err.response) {
           if (err.response.status === 404) {
-            setError("We couldn't find that school code. Check it with your school.");
+            setError(t('schoolCode.errorNotFound'));
           } else if (err.response.status === 429) {
-            setError('Too many attempts. Please wait a minute and try again.');
+            setError(t('schoolCode.errorTooMany'));
           } else {
-            setError(`Server error (${err.response.status}). Please try again shortly.`);
+            setError(t('schoolCode.errorServer', { status: err.response.status }));
           }
         } else {
-          setError("Can't reach the server. Make sure the API is running and reachable.");
+          setError(t('schoolCode.errorUnreachable'));
         }
         if (__DEV__) {
           console.log(
@@ -114,7 +116,7 @@ export default function SchoolEntryScreen() {
           );
         }
       } else {
-        setError('Something went wrong. Please try again.');
+        setError(t('schoolCode.errorGeneric'));
         if (__DEV__) console.log('[tenant verify] non-axios error:', err);
       }
     } finally {
@@ -156,7 +158,7 @@ export default function SchoolEntryScreen() {
             resizeMode="contain"
           />
           {tenant !== null && (
-            <Text style={styles.foundEyebrow}>We found your school</Text>
+            <NpText style={styles.foundEyebrow}>{t('schoolCode.foundSchool')}</NpText>
           )}
         </View>
 
@@ -165,9 +167,9 @@ export default function SchoolEntryScreen() {
         {/* ---------------------------------------------------------------- */}
         {tenant === null ? (
           <View style={styles.body}>
-            <Text style={styles.heading}>Find your school</Text>
+            <NpText style={styles.heading}>{t('schoolCode.findSchool')}</NpText>
             <Text style={styles.subtext}>
-              Enter the school code provided by your institution to continue.
+              {t('schoolCode.findSchoolHint')}
             </Text>
 
             {/* Input */}
@@ -175,10 +177,10 @@ export default function SchoolEntryScreen() {
               <Ionicons name="school" size={19} color={OB.green} />
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. motherland-school"
+                placeholder={t('schoolCode.codePlaceholder')}
                 placeholderTextColor={OB.muted}
                 value={slug}
-                onChangeText={(t) => { setSlug(t); setError(null); }}
+                onChangeText={(v) => { setSlug(v); setError(null); }}
                 autoCapitalize="none"
                 autoCorrect={false}
                 onSubmitEditing={handleSearch}
@@ -220,7 +222,7 @@ export default function SchoolEntryScreen() {
                 ) : (
                   <>
                     <Ionicons name="search" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.ctaText}>Find school</Text>
+                    <NpText style={styles.ctaText}>{t('schoolCode.findSchoolBtn')}</NpText>
                   </>
                 )}
               </LinearGradient>
@@ -282,7 +284,7 @@ export default function SchoolEntryScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.ctaFill}
               >
-                <Text style={[styles.ctaText, { marginRight: 8 }]}>Continue to login</Text>
+                <NpText style={[styles.ctaText, { marginRight: 8 }]}>{t('schoolCode.continueToLogin')}</NpText>
                 <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
               </LinearGradient>
             </TouchableOpacity>
@@ -292,7 +294,7 @@ export default function SchoolEntryScreen() {
               onPress={() => { setTenant(null); setError(null); }}
               activeOpacity={0.7}
             >
-              <Text style={styles.notMySchoolText}>Not your school?</Text>
+              <NpText style={styles.notMySchoolText}>{t('schoolCode.notYourSchool')}</NpText>
             </TouchableOpacity>
           </View>
         )}

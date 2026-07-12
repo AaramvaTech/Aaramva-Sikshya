@@ -1,6 +1,7 @@
 import {
   View, Text, ScrollView, Image, StatusBar, StyleSheet,
 } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
 import { router } from 'expo-router';
 
 import { useMyStaffProfile } from '../../hooks/useTeacher';
@@ -39,6 +40,7 @@ function DetailRow({
 
 export default function TeacherProfileDetails() {
   const c = useThemeColors();
+  const { t } = useLocale('teacher');
   const { data: p, isLoading, isError, refetch } = useMyStaffProfile();
   // FILE-1: storage-key photos resolve to presigned GETs; legacy values pass through.
   const photoSrc = useFileUrl(p?.photoUrl);
@@ -49,7 +51,7 @@ export default function TeacherProfileDetails() {
     <ScreenHeader
       variant="bar"
       onBack={() => router.back()}
-      title="Profile details"
+      title={t('profileDetails.title')}
       padH={16}
       padBottom={14}
     />
@@ -78,7 +80,7 @@ export default function TeacherProfileDetails() {
         <StatusBar barStyle="dark-content" />
         {Header}
         <View style={[styles.body, { justifyContent: 'center', flex: 1 }]}>
-          <ErrorState title="Couldn't load profile" onRetry={() => refetch()} />
+          <ErrorState title={t('profileDetails.errorTitle')} onRetry={() => refetch()} />
         </View>
       </View>
     );
@@ -98,20 +100,20 @@ export default function TeacherProfileDetails() {
 
   // Personal info rows — fields from StaffProfile that are personal in nature.
   const personalRows: { label: string; value: string }[] = [
-    { label: 'First name', value: p.firstName ?? '—' },
-    { label: 'Last name', value: p.lastName ?? '—' },
-    { label: 'Email', value: p.email },
-    ...(p.phone ? [{ label: 'Phone', value: p.phone }] : []),
-    ...(p.gender ? [{ label: 'Gender', value: p.gender }] : []),
+    { label: t('profileDetails.fields.firstName'), value: p.firstName ?? '—' },
+    { label: t('profileDetails.fields.lastName'), value: p.lastName ?? '—' },
+    { label: t('profileDetails.fields.email'), value: p.email },
+    ...(p.phone ? [{ label: t('profileDetails.fields.phone'), value: p.phone }] : []),
+    ...(p.gender ? [{ label: t('profileDetails.fields.gender'), value: p.gender }] : []),
   ];
 
   // Employment info rows — comp tEditProfile shows employee id, department, designation, join date.
   const employmentRows: { label: string; value: string }[] = [
-    { label: 'Employee ID', value: p.employeeId ?? '—' },
-    { label: 'Designation', value: p.designationTitle ?? '—' },
-    { label: 'Department', value: p.departmentName ?? '—' },
-    { label: 'Employment type', value: p.employmentType ?? '—' },
-    { label: 'Joined', value: joinedDisplay },
+    { label: t('profileDetails.fields.employeeId'), value: p.employeeId ?? '—' },
+    { label: t('profileDetails.fields.designation'), value: p.designationTitle ?? '—' },
+    { label: t('profileDetails.fields.department'), value: p.departmentName ?? '—' },
+    { label: t('profileDetails.fields.employmentType'), value: p.employmentType ?? '—' },
+    { label: t('profileDetails.fields.joined'), value: joinedDisplay },
   ];
 
   return (
@@ -134,7 +136,7 @@ export default function TeacherProfileDetails() {
         </View>
 
         {/* Personal info card */}
-        <CardLabel>Personal information</CardLabel>
+        <CardLabel>{t('profileDetails.personalInfo')}</CardLabel>
         <View style={[styles.infoCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
           {personalRows.map((r, idx) => (
             <DetailRow
@@ -147,7 +149,7 @@ export default function TeacherProfileDetails() {
         </View>
 
         {/* Employment info card */}
-        <CardLabel style={{ marginTop: 20 }}>Employment</CardLabel>
+        <CardLabel style={{ marginTop: 20 }}>{t('profileDetails.employment')}</CardLabel>
         <View style={[styles.infoCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
           {employmentRows.map((r, idx) => (
             <DetailRow

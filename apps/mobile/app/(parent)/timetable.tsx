@@ -6,8 +6,9 @@ import { todayBs, formatBs } from 'bs-calendar';
 import { useMyChildren, useChildTimetable } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
-import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, ErrorState } from '../../components/ui';
+import { useLocale, bsLang } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
+import { ScreenHeader, ChildPicker, Card, CardLabel, EmptyState, ErrorState } from '../../components/ui';
 import Skeleton from '../../components/Skeleton';
 import { formatPeriodRange } from '../../lib/time';
 import type { SectionTimetableSlot } from '../../types';
@@ -18,6 +19,9 @@ export default function ParentTimetable() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number>(() => new Date().getDay());
   const c = useThemeColors();
+  const { t, locale } = useLocale('parent');
+  const shortDays = t('common:days.short', { returnObjects: true }) as string[];
+  const longDays = t('common:days.long', { returnObjects: true }) as string[];
 
   const selectedChildId = useAuthStore((s) => s.selectedChildId);
   const setSelectedChildId = useAuthStore((s) => s.setSelectedChildId);
@@ -53,9 +57,9 @@ export default function ParentTimetable() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
       <ScreenHeader
-        eyebrow={selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : 'Timetable'}
-        title="Timetable"
-        subtitle={formatBs(todayBs(), 'en')}
+        eyebrow={selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : t('timetable.title')}
+        title={t('timetable.title')}
+        subtitle={formatBs(todayBs(), bsLang(locale))}
         overlap
       >
         <ChildPicker children={children} selectedId={effectiveChildId} onSelect={setSelectedChildId} />
@@ -64,7 +68,7 @@ export default function ParentTimetable() {
       <View style={styles.cards}>
         {/* Day selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
-          {DAY_NAMES.map((name, dow) => {
+          {DAY_NAMES.map((_name, dow) => {
             const isSat = dow === 6;
             const isToday = dow === todayDow;
             const isSelected = dow === selectedDay;
@@ -78,12 +82,12 @@ export default function ParentTimetable() {
                 className={isSelected ? 'bg-primary' : 'bg-surface'}
                 style={[styles.dayChip, isSat && styles.dayChipDisabled]}
               >
-                <Text
+                <NpText
                   className={isSelected ? 'text-primary-foreground' : 'text-foreground'}
                   style={styles.dayChipText}
                 >
-                  {name.slice(0, 3)}
-                </Text>
+                  {shortDays[dow]}
+                </NpText>
                 {isToday && (
                   <View
                     style={styles.todayDot}
@@ -97,17 +101,17 @@ export default function ParentTimetable() {
 
         {/* Periods */}
         <Card padded style={styles.lastCard}>
-          <CardLabel>{`${DAY_NAMES[selectedDay]} Periods`}</CardLabel>
+          <CardLabel>{t('timetable.dayPeriods', { day: longDays[selectedDay] })}</CardLabel>
           {timetableQuery.isLoading ? (
             <View style={{ gap: 10 }}>
               {[0, 1, 2, 3].map((i) => <Skeleton key={i} style={{ height: 52 }} className="rounded-xl" />)}
             </View>
           ) : timetableQuery.isError ? (
-            <ErrorState compact title="Couldn't load timetable" onRetry={() => void timetableQuery.refetch()} />
+            <ErrorState compact title={t('timetable.errorTitle')} onRetry={() => void timetableQuery.refetch()} />
           ) : selectedDay === 6 ? (
-            <EmptyState icon="sunny-outline" title="Saturday — no school" />
+            <EmptyState icon="sunny-outline" title={t('timetable.saturdayNoSchool')} />
           ) : daySlots.length === 0 ? (
-            <EmptyState icon="moon-outline" title="No periods" />
+            <EmptyState icon="moon-outline" title={t('timetable.emptyTitle')} />
           ) : (
             daySlots.map((p, idx) => (
               <View

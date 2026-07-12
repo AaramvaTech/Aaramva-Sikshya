@@ -1,4 +1,5 @@
 import { View, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { useLocale } from '../../hooks/useLocale';
 import { useState } from 'react';
 import { useNotices } from '../../hooks/useStudentMe';
 import { NoticeFeed, ScreenHeader } from '../../components/ui';
@@ -13,6 +14,7 @@ export default function TeacherNotices() {
   const [refreshing, setRefreshing] = useState(false);
   const { data: notices, isLoading, isError, refetch } = useNotices();
   const c = useThemeColors();
+  const { t } = useLocale('teacher');
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -32,8 +34,8 @@ export default function TeacherNotices() {
           compact
           padTop={12}
           padBottom={16}
-          title="Notices"
-          subtitle="Announcements from your school"
+          title={t('notices.title')}
+          subtitle={t('notices.subtitle')}
         />
 
         <View style={styles.body}>

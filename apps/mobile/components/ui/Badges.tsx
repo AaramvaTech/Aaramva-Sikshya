@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import NpText from '../NpText';
 import { Ionicons } from '@expo/vector-icons';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -15,7 +16,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ label, bg, color }: StatusBadgeProps) {
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
+      <NpText style={[styles.badgeText, { color }]}>{label}</NpText>
     </View>
   );
 }
@@ -33,7 +34,7 @@ export function HeaderPill({ icon, label, tint }: HeaderPillProps) {
   return (
     <View className="bg-white/12" style={styles.pill}>
       <Ionicons name={icon} size={12} color={tint} />
-      <Text style={[styles.pillText, { color: tint }]}>{label}</Text>
+      <NpText style={[styles.pillText, { color: tint }]}>{label}</NpText>
     </View>
   );
 }
