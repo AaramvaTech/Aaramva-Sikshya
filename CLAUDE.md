@@ -98,6 +98,12 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 
 ---
 
+## Git & GitHub conventions
+
+**Standing rule:** Claude Code never merges PRs, closes PRs, or performs GitHub account actions beyond `git push`, unless the current instruction explicitly says to. If a dependency is unmerged, stop and ask.
+
+---
+
 ## Module build order (follow this sequence)
 
 1. ✅ **Foundation** — Tenant resolution, Auth (JWT), RBAC, TenantPrismaService
