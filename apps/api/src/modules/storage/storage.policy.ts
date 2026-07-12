@@ -32,10 +32,22 @@ export interface FileKindPolicy {
   uploadRoles: Role[];
   /** served anonymously via bucket policy — persist publicUrl, not the key */
   publicRead: boolean;
+  /** EDU-1: grantable ONLY through a feature-module endpoint that performs its
+   *  own object-level eligibility check first (e.g. submission-file requires
+   *  the student to be targeted by the assignment). The generic
+   *  POST /files/presign-upload rejects these kinds. */
+  scopedOnly?: boolean;
 }
 
 const SETTINGS_EDITORS = [Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL];
 const STUDENT_MANAGERS = [...SETTINGS_EDITORS, Role.ACADEMIC_COORDINATOR];
+
+/** EDU-1 document types (assignment attachments + submissions). */
+const DOCUMENT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+};
 
 export const FILE_KIND_POLICIES = {
   'student-photo': {
@@ -74,15 +86,40 @@ export const FILE_KIND_POLICIES = {
     uploadRoles: SETTINGS_EDITORS,
     publicRead: false,
   },
+  // EDU-1: teacher homework attachments — presignable via the generic route.
+  'assignment-attachment': {
+    maxBytes: 10 * MB,
+    contentTypes: { ...IMAGE_TYPES, ...DOCUMENT_TYPES },
+    uploadRoles: [...STUDENT_MANAGERS, Role.TEACHER],
+    publicRead: false,
+  },
+  // EDU-1: student submission files — scopedOnly: eligibility (student is
+  // targeted by the published assignment) lives in AssignmentModule; presign
+  // ONLY via POST /assignments/:id/submissions/presign-upload.
+  'submission-file': {
+    maxBytes: 10 * MB,
+    contentTypes: { ...IMAGE_TYPES, ...DOCUMENT_TYPES },
+    uploadRoles: [Role.STUDENT],
+    publicRead: false,
+    scopedOnly: true,
+  },
 } satisfies Record<string, FileKindPolicy>;
 
 export type FileKind = keyof typeof FILE_KIND_POLICIES;
 
 export const FILE_KIND_NAMES = Object.keys(FILE_KIND_POLICIES) as FileKind[];
 
-/** Union of all kinds' uploadRoles — the controller-level gate; the per-kind
- *  narrowing happens in StorageService.presignUpload. */
-export const UPLOADER_ROLES = STUDENT_MANAGERS;
+/** Union of the NON-scopedOnly kinds' uploadRoles — the generic controller
+ *  gate; per-kind narrowing happens in StorageService.presignUpload. scopedOnly
+ *  kinds (submission-file) are excluded: their presign lives on the feature
+ *  endpoint that performs the eligibility check. */
+export const UPLOADER_ROLES = [
+  ...new Set(
+    Object.values(FILE_KIND_POLICIES as Record<string, FileKindPolicy>)
+      .filter((p) => !p.scopedOnly)
+      .flatMap((p) => p.uploadRoles),
+  ),
+];
 
 export interface ParsedStorageKey {
   slug: string;

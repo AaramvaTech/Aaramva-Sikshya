@@ -8,6 +8,7 @@ import { AttendanceListener } from './listeners/attendance.listener';
 import { FinanceListener } from './listeners/finance.listener';
 import { ExaminationListener } from './listeners/examination.listener';
 import { NoticeListener } from './listeners/notice.listener';
+import { AssignmentListener } from './listeners/assignment.listener';
 import { DeviceTokenService } from './device-token.service';
 
 @Module({
@@ -21,6 +22,7 @@ import { DeviceTokenService } from './device-token.service';
     FinanceListener,
     ExaminationListener,
     NoticeListener,
+    AssignmentListener,
     DeviceTokenService,
   ],
   exports: [SmsService, NoticeService, NotificationService, PushService],

@@ -1318,3 +1318,80 @@ export interface EsewaPublicReceipt {
   verifiedAt: string | null;
 }
 
+
+// ── EDU-1 Assignments ────────────────────────────────────────────────────────
+
+export type AssignmentStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED';
+export type SubmissionStatus = 'SUBMITTED' | 'LATE' | 'REVIEWED';
+
+export interface Assignment {
+  id: string;
+  academicYearId: string;
+  classId: string;
+  sectionId: string | null;
+  subjectId: string;
+  createdBy: string;
+  title: string;
+  description: string | null;
+  dueDate: string;
+  attachmentKeys: string[];
+  status: AssignmentStatus;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  className?: string;
+  sectionName?: string | null;
+  subjectName?: string;
+  teacherName?: string;
+  submissionCount?: number;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  textAnswer: string | null;
+  fileKey: string | null;
+  submittedAt: string;
+  status: SubmissionStatus;
+  marks: number | null;
+  feedback: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  studentName?: string;
+  rollNumber?: number | null;
+}
+
+export interface MissingStudent {
+  studentId: string;
+  studentName: string;
+  rollNumber: number | null;
+}
+
+export interface AssignmentSubmissionsView {
+  submissions: AssignmentSubmission[];
+  missing: MissingStudent[];
+}
+
+export interface CreateAssignmentData {
+  title: string;
+  description?: string;
+  classId: string;
+  sectionId?: string;
+  subjectId: string;
+  academicYearId?: string;
+  dueDate: string;
+  attachmentKeys?: string[];
+}
+
+export interface UpdateAssignmentData {
+  title?: string;
+  description?: string;
+  dueDate?: string;
+  attachmentKeys?: string[];
+}
+
+export interface ReviewSubmissionData {
+  marks?: number;
+  feedback?: string;
+}

@@ -66,6 +66,9 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // (SCHOOL_OWNER/PRINCIPAL only), which the section still permits via the shell.
   { prefix: '/academic', roles: COORDINATOR_AND_ABOVE, endpoint: 'POST /classes' },
   { prefix: '/attendance', roles: TEACHER_TIER, endpoint: 'POST /attendance/students/bulk' },
+  // EDU-1 assignments — mirrors ASSIGNMENT_MANAGER_ROLES on the backend
+  // (PLATFORM_ADMIN/SCHOOL_OWNER/PRINCIPAL/ACADEMIC_COORDINATOR/TEACHER).
+  { prefix: '/assignments', roles: TEACHER_TIER, endpoint: 'POST /assignments' },
   { prefix: '/finance', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-structures' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   { prefix: '/library', roles: LIBRARIAN_AND_ABOVE, endpoint: 'POST /library/books' },
