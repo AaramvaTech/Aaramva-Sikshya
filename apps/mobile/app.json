@@ -48,6 +48,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "54147e05-403e-4185-9d0c-67dd5d1f6a74"
+      }
+    },
+    "owner": "aaramva-nepal-technology"
   }
 }

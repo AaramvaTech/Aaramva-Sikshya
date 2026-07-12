@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_PROJECT_ID": "54147e05-403e-4185-9d0c-67dd5d1f6a74",
+        "EXPO_PUBLIC_API_URL": "http://192.168.10.74:3001/api/v1"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_PROJECT_ID": "54147e05-403e-4185-9d0c-67dd5d1f6a74",
+        "EXPO_PUBLIC_API_URL": "https://api.aaramvashikshya.com/api/v1"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
