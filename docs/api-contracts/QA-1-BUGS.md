@@ -32,7 +32,13 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 
 ---
 
-## BUG-4 (Phase 10) — 🔴 CRITICAL cross-tenant data leak (token/tenant not cross-checked) — **STOP-and-report (NOT fixed; needs architect decision)**
+## BUG-4 (Phase 10) — 🔴 CRITICAL cross-tenant data leak — **FIXED (Phase 11)**
+
+**Fix (architect-approved):** global `TenantMatchGuard` (`modules/common/guards/tenant-match.guard.ts`) registered via `APP_GUARD` **after** a global lenient `OptionalJwtGuard` (`optional-jwt.guard.ts`) that populates `req.user` from a valid token without ever rejecting (strict auth stays per-controller — so no `@Public()` churn, public/login/refresh untouched). The guard compares **canonical `token.tenantId` vs `req.tenant.tenantId` (ids, never slugs)** → **403** on mismatch; `tenantId==null` (platform admin) → allow + **structured audit log**; no `req.user` or no `req.tenant` → no-op. Registered in `app.module.ts` after `ThrottlerGuard`. 4 files + 5 regression tests (mismatch / match / null-tenantId+log / no-user / no-tenant).
+
+**Closing proofs (live, raw):** exact leak repro (qa-demo token + `X-Tenant-Slug: demo`) → **403**; same-tenant → **200** (unchanged); cross-tenant **WRITE** (POST /students) → **403** with psql proof `demo.students 15→15` and no `Intruder` row; global coverage confirmed — `files/presign-upload`, `reports/attendance/trends`, `dashboard/overview` all **403** cross-tenant; data-level foreign `:id` still **404**; public login still authenticates. Suite 530→ (guard tests +5).
+
+<details><summary>Original finding (kept for the record)</summary>
 
 | Field | Value |
 |---|---|
@@ -42,6 +48,8 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | **Blast radius** | Every authenticated tenant-scoped route. Any leaked/stolen/log-captured token becomes a cross-tenant skeleton key. Data-level isolation (search_path) is intact (BUG is the *selection* of tenant), and `GET /students/:id` for a foreign id 404s (I1) — but the header lets the token operate wholesale in the foreign schema. |
 | **Proposed fix (for approval)** | Add a check, after both `TenantMiddleware` and `JwtAuthGuard` have run, comparing `req.user.tenantId` to `req.tenant.tenantId`; **reject 403 on mismatch**. Placement options: a dedicated `TenantMatchGuard` registered globally after auth, or in `RolesGuard`, or an interceptor. **Nuance to decide:** PLATFORM_ADMIN tokens carry `tenantId: null` (super-admin routes are already excluded from `TenantMiddleware`); impersonation tokens carry the *target* tenant's tenantId (so they'd pass naturally). Safe default: **enforce only when `token.tenantId` is non-null** (non-null must equal the resolved tenant); allow null (platform admin) through. Regression test: cross-tenant token → 403; same-tenant → 200; platform-admin/impersonation unaffected. |
 | **Why not fixed inline** | Security-critical **core auth path** (every request) with a genuine platform-admin/impersonation nuance → Bug Protocol STOP-and-report. Surfaced at CHECKPOINT 10 for the architect to approve the fix approach (placement + platform-admin handling) before touching auth. |
+
+</details>
 
 ## OBS-C (Phase 10) — student status enum in stats — **FIXED**
 
