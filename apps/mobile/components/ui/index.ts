@@ -27,3 +27,7 @@ export { FeatureTile, FeatureButton } from './FeatureTile';
 export { TodayModule } from './TodayModule';
 export { StatTile } from './StatTile';
 export { SegmentedPills } from './SegmentedPills';
+export { ResultHero } from './ResultHero';
+export { GpaTrendBars } from './GpaTrendBars';
+export { InsightCard } from './InsightCard';
+export { SubjectRow } from './SubjectRow';

@@ -89,7 +89,12 @@
     "gradeRank": "ग्रेड · र्‍याङ्क",
     "fullMarks": "पूर्णाङ्क {{value}}",
     "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
-    "downloading": "डाउनलोड हुँदैछ…"
+    "downloading": "डाउनलोड हुँदैछ…",
+    "aggregatePct": "{{value}}% समग्र",
+    "rankHash": "र्‍याङ्क #{{value}}",
+    "gpaChangeLabel": "GPA परिवर्तन",
+    "rankChangeLabel": "र्‍याङ्क",
+    "gpaTrend": "GPA प्रवृत्ति"
   },
   "profile": {
     "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"

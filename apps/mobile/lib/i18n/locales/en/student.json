@@ -89,7 +89,12 @@
     "gradeRank": "Grade · Rank",
     "fullMarks": "Full marks {{value}}",
     "downloadPdf": "Download report card PDF",
-    "downloading": "Downloading…"
+    "downloading": "Downloading…",
+    "aggregatePct": "{{value}}% aggregate",
+    "rankHash": "Rank #{{value}}",
+    "gpaChangeLabel": "GPA change",
+    "rankChangeLabel": "Rank",
+    "gpaTrend": "GPA trend"
   },
   "profile": {
     "errorTitle": "Couldn't load your profile"
