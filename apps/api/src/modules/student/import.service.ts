@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { bsToAd, parseBsString } from 'bs-calendar';
-import { formatLocalDate } from '../common/utils/date.util';
+import { formatLocalDate, todayAdInNepal } from '../common/utils/date.util';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { StudentService } from './student.service';
 import { GuardianService } from './guardian.service';
@@ -216,7 +216,7 @@ export class ImportService {
     if (!ctx.year) throw new BadRequestException('No current academic year — complete academic setup first.');
     const rows = this.validateRows(records, ctx);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayAdInNepal(); // QA-1 OBS-E-6: Nepal-today admission default
     const created: CommitResult['created'] = [];
     const skipped: CommitResult['skipped'] = [];
 

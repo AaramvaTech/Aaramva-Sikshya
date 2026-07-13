@@ -145,7 +145,8 @@ export class InvoiceService {
     const dueDate = dto.dueDate ?? todayAdInNepal();
 
     return this.tenantPrisma.run(async (tx) => {
-      const bsYear = getBsYear(new Date());
+      // QA-1 OBS-F: BS year for the invoice number from Nepal-today.
+      const bsYear = getBsYear(new Date(todayAdInNepal()));
 
       const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
         `INSERT INTO sequences (key, value) VALUES ('invoice_seq', 1)

@@ -115,8 +115,8 @@ The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service
 | OBS-E-3 | `hr/staff.service.ts:302` (soft-delete `end_date`) → `todayAdInNepal()` | 8 | **FIXED (this branch)** — 2 files + mocked-clock test (end_date=2026-07-14 at 00:30+05:45); live delete → end_date 2026-07-13 |
 | OBS-E-4 | `library/issue.service.ts` returnBook (`returned_at` + overdue day-count) → `todayAdInNepal()` + TZ-independent diff | 9 | **FIXED (this branch)** — 2 files + mocked-clock test (returned_at=2026-07-14, fine_days=4 at boundary). **Live-proven off-by-one**: returned_at now 2026-07-13 (was 2026-07-12 — local-midnight→toISOString rendered the prior UTC day even at midday). Fine amount `fine_days × fine_per_day` is JS-float → BUG-3/MON-1 (not fixed). |
 | OBS-E-5 | `dashboard.service.ts` getOverview (28) + getUpcoming (290) + weekly-attendance window → `todayAdInNepal()` | 10 | **FIXED (this branch)** — 2 files + 2 mocked-clock tests; live weekEnd=2026-07-13. Week is a rolling 7-day window ending Nepal-today (NOT ISO-Monday — no week-start logic; each day labeled by its own day-of-week). |
-| OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
-| OBS-F (reclassified into OBS-E family) | `finance/payment.service.ts:28-31` (`deriveStatus`) + `invoice.service.ts:146` / `payment.service.ts:70` (`getBsYear(new Date())`) → `todayAdInNepal()` + mocked-clock tests | 11 | pending |
+| OBS-E-6 | `student/import.service.ts:219` (imported-student `admissionDate` default) → `todayAdInNepal()` | 11 | **FIXED** |
+| OBS-F | `payment.service.deriveStatus` (OVERDUE-vs-UNPAID) + `getBsYear(new Date())` at `payment.service:70` & `invoice.service:146` → Nepal-today | 11 | **FIXED** — deriveStatus mocked-clock test (due-yesterday-Nepal at 00:30+05:45 → OVERDUE, was UNPAID) |
 
 ## OBS-G (Phase 8) — Leave self-approval is permitted — **INTENTIONAL (no guard)**
 

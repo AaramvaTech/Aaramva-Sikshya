@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getBsYear } from 'bs-calendar';
+import { todayAdInNepal } from '../common/utils/date.util';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import {
@@ -25,11 +26,10 @@ export class PaymentService {
   private deriveStatus(totalAmount: number, paidAmount: number, dueDate: Date | string): string {
     if (paidAmount >= totalAmount) return 'PAID';
     if (paidAmount > 0) return 'PARTIAL';
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return due < today ? 'OVERDUE' : 'UNPAID';
+    // QA-1 OBS-F: OVERDUE vs UNPAID against Nepal's calendar today (lexical
+    // 'YYYY-MM-DD' compare — TZ-independent), not the server-local midnight.
+    const dueAd = dueDate instanceof Date ? dueDate.toISOString().slice(0, 10) : String(dueDate).slice(0, 10);
+    return dueAd < todayAdInNepal() ? 'OVERDUE' : 'UNPAID';
   }
 
   // ─── Record payment (atomic: insert payment + update invoice) ───────────────
@@ -66,8 +66,8 @@ export class PaymentService {
       );
       if (!invoice) throw new NotFoundException(`Invoice ${dto.invoiceId} not found`);
 
-      // Get next payment sequence
-      const bsYear = getBsYear(new Date());
+      // Get next payment sequence (QA-1 OBS-F: BS year from Nepal-today)
+      const bsYear = getBsYear(new Date(todayAdInNepal()));
       const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
         `INSERT INTO sequences (key, value) VALUES ('payment_seq', 1)
          ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1

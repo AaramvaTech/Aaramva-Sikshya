@@ -205,4 +205,30 @@ describe('PaymentService', () => {
       expect(deleteCall).toBeDefined();
     });
   });
+
+  // QA-1 OBS-F: OVERDUE vs UNPAID must use Nepal's calendar today, not UTC/
+  // server-local. At 2026-07-14 00:30 +05:45 (= 2026-07-13 18:45Z) an invoice
+  // due 2026-07-13 is already OVERDUE in Nepal (the old UTC path saw "today"
+  // as 2026-07-13 and returned UNPAID).
+  describe('deriveStatus (OBS-F)', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const derive = (due: string, paid = 0, total = 1000) =>
+      (service as unknown as { deriveStatus: (t: number, p: number, d: string) => string })
+        .deriveStatus(total, paid, due);
+
+    it('is OVERDUE for a due-yesterday-Nepal invoice at the midnight boundary', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      expect(derive('2026-07-13')).toBe('OVERDUE'); // Nepal is 2026-07-14
+    });
+
+    it('is UNPAID when due today (Nepal) and nothing paid', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      expect(derive('2026-07-14')).toBe('UNPAID'); // due == Nepal-today
+    });
+
+    it('is PAID/PARTIAL regardless of date', () => {
+      expect(derive('2020-01-01', 1000, 1000)).toBe('PAID');
+      expect(derive('2020-01-01', 500, 1000)).toBe('PARTIAL');
+    });
+  });
 });
