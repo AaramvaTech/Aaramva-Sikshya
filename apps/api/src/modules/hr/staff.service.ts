@@ -7,6 +7,7 @@ import { MAIL_EVENTS } from '../mail/mail.events';
 import type { CredentialsIssuedEvent } from '../mail/mail.events';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import {
   StaffProfileRow,
   StaffDocumentRow,
@@ -299,7 +300,8 @@ export class StaffService {
     );
     if (!rows[0]) throw new NotFoundException(`Staff profile ${id} not found`);
 
-    const today = new Date().toISOString().split('T')[0];
+    // QA-1 OBS-E-3: end_date is Nepal's calendar today, not UTC-today.
+    const today = todayAdInNepal();
 
     await this.tenantPrisma.execute(
       `UPDATE staff_profiles

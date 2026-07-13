@@ -140,4 +140,20 @@ No code changes — the report module is clean (no UTC-date truncation; `fee-agi
 
 **BS-month bucketing boundary proof (requirement 1):** seeded 1 attendance record on `2026-07-15` + 1 on `2026-07-16`; the trends report (`groupBy=bs-month`) split them into **two distinct buckets — `2083-03` "Ashadh 2083" (07-15) vs `2083-04` "Shrawan 2083" (07-16)** — the exact Ashadh(31)→Shrawan(1) boundary. Verified against `packages/bs-calendar` (`2026-07-15 → 2083-03-31`, `2026-07-16 → 2083-04-01`, modern-era FIX-3-safe); psql cross-checked; seeded rows cleaned (count 0).
 
-**Phase 7 result:** all cells PASS, no code changes. BS-month bucket boundary correct (a cross-Gregorian-month BS month splits on the right AD day); fee-aging `asOf` is Nepal-today (`todayAdInNepal()`); all report endpoints 200 for admin tier with correct aggregates; **teacher/student/parent → 403** on every report endpoint (requirement 3). No UTC-date-truncation in the report/bucketing code (requirement 2 — grep clean). Marks entry stamps `entered_by`=teacher; **out-of-range marks rejected 400 with psql proof of no write**; full pipeline marks→result(grade/rank)→report-card verified (Aarav 85%→A→rank 1); **publish privacy gate proven** (parent/student see only published terms — `examResults` empty until publish; staff see all); report-card JSON + **PDF valid** (`%PDF-` magic, 23964 B non-zero, download round-trip) for student `/me` and parent own-child; **cross-family report-card + PDF → 403**.
+**Phase 7 result (continued):** all cells PASS, no code changes.
+
+## Phase 8 — HR & Staff
+
+**Fix landed:** OBS-E-3 (`staff.service` soft-delete `end_date` UTC-today → `todayAdInNepal()`; 2 files + mocked-clock test). See QA-1-BUGS.md.
+
+| Module | Feature | C | R | U | D | Admin | Non-admin/approver | State/scoping | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| HR | Staff CRUD | PASS (EMP-2083-0003) | PASS | PASS (psql) | PASS (soft; **`end_date` Nepal-today**, user inactive) | PASS | teacher POST → 403 | — | PASS |
+| HR | Leave type | PASS | PASS | PASS | (soft) | PASS | — | — | PASS |
+| HR | Leave apply→approve loop | PASS (PENDING, total_days 3) | PASS (approver sees pending; applicant `/my`) | PASS (approve→APPROVED, **`reviewed_by`=approver**) | — | PASS | — | applicant view reflects state | PASS |
+| HR | Non-approver review | — | — | — | — | — | teacher2 review → **403** | FORBIDDEN-CORRECT | PASS |
+| HR | State-machine integrity | — | — | reject-after-approve → **400**; double-approve → **400** | — | — | — | psql status **unchanged** (APPROVED) | PASS |
+| HR | **Self-approval** | — | — | owner approves own → **200 ALLOWED** | — | — | — | **not blocked → OBS-G product ruling** | FLAGGED |
+| HR | Leave-day counting | — | — | — | — | — | — | Fri→Sun span Sat = **3 calendar days** → CAL-1 | NOTE |
+
+**Phase 8 result:** all matrix cells PASS (self-approval FLAGGED for product ruling, day-counting a CAL-1 NOTE — neither a FAIL). Staff CRUD + soft-delete (OBS-E-3 `end_date`=Nepal-today); full leave loop with `reviewed_by` actor accountability; **state-machine integrity enforced** (reject-after-approve + double-approve → 400, no state change); **non-approver → 403**. Two flags per architect decisions: **OBS-G** self-approval permitted (product ruling, not fixed), **CAL-1** leave = calendar days (no Saturday/holiday exclusion, no fix). BS-month bucket boundary correct (a cross-Gregorian-month BS month splits on the right AD day); fee-aging `asOf` is Nepal-today (`todayAdInNepal()`); all report endpoints 200 for admin tier with correct aggregates; **teacher/student/parent → 403** on every report endpoint (requirement 3). No UTC-date-truncation in the report/bucketing code (requirement 2 — grep clean). Marks entry stamps `entered_by`=teacher; **out-of-range marks rejected 400 with psql proof of no write**; full pipeline marks→result(grade/rank)→report-card verified (Aarav 85%→A→rank 1); **publish privacy gate proven** (parent/student see only published terms — `examResults` empty until publish; staff see all); report-card JSON + **PDF valid** (`%PDF-` magic, 23964 B non-zero, download round-trip) for student `/me` and parent own-child; **cross-family report-card + PDF → 403**.

@@ -89,11 +89,19 @@ The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service
 |---|---|---|---|
 | OBS-E (this) | `attendance/student-attendance.service.ts` getSchoolSummary | 3 | **FIXED (b8d1bf9)** |
 | OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` + fine-cron `recalculate-fines.job.ts:115-121` → `todayAdInNepal()`** (TZ-independent day-diff) | 5 | **FIXED (this branch)** — 4 files + 2 mocked-clock tests; live fine-execution proof 120.00 |
-| OBS-E-3 | `hr/staff.service.ts:302` | 8 | pending |
+| OBS-E-3 | `hr/staff.service.ts:302` (soft-delete `end_date`) → `todayAdInNepal()` | 8 | **FIXED (this branch)** — 2 files + mocked-clock test (end_date=2026-07-14 at 00:30+05:45); live delete → end_date 2026-07-13 |
 | OBS-E-4 | `library/issue.service.ts:92` | 9 | pending |
 | OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
 | OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
 | OBS-F (reclassified into OBS-E family) | `finance/payment.service.ts:28-31` (`deriveStatus`) + `invoice.service.ts:146` / `payment.service.ts:70` (`getBsYear(new Date())`) → `todayAdInNepal()` + mocked-clock tests | 11 | pending |
+
+## OBS-G (Phase 8) — Leave self-approval is permitted — **FLAGGED for product ruling (not fixed)**
+
+`LeaveService.reviewLeave` does not check `reviewerId !== leave.user_id`, so a reviewer (any REVIEWER_ROLES) can **approve their own leave request**. Live-proven: owner applied leave then approved it → 200, `reviewed_by = user_id`. Per architect decision (Phase 8 requirement 1), **not fixed** — flagged for a product ruling: should self-approval be blocked (require a different approver), or is it acceptable for a SCHOOL_OWNER/PRINCIPAL (top of the hierarchy has no one above them)? If blocked, the fix is a guard in `reviewLeave` (never a role change).
+
+## CAL-1 note (Phase 8) — leave days are calendar days
+
+`LeaveService.applyLeave` computes `total_days = ceil((to - from)/day) + 1` = **calendar days**, with **no Saturday/holiday exclusion** (live: a Fri→Sun leave spanning Saturday counted 3 days). Recorded for **CAL-1** (school-calendar/holidays module) — the same backlog that should drive attendance working-days (OBS-D). No judgment/fix this phase.
 
 ## OBS-C — student status enum consistency — **upgraded → verify in Phase 10**
 
