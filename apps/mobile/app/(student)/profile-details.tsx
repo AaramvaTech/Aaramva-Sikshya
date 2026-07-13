@@ -7,7 +7,7 @@ import { useMyProfile } from '../../hooks/useStudentMe';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { CardLabel, ErrorState, ScreenHeader } from '../../components/ui';
+import { CardLabel, ErrorState, Icon, ScreenHeader } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { useLocale } from '../../hooks/useLocale';
@@ -31,8 +31,12 @@ function DetailRow({
         !isLast && { borderBottomWidth: 1, borderBottomColor: c.border },
       ]}
     >
-      <Text style={[styles.rowLabel, { color: c.mutedForeground }]}>{label}</Text>
-      <NpText style={[styles.rowValue, { color: c.foreground }]}>{value}</NpText>
+      <View style={styles.rowText}>
+        <Text style={[styles.rowLabel, { color: c.mutedForeground }]}>{label}</Text>
+        <NpText style={[styles.rowValue, { color: c.foreground }]}>{value}</NpText>
+      </View>
+      {/* Locked-field marker — every field here is school-managed (comp sEditProfile f.lockIcon). */}
+      <Icon name="lock" size={16} color={c.placeholderIcon} />
     </View>
   );
 }
@@ -158,9 +162,9 @@ export default function StudentProfileDetails() {
         </View>
 
         {/* Locked-field notice — mirrors comp line 529 (read-only message) */}
-        <Text style={[styles.lockedNote, { color: c.mutedForeground }]}>
-          Profile information is managed by your school.{'\n'}Contact the office to request changes.
-        </Text>
+        <NpText style={[styles.lockedNote, { color: c.mutedForeground }]}>
+          {t('profileDetails.lockedNote')}
+        </NpText>
       </ScrollView>
     </View>
   );
@@ -193,7 +197,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 14,
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
   },
   rowLabel: {
     fontFamily: FONT.bold,

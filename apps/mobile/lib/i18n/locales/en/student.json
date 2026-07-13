@@ -100,13 +100,15 @@
     "needsFocus": "Needs focus"
   },
   "profile": {
-    "errorTitle": "Couldn't load your profile"
+    "errorTitle": "Couldn't load your profile",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "Profile details",
     "personalInfo": "Personal information",
     "enrollment": "Enrollment",
     "errorTitle": "Couldn't load details",
+    "lockedNote": "Profile information is managed by your school.\nContact the office to request changes.",
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",
@@ -128,6 +130,7 @@
   "settingsRow": {
     "notifications": "Notifications",
     "privacy": "Privacy & security",
-    "help": "Help & support"
+    "help": "Help & support",
+    "changePassword": "Change password"
   }
 }

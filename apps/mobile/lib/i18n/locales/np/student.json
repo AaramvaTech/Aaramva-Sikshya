@@ -100,13 +100,15 @@
     "needsFocus": "ध्यान दिनुपर्ने"
   },
   "profile": {
-    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
+    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",
     "personalInfo": "व्यक्तिगत जानकारी",
     "enrollment": "भर्ना विवरण",
     "errorTitle": "विवरण लोड गर्न सकिएन",
+    "lockedNote": "प्रोफाइलको जानकारी तपाईंको विद्यालयद्वारा व्यवस्थापन गरिन्छ।\nपरिवर्तनका लागि कार्यालयलाई सम्पर्क गर्नुहोस्।",
     "fields": {
       "firstName": "पहिलो नाम",
       "lastName": "थर",
@@ -128,6 +130,7 @@
   "settingsRow": {
     "notifications": "सूचना सेटिङ",
     "privacy": "गोपनीयता र सुरक्षा",
-    "help": "सहयोग"
+    "help": "सहयोग",
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   }
 }
