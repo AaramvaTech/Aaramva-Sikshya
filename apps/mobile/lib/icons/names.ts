@@ -23,7 +23,9 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * to migrate existing `PrimaryButton` callers off Ionicons — verified against
  * MaterialIcons' glyphMap, not part of the original design canvas. Plus 2 added
  * in Task C1 (`assignment`, `grade`) for the Student Home quick-access tiles
- * (Assignments / Results) — also verified against MaterialIcons' glyphMap.
+ * (Assignments / Results) — also verified against MaterialIcons' glyphMap. Plus 1 added
+ * in Task E5 (`attach_file`) for the Student Assignments list/detail attachment rows —
+ * also verified against MaterialIcons' glyphMap.
  */
 export type IconName =
   | 'account_balance_wallet'
@@ -32,6 +34,7 @@ export type IconName =
   | 'arrow_forward'
   | 'assignment'
   | 'assignment_late'
+  | 'attach_file'
   | 'battery_full'
   | 'calculate'
   | 'calendar_month'

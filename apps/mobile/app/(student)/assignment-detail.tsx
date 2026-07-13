@@ -12,13 +12,12 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useMyAssignments, useMySubmission, useSubmitAssignment } from '../../hooks/useAssignments';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import { pickSubmissionFile, uploadSubmissionFile, type PickedFile } from '../../lib/submissionUpload';
 import { chipFor, SUBMISSION_CHIPS } from '../../lib/assignmentStatus';
-import { ErrorState, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
+import { ErrorState, Icon, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { useLocale, bsLang } from '../../hooks/useLocale';
@@ -38,9 +37,9 @@ function AttachmentRow({ fileKey, index }: { fileKey: string; index: number }) {
       onPress={() => url && Linking.openURL(url)}
       activeOpacity={0.7}
     >
-      <Ionicons name="document-attach-outline" size={18} color={c.primary} />
+      <Icon name="attach_file" size={18} color={c.primary} />
       <NpText style={[styles.attachText, { color: c.foreground }]}>{t('assignmentDetail.attachmentN', { number: index + 1 })}</NpText>
-      <Ionicons name="open-outline" size={16} color={c.mutedForeground} />
+      <Icon name="download" size={16} color={c.mutedForeground} />
     </TouchableOpacity>
   );
 }
@@ -113,6 +112,7 @@ export default function AssignmentDetail() {
   if (assignments.isLoading) {
     return (
       <View style={[styles.root, { backgroundColor: c.background }]}>
+        <ScreenHeader variant="bar" onBack={() => router.back()} padTop={12} padBottom={12} title={t('assignmentDetail.title')} />
         <LoadingBlock />
       </View>
     );
@@ -120,7 +120,7 @@ export default function AssignmentDetail() {
   if (assignments.isError || !assignment) {
     return (
       <View style={[styles.root, { backgroundColor: c.background }]}>
-        <ScreenHeader variant="plain" compact padTop={12} padBottom={12} title={t('assignmentDetail.title')} />
+        <ScreenHeader variant="bar" onBack={() => router.back()} padTop={12} padBottom={12} title={t('assignmentDetail.title')} />
         <ErrorState
           title={assignments.isError ? t('common:state.errorTitle') : t('assignmentDetail.notFound')}
           subtitle={assignments.isError ? undefined : t('assignmentDetail.notFoundBody')}
@@ -146,13 +146,15 @@ export default function AssignmentDetail() {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader
-          variant="plain"
-          compact
+          variant="bar"
+          onBack={() => router.back()}
           padTop={12}
           padBottom={12}
-          eyebrow={assignment.subjectName}
           title={assignment.title}
-          subtitle={t('assignmentDetail.dueTeacher', { date: dueBs, teacher: assignment.teacherName ?? '' })}
+          subtitle={
+            (assignment.subjectName ? `${assignment.subjectName} · ` : '') +
+            t('assignmentDetail.dueTeacher', { date: dueBs, teacher: assignment.teacherName ?? '' })
+          }
         />
 
         <View style={styles.body}>
@@ -207,14 +209,14 @@ export default function AssignmentDetail() {
           {/* Submit / resubmit form — or the honest blocked states */}
           {reviewed ? (
             <View style={[styles.note, { backgroundColor: c.surface }]}>
-              <Ionicons name="lock-closed-outline" size={16} color={c.mutedForeground} />
+              <Icon name="lock" size={16} color={c.mutedForeground} />
               <NpText style={[styles.noteText, { color: c.mutedForeground }]}>
                 {t('assignmentDetail.reviewedLock')}
               </NpText>
             </View>
           ) : closed ? (
             <View style={[styles.note, { backgroundColor: c.surface }]}>
-              <Ionicons name="lock-closed-outline" size={16} color={c.mutedForeground} />
+              <Icon name="lock" size={16} color={c.mutedForeground} />
               <NpText style={[styles.noteText, { color: c.mutedForeground }]}>
                 {t('assignmentDetail.closedLock')}
               </NpText>
@@ -233,13 +235,13 @@ export default function AssignmentDetail() {
                 onChangeText={setTextAnswer}
               />
               <TouchableOpacity style={[styles.attachRow, { borderColor: c.border }]} onPress={onPickFile} activeOpacity={0.7}>
-                <Ionicons name={picked ? 'document-attach' : 'attach-outline'} size={18} color={c.primary} />
+                <Icon name="attach_file" size={18} color={c.primary} fill={!!picked} />
                 <Text style={[styles.attachText, { color: picked ? c.foreground : c.mutedForeground }]} numberOfLines={1}>
                   {picked ? picked.name : t('assignmentDetail.attachHint')}
                 </Text>
                 {picked && (
                   <TouchableOpacity onPress={() => setPicked(null)} hitSlop={8}>
-                    <Ionicons name="close-circle" size={18} color={c.mutedForeground} />
+                    <Icon name="cancel" size={18} color={c.mutedForeground} />
                   </TouchableOpacity>
                 )}
               </TouchableOpacity>

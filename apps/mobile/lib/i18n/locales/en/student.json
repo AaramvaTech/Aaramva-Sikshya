@@ -34,7 +34,11 @@
     "emptyTitle": "No assignments yet",
     "emptySubtitle": "New homework from your teachers will show up here.",
     "toSubmit": "To submit",
-    "submitted": "Submitted"
+    "submitted": "Submitted",
+    "pendingCount_one": "{{count}} pending",
+    "pendingCount_other": "{{count}} pending",
+    "submittedCount_one": "{{count}} submitted",
+    "submittedCount_other": "{{count}} submitted"
   },
   "assignmentDetail": {
     "title": "Assignment",

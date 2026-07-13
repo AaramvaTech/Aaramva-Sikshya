@@ -34,7 +34,11 @@
     "emptyTitle": "अहिलेसम्म कुनै गृहकार्य छैन",
     "emptySubtitle": "तपाईंका शिक्षकहरूले दिनुभएको नयाँ गृहकार्य यहाँ देखिनेछ।",
     "toSubmit": "पेश गर्न बाँकी",
-    "submitted": "पेश गरिएको"
+    "submitted": "पेश गरिएको",
+    "pendingCount_one": "{{count}} बाँकी",
+    "pendingCount_other": "{{count}} बाँकी",
+    "submittedCount_one": "{{count}} पेश गरिएको",
+    "submittedCount_other": "{{count}} पेश गरिएको"
   },
   "assignmentDetail": {
     "title": "गृहकार्य",

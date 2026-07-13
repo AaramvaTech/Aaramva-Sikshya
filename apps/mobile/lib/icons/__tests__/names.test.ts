@@ -60,11 +60,13 @@ const ICON_NAMES: IconName[] = [
   // Task C1 additions — Student Home quick-access tiles (Results / Assignments).
   'assignment',
   'grade',
+  // Task E5 addition — Student Assignments list/detail attachment rows.
+  'attach_file',
 ];
 
 describe('resolveMaterialName', () => {
-  it('covers all 52 design icon names', () => {
-    expect(ICON_NAMES.length).toBe(52);
+  it('covers all 53 design icon names', () => {
+    expect(ICON_NAMES.length).toBe(53);
   });
 
   it.each(ICON_NAMES)('%s resolves to a real MaterialIcons glyph', (name) => {
