@@ -172,9 +172,11 @@ export default function StudentResults() {
               </View>
 
               {/* GPA trend across published terms — hidden below 2 data points */}
-              <View style={{ marginBottom: 14 }}>
-                <GpaTrendBars data={trendData} />
-              </View>
+              {trendData.length >= 2 && (
+                <View style={{ marginBottom: 14 }}>
+                  <GpaTrendBars data={trendData} />
+                </View>
+              )}
 
               {/* Top-subject / needs-focus insight tiles — hidden when nothing is graded */}
               {(insights.top || insights.focus) && (
