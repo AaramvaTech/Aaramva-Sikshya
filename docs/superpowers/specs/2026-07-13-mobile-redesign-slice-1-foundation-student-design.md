@@ -164,11 +164,14 @@ Data comes from **existing** student hooks (`hooks/useStudentMe.ts` and the resu
 notices/inbox hooks); the implementation plan will confirm exact hook names before wiring.
 
 1. **Home** (`(student)/index.tsx`) — `hero` header (school badge, bell w/ unread, avatar,
-   name, class·section·roll, today BS) + **Today** module (attendance marked/not-marked from
-   summary; next-class from today's timetable; homework + notice count buttons) + **Quick access**
-   6-tile grid + **Today's classes** list.
-   *Fallback:* "next class · 10:45" exact time and "marked at 10:02 AM" timestamp omitted if not
-   in the API — show marked/not-marked state + next period name only.
+   name, class·section·roll, today BS) + **Today** module (today's attendance status;
+   next-class; homework + notice count buttons) + **Quick access** 6-tile grid + **Today's
+   classes** list.
+   *Verified:* **next-class time IS available** — `GET /students/me/timetable/today` returns each
+   period's `startTime`/`endTime`; compute the next upcoming period from Nepal-now. Today's
+   **attendance status IS derivable** — `summary.recentHistory[0]` where `dateAd == today`.
+   *Fallback:* the exact **"marked at 10:02 AM" timestamp is NOT returned** (summary selects only
+   `date`+`status`) → show "Marked present / absent / not yet marked" without a time.
 2. **Attendance** (`attendance.tsx`) — `hero` (title, class, month) + year pills + horizontal
    month `SegmentedPills` + 4-up `StatTile`s + present-rate line + restyled `AttendanceCalendar`
    (rounded tinted cells, today ring, Saturday column) + **Recent activity** list.
@@ -179,10 +182,18 @@ notices/inbox hooks); the implementation plan will confirm exact hook names befo
 4. **Notices** (`notices.tsx`) — `bar` header + left-accent `NoticeCard`s (tag chip, date, title, body).
 5. **Profile** (`profile.tsx`) — tinted header (settings gear → Settings, school badge, avatar,
    name, adm·class) + info `Card` (`InfoRow`s) + menu `SettingsRow`s + danger sign-out.
-6. **Results** (`results.tsx`) — `bar` + exam-term pills + `ResultHero` (GPA/grade/rank; change
-   strip only when prior-term data exists) + `GpaTrendBars` **only if ≥2 published terms** +
-   `InsightCard` top/needs-focus (derived from returned marks) + `SubjectRow` breakdown
-   (class-avg marker only when API returns it) + Marksheet/PDF (existing `useReportCardDownload`).
+6. **Results** (`results.tsx`) — `bar` + exam-term pills + `ResultHero` + `GpaTrendBars` +
+   `InsightCard` top/needs-focus + `SubjectRow` breakdown + Marksheet/PDF. Uses **both**
+   `GET /students/me/results` (lightweight per-term list: gpa/percentage/grade/rankInClass across
+   all published terms → term pills, trend, change strip) and `GET /students/me/report-card`
+   (per-term `subjects[]` → insights + breakdown), plus the existing report-card PDF hook.
+   *Verified derivable client-side (no API change):* GPA-trend bars, **GPA-change** and
+   **rank-change** strips (diff selected term vs previous in the results list, shown only when
+   ≥2 published terms exist), **top-subject / needs-focus** (max/min subject %), subject
+   obtained/full/grade/progress.
+   *True fallbacks (not in any student-facing response — omit):* the rank **total** ("Rank X
+   **of Y**") and the **per-subject class average** + delta marker (both need class-wide data,
+   staff-only). Show "Rank #X" and a plain progress bar (obtained/full) instead.
 7. **Assignments** (`assignments.tsx`) — `bar` (n pending · n submitted) + tinted assignment cards
    (subject tint, status chip OPEN/OVERDUE/SUBMITTED/LATE/REVIEWED via existing `lib/assignmentStatus`).
 8. **Assignment-detail** (`assignment-detail.tsx`) — restyle with new primitives;
@@ -198,6 +209,23 @@ notices/inbox hooks); the implementation plan will confirm exact hook names befo
     fields shown read-only, locked ones "managed by your school". **No new write endpoints.**
 
 ---
+
+### Verified data availability (checked against the live services 2026-07-13)
+
+| Design element | Source | Verdict |
+|---|---|---|
+| Next-class time (Home) | `me/timetable/today` → `startTime`/`endTime` | ✅ available (compute next period) |
+| Today's attendance status (Home) | `me/attendance/summary` → `recentHistory[0]` | ✅ derivable |
+| "Marked at 10:02 AM" timestamp (Home) | summary returns only `date`+`status` | ❌ **omit** (no `marked_at` in response) |
+| GPA / % / grade / rank per term | `me/results`, `me/report-card` | ✅ available |
+| GPA-trend, GPA-change, rank-change | multi-term `me/results` list | ✅ derivable client-side (≥2 published terms) |
+| Top-subject / needs-focus | `me/report-card` → `subjects[]` | ✅ derivable (max/min %) |
+| Subject obtained/full/grade/progress | `me/report-card` → `subjects[]` | ✅ available |
+| Rank **total** ("of Y") | not in student-facing response | ❌ **omit** (show "Rank #X") |
+| Per-subject **class average** + delta | not in student-facing response | ❌ **omit** (plain progress bar) |
+
+Publish gate stays authoritative: unpublished terms are invisible to STUDENT (already enforced
+in `ResultService`).
 
 ## 6. States, i18n, theming discipline
 
