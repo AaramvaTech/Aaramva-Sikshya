@@ -1,4 +1,10 @@
 {
+  "name": "aaramva-shikshya",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "setup:db": "node scripts/setup-db.mjs"
+  },
   "devDependencies": {
     "prisma": "^6.19.3"
   },

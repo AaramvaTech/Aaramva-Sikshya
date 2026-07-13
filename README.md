@@ -105,71 +105,31 @@ schoolname.aaramvashikshya.com  →  tenant slug "schoolname"  →  schema tenan
 
 ### Prerequisites
 
-- **Node.js** 20+
-- **PostgreSQL** 16 (or use the bundled Docker service)
-- **Redis** 7 (optional — only needed for background jobs)
+- **Node.js** 24+
+- **PostgreSQL** 17 (16 also works)
+- **Redis** 7 (optional — the app runs fine without it)
 
-### 1. Clone & install
+No Docker required.
 
-```bash
+### Two commands from a fresh clone
+
+```powershell
 git clone <your-repo-url> aaramva-shikshya
 cd aaramva-shikshya
 
-# Backend
-cd apps/api && npm install
-
-# Web
-cd ../web && npm install
+npm run setup       # build bs-calendar, install all apps, create apps/api/.env
+# edit apps/api/.env → DATABASE_URL (your Postgres), then:
+npm run setup:db    # migrate + seed plans + seed the demo school (prints logins)
 ```
 
-### 2. Start infrastructure (optional, via Docker)
+Then start the API (`cd apps/api && npm run start:dev`, port 3001) and the web
+portal (`cd apps/web && npm run dev`, port 3000), open **http://localhost:3000**,
+enter school code **`demo`**, and log in with the seeded demo credentials.
 
-```bash
-docker compose up -d        # Postgres + Redis
-```
+👉 **Full walkthrough — demo logins, mobile setup, and troubleshooting — is in
+[`GETTING-STARTED.md`](./GETTING-STARTED.md).**
 
-This starts PostgreSQL (`sms_user` / `sms_pass` / `sms_db`) and Redis. You can also point at a local PostgreSQL instead.
-
-### 3. Configure environment
-
-```bash
-cd apps/api
-cp .env.example .env
-```
-
-Edit `.env` and set `DATABASE_URL`. For the Docker service above:
-
-```env
-DATABASE_URL="postgresql://sms_user:sms_pass@localhost:5432/sms_db?schema=public"
-JWT_ACCESS_SECRET="change-me-access"
-JWT_REFRESH_SECRET="change-me-refresh"
-REDIS_ENABLED=false        # set true only when Redis is running
-PORT=3001
-```
-
-### 4. Migrate & seed
-
-```bash
-cd apps/api
-npx prisma migrate dev     # apply migrations to the public schema
-npm run seed               # seed subscription plans (Basic / Pro / Enterprise)
-```
-
-> Tenant schemas are provisioned automatically when a school registers/onboards.
-
-### 5. Run
-
-```bash
-# Terminal 1 — API  (http://localhost:3001)
-cd apps/api && npm run start:dev
-
-# Terminal 2 — Web  (http://localhost:3000)
-cd apps/web && npm run dev
-```
-
-Open **http://localhost:3000** and register a school, or log in to the Super Admin portal at **/super-admin**.
-
-> **Local dev tip:** there are no subdomains on `localhost`. Pass the tenant via the `?tenant=<slug>` query param or the `X-Tenant-Slug` header.
+> **Local dev tip:** there are no subdomains on `localhost`. Pass the tenant via the `?tenant=<slug>` query param (web) or the `X-Tenant-Slug` header (API/mobile).
 
 ---
 
@@ -218,12 +178,14 @@ Open **http://localhost:3000** and register a school, or log in to the Super Adm
 
 ## 🤝 Contributing
 
-This is an actively developed product. If you're contributing:
+This is an actively developed product. Start with **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**
+(branch naming, PR flow, secrets policy, the spec-first workflow) and
+**[`CLAUDE.md`](./CLAUDE.md)** (conventions). In short:
 
 1. Read [`CLAUDE.md`](./CLAUDE.md) for conventions (naming, response format, multi-tenancy rules).
 2. Follow the established module structure under `apps/api/src/modules/`.
 3. Keep all tenant-scoped DB access going through `TenantPrismaService`.
-4. Add unit tests for new services.
+4. Add unit tests for new services, and keep the suite green before opening a PR.
 
 ---
 
