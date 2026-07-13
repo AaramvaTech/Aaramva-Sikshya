@@ -476,7 +476,10 @@ Numerals stay Arabic (0–9) in v1; dates render BS with Nepali month names. Kee
 | `profileDetails.lockedNote` | Profile information is managed by your school.\nContact the office to request changes. | प्रोफाइलको जानकारी तपाईंको विद्यालयद्वारा व्यवस्थापन गरिन्छ।\nपरिवर्तनका लागि कार्यालयलाई सम्पर्क गर्नुहोस्। |
 | `timetable.breakDuration` | {{minutes}} min break | {{minutes}} मिनेट ब्रेक |
 | `settingsRow.changePassword` | Change password | पासवर्ड परिवर्तन गर्नुहोस् |
+| `today.markedLate` | Marked late | ढिलो चिह्नित |
+| `today.markedLeave` | On leave | बिदामा |
+| `today.newNotice` | Notices | सूचनाहरू |
 
 ---
 
-**Totals:** 433 strings across 5 namespaces (417 existing + 16 added in Redesign Slice 1).
+**Totals:** 436 strings across 5 namespaces (417 existing + 19 added in Redesign Slice 1).
