@@ -88,20 +88,24 @@ function ClassTooltip({ active, payload }: { active?: boolean; payload?: { value
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+// QA-1 OBS-C: match the real student status enum
+// (ACTIVE, PASSED_OUT, EXPELLED, TRANSFERRED, DROPPED).
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: '#22c55e',
-  INACTIVE: '#f59e0b',
+  PASSED_OUT: '#8b5cf6',
+  EXPELLED: '#ef4444',
   TRANSFERRED: '#3b82f6',
-  GRADUATED: '#8b5cf6',
+  DROPPED: '#f59e0b',
 };
 
 const GENDER_COLORS = ['#3b82f6', '#ec4899', '#8b5cf6'];
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Active',
-  INACTIVE: 'Inactive',
+  PASSED_OUT: 'Passed Out',
+  EXPELLED: 'Expelled',
   TRANSFERRED: 'Transferred',
-  GRADUATED: 'Graduated',
+  DROPPED: 'Dropped',
 };
 
 export default function StudentsOverviewPage() {
@@ -171,8 +175,8 @@ export default function StudentsOverviewPage() {
         />
         <StatCard
           icon={GraduationCap}
-          label="Graduated"
-          value={stats?.byStatus.GRADUATED ?? 0}
+          label="Passed Out"
+          value={stats?.byStatus.PASSED_OUT ?? 0}
           sub="All time"
           iconBg="bg-purple-50"
           iconColor="text-purple-600"

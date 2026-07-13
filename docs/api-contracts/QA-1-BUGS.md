@@ -32,6 +32,21 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 
 ---
 
+## BUG-4 (Phase 10) — 🔴 CRITICAL cross-tenant data leak (token/tenant not cross-checked) — **STOP-and-report (NOT fixed; needs architect decision)**
+
+| Field | Value |
+|---|---|
+| **Severity** | **CRITICAL** — full multi-tenancy isolation break. A valid JWT from tenant A can **read and write any other tenant B's data** by sending `X-Tenant-Slug: B`. |
+| **Repro (live-proven)** | qa-demo `SCHOOL_OWNER` token (tenantId `3d1c05c5…`, tenantSlug `qa-demo`) → `GET /students` with `X-Tenant-Slug: qa-demo` → qa_demo students ("Aarav Family1"…); the **same token** with `X-Tenant-Slug: demo` → **200 with DEMO's students** ("Aarav Shrestha", "Binod Gurung"…). Expected 401/403; got another tenant's data. |
+| **Root cause** | `TenantMiddleware` (`tenant.middleware.ts`) resolves the schema **solely from `X-Tenant-Slug`/subdomain** and runs **before** auth (never sees the JWT). `JwtStrategy.validate` (`jwt.strategy.ts`) just echoes the token payload to `req.user`. **Nothing compares `req.user.tenantId` (token) against `req.tenant.tenantId` (resolved context).** Auth and tenant-context are fully decoupled → the query runs in whatever schema the header names. |
+| **Blast radius** | Every authenticated tenant-scoped route. Any leaked/stolen/log-captured token becomes a cross-tenant skeleton key. Data-level isolation (search_path) is intact (BUG is the *selection* of tenant), and `GET /students/:id` for a foreign id 404s (I1) — but the header lets the token operate wholesale in the foreign schema. |
+| **Proposed fix (for approval)** | Add a check, after both `TenantMiddleware` and `JwtAuthGuard` have run, comparing `req.user.tenantId` to `req.tenant.tenantId`; **reject 403 on mismatch**. Placement options: a dedicated `TenantMatchGuard` registered globally after auth, or in `RolesGuard`, or an interceptor. **Nuance to decide:** PLATFORM_ADMIN tokens carry `tenantId: null` (super-admin routes are already excluded from `TenantMiddleware`); impersonation tokens carry the *target* tenant's tenantId (so they'd pass naturally). Safe default: **enforce only when `token.tenantId` is non-null** (non-null must equal the resolved tenant); allow null (platform admin) through. Regression test: cross-tenant token → 403; same-tenant → 200; platform-admin/impersonation unaffected. |
+| **Why not fixed inline** | Security-critical **core auth path** (every request) with a genuine platform-admin/impersonation nuance → Bug Protocol STOP-and-report. Surfaced at CHECKPOINT 10 for the architect to approve the fix approach (placement + platform-admin handling) before touching auth. |
+
+## OBS-C (Phase 10) — student status enum in stats — **FIXED**
+
+`getStats.byStatus` counted stale `INACTIVE`/`GRADUATED` (statuses that can never be set) and **dropped** the real `PASSED_OUT`/`EXPELLED`/`DROPPED`. Fixed to the real enum `ACTIVE/PASSED_OUT/EXPELLED/TRANSFERRED/DROPPED` (API `student.service.getStats` + web `api.types.ts` + `students/overview` page + unit test). **Live-proven:** a student set `PASSED_OUT` → `byStatus.PASSED_OUT = 1` (was invisible before). 4 files. (Note: `new_this_month` uses SQL `CURRENT_DATE` — DB-session date, separate from the OBS-E JS-toISOString family.)
+
 ## BUG-3 (Phase 5) — Money computed in JS floats — **CONFIRMED; needs remediation decision (NOT fixed inline)**
 
 | Field | Value |
@@ -39,7 +54,7 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | **Finding** | All persisted amounts are `NUMERIC(10,2)` (storage correct), but **every derived figure is computed in JS floats** and written back via bound params (Postgres re-quantizes on write). ~25 sites (full grep list from finance recon): the two float-sensitive kinds are **percentage discount** `originalAmount * (1 - pct/100)` (`invoice.service.ts:67,512,552`) and **fine** `daysOverdue * finePerDay` (`invoice.service.ts:277`); plus subtotal/discount/total accumulation (`:80-81,86-87,142,281`), all report aggregates (`report.service.ts:57-89,148-153,230-249`), and `fee-structure.service.ts:118,149`. Root converter `entities/finance.entity.ts:211` `toNum`=`parseFloat`. Only `invoices.balance` avoids JS (SQL `GENERATED STORED`); the gateway paisa path is integer-safe by design. |
 | **Impact** | The `Math.round(x*100)/100` snap corrects most float error, so observed values are usually right (live sweep: 20% of 1000 = 200.00 exact; fine 12×10 = 120.00 exact). But it is **not provably correct** — half-cent inputs and long item-accumulation can drift, and per architect decision 3 "money computed via JS floats is a bug even if stored as NUMERIC." |
 | **Disposition** | **DEFERRED → MON-1** (dedicated post-QA-1 pass; architect decision). **No BUG-3 code changes in QA-1.** |
-| **Agreed remediation (MON-1)** | (a) **Report aggregates** (report.service totals/rates) → **SQL-side NUMERIC aggregation** (SUM/aggregate in Postgres, not JS reduce). (b) **Transactional derived money** (discounts in `calculateItemAmounts`, fines in `recalculateFine`) → **`Prisma.Decimal` arithmetic** — decimal.js is already bundled via Prisma, so **no new dependency**. (c) **Integer-paisa rejected** as unnecessarily invasive. |
+| **Agreed remediation (MON-1)** | (a) **Report aggregates** (report.service totals/rates) → **SQL-side NUMERIC aggregation** (SUM/aggregate in Postgres, not JS reduce). (b) **Transactional derived money** (discounts in `calculateItemAmounts`, fines in `recalculateFine`, **library `issue.service` `fine_amount`**) → **`Prisma.Decimal` arithmetic** — decimal.js is already bundled via Prisma, so **no new dependency**. (c) **Integer-paisa rejected** as unnecessarily invasive. (d) **Schema normalization (Phase-10 decision):** while touching money columns, normalize **`book_issues.fine_amount NUMERIC(8,2) → NUMERIC(10,2)`** (and consider `fine_per_day NUMERIC(6,2)`) for consistency with the finance money columns. |
 
 ## dueDate text-vs-date cast — **VERIFIED already fixed (no action)**
 
@@ -91,7 +106,7 @@ The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service
 | OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` + fine-cron `recalculate-fines.job.ts:115-121` → `todayAdInNepal()`** (TZ-independent day-diff) | 5 | **FIXED (this branch)** — 4 files + 2 mocked-clock tests; live fine-execution proof 120.00 |
 | OBS-E-3 | `hr/staff.service.ts:302` (soft-delete `end_date`) → `todayAdInNepal()` | 8 | **FIXED (this branch)** — 2 files + mocked-clock test (end_date=2026-07-14 at 00:30+05:45); live delete → end_date 2026-07-13 |
 | OBS-E-4 | `library/issue.service.ts` returnBook (`returned_at` + overdue day-count) → `todayAdInNepal()` + TZ-independent diff | 9 | **FIXED (this branch)** — 2 files + mocked-clock test (returned_at=2026-07-14, fine_days=4 at boundary). **Live-proven off-by-one**: returned_at now 2026-07-13 (was 2026-07-12 — local-midnight→toISOString rendered the prior UTC day even at midday). Fine amount `fine_days × fine_per_day` is JS-float → BUG-3/MON-1 (not fixed). |
-| OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
+| OBS-E-5 | `dashboard.service.ts` getOverview (28) + getUpcoming (290) + weekly-attendance window → `todayAdInNepal()` | 10 | **FIXED (this branch)** — 2 files + 2 mocked-clock tests; live weekEnd=2026-07-13. Week is a rolling 7-day window ending Nepal-today (NOT ISO-Monday — no week-start logic; each day labeled by its own day-of-week). |
 | OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
 | OBS-F (reclassified into OBS-E family) | `finance/payment.service.ts:28-31` (`deriveStatus`) + `invoice.service.ts:146` / `payment.service.ts:70` (`getBsYear(new Date())`) → `todayAdInNepal()` + mocked-clock tests | 11 | pending |
 
