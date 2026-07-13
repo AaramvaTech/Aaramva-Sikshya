@@ -23,10 +23,12 @@
     "title": "आज",
     "markedPresent": "उपस्थित चिह्नित",
     "markedAbsent": "अनुपस्थित चिह्नित",
+    "markedLate": "ढिलो चिह्नित",
+    "markedLeave": "बिदामा",
     "notMarked": "अझै चिह्नित छैन",
     "nextClass": "अर्को कक्षा · {{time}}",
     "homeworkDue": "बाँकी गृहकार्य",
-    "newNotice": "नयाँ सूचना"
+    "newNotice": "सूचनाहरू"
   },
   "assignments": {
     "title": "गृहकार्य",

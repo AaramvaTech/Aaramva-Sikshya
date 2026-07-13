@@ -9,6 +9,7 @@ import { FONT } from '../../lib/theme/fonts';
 import { useLocale } from '../../hooks/useLocale';
 import { formatPeriodTime12 } from '../../lib/time';
 import type { PeriodLike } from '../../lib/nextPeriod';
+import type { IconName } from '../../lib/icons/names';
 
 interface TodayModuleProps {
   /** Today's attendance status ('PRESENT' | 'ABSENT' | ... ), or null if unmarked. */
@@ -37,13 +38,20 @@ export function TodayModule({
   const c = useThemeColors();
   const { t } = useLocale('student');
 
-  const tone: keyof typeof SEMANTIC_SOFT =
-    status === 'PRESENT' ? 'success' : status === 'ABSENT' ? 'danger' : 'neutral';
+  // Status → tone/icon/label. Attendance data can carry PRESENT/ABSENT/LATE/LEAVE
+  // (or null when unmarked) — every known status needs its own honest label, not
+  // just PRESENT/ABSENT falling through to the rest as "Not yet marked".
+  const STATUS_META: Record<string, { tone: keyof typeof SEMANTIC_SOFT; icon: IconName; labelKey: string }> = {
+    PRESENT: { tone: 'success', icon: 'check_circle', labelKey: 'today.markedPresent' },
+    ABSENT: { tone: 'danger', icon: 'check_circle', labelKey: 'today.markedAbsent' },
+    LATE: { tone: 'warning', icon: 'schedule', labelKey: 'today.markedLate' },
+    LEAVE: { tone: 'info', icon: 'event', labelKey: 'today.markedLeave' },
+  };
+  const statusMeta = status ? STATUS_META[status] : undefined;
+  const tone: keyof typeof SEMANTIC_SOFT = statusMeta?.tone ?? 'neutral';
   const statusSoft = SEMANTIC_SOFT[tone];
-  const statusLabel =
-    status === 'PRESENT' ? t('today.markedPresent')
-      : status === 'ABSENT' ? t('today.markedAbsent')
-        : t('today.notMarked');
+  const statusIcon: IconName = statusMeta?.icon ?? 'check_circle';
+  const statusLabel = statusMeta ? t(statusMeta.labelKey) : t('today.notMarked');
 
   return (
     <Card elevated style={styles.card}>
@@ -55,7 +63,7 @@ export function TodayModule({
       </View>
 
       <View style={[styles.row, { backgroundColor: statusSoft.bg }]}>
-        <Icon name="check_circle" fill={status === 'PRESENT'} size={22} color={statusSoft.fg} />
+        <Icon name={statusIcon} fill={status === 'PRESENT'} size={22} color={statusSoft.fg} />
         <NpText style={[styles.rowTitle, { color: statusSoft.fgDeep }]}>{statusLabel}</NpText>
       </View>
 

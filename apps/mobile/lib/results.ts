@@ -17,6 +17,7 @@ export function rankChange(terms: { rankInClass: number | null }[], index: numbe
 export function subjectInsights(subjects: SubjectLite[]): { top: SubjectLite | null; focus: SubjectLite | null } {
   const graded = subjects.filter((s) => s.percentage != null);
   if (!graded.length) return { top: null, focus: null };
+  if (graded.length === 1) return { top: graded[0], focus: null };
   const sorted = [...graded].sort((a, b) => (b.percentage as number) - (a.percentage as number));
   return { top: sorted[0], focus: sorted[sorted.length - 1] };
 }

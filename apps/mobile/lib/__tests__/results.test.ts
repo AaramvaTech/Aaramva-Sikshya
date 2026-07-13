@@ -22,4 +22,12 @@ describe('Results derivation helpers', () => {
     expect(r.top?.subjectName).toBe('Math');
     expect(r.focus?.subjectName).toBe('Eng');
   });
+  it('subjectInsights returns null focus (not a duplicate) when only one subject is graded', () => {
+    const subs = [
+      { subjectName: 'Math', percentage: 92, marksObtained: 92, fullMarks: 100, grade: 'A+' },
+    ];
+    const r = subjectInsights(subs);
+    expect(r.top?.subjectName).toBe('Math');
+    expect(r.focus).toBeNull();
+  });
 });

@@ -23,10 +23,12 @@
     "title": "Today",
     "markedPresent": "Marked present",
     "markedAbsent": "Marked absent",
+    "markedLate": "Marked late",
+    "markedLeave": "On leave",
     "notMarked": "Not yet marked",
     "nextClass": "Next class · {{time}}",
     "homeworkDue": "Homework due",
-    "newNotice": "New notices"
+    "newNotice": "Notices"
   },
   "assignments": {
     "title": "Assignments",
