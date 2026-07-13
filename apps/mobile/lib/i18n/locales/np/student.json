@@ -122,7 +122,8 @@
     "title": "कक्षा रुटिन",
     "weekly": "साप्ताहिक रुटिन",
     "errorTitle": "तपाईंको रुटिन लोड गर्न सकिएन",
-    "emptyDay": "{{day}} का लागि कुनै कक्षा तालिका छैन।"
+    "emptyDay": "{{day}} का लागि कुनै कक्षा तालिका छैन।",
+    "breakDuration": "{{minutes}} मिनेट ब्रेक"
   },
   "settingsRow": {
     "notifications": "सूचना सेटिङ",

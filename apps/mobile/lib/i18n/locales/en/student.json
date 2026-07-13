@@ -122,7 +122,8 @@
     "title": "Class routine",
     "weekly": "Weekly timetable",
     "errorTitle": "Couldn't load your timetable",
-    "emptyDay": "Nothing scheduled for {{day}}."
+    "emptyDay": "Nothing scheduled for {{day}}.",
+    "breakDuration": "{{minutes}} min break"
   },
   "settingsRow": {
     "notifications": "Notifications",
