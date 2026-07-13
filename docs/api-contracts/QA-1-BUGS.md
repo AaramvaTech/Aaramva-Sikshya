@@ -49,6 +49,20 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | **Severity** | **Real but low.** Soft-deleting a guardian is now **live-possible** (the column exists), so a soft-deleted guardian could still leak via these unfiltered paths (audience fan-out, scoping checks). Low because **no delete path emits a soft-delete today** — it only becomes reachable once a guardian-removal feature ships. |
 | **Disposition** | **DEFERRED → CL (changelog/backlog).** Spec a "guardian soft-delete propagation" sweep after QA-1 (add `deleted_at IS NULL` to all guardian reads, ideally via a shared helper). Not done in QA-1: exceeds the Bug-Protocol ≤5-file limit and touches access-control/audience queries that warrant their own review. |
 
+## OBS-D — Attendance permits Saturday marks — **INTENTIONAL (backlog CAL-1)**
+
+`bulkMark` accepts attendance on Saturday (Nepal's weekly holiday) — Sat `2026-07-10` → 201. **Decision: keep the backend permissive.** Working-days are derived from actually-marked dates (self-consistent), so `%` stays correct. Proper working-day logic needs a **school-calendar/holidays module (CAL-1, backlogged)** — Dashain/Tihar/exam breaks make a holiday table necessary regardless of Saturdays, so hardcoding "reject Saturday" would be the wrong fix. No change in QA-1.
+
+## OBS-E — UTC-today instead of Nepal-today — **FIXED (Phase 3, this branch)**
+
+| Field | Value |
+|---|---|
+| **Finding** | `student-attendance.service.ts` `getSchoolSummary` computed "today" as `new Date().toISOString().split('T')[0]` = **UTC-today**, so the dashboard "today's attendance" board showed the **previous Nepal day** for the first 5h45m after Nepal midnight. |
+| **Scope (grepped)** | Decision scope = attendance module + fine-cron-consumed code. Only **1** UTC-today-truncation occurrence there: `getSchoolSummary`. The fine cron's `recalculateFine` uses server-local `new Date()`+`setHours` (Nepal-correct under the TZ pin, **not** the `toISOString` bug). `invoice.service:143` is invoice-*create* (not fine-cron-consumed) → out of scope. |
+| **Fix** | Added canonical `todayAdInNepal()` to shared `common/utils/date.util.ts` (offset arithmetic, `NEPAL_OFFSET_MS`, TZ-independent). `getSchoolSummary` now calls it. **3 files** (date.util + attendance service + date.util.spec). |
+| **Re-verified** | Mocked-clock regression test at `2026-07-14T00:30+05:45` (= `2026-07-13T18:45Z`): old UTC path → `2026-07-13`, `todayAdInNepal()` → **`2026-07-14`** (both asserted). Live: `GET /attendance/students/school/summary` → 200, `date {ad:2026-07-13, bs:2083-03-29}` (midday, UTC==Nepal — endpoint intact). Suite 518. |
+| **DEFERRED → FIX-2-continuation** | The other ~10 UTC-today `new Date().toISOString()` "today" sites remain (out of this decision's scope): `dashboard.service.ts` (28, 290 + week loop), `finance/report.service.ts` (20, 110), `finance/invoice.service.ts:143`, `hr/staff.service.ts:302`, `student/import.service.ts:219`, `library/issue.service.ts:92`. All can migrate to `todayAdInNepal()` in a dedicated FIX-2-continuation pass. |
+
 ## OBS-C — student status enum consistency — **upgraded → verify in Phase 10**
 
 Student *status* enum differs across surfaces — list-query `ACTIVE/PASSED_OUT/EXPELLED/TRANSFERRED/DROPPED` vs `stats.byStatus` keys `ACTIVE/INACTIVE/TRANSFERRED/GRADUATED`. **Phase 10 plan:** set one QA student to `PASSED_OUT` (via the status-update endpoint) and assert `stats.byStatus` counts it correctly against a direct psql count. If the stats buckets are hardcoded stale enums that drop `PASSED_OUT`, that is a **bug to fix in Phase 10**.
