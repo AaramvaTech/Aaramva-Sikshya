@@ -19,3 +19,5 @@ export { HeaderBell } from './HeaderBell';
 export { NotificationInbox } from './NotificationInbox';
 export { PayChooser, type PayGateway } from './PayChooser';
 export { LanguageToggle } from './LanguageToggle';
+export { Icon } from './Icon';
+export type { IconName } from '../../lib/icons/names';
