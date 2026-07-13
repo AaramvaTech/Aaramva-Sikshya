@@ -296,7 +296,7 @@ export default function ParentRequestLeave() {
 
           <PrimaryButton
             label={submitting ? t('requestLeave.submitting') : buttonLabel}
-            icon={status === 'error' ? 'refresh-outline' : 'send-outline'}
+            icon={status === 'error' ? 'refresh' : 'send'}
             loading={submitting}
             disabled={!canSubmit && status !== 'error'}
             onPress={handleSubmit}

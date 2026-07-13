@@ -43,7 +43,7 @@ export function PayChooser({
         <PrimaryButton
           key={gw}
           label={t('pay.payWith', { amount: balanceLabel, gateway: GATEWAY_NAMES[gw] })}
-          icon="wallet-outline"
+          icon="account_balance_wallet"
           variant="soft"
           loading={payingWith === gw}
           disabled={payingWith !== null && payingWith !== gw}

@@ -335,7 +335,7 @@ export default function TeacherAttendance() {
               ) : (
                 <PrimaryButton
                   label={markMutation.isPending ? t('attendance.saving') : t('attendance.saveWithCount', { count: students.length })}
-                  icon="save-outline"
+                  icon="save"
                   loading={markMutation.isPending}
                   onPress={handleSubmit}
                 />

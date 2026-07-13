@@ -2,8 +2,9 @@ import { describe, it, expect } from '@jest/globals';
 import { MaterialIcons } from '@expo/vector-icons';
 import { resolveMaterialName, type IconName } from '../names';
 
-// The full 46-name design set (Task A1 brief) — kept literal (not re-imported
-// from names.ts) so this test can't pass by construction if the union drifts.
+// The full design icon set (Task A1 brief, +4 in Task B1 for PrimaryButton
+// caller migration) — kept literal (not re-imported from names.ts) so this
+// test can't pass by construction if the union drifts.
 const ICON_NAMES: IconName[] = [
   'arrow_back',
   'arrow_forward',
@@ -51,11 +52,16 @@ const ICON_NAMES: IconName[] = [
   'home',
   'event_available',
   'event_note',
+  // Task B1 additions — needed to migrate existing PrimaryButton callers off Ionicons.
+  'account_balance_wallet',
+  'add_circle',
+  'refresh',
+  'send',
 ];
 
 describe('resolveMaterialName', () => {
-  it('covers all 46 design icon names', () => {
-    expect(ICON_NAMES.length).toBe(46);
+  it('covers all 50 design icon names', () => {
+    expect(ICON_NAMES.length).toBe(50);
   });
 
   it.each(ICON_NAMES)('%s resolves to a real MaterialIcons glyph', (name) => {

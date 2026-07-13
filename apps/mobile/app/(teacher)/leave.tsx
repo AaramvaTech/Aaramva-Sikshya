@@ -201,7 +201,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
 
           <PrimaryButton
             label={applyMutation.isPending ? t('leave.submitting') : t('leave.submitApplication')}
-            icon="send-outline"
+            icon="send"
             loading={applyMutation.isPending}
             onPress={handleSubmit}
           />
@@ -244,7 +244,7 @@ export default function TeacherLeave() {
       />
 
       <View style={styles.body}>
-        <PrimaryButton label={t('leave.applyForLeave')} icon="add-circle-outline" onPress={() => setShowApplyModal(true)} />
+        <PrimaryButton label={t('leave.applyForLeave')} icon="add_circle" onPress={() => setShowApplyModal(true)} />
 
         <View>
           <CardLabel>{t('leave.leaveRequests')}</CardLabel>

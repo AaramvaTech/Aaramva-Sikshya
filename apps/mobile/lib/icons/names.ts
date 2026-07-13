@@ -17,8 +17,15 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * `Icon.tsx`), not a call-site migration.
  */
 
-/** The design's 46 Material icon names (snake_case), as used by the target canvas. */
+/**
+ * The design's 46 Material icon names (snake_case), as used by the target canvas,
+ * plus 4 added in Task B1 (`account_balance_wallet`, `add_circle`, `refresh`, `send`)
+ * to migrate existing `PrimaryButton` callers off Ionicons — verified against
+ * MaterialIcons' glyphMap, not part of the original design canvas.
+ */
 export type IconName =
+  | 'account_balance_wallet'
+  | 'add_circle'
   | 'arrow_back'
   | 'arrow_forward'
   | 'assignment_late'
@@ -50,11 +57,13 @@ export type IconName =
   | 'payments'
   | 'person'
   | 'photo_camera'
+  | 'refresh'
   | 'restaurant'
   | 'save'
   | 'schedule'
   | 'school'
   | 'search'
+  | 'send'
   | 'settings'
   | 'share'
   | 'signal_cellular_alt'

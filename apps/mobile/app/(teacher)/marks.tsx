@@ -413,7 +413,7 @@ export default function TeacherMarks() {
                     : hasValidationErrors ? 'Fix errors above'
                     : t('marks.saveWithCount', { count: touchedRef.current.size })
                 }
-                icon="save-outline"
+                icon="save"
                 loading={submitMutation.isPending}
                 disabled={hasValidationErrors}
                 onPress={handleSubmit}

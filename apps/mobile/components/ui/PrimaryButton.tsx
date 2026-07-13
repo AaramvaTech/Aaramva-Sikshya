@@ -1,9 +1,9 @@
-import { Text, TouchableOpacity, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import NpText from '../NpText';
-import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../../lib/theme/colors';
-
-type IconName = keyof typeof Ionicons.glyphMap;
+import { Icon } from './Icon';
+import type { IconName } from '../../lib/icons/names';
+import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 
 interface PrimaryButtonProps {
   label: string;
@@ -13,14 +13,14 @@ interface PrimaryButtonProps {
   iconRight?: boolean;
   loading?: boolean;
   disabled?: boolean;
-  /** Outline/ghost variant on a tinted brand surface instead of solid fill. */
-  variant?: 'solid' | 'soft';
+  /** Outline/ghost variant on a tinted brand surface, or a brand gradient fill. */
+  variant?: 'solid' | 'soft' | 'gradient';
   style?: ViewStyle;
 }
 
 /**
- * The one primary CTA. Solid brand fill (or soft tinted) + loading spinner.
- * Meets the 44pt touch target and shows clear pressed/disabled feedback.
+ * The one primary CTA. Solid brand fill, soft tinted, or gradient fill + loading
+ * spinner. Meets the 44pt touch target and shows clear pressed/disabled feedback.
  */
 export function PrimaryButton({
   label,
@@ -37,6 +37,39 @@ export function PrimaryButton({
   const fg = isSoft ? c.primary : c.primaryForeground;
   const isDisabled = disabled || loading;
 
+  const content = loading ? (
+    <ActivityIndicator size="small" color={fg} />
+  ) : (
+    <>
+      {icon && !iconRight && <Icon name={icon} size={18} color={fg} style={styles.iconLeft} />}
+      <NpText style={[styles.label, { color: fg }]}>{label}</NpText>
+      {icon && iconRight && <Icon name={icon} size={18} color={fg} style={styles.iconRight} />}
+    </>
+  );
+
+  if (variant === 'gradient') {
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={isDisabled}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: isDisabled }}
+        style={[isDisabled && styles.disabled, style]}
+      >
+        <LinearGradient
+          colors={headerGradient(c.primary) as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.button}
+        >
+          {content}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -48,15 +81,7 @@ export function PrimaryButton({
       className={isSoft ? 'bg-primary/10' : 'bg-primary'}
       style={[styles.button, isDisabled && styles.disabled, style]}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={fg} />
-      ) : (
-        <>
-          {icon && !iconRight && <Ionicons name={icon} size={18} color={fg} style={styles.iconLeft} />}
-          <NpText style={[styles.label, { color: fg }]}>{label}</NpText>
-          {icon && iconRight && <Ionicons name={icon} size={18} color={fg} style={styles.iconRight} />}
-        </>
-      )}
+      {content}
     </TouchableOpacity>
   );
 }
