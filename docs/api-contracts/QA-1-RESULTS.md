@@ -125,4 +125,19 @@ No code changes this phase — the module is correct end-to-end (incl. the publi
 | Exams | Report card (JSON) | — | PASS | — | — | PASS | PASS (`/me`, own) | PASS (own child) | **cross-family S3 → 403** | PASS |
 | Exams | Report card **PDF** | — | PASS (`%PDF-`, 23964 B, round-trip) | — | — | PASS | PASS (`/me/pdf`) | PASS | **cross-family PDF → 403** | PASS |
 
-**Phase 6 result:** all cells PASS, no code changes. Marks entry stamps `entered_by`=teacher; **out-of-range marks rejected 400 with psql proof of no write**; full pipeline marks→result(grade/rank)→report-card verified (Aarav 85%→A→rank 1); **publish privacy gate proven** (parent/student see only published terms — `examResults` empty until publish; staff see all); report-card JSON + **PDF valid** (`%PDF-` magic, 23964 B non-zero, download round-trip) for student `/me` and parent own-child; **cross-family report-card + PDF → 403**.
+**Phase 6 result:** all cells PASS, no code changes. Marks entry stamps `entered_by`=teacher; out-of-range marks rejected 400 with psql proof of no write; full pipeline verified; publish privacy gate proven; report-card JSON + PDF valid; cross-family → 403.
+
+## Phase 7 — Reports (REP-1)
+
+No code changes — the report module is clean (no UTC-date truncation; `fee-aging asOf = todayAdInNepal()`, `bsMonthBucket`/`isoDate` operate on DB DATE values per FIX-2, `exam.publishedAt.toISOString()` is a legit timestamp).
+
+| Module | Feature | Read | Roles | Scoping 403 | Status |
+|---|---|---|---|---|---|
+| Reports | **Attendance trends — BS-month bucketing (boundary)** | PASS | ACADEMIC_REPORT_ROLES | teacher/student/parent → 403 | PASS |
+| Reports | Attendance class-comparison / low / staff | PASS (200) | ACADEMIC_REPORT_ROLES | — | PASS |
+| Reports | Exams published / summary / comparison / student-progress | PASS (summary: 3 students, passRate 66.7%, avg 48.3%) | ACADEMIC_REPORT_ROLES (published-only) | — | PASS |
+| Reports | **Fee aging (asOf Nepal-correct)** | PASS (`asOf 2026-07-13`; overdue Rs1120 → 0-30 bucket) | FINANCE_REPORT_ROLES (+ACCOUNTANT) | teacher/student/parent → 403 | PASS |
+
+**BS-month bucketing boundary proof (requirement 1):** seeded 1 attendance record on `2026-07-15` + 1 on `2026-07-16`; the trends report (`groupBy=bs-month`) split them into **two distinct buckets — `2083-03` "Ashadh 2083" (07-15) vs `2083-04` "Shrawan 2083" (07-16)** — the exact Ashadh(31)→Shrawan(1) boundary. Verified against `packages/bs-calendar` (`2026-07-15 → 2083-03-31`, `2026-07-16 → 2083-04-01`, modern-era FIX-3-safe); psql cross-checked; seeded rows cleaned (count 0).
+
+**Phase 7 result:** all cells PASS, no code changes. BS-month bucket boundary correct (a cross-Gregorian-month BS month splits on the right AD day); fee-aging `asOf` is Nepal-today (`todayAdInNepal()`); all report endpoints 200 for admin tier with correct aggregates; **teacher/student/parent → 403** on every report endpoint (requirement 3). No UTC-date-truncation in the report/bucketing code (requirement 2 — grep clean). Marks entry stamps `entered_by`=teacher; **out-of-range marks rejected 400 with psql proof of no write**; full pipeline marks→result(grade/rank)→report-card verified (Aarav 85%→A→rank 1); **publish privacy gate proven** (parent/student see only published terms — `examResults` empty until publish; staff see all); report-card JSON + **PDF valid** (`%PDF-` magic, 23964 B non-zero, download round-trip) for student `/me` and parent own-child; **cross-family report-card + PDF → 403**.
