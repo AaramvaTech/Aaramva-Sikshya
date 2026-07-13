@@ -1,5 +1,12 @@
 # QA-1 — Seed Registry (`qa-demo` tenant)
 
+> **⛔ TORN DOWN (Phase 11, 2026-07-13).** The `qa-demo` tenant no longer exists.
+> `DROP SCHEMA tenant_qa_demo CASCADE` (50 objects) + `DELETE` of the public
+> `tenants`/`subscriptions` rows (both → 0) + `mc rm --recursive tenant_qa-demo/`
+> (7 objects → empty) were all executed and psql/mc-proven. `pay1-verify@demo.school`
+> (tenant `demo`, PAY-1 gate) was confirmed untouched. This file is retained as the
+> historical record of what the audit exercised; the IDs below are dead.
+
 Everything below was built via the **live HTTP API** (`localhost:3001/api/v1`) by
 `scratchpad/qa-seed.mjs` on 2026-07-13. Delete this whole tenant at Phase 11 cleanup.
 
