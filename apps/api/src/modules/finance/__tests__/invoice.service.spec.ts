@@ -279,20 +279,23 @@ describe('InvoiceService', () => {
   });
 
   describe('recalculateFine()', () => {
-    it('sets fine_amount = days_overdue * fine_per_day (grace period applied)', async () => {
-      // Invoice due 10 days ago, fine_per_day = 5, grace = 2 → days_overdue = 8 → fine = 40
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() - 10);
+    afterEach(() => jest.restoreAllMocks());
 
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
-        id: 'inv-1',
-        due_date: dueDate,
-        status: 'UNPAID',
-        subtotal: '1000.00',
-        discount_amount: '0.00',
-        total_fine_per_day: '5.00',
-        max_grace_period_days: 2,
-      }]);
+    const invoiceDue = (dueAd: string) => ({
+      id: 'inv-1',
+      due_date: new Date(`${dueAd}T00:00:00Z`),
+      status: 'UNPAID',
+      subtotal: '1000.00',
+      discount_amount: '0.00',
+      total_fine_per_day: '5.00',
+      max_grace_period_days: 2,
+    });
+
+    it('sets fine_amount = days_overdue * fine_per_day (grace period applied), deterministic clock', async () => {
+      // Fixed clock: 2026-07-13 06:00Z = 11:45 Nepal (same calendar day both frames).
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 6, 0, 0));
+      // Due 2026-07-03 → 10 days overdue, grace 2 → 8 billable days → fine 40.
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([invoiceDue('2026-07-03')]);
       (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
 
       await service.recalculateFine('inv-1');
@@ -301,9 +304,29 @@ describe('InvoiceService', () => {
         expect.stringContaining('UPDATE invoices'),
         40,                    // fine_amount = 8 * 5
         expect.any(Number),    // total_amount = 1000 - 0 + 40 = 1040
-        expect.any(String),    // status
+        expect.any(String),
         'inv-1',
       );
+    });
+
+    // QA-1 OBS-E-2 / decision 2: at 2026-07-14 00:30 +05:45 (= 2026-07-13 18:45Z),
+    // Nepal is already on the 14th while UTC is still the 13th. The fine must use
+    // the Nepal date. Due 2026-07-11, grace 0, fine/day 10:
+    //   Nepal-today 2026-07-14 → 3 days overdue → fine 30.
+    //   old UTC-today 2026-07-13 → 2 days overdue → fine 20 (WRONG).
+    it('bills fines against Nepal-today, not UTC-today, just after Nepal midnight', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...invoiceDue('2026-07-11'),
+        total_fine_per_day: '10.00',
+        max_grace_period_days: 0,
+      }]);
+      (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
+
+      await service.recalculateFine('inv-1');
+
+      const [, fine] = (tenantPrisma.execute as jest.Mock).mock.calls[0];
+      expect(fine).toBe(30); // Nepal (3 days) — the old UTC path would give 20
     });
   });
 });

@@ -49,6 +49,10 @@ Guardian ids: P1 guardian `b976e727-98d2-413f-a1d0-d29fbd91c998` (→ S1); P2 gu
 
 **Cross-family probe pairs:** Parent1 (child S1) vs S3/S4; Parent2 (child S3) vs S1/S2; Student1 (S1) vs S3.
 
+## Out-of-scope for Phase 11 cleanup (do NOT delete)
+
+- **`pay1-verify@demo.school`** (in tenant `demo`, NOT `qa-demo`) — belongs to the **PAY-1 gate**, not QA-1. Phase 11 cleanup only drops the `qa-demo` tenant, so this account is untouched regardless; recorded here explicitly so no probe/cleanup ever targets it.
+
 ## Re-seed / login helper
 
 `node scratchpad/qa-seed.mjs` — idempotent on the tenant (skips register-school if `qa-demo` exists; logs in owner). Token capture at the end respects the 5/min login throttle.

@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Role } from '../common/enums/role.enum';
 import { getCurrentFiscalYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import {
   InvoiceRow,
   InvoiceItemRow,
@@ -17,7 +18,7 @@ export class ReportService {
 
   async getCollectionReport(academicYearId: string): Promise<object> {
     const fiscalYear = getCurrentFiscalYear();
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayAdInNepal(); // QA-1 OBS-E-2: Nepal-today asOf
 
     const byClassRows = await this.tenantPrisma.query<{
       class_id: string;
@@ -107,7 +108,7 @@ export class ReportService {
       guardianPhone: string;
     }[];
   }> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayAdInNepal(); // QA-1 OBS-E-2: Nepal-today asOf
 
     const rows = await this.tenantPrisma.query<{
       student_id: string;

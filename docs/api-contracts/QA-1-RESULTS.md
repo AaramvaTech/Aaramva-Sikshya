@@ -89,3 +89,24 @@ Fixes landed this phase (commit **8611d5b**): **BUG-1** `/health` storage reacha
 | Assignments | File lifecycle both directions | — | PASS | — | — | teacher↓submission 68B | student↓attachment 69B | — | byte-exact | PASS |
 
 **Phase 4 result:** all cells PASS. Full DRAFT→PUBLISHED→CLOSED + submit→review lifecycle; **soft-scoped teacher writes now accountable** (`updated_by`/`reviewed_by` = actor, per decision 3 — fixed by adding the stamp, no block added); student/parent **hard-scoped** (cross-section not visible, submit→403, `/me` + `my-children` own-only); submission-file `scopedOnly` enforced (generic presign→403); file lifecycle byte-exact both directions; BS due-date conversion modern-era-correct.
+
+## Phase 5 — Finance
+
+**Fixes/findings this phase:** OBS-E-2 UTC-today **FIXED** (report ×2, invoice-create default, `recalculateFine`, fine-cron pre-filter → `todayAdInNepal()`; 4 files + 2 mocked-clock tests). dueDate cast bug **verified already-fixed** (no un-cast DATE write exists). **BUG-3 (JS-float money math) CONFIRMED — not fixed inline, needs remediation-approach decision** (see QA-1-BUGS.md; surfaced at checkpoint).
+
+| Module | Feature | C | R | U | D | Admin | Student | Parent | Scoping 403 | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Finance | Fee category / structure | PASS (`amount 1000.00` NUMERIC) | PASS | — | (soft, OWNER) | PASS | — | — | — | PASS |
+| Finance | Discount / scholarship | PASS (20% → `discount 200.00` exact) | PASS | — | — | PASS | — | — | — | PASS |
+| Finance | Invoice generate (+dueDate cast) | PASS (`subtotal/total` NUMERIC; `$4::date`) | PASS | — | PASS (soft, WAIVED) | PASS | — | — | — | PASS |
+| Finance | Payment record (manual/CASH) | PASS (`received_by` stamp; `balance` generated) | PASS | — | (soft, OWNER) | PASS | — | — | — | PASS |
+| Finance | **Fine cron EXECUTION** | — | — | PASS (recalc → **`fine 120.00` NUMERIC, Nepal-date, OVERDUE**) | — | PASS | — | — | — | PASS |
+| Finance | Parent fee views (assignments/ledger) | — | PASS (own child) | — | — | PASS | N/A (no student finance view) | PASS (own) | **cross-family S3 → 403/403** | PASS |
+| Finance | eSewa initiate (initiation-only) | PASS (INITIATED txn, amount server-computed 300) | PASS (**HMAC signature match**) | — | — | PASS | — | PASS (own invoice) | **cross-family invoice → 403** | PASS |
+| Finance | Khalti initiate (disabled) | FORBIDDEN-CORRECT (503, no key) | — | — | — | — | — | — | — | PASS |
+| Finance | payment-gateways (route-shadow safe) | — | PASS (`{esewa:true,khalti:false}`) | — | — | PASS | — | PASS | — | PASS |
+
+**Phase 5 result:** all cells PASS. **Fine-cron execution proven** (not just registration): overdue invoice → `recalculate-fine` → `fine 120.00` (12 days × Rs10) NUMERIC(10,2), status OVERDUE, computed against **Nepal-today** via the OBS-E-2 fix. Money is NUMERIC(10,2) throughout (discount/fine exact in the observed cases). Cross-family 403 mandatory-probes all pass (assignments, ledger, eSewa initiate). eSewa initiation verified **signature-correct** (recomputed HMAC-SHA256) with server-computed amount and an INITIATED audit row — **zero live gateway calls**; Khalti correctly 503s (disabled). No route-shadow (`payment-gateways` is top-level).
+
+- **OBS-F (additional UTC-today sites found, flagged):** `payment.service.ts:28-31` `deriveStatus` (OVERDUE-vs-UNPAID, server-local `new Date()`) and `invoice.service.ts:146` / `payment.service.ts:70` `getBsYear(new Date())` (BS-year for invoice/payment numbering) are further finance "today" sites not in OBS-E-2's explicit scope. Low impact (status re-derived on recalc; BS year changes once/yr). Should migrate to `todayAdInNepal()` in the same eventual pass; not fixed here to keep the OBS-E-2 fix ≤5 files.
+- **BUG-3 (JS-float money) — see QA-1-BUGS.md.** Confirmed bug class; STOP-and-report (architectural). **Decision needed:** Decimal library vs integer-paisa vs SQL-side computation.

@@ -32,6 +32,18 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 
 ---
 
+## BUG-3 (Phase 5) — Money computed in JS floats — **CONFIRMED; needs remediation decision (NOT fixed inline)**
+
+| Field | Value |
+|---|---|
+| **Finding** | All persisted amounts are `NUMERIC(10,2)` (storage correct), but **every derived figure is computed in JS floats** and written back via bound params (Postgres re-quantizes on write). ~25 sites (full grep list from finance recon): the two float-sensitive kinds are **percentage discount** `originalAmount * (1 - pct/100)` (`invoice.service.ts:67,512,552`) and **fine** `daysOverdue * finePerDay` (`invoice.service.ts:277`); plus subtotal/discount/total accumulation (`:80-81,86-87,142,281`), all report aggregates (`report.service.ts:57-89,148-153,230-249`), and `fee-structure.service.ts:118,149`. Root converter `entities/finance.entity.ts:211` `toNum`=`parseFloat`. Only `invoices.balance` avoids JS (SQL `GENERATED STORED`); the gateway paisa path is integer-safe by design. |
+| **Impact** | The `Math.round(x*100)/100` snap corrects most float error, so observed values are usually right (live sweep: 20% of 1000 = 200.00 exact; fine 12×10 = 120.00 exact). But it is **not provably correct** — half-cent inputs and long item-accumulation can drift, and per architect decision 3 "money computed via JS floats is a bug even if stored as NUMERIC." |
+| **Disposition** | **STOP-and-report (Bug Protocol >5 files + architectural).** Remediating properly means picking ONE approach — (a) a Decimal library (decimal.js/big.js), (b) integer-paisa arithmetic (like the gateway path already does), or (c) compute in SQL NUMERIC (`GENERATED`/CTE). That is a design decision + a broad refactor across invoice/report/fee-structure services, exceeding the ≤5-file limit. **Not fixed in QA-1** pending the architect's chosen approach. Surfaced at CHECKPOINT 5 for decision. |
+
+## dueDate text-vs-date cast — **VERIFIED already fixed (no action)**
+
+The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service.ts:160` casts `$4::date`, both `fee_structure_items` writes cast `$5::date` (POL-1 T1 + sibling `updateItems`). Finance recon confirmed **zero** un-cast DATE writes (payments/transactions have no DATE column). Live: fee-structure create + invoice generate with `dueDate` → 201 (no Postgres 42804). Grep for siblings found none.
+
 ## BUG-2 (Phase 4) — Cross-teacher assignment edit records no actor — **FIXED**
 
 | Field | Value |
@@ -75,7 +87,7 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | Ref | Site | Phase | Status |
 |---|---|---|---|
 | OBS-E (this) | `attendance/student-attendance.service.ts` getSchoolSummary | 3 | **FIXED (b8d1bf9)** |
-| OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` server-local `new Date()`→`todayAdInNepal()`** (TZ-pin-dependent ≠ correct; add to fine-cron regression) | 5 | pending |
+| OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` + fine-cron `recalculate-fines.job.ts:115-121` → `todayAdInNepal()`** (TZ-independent day-diff) | 5 | **FIXED (this branch)** — 4 files + 2 mocked-clock tests; live fine-execution proof 120.00 |
 | OBS-E-3 | `hr/staff.service.ts:302` | 8 | pending |
 | OBS-E-4 | `library/issue.service.ts:92` | 9 | pending |
 | OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
