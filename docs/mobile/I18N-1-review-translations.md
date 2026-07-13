@@ -454,6 +454,29 @@ Numerals stay Arabic (0–9) in v1; dates render BS with Nepali month names. Kee
 | `assignmentDetail.alertFailedTitle` | Failed | असफल |
 | `assignmentDetail.alertFailedBody` | Could not save the review — try again. | जाँच सुरक्षित गर्न सकिएन — फेरि प्रयास गर्नुहोस्। |
 
+## Redesign Slice 1 — Student (added 2026-07, awaiting native review)
+
+**Note:** These strings were machine-drafted during the mobile redesign slice. Please review for natural language and cultural fit in a Nepali school context before merge.
+
+| Key | English | Nepali (नेपाली) |
+|---|---|---|
+| `assignments.pendingCount_one` | {{count}} pending | {{count}} बाँकी |
+| `assignments.pendingCount_other` | {{count}} pending | {{count}} बाँकी |
+| `assignments.submittedCount_one` | {{count}} submitted | {{count}} पेश गरिएको |
+| `assignments.submittedCount_other` | {{count}} submitted | {{count}} पेश गरिएको |
+| `attendance.presentRate` | {{value}}% present rate | {{value}}% उपस्थिति दर |
+| `results.aggregatePct` | {{value}}% aggregate | {{value}}% समग्र |
+| `results.rankHash` | Rank #{{value}} | र्‍याङ्क #{{value}} |
+| `results.gpaChangeLabel` | GPA change | GPA परिवर्तन |
+| `results.rankChangeLabel` | Rank | र्‍याङ्क |
+| `results.gpaTrend` | GPA trend | GPA प्रवृत्ति |
+| `results.topSubject` | Top subject | उत्कृष्ट विषय |
+| `results.needsFocus` | Needs focus | ध्यान दिनुपर्ने |
+| `profile.footer` | Aaramva Shikshya · v1.0.0 | Aaramva Shikshya · v1.0.0 |
+| `profileDetails.lockedNote` | Profile information is managed by your school.\nContact the office to request changes. | प्रोफाइलको जानकारी तपाईंको विद्यालयद्वारा व्यवस्थापन गरिन्छ।\nपरिवर्तनका लागि कार्यालयलाई सम्पर्क गर्नुहोस्। |
+| `timetable.breakDuration` | {{minutes}} min break | {{minutes}} मिनेट ब्रेक |
+| `settingsRow.changePassword` | Change password | पासवर्ड परिवर्तन गर्नुहोस् |
+
 ---
 
-**Totals:** 417 strings across 5 namespaces.
+**Totals:** 433 strings across 5 namespaces (417 existing + 16 added in Redesign Slice 1).
