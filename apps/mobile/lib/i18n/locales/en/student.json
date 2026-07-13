@@ -19,6 +19,15 @@
     "notices": "Notices",
     "profile": "Profile"
   },
+  "today": {
+    "title": "Today",
+    "markedPresent": "Marked present",
+    "markedAbsent": "Marked absent",
+    "notMarked": "Not yet marked",
+    "nextClass": "Next class · {{time}}",
+    "homeworkDue": "Homework due",
+    "newNotice": "New notices"
+  },
   "assignments": {
     "title": "Assignments",
     "subtitle": "Homework from your teachers",

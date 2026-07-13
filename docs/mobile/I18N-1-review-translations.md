@@ -157,6 +157,13 @@ Numerals stay Arabic (0–9) in v1; dates render BS with Nepali month names. Kee
 | `quick.assignments` | Assignments | गृहकार्य |
 | `quick.notices` | Notices | सूचना |
 | `quick.profile` | Profile | प्रोफाइल |
+| `today.title` | Today | आज |
+| `today.markedPresent` | Marked present | उपस्थित चिह्नित |
+| `today.markedAbsent` | Marked absent | अनुपस्थित चिह्नित |
+| `today.notMarked` | Not yet marked | अझै चिह्नित छैन |
+| `today.nextClass` | Next class · {{time}} | अर्को कक्षा · {{time}} |
+| `today.homeworkDue` | Homework due | बाँकी गृहकार्य |
+| `today.newNotice` | New notices | नयाँ सूचना |
 | `assignments.title` | Assignments | गृहकार्य |
 | `assignments.subtitle` | Homework from your teachers | तपाईंका शिक्षकहरूबाट गृहकार्य |
 | `assignments.emptyTitle` | No assignments yet | अहिलेसम्म कुनै गृहकार्य छैन |

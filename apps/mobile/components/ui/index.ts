@@ -24,5 +24,6 @@ export type { IconName } from '../../lib/icons/names';
 export { SectionLabel } from './SectionLabel';
 export { SchoolBadge, AvatarBadge } from './Identity';
 export { FeatureTile, FeatureButton } from './FeatureTile';
+export { TodayModule } from './TodayModule';
 export { StatTile } from './StatTile';
 export { SegmentedPills } from './SegmentedPills';

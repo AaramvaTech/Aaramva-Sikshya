@@ -21,13 +21,16 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * The design's 46 Material icon names (snake_case), as used by the target canvas,
  * plus 4 added in Task B1 (`account_balance_wallet`, `add_circle`, `refresh`, `send`)
  * to migrate existing `PrimaryButton` callers off Ionicons — verified against
- * MaterialIcons' glyphMap, not part of the original design canvas.
+ * MaterialIcons' glyphMap, not part of the original design canvas. Plus 2 added
+ * in Task C1 (`assignment`, `grade`) for the Student Home quick-access tiles
+ * (Assignments / Results) — also verified against MaterialIcons' glyphMap.
  */
 export type IconName =
   | 'account_balance_wallet'
   | 'add_circle'
   | 'arrow_back'
   | 'arrow_forward'
+  | 'assignment'
   | 'assignment_late'
   | 'battery_full'
   | 'calculate'
@@ -45,6 +48,7 @@ export type IconName =
   | 'event_upcoming'
   | 'flag'
   | 'free_breakfast'
+  | 'grade'
   | 'groups'
   | 'help'
   | 'how_to_reg'

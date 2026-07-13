@@ -19,6 +19,15 @@
     "notices": "सूचना",
     "profile": "प्रोफाइल"
   },
+  "today": {
+    "title": "आज",
+    "markedPresent": "उपस्थित चिह्नित",
+    "markedAbsent": "अनुपस्थित चिह्नित",
+    "notMarked": "अझै चिह्नित छैन",
+    "nextClass": "अर्को कक्षा · {{time}}",
+    "homeworkDue": "बाँकी गृहकार्य",
+    "newNotice": "नयाँ सूचना"
+  },
   "assignments": {
     "title": "गृहकार्य",
     "subtitle": "तपाईंका शिक्षकहरूबाट गृहकार्य",

@@ -57,11 +57,14 @@ const ICON_NAMES: IconName[] = [
   'add_circle',
   'refresh',
   'send',
+  // Task C1 additions — Student Home quick-access tiles (Results / Assignments).
+  'assignment',
+  'grade',
 ];
 
 describe('resolveMaterialName', () => {
-  it('covers all 50 design icon names', () => {
-    expect(ICON_NAMES.length).toBe(50);
+  it('covers all 52 design icon names', () => {
+    expect(ICON_NAMES.length).toBe(52);
   });
 
   it.each(ICON_NAMES)('%s resolves to a real MaterialIcons glyph', (name) => {
