@@ -56,4 +56,17 @@ Fixes landed this phase (commit **8611d5b**): **BUG-1** `/health` storage reacha
 **Phase 2 result:** all cells PASS. `marked_by` accountability stamped; AD date stored exactly + BS display modern-era-correct; future-date rejected; student/parent own-scope + cross-family 403; cron armed (not silently dead).
 
 - **OBS-D (Attendance weekend enforcement — flagged, product decision):** `bulkMark` only rejects **future** dates; it does **not** reject **Saturday** (Nepal's weekly holiday) — marking on Sat `2026-07-10` returned **201**. Working-days = distinct actually-marked dates (self-consistent), so the % stays correct *as long as Saturdays aren't marked*. The mobile timetable has a Saturday guard but attendance marking does not. **Low severity**; product decision whether the backend should reject Saturday marks (or a school-calendar/holiday table should drive working-days). Not changed in QA-1 (STOP-condition: ambiguous product decision).
-- **OBS-E (UTC-today in getSchoolSummary — known FIX-2 remainder):** `getSchoolSummary` computes "today" as `new Date().toISOString()` = **UTC-today**, Nepal-early by 5h45m near midnight (dashboard "today's attendance" shows the prior Nepal day for the first ~6h). This is one of the ~11 sites CLAUDE.md/FIX-2 already documents; TZ-stable, not new. Bulk-mark's future-date check uses server-local `new Date()` (server runs Asia/Kathmandu — timestamps are `+05:45`), so it is correct here; CI/Docker pin the TZ. Not fixed (FIX-2 remainder scope).
+- **OBS-E (UTC-today in getSchoolSummary) — FIXED (b8d1bf9):** now uses `todayAdInNepal()`; mocked-clock regression test proves the Nepal date at 00:30 +05:45. Remaining ~10 UTC-today sites DEFERRED → FIX-2-continuation (list in QA-1-BUGS.md). OBS-D recorded **INTENTIONAL** (CAL-1 school-calendar backlog).
+
+## Phase 3 — Academic
+
+| Module | Feature | C | R | U | D | Admin | Teacher | Student | Parent | Scoping | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Academic | Academic year (+set-current, BS/AD) | PASS (AD stored; `2026-07-16`=1 Shrawan 2083) | PASS (`/current` route-shadow ok) | PASS (rename + set-current flip/restore) | PASS (soft) | PASS | read | read | read | non-admin write→403 | PASS |
+| Academic | Class | PASS | PASS | PASS | PASS (soft) | PASS | read (write 403) | read | read | teacher POST→403 | PASS |
+| Academic | Section | PASS | PASS | PASS (capacity) | PASS (soft) | PASS | read | read | read | — | PASS |
+| Academic | Subject | PASS | PASS | PASS | PASS (soft) | PASS | read | read | read | — | PASS |
+| Academic | Class-subject mapping | PASS (full/pass marks) | PASS (count) | — | PASS (remove) | PASS | read | read | read | — | PASS |
+| Academic | Timetable/routine (Sun–Fri) | PASS | PASS (day-keyed `schedule`; `/my`,`/my/sections`) | — | PASS | PASS | self-scoped | read (`/section/:id`) | read | — | PASS |
+
+**Phase 3 result:** all cells PASS. Academic-year dates AD-stored + BS modern-era-correct (1 Shrawan 2083 fiscal start); full CRUD + soft-delete on class/section/subject; class-subject mapping; timetable day-keyed Sun–Fri structure with self-scoped teacher routes; admin-write / all-read scoping enforced (non-admin write → 403). **No separate `terms` entity** — the fiscal `academic_year` is the term container (exam_types provide exam periods). Timetable accepts `dayOfWeek=6` (Saturday) — backend-permissive, tracked under OBS-D/CAL-1.
