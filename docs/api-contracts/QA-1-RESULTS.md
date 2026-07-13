@@ -37,4 +37,23 @@ Fixes landed this phase (commit **8611d5b**): **BUG-1** `/health` storage reacha
 **Phase 1 result:** all cells PASS. Accountability stamp (`created_by`) proven; soft-delete proven (row present + `deleted_at` set + excluded from GET/list/stats); photo round-trips to MinIO byte-exact (no silent discard); guardian casing correct end-to-end; role scoping correct (parent/student `:id`→403, teacher roster 200; `/me` + `my-children` own-only).
 
 - **OBS-B (flagged, FIX-3):** student DOBs render BS in the 2067 era (e.g. `2010-05-20 → 2067-02-07`), inside the FIX-3 documented off-by-one window. Consistent internal use of `adToBs`; cross-check vs hamropatro before trusting historical BS DOBs. Not fixed (FIX-3 is its own pass).
-- **OBS-C (minor, tracked):** the student *status* enum differs across surfaces — list-query `['ACTIVE,PASSED_OUT,EXPELLED,TRANSFERRED,DROPPED']` vs `stats.byStatus` keys `ACTIVE/INACTIVE/TRANSFERRED/GRADUATED`. No functional failure; a cosmetic enum-consistency nit. Revisit if it surfaces in a status-update flow.
+- **OBS-C (minor, tracked):** the student *status* enum differs across surfaces — list-query `['ACTIVE,PASSED_OUT,EXPELLED,TRANSFERRED,DROPPED']` vs `stats.byStatus` keys `ACTIVE/INACTIVE/TRANSFERRED/GRADUATED`. No functional failure; a cosmetic enum-consistency nit. Revisit if it surfaces in a status-update flow. **(Phase 10: upgraded to a verify-and-maybe-fix — see QA-1-BUGS.md OBS-C.)**
+
+## Phase 2 — Attendance
+
+**Scheduling (decision 4):** BullMQ is **fully removed** (OPS-1) — zero `bullmq`/`Queue`/`Processor` in the codebase. The only scheduled job is `@nestjs/schedule` `@Cron('5 0 * * *', tz Asia/Kathmandu)` (fine recalc). Proven via a throwaway `SchedulerRegistry` probe: **1 cron registered `recalculate-fines`, next fire `2026-07-14T00:05:00.000+05:45`** (armed, Nepal-tz). With Redis temporarily enabled (WSL redis 7.0.15), `HealthService.check()` → `redis:{up,33ms}`, storage up, db up, overall `ok` — the live redis path works. **No BullMQ queue exists to verify** → cron is NOT N/A. Attendance itself has **no** dedicated cron (its background work is event-driven: `attendance.absent` → listener → in-app/push; SMS is MOCK, none sent).
+
+| Module | Feature | C | R | U | D | Admin | Teacher | Student | Parent | Scoping 403 | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Attendance | Mark student attendance (bulk UPSERT) | PASS (`marked_by`=teacher) | PASS | PASS (re-UPSERT) | N/A (UPSERT, no soft-del) | PASS | PASS (mobile) | N/A | N/A | — | PASS |
+| Attendance | Future-date guard | 400 (`"future dates"`) | — | — | — | — | PASS | — | — | — | PASS |
+| Attendance | Date AD-stored + BS display (Kathmandu) | PASS (`2026-07-13` AD → BS `2083-03-29`) | PASS | — | — | — | PASS | PASS | PASS | — | PASS |
+| Attendance | Student own summary/history (`/me`) | — | PASS (100%, /me) | — | — | — | — | PASS (own) | — | no id param | PASS |
+| Attendance | Parent child summary/history | — | PASS (own child) | — | — | — | — | — | PASS | cross-family **403/403** | PASS |
+| Attendance | Teacher section report | — | PASS (grid + per-student %) | — | — | PASS | PASS | — | — | — | PASS |
+| Attendance | Cron/schedule alive | — | PASS (SchedulerRegistry, armed) | — | — | — | — | — | — | — | PASS |
+
+**Phase 2 result:** all cells PASS. `marked_by` accountability stamped; AD date stored exactly + BS display modern-era-correct; future-date rejected; student/parent own-scope + cross-family 403; cron armed (not silently dead).
+
+- **OBS-D (Attendance weekend enforcement — flagged, product decision):** `bulkMark` only rejects **future** dates; it does **not** reject **Saturday** (Nepal's weekly holiday) — marking on Sat `2026-07-10` returned **201**. Working-days = distinct actually-marked dates (self-consistent), so the % stays correct *as long as Saturdays aren't marked*. The mobile timetable has a Saturday guard but attendance marking does not. **Low severity**; product decision whether the backend should reject Saturday marks (or a school-calendar/holiday table should drive working-days). Not changed in QA-1 (STOP-condition: ambiguous product decision).
+- **OBS-E (UTC-today in getSchoolSummary — known FIX-2 remainder):** `getSchoolSummary` computes "today" as `new Date().toISOString()` = **UTC-today**, Nepal-early by 5h45m near midnight (dashboard "today's attendance" shows the prior Nepal day for the first ~6h). This is one of the ~11 sites CLAUDE.md/FIX-2 already documents; TZ-stable, not new. Bulk-mark's future-date check uses server-local `new Date()` (server runs Asia/Kathmandu — timestamps are `+05:45`), so it is correct here; CI/Docker pin the TZ. Not fixed (FIX-2 remainder scope).

@@ -32,6 +32,23 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 
 ---
 
-## OBSERVATIONS (tracked for their owning phase)
+## OBS-B — bs-calendar DOB off-by-one — **CONFIRMED, DEFERRED → FIX-3**
 
-- **OBS-B (Phase 1/3, FIX-3):** student DOBs (e.g. 2010-05-20 → BS ~2067) fall in the **FIX-3 documented 2070-era off-by-one** window in `bs-calendar`. Modern-era dates (academic year 2082-83) are correct. Verify a DOB BS display in Phase 1 and cross-check one date vs hamropatro; do NOT fix the table here (FIX-3 is its own pass).
+| Field | Value |
+|---|---|
+| **Finding** | For a student DOB of AD **2010-05-20**, the API renders BS **2067-02-07** (Jestha 7, 2067) via `adToBs`. |
+| **External authority** | hamropatro's Jestha 2067 page shows **1 Jestha 2067 = 2010-05-15**, so **2010-05-20 = 2067-02-06**. The app is **+1 day** (renders 07, correct is 06). |
+| **Root cause** | The `bs-calendar` `BS_MONTH_DATA` lookup table is off-by-one in this era — the **documented FIX-3 open bug** (CLAUDE.md: "2070-era table one day off; audit 2000–~2080"). Modern era (2082-83 academic year) is correct. |
+| **Disposition** | **DEFERRED → FIX-3.** Do NOT modify the lookup table in QA-1 (FIX-3 is its own pass; the 2070-era `date.util.spec.ts` vectors are keyed to the current table and must change with the table fix). Affects historical BS dates platform-wide (student DOBs). |
+
+## OBS-A follow-up — guardian soft-delete propagation — **DEFERRED → CL (post-QA-1)**
+
+| Field | Value |
+|---|---|
+| **Finding** | OBS-A added `guardians.deleted_at` + filtered the 6 reads in `guardian.service.ts`. **~9 other guardian-table reads are NOT filtered:** communication listeners (attendance/notice/examination/finance/assignment), finance (report/invoice), `sms.service`, attendance `leave.service` + `student-attendance.service`, `storage/file-access`, `examination/result`, `academic/timetable`, `assignment/submission`. |
+| **Severity** | **Real but low.** Soft-deleting a guardian is now **live-possible** (the column exists), so a soft-deleted guardian could still leak via these unfiltered paths (audience fan-out, scoping checks). Low because **no delete path emits a soft-delete today** — it only becomes reachable once a guardian-removal feature ships. |
+| **Disposition** | **DEFERRED → CL (changelog/backlog).** Spec a "guardian soft-delete propagation" sweep after QA-1 (add `deleted_at IS NULL` to all guardian reads, ideally via a shared helper). Not done in QA-1: exceeds the Bug-Protocol ≤5-file limit and touches access-control/audience queries that warrant their own review. |
+
+## OBS-C — student status enum consistency — **upgraded → verify in Phase 10**
+
+Student *status* enum differs across surfaces — list-query `ACTIVE/PASSED_OUT/EXPELLED/TRANSFERRED/DROPPED` vs `stats.byStatus` keys `ACTIVE/INACTIVE/TRANSFERRED/GRADUATED`. **Phase 10 plan:** set one QA student to `PASSED_OUT` (via the status-update endpoint) and assert `stats.byStatus` counts it correctly against a direct psql count. If the stats buckets are hardcoded stale enums that drop `PASSED_OUT`, that is a **bug to fix in Phase 10**.
