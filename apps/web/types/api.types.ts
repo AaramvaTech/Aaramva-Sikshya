@@ -132,7 +132,7 @@ export interface StudentDetail {
 
 export interface StudentStats {
   total: number;
-  byStatus: { ACTIVE: number; INACTIVE: number; TRANSFERRED: number; GRADUATED: number };
+  byStatus: { ACTIVE: number; PASSED_OUT: number; EXPELLED: number; TRANSFERRED: number; DROPPED: number };
   byGender: { MALE: number; FEMALE: number; OTHER: number };
   newThisMonth: number;
   byClass: { className: string; count: number }[];

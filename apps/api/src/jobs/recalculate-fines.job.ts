@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../modules/tenant/tenant-context.service';
 import { TenantService } from '../modules/tenant/tenant.service';
 import { InvoiceService } from '../modules/finance/invoice.service';
+import { todayAdInNepal } from '../modules/common/utils/date.util';
 
 export interface FineRunSummary {
   trigger: 'cron' | 'manual';
@@ -112,14 +113,14 @@ export class RecalculateFinesService implements OnModuleInit {
     const partialInvoices = await this.invoiceService.findAll({ status: 'PARTIAL' });
 
     const allInvoices = [...overdueInvoices.data, ...partialInvoices.data];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // QA-1 OBS-E-2 / decision 2: compare against Nepal's calendar today, not the
+    // server-local midnight. dueDate.ad is already 'YYYY-MM-DD', so a lexical
+    // string compare is a correct, TZ-independent date ordering.
+    const todayAd = todayAdInNepal();
 
     let processed = 0;
     for (const invoice of allInvoices) {
-      const dueDate = new Date(invoice.dueDate.ad);
-      dueDate.setHours(0, 0, 0, 0);
-      if (dueDate < today) {
+      if (invoice.dueDate.ad < todayAd) {
         await this.invoiceService.recalculateFine(invoice.id);
         processed++;
       }

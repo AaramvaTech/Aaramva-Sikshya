@@ -162,7 +162,11 @@ export class AssignmentService {
     return toAssignmentResponse(rows[0]);
   }
 
-  async update(id: string, dto: UpdateAssignmentDto): Promise<AssignmentResponseDto> {
+  async update(
+    id: string,
+    dto: UpdateAssignmentDto,
+    user: AuthUser,
+  ): Promise<AssignmentResponseDto> {
     const existing = await this.tenantPrisma.query<AssignmentRow>(
       `SELECT * FROM assignments WHERE id = $1::uuid AND deleted_at IS NULL`,
       id,
@@ -178,12 +182,14 @@ export class AssignmentService {
         : undefined;
 
     // Edits never re-fire assignment.published (publish-edge-only rule).
+    // Soft-scoped write → record the actor (decision 3): updated_by = editor.
     await this.tenantPrisma.execute(
       `UPDATE assignments SET
          title = COALESCE($2, title),
          description = CASE WHEN $3::boolean THEN $4 ELSE description END,
          due_date = COALESCE($5::date, due_date),
          attachment_keys = COALESCE($6::jsonb, attachment_keys),
+         updated_by = $7::uuid,
          updated_at = NOW()
        WHERE id = $1::uuid`,
       id,
@@ -192,6 +198,7 @@ export class AssignmentService {
       dto.description ?? null,
       dto.dueDate ?? null,
       attachmentKeys !== undefined ? JSON.stringify(attachmentKeys) : null,
+      user.userId,
     );
     return this.findOne(id);
   }
@@ -209,12 +216,14 @@ export class AssignmentService {
    * DRAFT→PUBLISHED. The event fires on this edge ONLY (PUSH-1 rule): the
    * conditional UPDATE returns a row exactly once; re-publish attempts 409.
    */
-  async publish(id: string): Promise<AssignmentResponseDto> {
+  async publish(id: string, user: AuthUser): Promise<AssignmentResponseDto> {
     const rows = await this.tenantPrisma.query<AssignmentRow>(
-      `UPDATE assignments SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW()
+      `UPDATE assignments SET status = 'PUBLISHED', published_at = NOW(),
+         updated_by = $2::uuid, updated_at = NOW()
        WHERE id = $1::uuid AND deleted_at IS NULL AND status = 'DRAFT'
        RETURNING *`,
       id,
+      user.userId,
     );
     if (!rows[0]) {
       await this.findOne(id); // 404 if missing…
@@ -236,12 +245,13 @@ export class AssignmentService {
   }
 
   /** PUBLISHED→CLOSED (stops accepting submissions). No event. */
-  async close(id: string): Promise<AssignmentResponseDto> {
+  async close(id: string, user: AuthUser): Promise<AssignmentResponseDto> {
     const rows = await this.tenantPrisma.query<AssignmentRow>(
-      `UPDATE assignments SET status = 'CLOSED', updated_at = NOW()
+      `UPDATE assignments SET status = 'CLOSED', updated_by = $2::uuid, updated_at = NOW()
        WHERE id = $1::uuid AND deleted_at IS NULL AND status = 'PUBLISHED'
        RETURNING id`,
       id,
+      user.userId,
     );
     if (!rows[0]) {
       await this.findOne(id);

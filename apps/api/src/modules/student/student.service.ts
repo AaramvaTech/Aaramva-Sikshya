@@ -532,20 +532,26 @@ export class StudentService {
     const summaryRows = await this.tenantPrisma.query<{
       total: string;
       active: string;
-      inactive: string;
+      passed_out: string;
+      expelled: string;
       transferred: string;
-      graduated: string;
+      dropped: string;
       male: string;
       female: string;
       other_gender: string;
       new_this_month: string;
     }>(
+      // QA-1 OBS-C: byStatus buckets must match the real student status enum
+      // (ACTIVE, PASSED_OUT, EXPELLED, TRANSFERRED, DROPPED). The old buckets
+      // counted INACTIVE/GRADUATED — statuses that can never be set, so
+      // PASSED_OUT/EXPELLED/DROPPED students were silently dropped from byStatus.
       `SELECT
          COUNT(*)                                                                AS total,
          COUNT(*) FILTER (WHERE status = 'ACTIVE')                             AS active,
-         COUNT(*) FILTER (WHERE status = 'INACTIVE')                           AS inactive,
+         COUNT(*) FILTER (WHERE status = 'PASSED_OUT')                         AS passed_out,
+         COUNT(*) FILTER (WHERE status = 'EXPELLED')                           AS expelled,
          COUNT(*) FILTER (WHERE status = 'TRANSFERRED')                        AS transferred,
-         COUNT(*) FILTER (WHERE status = 'GRADUATED')                          AS graduated,
+         COUNT(*) FILTER (WHERE status = 'DROPPED')                            AS dropped,
          COUNT(*) FILTER (WHERE gender = 'MALE')                               AS male,
          COUNT(*) FILTER (WHERE gender = 'FEMALE')                             AS female,
          COUNT(*) FILTER (WHERE gender = 'OTHER')                              AS other_gender,
@@ -575,7 +581,7 @@ export class StudentService {
        LIMIT 8`,
     );
 
-    const s = summaryRows[0] ?? { total: '0', active: '0', inactive: '0', transferred: '0', graduated: '0', male: '0', female: '0', other_gender: '0', new_this_month: '0' };
+    const s = summaryRows[0] ?? { total: '0', active: '0', passed_out: '0', expelled: '0', transferred: '0', dropped: '0', male: '0', female: '0', other_gender: '0', new_this_month: '0' };
 
     const toAd = (d: Date | string) => {
       const date = d instanceof Date ? d : new Date(d);
@@ -591,9 +597,10 @@ export class StudentService {
       total: Number(s.total),
       byStatus: {
         ACTIVE: Number(s.active),
-        INACTIVE: Number(s.inactive),
+        PASSED_OUT: Number(s.passed_out),
+        EXPELLED: Number(s.expelled),
         TRANSFERRED: Number(s.transferred),
-        GRADUATED: Number(s.graduated),
+        DROPPED: Number(s.dropped),
       },
       byGender: {
         MALE: Number(s.male),

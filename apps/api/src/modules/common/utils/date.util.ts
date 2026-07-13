@@ -19,3 +19,18 @@ export function formatLocalDate(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/**
+ * QA-1 OBS-E — "today" as an AD 'YYYY-MM-DD' in **Asia/Kathmandu**, TZ-independent.
+ *
+ * `new Date().toISOString().split('T')[0]` yields UTC-today, which in Nepal
+ * (+05:45) is the PREVIOUS day for the first 5h45m after local midnight — the
+ * dashboard/summary "today's attendance" then shows yesterday's data all night.
+ * Offset arithmetic (add +05:45, then read the UTC date part) gives the correct
+ * Nepal calendar date regardless of the process timezone. This is the canonical
+ * home for the "platform pattern" also used by reports/report.util.ts.
+ */
+export const NEPAL_OFFSET_MS = 345 * 60 * 1000;
+export function todayAdInNepal(): string {
+  return new Date(Date.now() + NEPAL_OFFSET_MS).toISOString().slice(0, 10);
+}

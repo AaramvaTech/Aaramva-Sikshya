@@ -6,6 +6,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { envValidationSchema } from './config/env.validation';
+import { OptionalJwtGuard } from './modules/common/guards/optional-jwt.guard';
+import { TenantMatchGuard } from './modules/common/guards/tenant-match.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { TenantMiddleware } from './modules/tenant/tenant.middleware';
@@ -70,6 +72,11 @@ import { ReportsModule } from './modules/reports/reports.module';
     AppService,
     // Enforce rate limiting globally. Was configured but never bound before.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // QA-1 BUG-4: global guards, in order. OptionalJwtGuard populates req.user
+    // from a valid token (never rejects — strict auth stays per-controller);
+    // TenantMatchGuard then rejects any token whose tenant ≠ the resolved tenant.
+    { provide: APP_GUARD, useClass: OptionalJwtGuard },
+    { provide: APP_GUARD, useClass: TenantMatchGuard },
   ],
 })
 export class AppModule {

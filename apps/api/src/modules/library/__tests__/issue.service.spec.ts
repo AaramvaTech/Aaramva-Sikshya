@@ -198,6 +198,30 @@ describe('IssueService', () => {
       );
     });
 
+    // QA-1 OBS-E-4: returned_at + overdue day-count use Nepal's calendar today.
+    // At 2026-07-14 00:30 +05:45 (= 2026-07-13 18:45Z), Nepal is on the 14th but
+    // UTC is still the 13th. due 2026-07-10 → 4 days late, fine 4×5=20; and
+    // returned_at must be 2026-07-14 (the old code stamped UTC 2026-07-13).
+    it('stamps returned_at + fine_days against Nepal-today at the midnight boundary', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      const overdueIssue = { ...baseIssueRow, due_date: '2026-07-10', fine_per_day: '5.00' };
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([overdueIssue]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ ...overdueIssue, status: 'RETURNED' }]);
+      mockTx.$executeRawUnsafe.mockResolvedValueOnce(1);
+
+      await service.returnBook('issue-1', {}, 'librarian-1');
+
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE book_issues'),
+        '2026-07-14', // returned_at = Nepal-today, NOT UTC 2026-07-13
+        'librarian-1',
+        4,            // fine_days = 2026-07-14 − 2026-07-10
+        20,           // fine_amount = 4 × 5
+        'issue-1',
+      );
+      jest.restoreAllMocks();
+    });
+
     it('sets is_available=true on the copy in the same transaction', async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 5);

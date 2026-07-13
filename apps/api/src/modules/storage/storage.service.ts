@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -91,10 +92,33 @@ export class StorageService implements OnModuleInit {
       `${endpoint.replace(/\/+$/, '')}/${this.bucket}`
     ).replace(/\/+$/, '');
     this.logger.log(`File storage enabled — bucket "${this.bucket}" at ${endpoint}`);
+    // BUG-1: enabled means the S3_* env is present, NOT that the backend is
+    // reachable. Probe once at startup (fire-and-forget) so a down/misconfigured
+    // backend is loud in the logs instead of only surfacing as a failed upload.
+    void this.warnIfUnreachable(endpoint);
   }
 
   isEnabled(): boolean {
     return this.client !== null;
+  }
+
+  /** BUG-1: HeadBucket reachability probe (used by /health). Throws when the
+   *  backend is unreachable/misconfigured; caller decides how to report. */
+  async assertReachable(): Promise<void> {
+    const client = this.requireClient();
+    await client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+  }
+
+  private async warnIfUnreachable(endpoint: string): Promise<void> {
+    try {
+      await this.assertReachable();
+    } catch (err) {
+      this.logger.warn(
+        `File storage backend UNREACHABLE at ${endpoint} (bucket "${this.bucket}") — ` +
+          `presign will still 201 but the browser PUT will fail until it is up. ` +
+          `${(err as Error).message.split('\n')[0]}`,
+      );
+    }
   }
 
   private requireClient(): S3Client {

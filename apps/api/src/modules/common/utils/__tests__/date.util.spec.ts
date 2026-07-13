@@ -1,5 +1,5 @@
 import { bsToAd, parseBsString } from 'bs-calendar';
-import { formatLocalDate } from '../date.util';
+import { formatLocalDate, todayAdInNepal } from '../date.util';
 
 /**
  * FIX-2 — TZ-independent BS→AD conversion formatting.
@@ -57,5 +57,31 @@ describe('formatLocalDate (FIX-2)', () => {
     // A local-frame construction formats to the same components in ANY process
     // TZ — this is what toISOString() violated for UTC+ zones.
     expect(formatLocalDate(new Date(2013, 7, 30))).toBe('2013-08-30');
+  });
+});
+
+/**
+ * QA-1 OBS-E — todayAdInNepal() returns the Asia/Kathmandu calendar date, not
+ * UTC-today. The decisive case is just after Nepal midnight, while UTC is still
+ * on the previous day.
+ */
+describe('todayAdInNepal (QA-1 OBS-E)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('uses the Nepal date at 2026-07-14 00:30 +05:45 (UTC is still 2026-07-13)', () => {
+    // 2026-07-13T18:45:00Z  ==  2026-07-14T00:30:00+05:45
+    const instant = Date.UTC(2026, 6, 13, 18, 45, 0);
+    jest.spyOn(Date, 'now').mockReturnValue(instant);
+
+    // Sanity: the OLD (buggy) UTC-today would report the previous Nepal day.
+    expect(new Date(Date.now()).toISOString().slice(0, 10)).toBe('2026-07-13');
+
+    // The fix: Nepal date is 2026-07-14.
+    expect(todayAdInNepal()).toBe('2026-07-14');
+  });
+
+  it('agrees with UTC when Nepal and UTC are on the same calendar day (midday)', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 6, 0, 0)); // 11:45 Nepal
+    expect(todayAdInNepal()).toBe('2026-07-13');
   });
 });

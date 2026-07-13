@@ -288,5 +288,23 @@ describe('StaffService', () => {
 
       await expect(service.softDeleteStaff('nonexistent-id')).rejects.toThrow(NotFoundException);
     });
+
+    // QA-1 OBS-E-3: end_date must be Nepal's calendar today, not UTC-today.
+    // At 2026-07-14 00:30 +05:45 (= 2026-07-13 18:45Z) Nepal is on the 14th
+    // while UTC is still the 13th — the old code would have stamped 2026-07-13.
+    it('stamps end_date as Nepal-today, not UTC-today', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseProfileRow]);
+      (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
+
+      await service.softDeleteStaff('profile-1');
+
+      const profileUpdate = (tenantPrisma.execute as jest.Mock).mock.calls.find(
+        ([sql]: [string]) => sql.includes('staff_profiles') && sql.includes('end_date'),
+      );
+      expect(profileUpdate).toBeDefined();
+      expect(profileUpdate[1]).toBe('2026-07-14'); // Nepal date, not UTC 2026-07-13
+      jest.restoreAllMocks();
+    });
   });
 });

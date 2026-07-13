@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getBsYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import {
   FeeStructureItemRow,
   StudentFeeAssignmentRow,
@@ -140,10 +141,12 @@ export class InvoiceService {
     const assignmentMap = new Map(assignments.map((a) => [a.fee_structure_item_id, a]));
     const { invoiceItems, subtotal, discountAmount } = this.calculateItemAmounts(fsiRows, assignmentMap);
     const totalAmount = Math.round((subtotal - discountAmount) * 100) / 100;
-    const dueDate = dto.dueDate ?? new Date().toISOString().split('T')[0];
+    // QA-1 OBS-E-2: default due date is Nepal-today, not UTC-today.
+    const dueDate = dto.dueDate ?? todayAdInNepal();
 
     return this.tenantPrisma.run(async (tx) => {
-      const bsYear = getBsYear(new Date());
+      // QA-1 OBS-F: BS year for the invoice number from Nepal-today.
+      const bsYear = getBsYear(new Date(todayAdInNepal()));
 
       const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
         `INSERT INTO sequences (key, value) VALUES ('invoice_seq', 1)
@@ -267,11 +270,17 @@ export class InvoiceService {
     if (!rows[0]) throw new NotFoundException(`Invoice ${id} not found`);
     const inv = rows[0];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = new Date(inv.due_date);
-    dueDate.setHours(0, 0, 0, 0);
-    const daysSinceDue = Math.floor((today.getTime() - dueDate.getTime()) / 86400000);
+    // QA-1 OBS-E-2 / decision 2: overdue days from Nepal's calendar "today",
+    // TZ-independent (both dates parsed as UTC-midnight — the server timezone
+    // no longer changes the fine). Replaces the server-local new Date()+setHours.
+    const todayAd = todayAdInNepal();
+    const dueAd =
+      typeof inv.due_date === 'string'
+        ? inv.due_date.slice(0, 10)
+        : inv.due_date.toISOString().slice(0, 10);
+    const daysSinceDue = Math.floor(
+      (Date.parse(`${todayAd}T00:00:00Z`) - Date.parse(`${dueAd}T00:00:00Z`)) / 86400000,
+    );
     const daysOverdue = Math.max(0, daysSinceDue - Number(inv.max_grace_period_days));
     const finePerDay = toNum(inv.total_fine_per_day);
     const fine = Math.round(daysOverdue * finePerDay * 100) / 100;

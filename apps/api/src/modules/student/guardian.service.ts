@@ -72,7 +72,7 @@ export class GuardianService {
       // Lock the guardian row to prevent concurrent account creation
       const guardianRows = await tx.$queryRawUnsafe<GuardianRow[]>(
         `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
-         FROM guardians WHERE id = $1::uuid AND student_id = $2::uuid FOR UPDATE`,
+         FROM guardians WHERE id = $1::uuid AND student_id = $2::uuid AND deleted_at IS NULL FOR UPDATE`,
         guardianId,
         studentId,
       );
@@ -149,7 +149,7 @@ export class GuardianService {
     const rows = await this.tenantPrisma.query<{ user_id: string | null; email: string | null }>(
       `SELECT g.user_id, u.email
        FROM guardians g LEFT JOIN users u ON u.id = g.user_id
-       WHERE g.id = $1::uuid AND g.student_id = $2::uuid`,
+       WHERE g.id = $1::uuid AND g.student_id = $2::uuid AND g.deleted_at IS NULL`,
       guardianId, studentId,
     );
     if (!rows[0]) throw new NotFoundException('Guardian not found');
@@ -201,7 +201,7 @@ export class GuardianService {
       const existingGuardian = await tx.$queryRawUnsafe<GuardianRow[]>(
         `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
          FROM guardians
-         WHERE student_id = $1::uuid AND phone = $2
+         WHERE student_id = $1::uuid AND phone = $2 AND deleted_at IS NULL
          ORDER BY created_at ASC
          LIMIT 1
          FOR UPDATE`,
@@ -331,7 +331,7 @@ export class GuardianService {
 
       const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
         `SELECT id FROM guardians
-         WHERE student_id = $1::uuid AND phone IS NOT DISTINCT FROM $2
+         WHERE student_id = $1::uuid AND phone IS NOT DISTINCT FROM $2 AND deleted_at IS NULL
          LIMIT 1`,
         studentId,
         g.phone ?? null,
@@ -387,7 +387,7 @@ export class GuardianService {
               s.class_name, s.section_name, s.roll_number
        FROM guardians g
        JOIN students s ON s.id = g.student_id AND s.deleted_at IS NULL
-       WHERE g.user_id = $1::uuid
+       WHERE g.user_id = $1::uuid AND g.deleted_at IS NULL
        ORDER BY g.is_primary DESC, g.created_at ASC`,
       userId,
     );
@@ -438,7 +438,7 @@ export class GuardianService {
               g.relation,
               ay.id AS academic_year_id, ay.name AS academic_year_name
        FROM students s
-       JOIN guardians g ON g.student_id = s.id
+       JOIN guardians g ON g.student_id = s.id AND g.deleted_at IS NULL
        LEFT JOIN academic_years ay ON ay.is_current = true AND ay.deleted_at IS NULL
        WHERE g.user_id = $1::uuid
          AND s.deleted_at IS NULL`,

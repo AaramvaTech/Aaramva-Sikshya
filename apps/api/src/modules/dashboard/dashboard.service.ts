@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { getCurrentFiscalYear } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import { toTimeString } from '../academic/entities/academic.entity';
 import {
   BsAdDate,
@@ -25,7 +26,8 @@ export class DashboardService {
   ) {}
 
   async getOverview(): Promise<DashboardOverviewDto> {
-    const today = new Date().toISOString().split('T')[0] as string;
+    // QA-1 OBS-E-5: Nepal-today, not UTC-today (today's-attendance board).
+    const today = todayAdInNepal();
     const asOf: BsAdDate = toDateField(today);
 
     // ── 1. Student counts ─────────────────────────────────────────────────
@@ -167,9 +169,16 @@ export class DashboardService {
   }
 
   async getWeeklyAttendance(): Promise<WeeklyAttendanceDto> {
-    const today = new Date();
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - 6);
+    // QA-1 OBS-E-5: a rolling 7-day window ending on NEPAL's calendar today
+    // (NOT ISO Monday-start — there is no week-boundary logic; each day is
+    // labeled by its own day-of-week as it falls). All date math is done on
+    // UTC-midnight epochs derived from Nepal-today, so it is TZ-independent.
+    const todayAd = todayAdInNepal();
+    const todayMs = Date.parse(`${todayAd}T00:00:00Z`);
+    const dayMs = 86400000;
+    const weekStartMs = todayMs - 6 * dayMs;
+    const ad = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const weekStartAd = ad(weekStartMs);
 
     const rows = await this.tenantPrisma.query<{
       date: string;
@@ -186,8 +195,8 @@ export class DashboardService {
          AND s.deleted_at IS NULL
        GROUP BY sa.date
        ORDER BY sa.date`,
-      weekStart.toISOString().split('T')[0],
-      today.toISOString().split('T')[0],
+      weekStartAd,
+      todayAd,
     );
 
     // Build a map of existing data
@@ -202,15 +211,15 @@ export class DashboardService {
     // Fill all 7 days (including days with no data)
     const days: WeeklyAttendanceDayDto[] = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0] as string;
+      const dMs = weekStartMs + i * dayMs;
+      const dateStr = ad(dMs);
       const entry = dataMap.get(dateStr);
       const present = entry?.present ?? 0;
       const total = entry?.total ?? 0;
       days.push({
         date: toDateField(dateStr),
-        dayOfWeek: DAY_NAMES[d.getDay()] ?? '',
+        // getUTCDay() on the UTC-midnight epoch = the calendar day-of-week.
+        dayOfWeek: DAY_NAMES[new Date(dMs).getUTCDay()] ?? '',
         present,
         total,
         rate: total > 0 ? Math.round((present / total) * 1000) / 10 : 0,
@@ -218,8 +227,8 @@ export class DashboardService {
     }
 
     return {
-      weekStart: toDateField(weekStart),
-      weekEnd: toDateField(today),
+      weekStart: toDateField(weekStartAd),
+      weekEnd: toDateField(todayAd),
       days,
     };
   }
@@ -287,7 +296,8 @@ export class DashboardService {
   }
 
   async getUpcoming(): Promise<UpcomingEventsDto> {
-    const today = new Date().toISOString().split('T')[0] as string;
+    // QA-1 OBS-E-5: Nepal-today for the "upcoming exams from today" cutoff.
+    const today = todayAdInNepal();
 
     const examRows = await this.tenantPrisma.query<{
       id: string;

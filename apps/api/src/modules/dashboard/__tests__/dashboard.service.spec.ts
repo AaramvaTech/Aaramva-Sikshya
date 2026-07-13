@@ -107,6 +107,23 @@ describe('DashboardService', () => {
       expect(result.attendance.totalStudents).toBe(0);
       expect(result.attendance.byClass).toHaveLength(0);
     });
+
+    // QA-1 OBS-E-5: today's-attendance board uses Nepal-today, not UTC-today.
+    // At 2026-07-14 00:30 +05:45 (= 2026-07-13 18:45Z) Nepal is on the 14th.
+    it('queries today\'s attendance for Nepal-today, not UTC-today', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ total: '5', active: '5' }])
+        .mockResolvedValueOnce([]) // attendance-by-class
+        .mockResolvedValueOnce([]) // no academic year
+        .mockResolvedValueOnce([{ count: '0' }]);
+
+      await service.getOverview();
+
+      const attendanceCall = (tenantPrisma.query as jest.Mock).mock.calls[1];
+      expect(attendanceCall[1]).toBe('2026-07-14'); // Nepal date, not UTC 2026-07-13
+      jest.restoreAllMocks();
+    });
   });
 
   describe('getWeeklyAttendance()', () => {
@@ -141,6 +158,26 @@ describe('DashboardService', () => {
       expect(result.days[5].rate).toBe(0);
       expect(result.days[5].present).toBe(0);
       expect(result.days[5].total).toBe(0);
+    });
+
+    // QA-1 OBS-E-5: the rolling 7-day window ends on Nepal-today and each day is
+    // labeled by its true day-of-week (NOT ISO Monday-start), TZ-independently.
+    it('anchors the 7-day window to Nepal-today with correct day-of-week labels', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0)); // 2026-07-14 Nepal
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      const result = await service.getWeeklyAttendance();
+
+      const call = (tenantPrisma.query as jest.Mock).mock.calls[0];
+      expect(call[1]).toBe('2026-07-08'); // weekStart = today − 6
+      expect(call[2]).toBe('2026-07-14'); // Nepal-today
+      expect(result.weekEnd.ad).toBe('2026-07-14');
+      expect(result.weekStart.ad).toBe('2026-07-08');
+      expect(result.days).toHaveLength(7);
+      expect(result.days[6].date.ad).toBe('2026-07-14');
+      expect(result.days[6].dayOfWeek).toBe('Tue'); // 2026-07-14 is a Tuesday
+      expect(result.days[0].dayOfWeek).toBe('Wed');  // 2026-07-08 is a Wednesday
+      jest.restoreAllMocks();
     });
   });
 

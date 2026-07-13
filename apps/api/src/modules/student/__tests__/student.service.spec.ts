@@ -504,4 +504,29 @@ describe('StudentService', () => {
         .rejects.toThrow(ConflictException);
     });
   });
+
+  // QA-1 OBS-C: byStatus must expose the REAL status enum, not stale
+  // INACTIVE/GRADUATED — a PASSED_OUT student must be counted.
+  describe('getStats() — byStatus enum (OBS-C)', () => {
+    it('reports byStatus with ACTIVE/PASSED_OUT/EXPELLED/TRANSFERRED/DROPPED', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{
+          total: '5', active: '3', passed_out: '1', expelled: '0',
+          transferred: '1', dropped: '0', male: '3', female: '2',
+          other_gender: '0', new_this_month: '2',
+        }])
+        .mockResolvedValueOnce([]) // byClass
+        .mockResolvedValueOnce([]); // recentAdmissions
+
+      const stats = await service.getStats();
+
+      expect(Object.keys(stats.byStatus).sort()).toEqual(
+        ['ACTIVE', 'DROPPED', 'EXPELLED', 'PASSED_OUT', 'TRANSFERRED'],
+      );
+      expect(stats.byStatus.PASSED_OUT).toBe(1); // counted, not dropped
+      const summarySql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(summarySql).toContain("status = 'PASSED_OUT'");
+      expect(summarySql).not.toContain("status = 'GRADUATED'");
+    });
+  });
 });

@@ -78,8 +78,12 @@ export class AssignmentController {
 
   @Patch(':id')
   @Roles(...ASSIGNMENT_MANAGER_ROLES)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAssignmentDto) {
-    return this.assignmentService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAssignmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.assignmentService.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -91,14 +95,14 @@ export class AssignmentController {
 
   @Post(':id/publish')
   @Roles(...ASSIGNMENT_MANAGER_ROLES)
-  publish(@Param('id', ParseUUIDPipe) id: string) {
-    return this.assignmentService.publish(id);
+  publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.assignmentService.publish(id, user);
   }
 
   @Post(':id/close')
   @Roles(...ASSIGNMENT_MANAGER_ROLES)
-  close(@Param('id', ParseUUIDPipe) id: string) {
-    return this.assignmentService.close(id);
+  close(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.assignmentService.close(id, user);
   }
 
   // ─── Submissions ────────────────────────────────────────────────────────────

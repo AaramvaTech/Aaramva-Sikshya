@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role } from '../common/enums/role.enum';
+import { todayAdInNepal } from '../common/utils/date.util';
 import {
   StudentAttendanceRow,
   StudentSummaryDto,
@@ -367,7 +368,9 @@ export class StudentAttendanceService {
   }
 
   async getSchoolSummary(): Promise<SchoolSummaryDto> {
-    const today = new Date().toISOString().split('T')[0];
+    // QA-1 OBS-E: Nepal-today, not UTC-today (UTC would show yesterday's board
+    // for the first 5h45m of each Nepal day).
+    const today = todayAdInNepal();
 
     // Section-level breakdown — the overview UI filters this by grade + section.
     const rows = await this.tenantPrisma.query<{
