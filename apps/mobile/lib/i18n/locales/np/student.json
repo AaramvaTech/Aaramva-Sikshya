@@ -72,7 +72,8 @@
     "errorTitle": "हाजिरी लोड गर्न सकिएन",
     "academicYearThis": "यस शैक्षिक सत्र",
     "errorMonth": "यो महिना लोड गर्न सकिएन।",
-    "classPrefix": "कक्षा {{label}}"
+    "classPrefix": "कक्षा {{label}}",
+    "presentRate": "{{value}}% उपस्थिति दर"
   },
   "notices": {
     "title": "सूचना",

@@ -72,7 +72,8 @@
     "errorTitle": "Couldn't load attendance",
     "academicYearThis": "This academic year",
     "errorMonth": "Couldn't load this month.",
-    "classPrefix": "Class {{label}}"
+    "classPrefix": "Class {{label}}",
+    "presentRate": "{{value}}% present rate"
   },
   "notices": {
     "title": "Notices",
