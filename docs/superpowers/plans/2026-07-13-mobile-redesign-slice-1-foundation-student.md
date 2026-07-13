@@ -29,9 +29,27 @@
 
 ---
 
-## Phase A — Icon system (Material Symbols)
+## Phase A — Icon system
 
-### Task A1: Curated glyphmap for the 43 used icons
+> **OFFLINE REVISION (2026-07-13, authoritative — supersedes the original A1/A2 below).**
+> This environment has **no network**, so the true Material Symbols Rounded font +
+> codepoints cannot be fetched. Phase A is rebuilt on `@expo/vector-icons` **`MaterialIcons`**
+> (installed; bundles its own font + glyphmap; Material Symbols' predecessor, same Material
+> icon language). Verified name coverage: **45 of 46** design icons (only `event_upcoming`
+> missing → map to `event`). This **collapses A1+A2 into one task (A1-revised)** and drops the
+> glyphmap generation, the codepoints fetch, and the `@expo-google-fonts/material-symbols`
+> dependency. The `Icon` public API is unchanged (`name`/`size`/`color`/`fill`), so B4/C1/D2 and
+> every screen consume it exactly as written; a future networked swap to true Material Symbols is
+> localized to `Icon.tsx` + the name map. **B4 needs no glyphmap regen** — `home`, `event_available`,
+> `event_note`, `campaign`, `person` all exist in MaterialIcons.
+>
+> **Task A1-revised — `Icon` over MaterialIcons.** Files: create `apps/mobile/lib/icons/names.ts`
+> (`export type IconName` = the 46 design snake_case names; `export function resolveMaterialName(n: IconName): keyof typeof MaterialIcons.glyphMap` — replace `_`→`-`, special-case `event_upcoming`→`event`), create `apps/mobile/components/ui/Icon.tsx`
+> (`Icon({ name, size=22, color='#000', fill=false, style })` wrapping `<MaterialIcons name={resolveMaterialName(name)} .../>`; `fill` accepted + documented no-op since MaterialIcons is a single filled style), export both from the barrel. Tests: `lib/icons/__tests__/names.test.ts` — every `IconName` resolves to a key present in `MaterialIcons.glyphMap` (import the glyphmap JSON), and `resolveMaterialName('event_upcoming') === 'event'`. TDD: write the resolution test first (RED), implement, GREEN. Font: `MaterialIcons` self-loads via `@expo/vector-icons`; no `APP_FONTS` change needed. `npx tsc --noEmit` exits 0; commit `feat(mobile): Icon component over MaterialIcons (offline Material icon set)`.
+>
+> The original A1/A2 below are RETAINED for context only — do not execute their codepoints/font steps.
+
+### Task A1 (ORIGINAL — superseded, do not execute): Curated glyphmap for the 43 used icons
 
 **Files:**
 - Create: `apps/mobile/scripts/gen-icon-glyphmap.mjs`
