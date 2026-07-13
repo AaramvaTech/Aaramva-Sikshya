@@ -116,7 +116,7 @@ describe('AssignmentService', () => {
         .mockResolvedValueOnce([{ ...baseRow, status: 'PUBLISHED', published_at: new Date() }]) // conditional UPDATE
         .mockResolvedValueOnce([{ ...enrichedRow, status: 'PUBLISHED' }]); // findOne for event payload
 
-      await service.publish('asg-1');
+      await service.publish('asg-1', teacherUser);
       expect(emitMock).toHaveBeenCalledTimes(1);
       expect(emitMock).toHaveBeenCalledWith('assignment.published', expect.objectContaining({
         tenantSlug: 'demo',
@@ -131,7 +131,7 @@ describe('AssignmentService', () => {
         .mockResolvedValueOnce([]) // conditional UPDATE matched nothing
         .mockResolvedValueOnce([{ ...enrichedRow, status: 'PUBLISHED' }]); // findOne → exists
 
-      await expect(service.publish('asg-1')).rejects.toThrow(ConflictException);
+      await expect(service.publish('asg-1', teacherUser)).rejects.toThrow(ConflictException);
       expect(emitMock).not.toHaveBeenCalled();
     });
 
@@ -139,7 +139,7 @@ describe('AssignmentService', () => {
       queryMock
         .mockResolvedValueOnce([]) // conditional UPDATE
         .mockResolvedValueOnce([]); // findOne → missing
-      await expect(service.publish('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.publish('missing', teacherUser)).rejects.toThrow(NotFoundException);
       expect(emitMock).not.toHaveBeenCalled();
     });
   });
@@ -149,7 +149,7 @@ describe('AssignmentService', () => {
       queryMock
         .mockResolvedValueOnce([{ id: 'asg-1' }]) // conditional UPDATE
         .mockResolvedValueOnce([{ ...enrichedRow, status: 'CLOSED' }]); // findOne
-      const result = await service.close('asg-1');
+      const result = await service.close('asg-1', teacherUser);
       expect(result.status).toBe('CLOSED');
       expect(emitMock).not.toHaveBeenCalled();
     });
@@ -158,14 +158,14 @@ describe('AssignmentService', () => {
       queryMock
         .mockResolvedValueOnce([]) // conditional UPDATE matched nothing
         .mockResolvedValueOnce([enrichedRow]); // findOne → exists as DRAFT
-      await expect(service.close('asg-1')).rejects.toThrow(ConflictException);
+      await expect(service.close('asg-1', teacherUser)).rejects.toThrow(ConflictException);
     });
   });
 
   describe('update()', () => {
     it('409s editing a CLOSED assignment', async () => {
       queryMock.mockResolvedValueOnce([{ ...baseRow, status: 'CLOSED' }]);
-      await expect(service.update('asg-1', { title: 'new' })).rejects.toThrow(
+      await expect(service.update('asg-1', { title: 'new' }, teacherUser)).rejects.toThrow(
         ConflictException,
       );
       expect(executeMock).not.toHaveBeenCalled();
@@ -176,8 +176,24 @@ describe('AssignmentService', () => {
         .mockResolvedValueOnce([{ ...baseRow, status: 'PUBLISHED' }]) // existing
         .mockResolvedValueOnce([{ ...enrichedRow, status: 'PUBLISHED', title: 'v2' }]); // findOne
       executeMock.mockResolvedValueOnce(1);
-      await service.update('asg-1', { title: 'v2' });
+      await service.update('asg-1', { title: 'v2' }, teacherUser);
       expect(emitMock).not.toHaveBeenCalled();
+    });
+
+    // QA-1 Phase 4 (decision 3): a cross-teacher edit is soft-scoped but must
+    // record the ACTOR — updated_by = the editor, NOT the original created_by.
+    it('stamps updated_by with the editing actor (soft-scope accountability)', async () => {
+      const otherTeacher: AuthUser = { ...teacherUser, userId: 'teacher-user-2' };
+      queryMock
+        .mockResolvedValueOnce([{ ...baseRow, status: 'PUBLISHED', created_by: 'teacher-user-1' }])
+        .mockResolvedValueOnce([{ ...enrichedRow, status: 'PUBLISHED' }]);
+      executeMock.mockResolvedValueOnce(1);
+
+      await service.update('asg-1', { title: 'edited-by-2' }, otherTeacher);
+
+      const [sql, ...params] = executeMock.mock.calls[0];
+      expect(sql).toMatch(/updated_by = \$7::uuid/);
+      expect(params[params.length - 1]).toBe('teacher-user-2'); // actor, not the author
     });
   });
 });

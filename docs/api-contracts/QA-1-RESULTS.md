@@ -70,3 +70,22 @@ Fixes landed this phase (commit **8611d5b**): **BUG-1** `/health` storage reacha
 | Academic | Timetable/routine (Sun–Fri) | PASS | PASS (day-keyed `schedule`; `/my`,`/my/sections`) | — | PASS | PASS | self-scoped | read (`/section/:id`) | read | — | PASS |
 
 **Phase 3 result:** all cells PASS. Academic-year dates AD-stored + BS modern-era-correct (1 Shrawan 2083 fiscal start); full CRUD + soft-delete on class/section/subject; class-subject mapping; timetable day-keyed Sun–Fri structure with self-scoped teacher routes; admin-write / all-read scoping enforced (non-admin write → 403). **No separate `terms` entity** — the fiscal `academic_year` is the term container (exam_types provide exam periods). Timetable accepts `dayOfWeek=6` (Saturday) — backend-permissive, tracked under OBS-D/CAL-1.
+
+## Phase 4 — Assignments (EDU-1/EDU-2)
+
+**Fix landed (decision 3):** cross-teacher assignment edits were soft-scoped but recorded **no actor**. Migration **0009** adds `assignments.updated_by` (canary demo→all 7); `update`/`publish`/`close` now stamp `updated_by`=actor (controller passes `@CurrentUser`). Review already stamped `reviewed_by`. **4 files + 1 regression test.** Proven live below.
+
+| Module | Feature | C | R | U | D | Admin/Teacher | Student(mob) | Parent(mob) | Scoping 403 | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Assignments | Create (+attachment, BS due) | PASS (`created_by` stamp; due `2026-07-25`→BS 2083-04-10) | PASS | — | — | PASS | — | — | — | PASS |
+| Assignments | Edit (own + cross-teacher) | — | — | PASS (**`updated_by`=actor**; author unchanged) | — | PASS (soft-scope) | — | — | — | PASS |
+| Assignments | Publish / Close | — | — | PASS (edge-only event; `updated_by` stamped) | — | PASS | — | 409 resubmit after close | — | PASS |
+| Assignments | Soft-delete | — | — | — | PASS (`deleted_at`, GET→404) | PASS | — | — | — | PASS |
+| Assignments | Student list `/me` + submit(file) | PASS (submission) | PASS | — | — | — | PASS (targeted only) | — | cross-section not visible; submit→403 | PASS |
+| Assignments | Submission-file presign (scopedOnly) | — | — | — | — | — | assignment-scoped 201 | — | **generic /files route→403** | PASS |
+| Assignments | Teacher submissions view + missing | — | PASS (submitted 1 + missing list) | — | — | PASS | — | — | — | PASS |
+| Assignments | Review/grade | — | — | PASS (**`reviewed_by`=actor**, →REVIEWED) | — | PASS (cross-teacher) | sees marks/feedback | — | — | PASS |
+| Assignments | Parent child status | — | PASS (own child marks/feedback) | — | — | — | — | PASS | own children only | PASS |
+| Assignments | File lifecycle both directions | — | PASS | — | — | teacher↓submission 68B | student↓attachment 69B | — | byte-exact | PASS |
+
+**Phase 4 result:** all cells PASS. Full DRAFT→PUBLISHED→CLOSED + submit→review lifecycle; **soft-scoped teacher writes now accountable** (`updated_by`/`reviewed_by` = actor, per decision 3 — fixed by adding the stamp, no block added); student/parent **hard-scoped** (cross-section not visible, submit→403, `/me` + `my-children` own-only); submission-file `scopedOnly` enforced (generic presign→403); file lifecycle byte-exact both directions; BS due-date conversion modern-era-correct.

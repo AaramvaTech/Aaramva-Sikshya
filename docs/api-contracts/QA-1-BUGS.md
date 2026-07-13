@@ -32,6 +32,14 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 
 ---
 
+## BUG-2 (Phase 4) — Cross-teacher assignment edit records no actor — **FIXED**
+
+| Field | Value |
+|---|---|
+| **Finding** | Assignment writes are soft-scoped (any teacher may edit/publish/close any assignment — cover-teacher reality). But `update`/`publish`/`close` took **no `@CurrentUser`** and the `assignments` table had **no `updated_by`** — so a teacher editing another teacher's assignment was **anonymous** (only the original `created_by` was recorded). Per architect decision 3, soft-scoped writes are intentional *only if* the actor is stamped → this is a bug, fixed by **adding the stamp** (never a block). |
+| **Fix** | Migration **0009_assignments_updated_by** adds `assignments.updated_by UUID REFERENCES users(id)` (canary demo→all 7). Controller passes `@CurrentUser` to update/publish/close; service stamps `updated_by`=actor. Review already stamped `reviewed_by`. 4 files + 1 regression test. |
+| **Re-verified** | Live: teacher2 edits teacher1's assignment → 200, psql `created_by`=teacher1 (unchanged), `updated_by`=teacher2; publish stamps `updated_by`; teacher2 review → `reviewed_by`=teacher2. Unit: `update` SQL includes `updated_by = $7::uuid` and passes the editor's id (not the author's). Student/parent hard-scoping unchanged (cross-section submit→403). |
+
 ## OBS-B — bs-calendar DOB off-by-one — **CONFIRMED, DEFERRED → FIX-3**
 
 | Field | Value |
@@ -61,7 +69,17 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | **Scope (grepped)** | Decision scope = attendance module + fine-cron-consumed code. Only **1** UTC-today-truncation occurrence there: `getSchoolSummary`. The fine cron's `recalculateFine` uses server-local `new Date()`+`setHours` (Nepal-correct under the TZ pin, **not** the `toISOString` bug). `invoice.service:143` is invoice-*create* (not fine-cron-consumed) → out of scope. |
 | **Fix** | Added canonical `todayAdInNepal()` to shared `common/utils/date.util.ts` (offset arithmetic, `NEPAL_OFFSET_MS`, TZ-independent). `getSchoolSummary` now calls it. **3 files** (date.util + attendance service + date.util.spec). |
 | **Re-verified** | Mocked-clock regression test at `2026-07-14T00:30+05:45` (= `2026-07-13T18:45Z`): old UTC path → `2026-07-13`, `todayAdInNepal()` → **`2026-07-14`** (both asserted). Live: `GET /attendance/students/school/summary` → 200, `date {ad:2026-07-13, bs:2083-03-29}` (midday, UTC==Nepal — endpoint intact). Suite 518. |
-| **DEFERRED → FIX-2-continuation** | The other ~10 UTC-today `new Date().toISOString()` "today" sites remain (out of this decision's scope): `dashboard.service.ts` (28, 290 + week loop), `finance/report.service.ts` (20, 110), `finance/invoice.service.ts:143`, `hr/staff.service.ts:302`, `student/import.service.ts:219`, `library/issue.service.ts:92`. All can migrate to `todayAdInNepal()` in a dedicated FIX-2-continuation pass. |
+| **Re-scoped INTO QA-1 (architect decision)** | The other ~10 UTC-today `new Date().toISOString()` "today" sites are now fixed in their owning phases with `todayAdInNepal()`, each per Bug Protocol (mocked-clock test + live proof): **Phase 5** — `finance/report.service.ts:20,110` + `finance/invoice.service.ts:143` (invoice-create default due date) + migrate `invoice.service.recalculateFine` off server-local `new Date()`; **Phase 8** — `hr/staff.service.ts:302`; **Phase 9** — `library/issue.service.ts:92`; **Phase 10** — `dashboard.service.ts:28,290` (+ week loop); **Phase 11 cleanup** — `student/import.service.ts:219`. Tracked as OBS-E-2…E-6 below. |
+
+### OBS-E follow-ups (scheduled into QA-1 phases)
+| Ref | Site | Phase | Status |
+|---|---|---|---|
+| OBS-E (this) | `attendance/student-attendance.service.ts` getSchoolSummary | 3 | **FIXED (b8d1bf9)** |
+| OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` server-local `new Date()`→`todayAdInNepal()`** (TZ-pin-dependent ≠ correct; add to fine-cron regression) | 5 | pending |
+| OBS-E-3 | `hr/staff.service.ts:302` | 8 | pending |
+| OBS-E-4 | `library/issue.service.ts:92` | 9 | pending |
+| OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
+| OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
 
 ## OBS-C — student status enum consistency — **upgraded → verify in Phase 10**
 
