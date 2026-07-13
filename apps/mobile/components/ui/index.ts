@@ -21,3 +21,5 @@ export { PayChooser, type PayGateway } from './PayChooser';
 export { LanguageToggle } from './LanguageToggle';
 export { Icon } from './Icon';
 export type { IconName } from '../../lib/icons/names';
+export { SectionLabel } from './SectionLabel';
+export { SchoolBadge, AvatarBadge } from './Identity';
