@@ -277,6 +277,38 @@ describe('GuardianService', () => {
     });
   });
 
+  // ── OBS-A: soft-delete filter (guardians.deleted_at) ──────────────────────
+  // Regression guard: every guardian read must exclude soft-deleted rows.
+  // Removing the filter would silently resurface a soft-deleted guardian
+  // (and, via getMyChildren, its cross-family child access).
+  describe('soft-delete filter (OBS-A)', () => {
+    it('getMyChildren excludes soft-deleted guardians (deleted_at IS NULL)', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      await service.getMyChildren('parent-uuid');
+      const sql = mockTenantPrisma.query.mock.calls[0][0] as string;
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+    });
+
+    it('getMyProfile excludes soft-deleted guardians (deleted_at IS NULL)', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]); // → ForbiddenException path
+      await expect(service.getMyProfile('parent-uuid')).rejects.toThrow(ForbiddenException);
+      const sql = mockTenantPrisma.query.mock.calls[0][0] as string;
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+    });
+
+    it('insertGuardiansTx find-or-create ignores soft-deleted rows (deleted_at IS NULL)', async () => {
+      const tx = { $queryRawUnsafe: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([
+        { id: 'gid', student_id: 'stu-1', relation: 'Guardian', first_name: 'A',
+          last_name: null, phone: '9800000000', email: null, is_primary: true, user_id: null },
+      ]) };
+      await service.insertGuardiansTx(tx as any, 'stu-1', [
+        { relation: 'Guardian', firstName: 'A', lastName: 'B', phone: '9800000000', isPrimary: true } as any,
+      ]);
+      const findSql = tx.$queryRawUnsafe.mock.calls[0][0] as string;
+      expect(findSql).toMatch(/deleted_at IS NULL/);
+    });
+  });
+
   // ── insertGuardiansTx (MIG-2 normalized write path) ───────────────────────
 
   describe('insertGuardiansTx', () => {

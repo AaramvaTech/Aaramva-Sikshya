@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 export type ComponentStatus = 'up' | 'down' | 'disabled';
 
@@ -12,36 +13,52 @@ export interface ComponentReport {
 }
 
 export interface HealthReport {
-  /** ok = all components up; degraded = redis configured but unreachable
-   *  (the app legitimately runs without Redis); error = db down. */
+  /** ok = all components up; degraded = a non-fatal component (redis or file
+   *  storage) is configured but unreachable — the app legitimately runs
+   *  without either; error = db down. */
   status: 'ok' | 'degraded' | 'error';
   uptimeSec: number;
   timestamp: string;
   components: {
     db: ComponentReport;
     redis: ComponentReport;
+    storage: ComponentReport;
   };
 }
 
 const DB_TIMEOUT_MS = 2000;
 const REDIS_TIMEOUT_MS = 1500;
+const STORAGE_TIMEOUT_MS = 1500;
 
 @Injectable()
 export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly storage: StorageService,
   ) {}
 
   async check(): Promise<HealthReport> {
-    const [db, redis] = await Promise.all([this.checkDb(), this.checkRedis()]);
+    const [db, redis, storage] = await Promise.all([
+      this.checkDb(),
+      this.checkRedis(),
+      this.checkStorage(),
+    ]);
+    // db down → error (503). A non-fatal component down (redis OR storage) →
+    // degraded (still HTTP 200); the app runs without either. BUG-1: storage
+    // unreachable is now visible here instead of only surfacing as a failed
+    // client-side upload.
     const status: HealthReport['status'] =
-      db.status === 'down' ? 'error' : redis.status === 'down' ? 'degraded' : 'ok';
+      db.status === 'down'
+        ? 'error'
+        : redis.status === 'down' || storage.status === 'down'
+          ? 'degraded'
+          : 'ok';
     return {
       status,
       uptimeSec: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
-      components: { db, redis },
+      components: { db, redis, storage },
     };
   }
 
@@ -85,6 +102,22 @@ export class HealthService {
       return { status: 'down', error: (err as Error).message.split('\n')[0] };
     } finally {
       client.disconnect();
+    }
+  }
+
+  /** BUG-1: cheap reachability probe of the S3/MinIO backend. `disabled` when
+   *  no S3_* config (base64 legacy path is the intended mode); otherwise a
+   *  short-timeout HeadBucket → up/down. Never throws to the caller. */
+  private async checkStorage(): Promise<ComponentReport> {
+    if (!this.storage.isEnabled()) {
+      return { status: 'disabled' };
+    }
+    const start = Date.now();
+    try {
+      await this.withTimeout(this.storage.assertReachable(), STORAGE_TIMEOUT_MS);
+      return { status: 'up', latencyMs: Date.now() - start };
+    } catch (err) {
+      return { status: 'down', error: (err as Error).message.split('\n')[0] };
     }
   }
 
