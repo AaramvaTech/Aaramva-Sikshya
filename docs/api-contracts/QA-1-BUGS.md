@@ -90,14 +90,14 @@ The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service
 | OBS-E (this) | `attendance/student-attendance.service.ts` getSchoolSummary | 3 | **FIXED (b8d1bf9)** |
 | OBS-E-2 | `finance/report.service.ts:20,110`; `finance/invoice.service.ts:143`; **`invoice.recalculateFine` + fine-cron `recalculate-fines.job.ts:115-121` → `todayAdInNepal()`** (TZ-independent day-diff) | 5 | **FIXED (this branch)** — 4 files + 2 mocked-clock tests; live fine-execution proof 120.00 |
 | OBS-E-3 | `hr/staff.service.ts:302` (soft-delete `end_date`) → `todayAdInNepal()` | 8 | **FIXED (this branch)** — 2 files + mocked-clock test (end_date=2026-07-14 at 00:30+05:45); live delete → end_date 2026-07-13 |
-| OBS-E-4 | `library/issue.service.ts:92` | 9 | pending |
+| OBS-E-4 | `library/issue.service.ts` returnBook (`returned_at` + overdue day-count) → `todayAdInNepal()` + TZ-independent diff | 9 | **FIXED (this branch)** — 2 files + mocked-clock test (returned_at=2026-07-14, fine_days=4 at boundary). **Live-proven off-by-one**: returned_at now 2026-07-13 (was 2026-07-12 — local-midnight→toISOString rendered the prior UTC day even at midday). Fine amount `fine_days × fine_per_day` is JS-float → BUG-3/MON-1 (not fixed). |
 | OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
 | OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
 | OBS-F (reclassified into OBS-E family) | `finance/payment.service.ts:28-31` (`deriveStatus`) + `invoice.service.ts:146` / `payment.service.ts:70` (`getBsYear(new Date())`) → `todayAdInNepal()` + mocked-clock tests | 11 | pending |
 
-## OBS-G (Phase 8) — Leave self-approval is permitted — **FLAGGED for product ruling (not fixed)**
+## OBS-G (Phase 8) — Leave self-approval is permitted — **INTENTIONAL (no guard)**
 
-`LeaveService.reviewLeave` does not check `reviewerId !== leave.user_id`, so a reviewer (any REVIEWER_ROLES) can **approve their own leave request**. Live-proven: owner applied leave then approved it → 200, `reviewed_by = user_id`. Per architect decision (Phase 8 requirement 1), **not fixed** — flagged for a product ruling: should self-approval be blocked (require a different approver), or is it acceptable for a SCHOOL_OWNER/PRINCIPAL (top of the hierarchy has no one above them)? If blocked, the fix is a guard in `reviewLeave` (never a role change).
+`LeaveService.reviewLeave` has no `reviewerId !== leave.user_id` check; a reviewer can approve their own leave (live-proven: owner applied then approved → 200, `reviewed_by = user_id`). **Ruling: INTENTIONAL, no guard.** Rationale: only **admin-tier roles** can review (proven by teacher2's **403**), so self-approval only arises at the **top of the hierarchy**, where the owner has no approver above them; `reviewed_by` stamps the act, making it fully **auditable** — consistent with the platform's **permissive-but-accountable** model. **Revisit:** add a `reviewer ≠ applicant` guard **for non-owner roles** if a mid-level approver role is ever introduced.
 
 ## CAL-1 note (Phase 8) — leave days are calendar days
 

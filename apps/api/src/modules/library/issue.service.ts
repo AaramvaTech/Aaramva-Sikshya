@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import {
   BookCopyRow,
   LibraryMemberRow,
@@ -72,24 +73,26 @@ export class IssueService {
     if (!issue) throw new NotFoundException('Issue record not found or already returned');
 
     return this.tenantPrisma.run(async (tx) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const dueDateStr =
+      // QA-1 OBS-E-4: returned_at + overdue day-count are computed against Nepal's
+      // calendar today, TZ-independent (both dates parsed as UTC-midnight). The old
+      // code took a server-LOCAL midnight Date and toISOString()'d it, which under
+      // Nepal (+05:45) rendered the PREVIOUS day into returned_at.
+      const todayAd = todayAdInNepal();
+      const dueAd =
         issue.due_date instanceof Date
-          ? issue.due_date.toISOString().split('T')[0]
-          : String(issue.due_date).split('T')[0];
-      const dueDate = new Date(dueDateStr);
-      dueDate.setHours(0, 0, 0, 0);
+          ? issue.due_date.toISOString().slice(0, 10)
+          : String(issue.due_date).slice(0, 10);
 
       let fineDays = 0;
       let fineAmount = 0;
-      if (today > dueDate) {
-        fineDays = Math.round((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      const daysLate = Math.floor(
+        (Date.parse(`${todayAd}T00:00:00Z`) - Date.parse(`${dueAd}T00:00:00Z`)) / 86400000,
+      );
+      if (daysLate > 0) {
+        fineDays = daysLate;
+        // JS-float money (fineDays × fine_per_day) — tracked under BUG-3 → MON-1.
         fineAmount = fineDays * parseFloat(String(issue.fine_per_day));
       }
-
-      const todayStr = today.toISOString().split('T')[0];
 
       const [updated] = await tx.$queryRawUnsafe<BookIssueRow[]>(
         `UPDATE book_issues SET
@@ -101,7 +104,7 @@ export class IssueService {
            updated_at = NOW()
          WHERE id = $5::uuid
          RETURNING *`,
-        todayStr,
+        todayAd,
         returnedBy,
         fineDays,
         fineAmount,
