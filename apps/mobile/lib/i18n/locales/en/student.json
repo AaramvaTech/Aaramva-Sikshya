@@ -94,7 +94,9 @@
     "rankHash": "Rank #{{value}}",
     "gpaChangeLabel": "GPA change",
     "rankChangeLabel": "Rank",
-    "gpaTrend": "GPA trend"
+    "gpaTrend": "GPA trend",
+    "topSubject": "Top subject",
+    "needsFocus": "Needs focus"
   },
   "profile": {
     "errorTitle": "Couldn't load your profile"

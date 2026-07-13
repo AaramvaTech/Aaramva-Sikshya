@@ -94,7 +94,9 @@
     "rankHash": "र्‍याङ्क #{{value}}",
     "gpaChangeLabel": "GPA परिवर्तन",
     "rankChangeLabel": "र्‍याङ्क",
-    "gpaTrend": "GPA प्रवृत्ति"
+    "gpaTrend": "GPA प्रवृत्ति",
+    "topSubject": "उत्कृष्ट विषय",
+    "needsFocus": "ध्यान दिनुपर्ने"
   },
   "profile": {
     "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
