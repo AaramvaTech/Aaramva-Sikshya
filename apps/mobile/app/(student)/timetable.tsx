@@ -14,6 +14,9 @@ import { formatBs, todayBs } from 'bs-calendar';
 // Platform convention: the school week is Sunday–Friday (Saturday is the weekend).
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
+// Minimum inter-period gap (minutes) that reads as a real break, not a short passing gap.
+const MIN_BREAK_MINUTES = 15;
+
 function minutesNow(): number {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
@@ -143,7 +146,7 @@ export default function StudentTimetable() {
                 const gapMin = prev ? startMinutes(period.startTime) - endMinutes(prev.endTime) : 0;
                 return (
                   <View key={period.slotId}>
-                    {gapMin > 0 && (
+                    {gapMin >= MIN_BREAK_MINUTES && (
                       <View style={styles.breakRow}>
                         <View style={[styles.breakLine, { backgroundColor: c.border }]} />
                         <View style={[styles.breakPill, { backgroundColor: c.surface }]}>
