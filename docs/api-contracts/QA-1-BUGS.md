@@ -38,7 +38,8 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 |---|---|
 | **Finding** | All persisted amounts are `NUMERIC(10,2)` (storage correct), but **every derived figure is computed in JS floats** and written back via bound params (Postgres re-quantizes on write). ~25 sites (full grep list from finance recon): the two float-sensitive kinds are **percentage discount** `originalAmount * (1 - pct/100)` (`invoice.service.ts:67,512,552`) and **fine** `daysOverdue * finePerDay` (`invoice.service.ts:277`); plus subtotal/discount/total accumulation (`:80-81,86-87,142,281`), all report aggregates (`report.service.ts:57-89,148-153,230-249`), and `fee-structure.service.ts:118,149`. Root converter `entities/finance.entity.ts:211` `toNum`=`parseFloat`. Only `invoices.balance` avoids JS (SQL `GENERATED STORED`); the gateway paisa path is integer-safe by design. |
 | **Impact** | The `Math.round(x*100)/100` snap corrects most float error, so observed values are usually right (live sweep: 20% of 1000 = 200.00 exact; fine 12×10 = 120.00 exact). But it is **not provably correct** — half-cent inputs and long item-accumulation can drift, and per architect decision 3 "money computed via JS floats is a bug even if stored as NUMERIC." |
-| **Disposition** | **STOP-and-report (Bug Protocol >5 files + architectural).** Remediating properly means picking ONE approach — (a) a Decimal library (decimal.js/big.js), (b) integer-paisa arithmetic (like the gateway path already does), or (c) compute in SQL NUMERIC (`GENERATED`/CTE). That is a design decision + a broad refactor across invoice/report/fee-structure services, exceeding the ≤5-file limit. **Not fixed in QA-1** pending the architect's chosen approach. Surfaced at CHECKPOINT 5 for decision. |
+| **Disposition** | **DEFERRED → MON-1** (dedicated post-QA-1 pass; architect decision). **No BUG-3 code changes in QA-1.** |
+| **Agreed remediation (MON-1)** | (a) **Report aggregates** (report.service totals/rates) → **SQL-side NUMERIC aggregation** (SUM/aggregate in Postgres, not JS reduce). (b) **Transactional derived money** (discounts in `calculateItemAmounts`, fines in `recalculateFine`) → **`Prisma.Decimal` arithmetic** — decimal.js is already bundled via Prisma, so **no new dependency**. (c) **Integer-paisa rejected** as unnecessarily invasive. |
 
 ## dueDate text-vs-date cast — **VERIFIED already fixed (no action)**
 
@@ -92,6 +93,7 @@ The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service
 | OBS-E-4 | `library/issue.service.ts:92` | 9 | pending |
 | OBS-E-5 | `dashboard.service.ts:28,290` (+ week loop) | 10 | pending |
 | OBS-E-6 | `student/import.service.ts:219` | 11 | pending |
+| OBS-F (reclassified into OBS-E family) | `finance/payment.service.ts:28-31` (`deriveStatus`) + `invoice.service.ts:146` / `payment.service.ts:70` (`getBsYear(new Date())`) → `todayAdInNepal()` + mocked-clock tests | 11 | pending |
 
 ## OBS-C — student status enum consistency — **upgraded → verify in Phase 10**
 

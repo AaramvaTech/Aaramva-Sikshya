@@ -110,3 +110,19 @@ Fixes landed this phase (commit **8611d5b**): **BUG-1** `/health` storage reacha
 
 - **OBS-F (additional UTC-today sites found, flagged):** `payment.service.ts:28-31` `deriveStatus` (OVERDUE-vs-UNPAID, server-local `new Date()`) and `invoice.service.ts:146` / `payment.service.ts:70` `getBsYear(new Date())` (BS-year for invoice/payment numbering) are further finance "today" sites not in OBS-E-2's explicit scope. Low impact (status re-derived on recalc; BS year changes once/yr). Should migrate to `todayAdInNepal()` in the same eventual pass; not fixed here to keep the OBS-E-2 fix ≤5 files.
 - **BUG-3 (JS-float money) — see QA-1-BUGS.md.** Confirmed bug class; STOP-and-report (architectural). **Decision needed:** Decimal library vs integer-paisa vs SQL-side computation.
+
+## Phase 6 — Examinations
+
+No code changes this phase — the module is correct end-to-end (incl. the publish privacy gate and PDF).
+
+| Module | Feature | C | R | U | D | Admin/Teacher | Student | Parent | Scoping 403 | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Exams | Setup (grading scale / type / schedule) | PASS | PASS | PASS (rename/publish) | PASS (soft) | PASS | — | — | — | PASS |
+| Exams | Marks entry (teacher, `entered_by`) | PASS (`entered_by`=teacher1) | PASS | PASS (UPSERT) | — | PASS (mobile) | — | — | — | PASS |
+| Exams | Out-of-range mark rejection | 400 (`"marksObtained (150) exceeds fullMarks (100)"`) + **psql no-write** (S1 unchanged 85) | — | — | — | PASS | — | — | — | PASS |
+| Exams | Result pipeline (marks→grade→rank) | PASS (85%→A→rank1, 60%→B→rank2, absent→E→rank3) | PASS | — | — | PASS | — | — | — | PASS |
+| Exams | **Publish privacy gate** | — | PASS | PASS (publish toggle) | — | staff see all | **published-only** (n=0 unpublished → n=1 published) | **published-only** | — | PASS |
+| Exams | Report card (JSON) | — | PASS | — | — | PASS | PASS (`/me`, own) | PASS (own child) | **cross-family S3 → 403** | PASS |
+| Exams | Report card **PDF** | — | PASS (`%PDF-`, 23964 B, round-trip) | — | — | PASS | PASS (`/me/pdf`) | PASS | **cross-family PDF → 403** | PASS |
+
+**Phase 6 result:** all cells PASS, no code changes. Marks entry stamps `entered_by`=teacher; **out-of-range marks rejected 400 with psql proof of no write**; full pipeline marks→result(grade/rank)→report-card verified (Aarav 85%→A→rank 1); **publish privacy gate proven** (parent/student see only published terms — `examResults` empty until publish; staff see all); report-card JSON + **PDF valid** (`%PDF-` magic, 23964 B non-zero, download round-trip) for student `/me` and parent own-child; **cross-family report-card + PDF → 403**.
