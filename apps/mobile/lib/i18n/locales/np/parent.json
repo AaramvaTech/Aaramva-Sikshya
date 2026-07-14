@@ -54,7 +54,8 @@
   "profile": {
     "viewDetails": "प्रोफाइल विवरण हेर्नुहोस्",
     "myChildren": "मेरा बालबालिका",
-    "errorTitle": "बालबालिका लोड गर्न सकिएन"
+    "errorTitle": "बालबालिका लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",
@@ -104,5 +105,8 @@
     "saturdayNoSchool": "शनिबार — विद्यालय बिदा",
     "emptyTitle": "कुनै कक्षा छैन",
     "dayPeriods": "{{day}} का कक्षाहरू"
+  },
+  "settingsRow": {
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   }
 }

@@ -54,7 +54,8 @@
   "profile": {
     "viewDetails": "View profile details",
     "myChildren": "My children",
-    "errorTitle": "Couldn't load children"
+    "errorTitle": "Couldn't load children",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "Profile details",
@@ -104,5 +105,8 @@
     "saturdayNoSchool": "Saturday — no school",
     "emptyTitle": "No periods",
     "dayPeriods": "{{day}} Periods"
+  },
+  "settingsRow": {
+    "changePassword": "Change password"
   }
 }

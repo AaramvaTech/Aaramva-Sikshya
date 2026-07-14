@@ -25,7 +25,9 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * in Task C1 (`assignment`, `grade`) for the Student Home quick-access tiles
  * (Assignments / Results) — also verified against MaterialIcons' glyphMap. Plus 1 added
  * in Task E5 (`attach_file`) for the Student Assignments list/detail attachment rows —
- * also verified against MaterialIcons' glyphMap.
+ * also verified against MaterialIcons' glyphMap. Plus 1 added in Task S2P3 (`error`) for
+ * the Parent request-leave error banner (replacing Ionicons `alert-circle`) — also
+ * verified against MaterialIcons' glyphMap.
  */
 export type IconName =
   | 'account_balance_wallet'
@@ -47,6 +49,7 @@ export type IconName =
   | 'done_all'
   | 'download'
   | 'edit_note'
+  | 'error'
   | 'event'
   | 'event_upcoming'
   | 'flag'
