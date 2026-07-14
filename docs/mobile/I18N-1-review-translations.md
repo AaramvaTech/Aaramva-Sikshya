@@ -160,7 +160,7 @@ Numerals stay Arabic (0–9) in v1; dates render BS with Nepali month names. Kee
 | `today.title` | Today | आज |
 | `today.markedPresent` | Marked present | उपस्थित चिह्नित |
 | `today.markedAbsent` | Marked absent | अनुपस्थित चिह्नित |
-| `today.notMarked` | Not yet marked | अझै चिह्नित छैन |
+| `today.notMarked` | Attendence not yet marked | हाजिर अझै चिह्नित छैन |
 | `today.nextClass` | Next class · {{time}} | अर्को कक्षा · {{time}} |
 | `today.homeworkDue` | Homework due | बाँकी गृहकार्य |
 | `today.newNotice` | New notices | नयाँ सूचना |

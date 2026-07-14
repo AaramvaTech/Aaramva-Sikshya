@@ -24,7 +24,7 @@
     "markedAbsent": "Marked absent",
     "markedLate": "Marked late",
     "markedLeave": "On leave",
-    "notMarked": "Not yet marked",
+    "notMarked": "Attendence not yet marked",
     "feeDue": "Fee due",
     "feeOutstanding": "{{amount}} outstanding",
     "pay": "Pay"
