@@ -4,28 +4,45 @@ import { router } from 'expo-router';
 import { todayBs, formatBs } from 'bs-calendar';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 
-import { useMyChildren, useChildAttendanceSummary, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
+import { useMyChildren, useChildAttendanceSummary, useChildLedger, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
 import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
+import { todayAttendanceStatus } from '../../lib/todayStatus';
 import { useAuthStore } from '../../store/auth';
 import { useBranding } from '../../lib/theme/provider';
-import { useThemeColors } from '../../lib/theme/colors';
+import { useThemeColors, SEMANTIC_SOFT } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import {
-  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, HeaderBell, Icon, type TodayPeriod,
+  Card, SectionLabel, FeatureTile, TodayClasses, EmptyState, ErrorState, ScreenHeader, HeaderBell, Icon,
+  type TodayPeriod, type IconName,
 } from '../../components/ui';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 
+// Same "NPR 1,234" formatting as the fees screen (app/(parent)/fees.tsx) —
+// a 2-site literal, not worth extracting to a shared util yet.
+const formatNPR = (amount: number) => `NPR ${amount.toLocaleString('en-IN')}`;
+
+// Today card status row — mirrors app/(student)/index.tsx's TodayModule STATUS_META
+// (same statuses, same tones/icons); kept local since the parent Today card is a
+// bespoke composition, not the student-locked TodayModule component.
+const STATUS_META: Record<string, { tone: keyof typeof SEMANTIC_SOFT; icon: IconName; labelKey: string }> = {
+  PRESENT: { tone: 'success', icon: 'check_circle', labelKey: 'today.markedPresent' },
+  ABSENT: { tone: 'danger', icon: 'check_circle', labelKey: 'today.markedAbsent' },
+  LATE: { tone: 'warning', icon: 'schedule', labelKey: 'today.markedLate' },
+  LEAVE: { tone: 'info', icon: 'event', labelKey: 'today.markedLeave' },
+};
+
 // Material icon names (see lib/icons/names.ts) — mirrors the equivalent tiles
 // on the student dashboard (grade/how_to_reg/campaign/assignment) so the same
 // concept always reads as the same glyph across roles; 'payments' for Fees is
-// parent-only (no student equivalent).
+// parent-only (no student equivalent). Per-tile semantic tints (SEMANTIC_SOFT) —
+// documented literal exception, not brand-coupled (see student QUICK for precedent).
 const QUICK = [
-  { icon: 'grade', label: 'Results', route: '/(parent)/results' },
-  { icon: 'how_to_reg', label: 'Attendance', route: '/(parent)/attendance' },
-  { icon: 'campaign', label: 'Notices', route: '/(parent)/notices' },
-  { icon: 'payments', label: 'Fees', route: '/(parent)/fees' },
-  { icon: 'assignment', label: 'Homework', route: '/(parent)/assignments' },
+  { icon: 'grade', label: 'Results', route: '/(parent)/results', tint: 'warning' },
+  { icon: 'how_to_reg', label: 'Attendance', route: '/(parent)/attendance', tint: 'success' },
+  { icon: 'campaign', label: 'Notices', route: '/(parent)/notices', tint: 'neutral' },
+  { icon: 'payments', label: 'Fees', route: '/(parent)/fees', tint: 'danger' },
+  { icon: 'assignment', label: 'Homework', route: '/(parent)/assignments', tint: 'info' },
 ] as const;
 
 const QUICK_KEYS: Record<string, string> = {
@@ -63,10 +80,13 @@ export default function ParentDashboard() {
 
   const summaryQuery = useChildAttendanceSummary(effectiveChildId ?? '', academicYearId);
   const timetableQuery = useChildTimetable(sectionId);
+  const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([childrenQuery.refetch(), summaryQuery.refetch(), timetableQuery.refetch()]);
+    await Promise.all([
+      childrenQuery.refetch(), summaryQuery.refetch(), timetableQuery.refetch(), ledgerQuery.refetch(),
+    ]);
     setRefreshing(false);
   };
 
@@ -106,6 +126,28 @@ export default function ParentDashboard() {
   const todayDow = new Date().getDay();
   const isSchoolDay = todayDow !== 6;
   const slots = timetableQuery.data ?? [];
+
+  // Today module data — Nepal wall-clock "today" (UTC+5:45), TZ-independent
+  // (matches app/(student)/index.tsx's identical pattern).
+  const nepalNow = new Date(Date.now() + 345 * 60 * 1000);
+  const todayAd = nepalNow.toISOString().split('T')[0];
+  // The child-summary endpoint returns recentHistory as { ad, bs, status } (attendance.entity.ts
+  // StudentSummaryDto) — different field name than the student /me summary's { dateAd, status } —
+  // so adapt the shape before handing it to the shared todayAttendanceStatus helper.
+  const attendanceStatus = s
+    ? todayAttendanceStatus(
+        (s.recentHistory ?? []).map((h) => ({ dateAd: h.ad, status: h.status })),
+        todayAd,
+      )
+    : null;
+  const statusMeta = attendanceStatus ? STATUS_META[attendanceStatus] : undefined;
+  const statusTone: keyof typeof SEMANTIC_SOFT = statusMeta?.tone ?? 'neutral';
+  const statusSoft = SEMANTIC_SOFT[statusTone];
+  const statusIcon: IconName = statusMeta?.icon ?? 'check_circle';
+  const statusLabel = statusMeta ? t(statusMeta.labelKey) : t('today.notMarked');
+
+  const outstanding = ledgerQuery.data?.summary.totalBalance ?? 0;
+  const todayBsLabel = formatBs(todayBs(), bsLang(locale));
   const todayPeriods: TodayPeriod[] = slots
     .filter((slot) => slot.dayOfWeek === todayDow)
     .sort((a, b) => a.periodNumber - b.periodNumber)
@@ -169,7 +211,7 @@ export default function ParentDashboard() {
             </View>
           </View>
 
-          <NpText style={[styles.todayBs, { color: c.brandMuted }]}>{t('common:common.today')} · {formatBs(todayBs(), bsLang(locale))}</NpText>
+          <NpText style={[styles.todayBs, { color: c.brandMuted }]}>{t('common:common.today')} · {todayBsLabel}</NpText>
           <NpText style={[styles.viewing, { color: c.mutedForeground }]}>{t('dashboard.viewingChild')}</NpText>
           <NpText style={[styles.name, { color: c.foreground }]}>{childName}</NpText>
           <Text style={[styles.enroll, { color: c.mutedForeground }]}>{enrollmentLine}</Text>
@@ -201,36 +243,61 @@ export default function ParentDashboard() {
         </ScreenHeader>
 
         <View style={styles.body}>
-          {s ? (
-            <AttendanceSummaryCard
-              present={s.present}
-              absent={s.absent}
-              late={s.late}
-              leave={s.leave}
-              percent={s.attendancePercent}
-              totalWorkingDays={s.totalWorkingDays}
-            />
-          ) : summaryQuery.isLoading ? (
-            <Skeleton style={{ height: 150 }} className="rounded-2xl" />
+          {/* Today card — replaces the old full AttendanceSummaryCard on Home (same
+              rationale as the student TodayModule: a compact present/absent status
+              row + an optional fee-due prompt). The full breakdown (calendar, stat
+              tiles, recent activity) still lives untouched on the Attendance tab,
+              reading the same summaryQuery/historyQuery data. */}
+          {summaryQuery.isLoading ? (
+            <Skeleton style={{ height: 170 }} className="rounded-2xl" />
           ) : (
-            <EmptyState compact icon="stats-chart-outline" title={t('dashboard.attendanceUnavailable')} />
+            <Card elevated style={styles.todayCard}>
+              <View style={styles.todayHeadRow}>
+                <SectionLabel>{t('today.title')}</SectionLabel>
+                <View style={[styles.todayPill, { backgroundColor: c.brandSurface }]}>
+                  <NpText style={[styles.todayPillText, { color: c.primary }]}>{todayBsLabel}</NpText>
+                </View>
+              </View>
+
+              <View style={[styles.todayRow, { backgroundColor: statusSoft.bg }]}>
+                <Icon name={statusIcon} fill={attendanceStatus === 'PRESENT'} size={22} color={statusSoft.fg} />
+                <NpText style={[styles.todayRowTitle, { color: statusSoft.fgDeep }]}>{statusLabel}</NpText>
+              </View>
+
+              {outstanding > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/(parent)/fees')}
+                  style={[styles.todayRow, { backgroundColor: SEMANTIC_SOFT.warning.bg }]}
+                >
+                  <View style={[styles.todayIconChip, { backgroundColor: c.surface }]}>
+                    <Icon name="payments" size={19} color={SEMANTIC_SOFT.warning.fg} />
+                  </View>
+                  <View style={styles.todayRowInfo}>
+                    <NpText style={[styles.todayRowTitle, { color: SEMANTIC_SOFT.warning.fgDeep }]}>{t('today.feeDue')}</NpText>
+                    <NpText style={[styles.todayRowSub, { color: c.mutedForeground }]} numberOfLines={1}>
+                      {t('today.feeOutstanding', { amount: formatNPR(outstanding) })}
+                    </NpText>
+                  </View>
+                  <View style={[styles.payChip, { backgroundColor: SEMANTIC_SOFT.warning.fg }]}>
+                    <NpText style={styles.payChipText}>{t('today.pay')}</NpText>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </Card>
           )}
 
-          {/* Quick access (4 tiles) */}
+          {/* Quick access */}
           <NpText style={[styles.sectionLabel, styles.sectionLabelFirst, { color: c.foreground }]}>{t('dashboard.quickAccess')}</NpText>
           <View style={styles.quickGrid}>
             {QUICK.map((q) => (
-              <TouchableOpacity
+              <FeatureTile
                 key={q.label}
-                style={[styles.quickTile, { backgroundColor: c.surface }]}
-                activeOpacity={0.85}
+                icon={q.icon}
+                label={t(QUICK_KEYS[q.label] ?? q.label)}
+                tint={{ bg: SEMANTIC_SOFT[q.tint].bg, fg: SEMANTIC_SOFT[q.tint].fg }}
                 onPress={() => router.push(q.route)}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
-                  <Icon name={q.icon} size={21} color={c.primary} />
-                </View>
-                <NpText style={[styles.quickLabel, { color: c.foreground }]}>{t(QUICK_KEYS[q.label] ?? q.label)}</NpText>
-              </TouchableOpacity>
+              />
             ))}
           </View>
 
@@ -286,13 +353,23 @@ const styles = StyleSheet.create({
   fullRoutineLink: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 22, marginBottom: 12 },
   fullRoutineText: { fontFamily: FONT.bold, fontSize: 12 },
 
-  quickGrid: { flexDirection: 'row', gap: 9 },
-  quickTile: {
-    flex: 1, borderRadius: 15, paddingVertical: 13, paddingHorizontal: 4, alignItems: 'center', gap: 7,
-    shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 13, elevation: 2,
-  },
-  quickIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  quickLabel: { fontFamily: FONT.bold, fontSize: 10, textAlign: 'center' },
+  // Quick access — 3-column FeatureTile grid (width≈30.3%, wraps to a 3+2 row
+  // for 5 tiles), matching app/(student)/index.tsx's grid.
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 
   lastCard: { marginBottom: 8 },
+
+  // Today card — mirrors components/ui/TodayModule.tsx's row language (icon chip +
+  // title/sub + tinted background) so both roles' "Today" concept reads identically.
+  todayCard: { borderRadius: 20 },
+  todayHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  todayPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  todayPillText: { fontFamily: FONT.bold, fontSize: 10.5 },
+  todayRow: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, padding: 11, marginBottom: 9 },
+  todayIconChip: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  todayRowInfo: { flex: 1, minWidth: 0 },
+  todayRowTitle: { fontFamily: FONT.bold, fontSize: 13 },
+  todayRowSub: { fontFamily: FONT.medium, fontSize: 11.5, marginTop: 2 },
+  payChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  payChipText: { fontFamily: FONT.extrabold, fontSize: 11, color: '#fff' },
 });

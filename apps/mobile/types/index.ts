@@ -112,6 +112,10 @@ export interface ChildAttendanceSummary {
   late: number;
   leave: number;
   attendancePercent: number;
+  // Last-30-days rows from GET /attendance/students/:studentId/summary (backend
+  // StudentSummaryDto, attendance.entity.ts) — note field is `ad`, not `dateAd`
+  // (unlike the student /me summary's recentHistory shape).
+  recentHistory?: { ad: string; bs: string; status: string }[];
 }
 
 export interface ExamResult {

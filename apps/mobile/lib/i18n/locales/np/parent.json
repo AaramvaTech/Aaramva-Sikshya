@@ -18,6 +18,17 @@
     "routine": "रुटिन",
     "homework": "गृहकार्य"
   },
+  "today": {
+    "title": "आज",
+    "markedPresent": "उपस्थित चिह्नित",
+    "markedAbsent": "अनुपस्थित चिह्नित",
+    "markedLate": "ढिलो चिह्नित",
+    "markedLeave": "बिदामा",
+    "notMarked": "अझै चिह्नित छैन",
+    "feeDue": "बाँकी शुल्क",
+    "feeOutstanding": "{{amount}} बाँकी",
+    "pay": "तिर्नुहोस्"
+  },
   "assignments": {
     "title": "गृहकार्य",
     "subtitle": "तपाईंका बालबालिकाको गृहकार्य",

@@ -18,6 +18,17 @@
     "routine": "Routine",
     "homework": "Homework"
   },
+  "today": {
+    "title": "Today",
+    "markedPresent": "Marked present",
+    "markedAbsent": "Marked absent",
+    "markedLate": "Marked late",
+    "markedLeave": "On leave",
+    "notMarked": "Not yet marked",
+    "feeDue": "Fee due",
+    "feeOutstanding": "{{amount}} outstanding",
+    "pay": "Pay"
+  },
   "assignments": {
     "title": "Assignments",
     "subtitle": "Homework across your children",
