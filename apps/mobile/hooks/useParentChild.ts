@@ -137,7 +137,7 @@ export function useChildTimetable(sectionId: string | null | undefined) {
 interface ReportCardResponse {
   student: { id: string };
   examResults: {
-    examType: { id: string; name: string };
+    examType: { id: string; name: string; orderIndex: number };
     percentage: number | null;
     grade: string | null;
     gpa: number | null;
@@ -163,6 +163,7 @@ export function useChildResults(childId: string) {
         studentId,
         examTypeId: er.examType.id,
         examTypeName: er.examType.name,
+        orderIndex: er.examType.orderIndex,
         results: (er.subjects ?? []).map((s) => ({
           subjectId: s.subjectId,
           subjectName: s.subjectName,

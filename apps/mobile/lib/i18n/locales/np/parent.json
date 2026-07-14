@@ -107,7 +107,9 @@
     "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
     "downloading": "डाउनलोड हुँदैछ…",
     "topSubject": "उत्कृष्ट विषय",
-    "needsFocus": "ध्यान दिनुपर्ने"
+    "needsFocus": "ध्यान दिनुपर्ने",
+    "share": "सेयर गर्नुहोस्",
+    "shareMessage": "{{name}}को {{term}} नतिजा: GPA {{gpa}} ({{grade}})।"
   },
   "timetable": {
     "title": "रुटिन",

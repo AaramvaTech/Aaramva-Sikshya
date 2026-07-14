@@ -122,6 +122,9 @@ export interface ExamResult {
   studentId: string;
   examTypeId: string;
   examTypeName: string;
+  /** Exam term sequence (backend `examType.orderIndex`) — sort ascending for
+   * chronological order. Needed for term-over-term trend/change (parent results). */
+  orderIndex: number;
   results: {
     subjectId: string;
     subjectName: string;

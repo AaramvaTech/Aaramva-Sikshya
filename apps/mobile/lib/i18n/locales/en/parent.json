@@ -107,7 +107,9 @@
     "downloadPdf": "Download report card PDF",
     "downloading": "Downloading…",
     "topSubject": "Top subject",
-    "needsFocus": "Needs focus"
+    "needsFocus": "Needs focus",
+    "share": "Share",
+    "shareMessage": "{{name}}'s {{term}} result: GPA {{gpa}} ({{grade}})."
   },
   "timetable": {
     "title": "Timetable",

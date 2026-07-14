@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet, Share } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
@@ -9,26 +9,26 @@ import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import {
   EmptyState, ErrorState, ScreenHeader, Icon,
-  ResultHero, InsightCard, SubjectRow,
+  ResultHero, GpaTrendBars, InsightCard, SubjectRow,
 } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 import { FONT } from '../../lib/theme/fonts';
-import { subjectInsights } from '../../lib/results';
+import {
+  gpaTrend, gpaChange as computeGpaChange, rankChange as computeRankChange, subjectInsights,
+} from '../../lib/results';
 import type { ExamResult } from '../../types';
 
 // Per-exam-type block — GPA/grade/rank hero + top-subject/needs-focus insight
 // tiles + subject rows, all shared with the student results screen (DRY). The
 // parent screen has no single "active term" (every published exam is shown at
-// once). It also omits BOTH the ResultHero gpaChange/rankChange delta strip AND
-// the GpaTrendBars chart: useChildResults returns exams in the backend's
-// `computed_at DESC` order and (unlike the student hook) does NOT re-sort by
-// examType.orderIndex, and the ExamResult shape carries no orderIndex / date /
-// term-sequence field to sort on. Any term-over-term rendering would therefore
-// be reverse-chronological — a child improving 2.5→3.5→4.0 would read as a
-// decline. Per-block ResultHero / InsightCard / SubjectRow are order-agnostic
-// and safe.
-function ResultBlock({ result }: { result: ExamResult }) {
+// once, oldest → newest), so each block gets its OWN term-over-term
+// gpaChange/rankChange (vs the block before it) rather than a single active-term
+// delta. The exams now carry `orderIndex` (backend examType.orderIndex) so the
+// caller can sort chronologically before computing changes — see ParentResults.
+function ResultBlock({
+  result, gpaChange, rankChange,
+}: { result: ExamResult; gpaChange?: number | null; rankChange?: number | null }) {
   const c = useThemeColors();
   const { t } = useLocale('parent');
   const rows = result.results ?? [];
@@ -54,6 +54,8 @@ function ResultBlock({ result }: { result: ExamResult }) {
           pct={pct}
           grade={result.overallGrade}
           rank={result.rank}
+          gpaChange={gpaChange}
+          rankChange={rankChange}
         />
       </View>
 
@@ -112,7 +114,9 @@ export default function ParentResults() {
   const selectedChild = children.find((ch) => ch.id === effectiveChildId) ?? null;
 
   const resultsQuery = useChildResults(effectiveChildId ?? '');
-  const results = resultsQuery.data ?? [];
+  // Chronological order (oldest → newest) via the backend's examType.orderIndex —
+  // required for the trend chart and term-over-term change strips to read correctly.
+  const results = [...(resultsQuery.data ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
 
   // POL-2 T4: own-child report-card PDF. Passing the childId routes the shared
   // download hook to the parent-scoped endpoint (/exams/results/report-card/:id/pdf),
@@ -126,6 +130,27 @@ export default function ParentResults() {
   };
 
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
+
+  // GPA trend across all published terms — hidden below 2 data points (component self-guards too).
+  const trendData = gpaTrend(results.map((r) => ({ name: r.examTypeName, gpa: r.gpa })));
+
+  // Text-only share (no PDF) — summarises the most recent published term.
+  const latestResult = results.length > 0 ? results[results.length - 1] : null;
+  const handleShare = async () => {
+    if (!latestResult) return;
+    try {
+      await Share.share({
+        message: t('results.shareMessage', {
+          name: childName || t('results.title'),
+          term: latestResult.examTypeName,
+          gpa: latestResult.gpa != null ? latestResult.gpa.toFixed(2) : '—',
+          grade: latestResult.overallGrade ?? '—',
+        }),
+      });
+    } catch {
+      // Share sheet dismissed/failed — nothing to surface to the user.
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -160,20 +185,45 @@ export default function ParentResults() {
             </View>
           ) : (
             <>
-              {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
+              {/* GPA trend across published terms — hidden below 2 data points */}
+              {trendData.length >= 2 && (
+                <View style={{ marginBottom: 16 }}>
+                  <GpaTrendBars data={trendData} />
+                </View>
+              )}
 
-              {/* Download report card PDF — mirrors the student results screen */}
-              <TouchableOpacity
-                onPress={download}
-                disabled={downloading}
-                activeOpacity={0.85}
-                style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
-              >
-                <Icon name="download" size={19} color={c.primary} style={{ marginRight: 8 }} />
-                <NpText style={[styles.downloadBtnText, { color: c.primary }]}>
-                  {downloading ? t('results.downloading') : t('results.downloadPdf')}
-                </NpText>
-              </TouchableOpacity>
+              {results.map((r, idx) => (
+                <ResultBlock
+                  key={`${r.examTypeId}-${r.studentId}`}
+                  result={r}
+                  gpaChange={computeGpaChange(results.map((t) => ({ gpa: t.gpa })), idx)}
+                  rankChange={computeRankChange(results.map((t) => ({ rankInClass: t.rank })), idx)}
+                />
+              ))}
+
+              {/* Download report card PDF + share summary — mirrors the student results screen */}
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  onPress={download}
+                  disabled={downloading}
+                  activeOpacity={0.85}
+                  style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+                >
+                  <Icon name="download" size={19} color={c.primary} style={{ marginRight: 8 }} />
+                  <NpText style={[styles.downloadBtnText, { color: c.primary }]}>
+                    {downloading ? t('results.downloading') : t('results.downloadPdf')}
+                  </NpText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleShare}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('results.share')}
+                  style={[styles.shareBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+                >
+                  <Icon name="share" size={19} color={c.primary} />
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </View>
@@ -194,10 +244,16 @@ const styles = StyleSheet.create({
   // Subject rows — shared SubjectRow, wrapped in a bordered card
   rowsCard: { borderRadius: 16, paddingHorizontal: 14 },
 
-  // Download PDF button — same treatment as the student results screen
+  // Download PDF + share row
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 48, borderRadius: 14, borderWidth: 1.5, marginTop: 4,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: 14, borderWidth: 1.5,
   },
   downloadBtnText: { fontFamily: FONT.bold, fontSize: 14 },
+  // Share button — same tinted treatment as download, icon-only square
+  shareBtn: {
+    width: 48, height: 48, borderRadius: 14, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
+  },
 });
