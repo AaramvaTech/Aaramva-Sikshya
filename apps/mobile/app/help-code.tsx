@@ -4,7 +4,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from '../components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,14 +12,14 @@ import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { FONT } from '../lib/theme/fonts';
 
 type BulletItem = {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: IconName;
   label: string;
 };
 
 const BULLETS: BulletItem[] = [
-  { icon: 'person-outline', label: 'Ask your school\'s admin or office.' },
-  { icon: 'receipt-outline', label: 'Check a fee receipt or admission slip.' },
-  { icon: 'chatbubble-ellipses-outline', label: 'Look in an SMS from your school.' },
+  { icon: 'person', label: 'Ask your school\'s admin or office.' },
+  { icon: 'receipt', label: 'Check a fee receipt or admission slip.' },
+  { icon: 'sms', label: 'Look in an SMS from your school.' },
 ];
 
 export default function HelpCodeScreen() {
@@ -42,7 +42,7 @@ export default function HelpCodeScreen() {
           style={styles.backBtn}
           accessibilityLabel="Close"
         >
-          <Ionicons name="chevron-back" size={22} color={c.primary} />
+          <Icon name="arrow_back" size={22} color={c.primary} />
           <Text style={[styles.backLabel, { color: c.primary }]}>Close</Text>
         </TouchableOpacity>
       </View>
@@ -60,7 +60,7 @@ export default function HelpCodeScreen() {
           {BULLETS.map((item) => (
             <View key={item.icon} style={styles.bulletRow}>
               <View style={styles.bulletIcon} className="bg-surface-muted">
-                <Ionicons name={item.icon} size={20} color={c.mutedForeground} />
+                <Icon name={item.icon} size={20} color={c.mutedForeground} />
               </View>
               <Text style={styles.bulletText} className="text-muted-foreground">
                 {item.label}
@@ -71,7 +71,7 @@ export default function HelpCodeScreen() {
 
         {/* Closing line */}
         <View style={styles.closingRow} className="bg-surface border border-border rounded-xl">
-          <Ionicons name="information-circle-outline" size={16} color={c.mutedForeground} style={{ marginTop: 1 }} />
+          <Icon name="info" size={16} color={c.mutedForeground} style={{ marginTop: 1 }} />
           <Text style={styles.closingText} className="text-muted-foreground">
             It usually looks like your school's name, e.g.{' '}
             <Text style={styles.closingExample} className="text-foreground">motherland-school</Text>.

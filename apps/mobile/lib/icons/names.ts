@@ -30,7 +30,11 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * verified against MaterialIcons' glyphMap. Plus 2 added in Task S3T1 (`expand_less`,
  * `swap_horiz`) for the Teacher attendance screen's "show all sections" toggle
  * (replacing Ionicons `chevron-up` / `swap-horizontal-outline`) — also verified against
- * MaterialIcons' glyphMap (kebab keys `expand-less` / `swap-horiz`).
+ * MaterialIcons' glyphMap (kebab keys `expand-less` / `swap-horiz`). Plus 3 added in Task
+ * S4A1 (`receipt`, `sms`, `info`) for the help-code screen's "where to find your code"
+ * bullets and closing note (replacing Ionicons `receipt-outline`,
+ * `chatbubble-ellipses-outline`, `information-circle-outline`) — also verified against
+ * MaterialIcons' glyphMap.
  */
 export type IconName =
   | 'account_balance_wallet'
@@ -62,6 +66,7 @@ export type IconName =
   | 'groups'
   | 'help'
   | 'how_to_reg'
+  | 'info'
   | 'lock'
   | 'logout'
   | 'mail'
@@ -71,6 +76,7 @@ export type IconName =
   | 'payments'
   | 'person'
   | 'photo_camera'
+  | 'receipt'
   | 'refresh'
   | 'restaurant'
   | 'save'
@@ -81,6 +87,7 @@ export type IconName =
   | 'settings'
   | 'share'
   | 'signal_cellular_alt'
+  | 'sms'
   | 'swap_horiz'
   | 'tag'
   | 'trending_up'
