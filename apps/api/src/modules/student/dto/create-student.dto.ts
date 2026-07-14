@@ -8,13 +8,22 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
   MinLength,
+  Validate,
   ValidateNested,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
   IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { NEPAL_MOBILE_REGEX } from '../../common/utils/phone.util';
+
+// REG-1 §2: Nepali mobile, validated on input, stored E.164 (+977…) by the service.
+const NEPAL_MOBILE_MESSAGE =
+  'phone must be a valid Nepali mobile number (9 followed by 6/7/8 and 8 digits)';
 
 export class GuardianInputDto {
   @IsString() @MaxLength(50)
@@ -26,14 +35,40 @@ export class GuardianInputDto {
   @IsString() @MaxLength(100)
   lastName!: string;
 
+  // REG-1 §2: guardian phone MANDATORY, Nepali mobile.
   @IsString() @MaxLength(20)
+  @Matches(NEPAL_MOBILE_REGEX, { message: NEPAL_MOBILE_MESSAGE })
   phone!: string;
 
-  @IsOptional() @IsEmail()
-  email?: string;
+  // REG-1 §2: guardian email MANDATORY (credentials delivered to own email).
+  @IsEmail()
+  email!: string;
 
   @IsBoolean()
   isPrimary!: boolean;
+}
+
+/**
+ * REG-1 §2 — a student registration must carry EXACTLY ONE primary guardian.
+ * The "no primary provided" case (and the "several primaries" case) fail here
+ * with 400; the DB partial unique index (0011) enforces at-most-one at write
+ * time across all paths.
+ */
+@ValidatorConstraint({ name: 'exactlyOnePrimaryGuardian', async: false })
+export class ExactlyOnePrimaryGuardianConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown): boolean {
+    if (!Array.isArray(value) || value.length === 0) return false;
+    return (
+      value.filter(
+        (g) => g && (g as GuardianInputDto).isPrimary === true,
+      ).length === 1
+    );
+  }
+  defaultMessage(): string {
+    return 'a student must have exactly one primary guardian (guardians[].isPrimary = true)';
+  }
 }
 
 export class AddressDto {
@@ -72,7 +107,9 @@ export class CreateStudentDto {
   @IsOptional() @IsString() @MaxLength(50)
   motherTongue?: string;
 
+  // REG-1 §2: student contacts OPTIONAL, but validated (Nepali mobile) when given.
   @IsOptional() @IsString() @MaxLength(20)
+  @Matches(NEPAL_MOBILE_REGEX, { message: NEPAL_MOBILE_MESSAGE })
   phone?: string;
 
   @IsOptional() @IsEmail()
@@ -88,10 +125,14 @@ export class CreateStudentDto {
   @Type(() => AddressDto)
   temporaryAddress?: AddressDto;
 
-  @IsOptional()
+  // REG-1 §2: exactly one primary guardian REQUIRED at registration — no
+  // @IsOptional, so an absent/empty guardians list fails validation (400). Typed
+  // optional so programmatic callers that bypass the ValidationPipe (bulk import —
+  // out of scope; seeds) still compile.
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => GuardianInputDto)
+  @Validate(ExactlyOnePrimaryGuardianConstraint)
   guardians?: GuardianInputDto[];
 
   @IsOptional() @IsString() @MaxLength(50)

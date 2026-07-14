@@ -4,9 +4,11 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { NEPAL_MOBILE_REGEX } from '../../common/utils/phone.util';
 
 /**
  * Provisions a relational guardian row AND a working parent-portal login in one
@@ -25,7 +27,11 @@ export class ProvisionGuardianDto {
   @IsOptional() @IsString() @MaxLength(100)
   lastName?: string;
 
+  // REG-1 §2: Nepali mobile (this DTO also keys guardian idempotency on phone).
   @IsString() @MinLength(1) @MaxLength(20)
+  @Matches(NEPAL_MOBILE_REGEX, {
+    message: 'phone must be a valid Nepali mobile number (9 followed by 6/7/8 and 8 digits)',
+  })
   phone!: string;
 
   @IsEmail()

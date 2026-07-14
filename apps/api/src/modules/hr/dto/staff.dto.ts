@@ -1,8 +1,13 @@
 import {
   IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional,
-  IsString, IsUUID, MaxLength, Min,
+  IsString, IsUUID, Matches, MaxLength, Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { NEPAL_MOBILE_REGEX } from '../../common/utils/phone.util';
+
+// REG-1 §2: Nepali mobile, validated on input, stored E.164 (+977…) by the service.
+const NEPAL_MOBILE_MESSAGE =
+  'phone must be a valid Nepali mobile number (9 followed by 6/7/8 and 8 digits)';
 
 export enum EmploymentType {
   PERMANENT = 'PERMANENT',
@@ -54,8 +59,12 @@ export class CreateStaffDto {
   @IsIn(['MALE', 'FEMALE', 'OTHER'])
   gender?: string;
 
-  @IsOptional()
+  // REG-1 §2: staff phone is MANDATORY at the HTTP boundary — no @IsOptional, so
+  // an absent phone fails validation (400). Typed optional so internal callers
+  // that bypass the ValidationPipe (seeds/tests) still compile; the service
+  // stores it in E.164 (+977…).
   @IsString()
+  @Matches(NEPAL_MOBILE_REGEX, { message: NEPAL_MOBILE_MESSAGE })
   phone?: string;
 
   @IsString()

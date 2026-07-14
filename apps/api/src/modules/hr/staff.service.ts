@@ -8,6 +8,7 @@ import type { CredentialsIssuedEvent } from '../mail/mail.events';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { todayAdInNepal } from '../common/utils/date.util';
+import { toE164Nepal } from '../common/utils/phone.util';
 import {
   StaffProfileRow,
   StaffDocumentRow,
@@ -36,6 +37,10 @@ export class StaffService {
     // MAIL-1: omitted password → generate + email; provided → no email.
     const generated = !dto.password;
     const password = dto.password ?? generateTemporaryPassword();
+    // REG-1 §2: store the validated Nepali mobile in E.164 (+977…). The DTO
+    // guarantees a valid mobile for HTTP callers; direct callers (seeds/tests)
+    // may omit it → null (no throw here; the mandatory gate is the DTO).
+    const phoneE164 = toE164Nepal(dto.phone);
 
     const profile = await this.tenantPrisma.run(async (tx) => {
       const bsYear = getBsYear(new Date());
@@ -54,14 +59,15 @@ export class StaffService {
       let user: { id: string };
       try {
         [user] = await tx.$queryRawUnsafe<{ id: string }[]>(
-          `INSERT INTO users (email, password_hash, first_name, last_name, role, must_change_password)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO users (email, password_hash, first_name, last_name, role, phone, must_change_password)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id`,
           dto.email,
           passwordHash,
           dto.firstName,
           dto.lastName,
           dto.role,
+          phoneE164, // REG-1 §2: E.164 phone on the user row
           generated, // POL-1 T4: emailed temp password → force change on first login
         );
       } catch (err: unknown) {
@@ -90,7 +96,7 @@ export class StaffService {
         dto.designationId ?? null,
         dto.dateOfBirth ?? null,
         dto.gender ?? null,
-        dto.phone ?? null,
+        phoneE164, // REG-1 §2: E.164 phone on the staff profile
         dto.joinDate,
         dto.employmentType ?? 'PERMANENT',
         dto.baseSalary,
