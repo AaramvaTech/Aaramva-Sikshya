@@ -64,6 +64,15 @@ export const envValidationSchema = Joi.object({
   SPARROW_SMS_TOKEN: Joi.string().optional().allow(''),
   SPARROW_SMS_SENDER: Joi.string().optional().allow(''),
 
+  // Credential delivery (REG-1 Phase 3) — AES-256-GCM key for the temp-password
+  // secret store: 64 hex chars (32 bytes) or a 32-byte base64 value. Optional:
+  // when unset, credential delivery is disabled (registration still succeeds; the
+  // legacy MAIL event handles email). SMS_DRY_RUN skips the Sparrow call and marks
+  // SENT_DRY. CREDENTIAL_DELIVERY_POLL=false disables the auto-poller (manual only).
+  CREDENTIAL_SECRET_KEY: Joi.string().optional().allow(''),
+  SMS_DRY_RUN: Joi.boolean().truthy('true').falsy('false').default(false),
+  CREDENTIAL_DELIVERY_POLL: Joi.boolean().truthy('true').falsy('false').default(true),
+
   // Expo push (PUSH-1) — Expo's push API needs no secret; the access token is
   // only for EAS projects with enhanced push security enabled.
   EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),

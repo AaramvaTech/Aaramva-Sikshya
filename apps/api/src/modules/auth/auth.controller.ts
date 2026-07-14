@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AllowPasswordChangeRequired } from '../common/decorators/allow-password-change-required.decorator';
 import { ClientType } from '../common/decorators/client-type.decorator';
 import type { ClientType as ClientTypeValue } from '../common/decorators/client-type.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -100,6 +101,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
+  @AllowPasswordChangeRequired() // REG-1 §3: reachable while must_change_password is set
   async logout(
     @Req() req: Request,
     @Body() body: Record<string, unknown>,
@@ -150,6 +152,7 @@ export class AuthController {
 
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
+  @AllowPasswordChangeRequired() // REG-1 §3: the ONE endpoint a flagged user may reach
   @HttpCode(200)
   changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(user.userId, dto.currentPassword, dto.newPassword);

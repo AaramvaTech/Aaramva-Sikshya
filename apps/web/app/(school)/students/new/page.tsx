@@ -12,6 +12,7 @@ import {
   type CreateStudentFormValues,
 } from '@/lib/schemas/student.schema';
 import { useCreateStudent, useClasses, useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { extractApiErrors } from '@/lib/api-errors';
 import { uploadFile } from '@/lib/upload';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { todayBs } from '@/lib/bs-calendar';
@@ -166,10 +167,11 @@ export default function NewStudentPage() {
       toast.success(`Student admitted: ${student.studentId}`);
       router.push(`/students/${student.id}`);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error?.message ?? 'Failed to admit student';
-      toast.error('Admission failed', { description: msg });
+      // REG-1: surface the server's field-level validation messages (array) instead
+      // of a single opaque string.
+      toast.error('Admission failed', {
+        description: extractApiErrors(err, 'Failed to admit student').join(' • '),
+      });
     }
   }
 
@@ -648,7 +650,21 @@ export default function NewStudentPage() {
                       render={({ field }) => (
                         <FormItem className="flex items-center gap-2">
                           <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            {/* REG-1 §2: exactly one primary — checking one clears the others (radio behavior). */}
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  fields.forEach((_, i) =>
+                                    form.setValue(`guardians.${i}.isPrimary`, i === index, {
+                                      shouldValidate: true,
+                                    }),
+                                  );
+                                } else {
+                                  field.onChange(false);
+                                }
+                              }}
+                            />
                           </FormControl>
                           <FormLabel className="!mt-0 cursor-pointer">Primary Guardian</FormLabel>
                         </FormItem>
@@ -657,6 +673,12 @@ export default function NewStudentPage() {
                   </div>
                 </div>
               ))}
+
+              {form.formState.errors.guardians?.root?.message && (
+                <p className="text-theme-xs text-error-600">
+                  {form.formState.errors.guardians.root.message}
+                </p>
+              )}
 
               {fields.length < 3 && (
                 <Button

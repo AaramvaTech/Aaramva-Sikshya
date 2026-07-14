@@ -5,6 +5,7 @@ import { StudentService } from '../student.service';
 import { GuardianService } from '../guardian.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
+import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 
 const mockTenantCtx = {
@@ -109,6 +110,7 @@ describe('StudentService', () => {
         },
         { provide: GuardianService, useValue: mockGuardianService },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: CredentialDeliveryService, useValue: { enqueueInTx: jest.fn(), resendForUser: jest.fn() } },
       ],
     }).compile();
 

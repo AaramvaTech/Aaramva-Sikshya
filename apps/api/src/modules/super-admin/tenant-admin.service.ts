@@ -91,7 +91,9 @@ export class TenantAdminService {
       planId: dto.planId,
     });
 
-    if (generated) {
+    // REG-1: the owner's creds are delivered via the new tenant's own ledger when
+    // enqueued in provision(); fall back to the MAIL event only when they weren't.
+    if (generated && !result.enqueued) {
       this.events.emit(MAIL_EVENTS.credentialsIssued, {
         tenantId: result.tenant.id,
         to: dto.adminEmail, loginEmail: dto.adminEmail,

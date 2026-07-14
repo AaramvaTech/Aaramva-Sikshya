@@ -103,6 +103,14 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
+    // REG-1: a forced-change 403 must route the session to change-password, never a
+    // hard error. Setting the store flag makes the root layout redirect (POL-2 T6).
+    const errCode = (error.response?.data as { error?: { code?: string } } | undefined)?.error?.code;
+    if (error.response?.status === 403 && errCode === 'PASSWORD_CHANGE_REQUIRED') {
+      useAuthStore.getState().setMustChangePassword();
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Another refresh is already in flight — queue this request until it resolves.
       if (isRefreshing) {

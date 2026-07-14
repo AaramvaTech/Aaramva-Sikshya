@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { GuardianService } from '../guardian.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
 import { CreateGuardianAccountDto } from '../dto/create-guardian-account.dto';
 import { Role } from '../../common/enums/role.enum';
 
@@ -21,6 +22,7 @@ describe('GuardianService', () => {
         GuardianService,
         { provide: TenantPrismaService, useValue: mockTenantPrisma },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: CredentialDeliveryService, useValue: { enqueueInTx: jest.fn() } },
         {
           provide: TenantContextService,
           useValue: { getOrThrow: () => ({ tenantId: 'tenant-1', slug: 'demo', schemaName: 'tenant_demo' }) },

@@ -56,6 +56,9 @@ interface AuthActions {
   setSelectedChildId: (id: string | null) => void;
   // POL-2 T6: clear the first-login force flag (after a successful change).
   clearMustChangePassword: () => void;
+  // REG-1: set the force-change flag (from the global 403 PASSWORD_CHANGE_REQUIRED
+  // interceptor) so the root layout redirects to change-password.
+  setMustChangePassword: () => void;
   // ─── Legacy compat (used by session.ts and login.tsx) ───────────────────────
   setSession: (params: {
     accessToken: string;
@@ -148,6 +151,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   setSelectedChildId: (id) => set({ selectedChildId: id }),
 
   clearMustChangePassword: () => set({ mustChangePassword: false }),
+  setMustChangePassword: () => set({ mustChangePassword: true }),
 
   // ── Legacy compat wrappers ──────────────────────────────────────────────────
   setSession: ({ accessToken, user, tenant, slug, mustChangePassword }) => {

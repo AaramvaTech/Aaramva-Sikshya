@@ -8,6 +8,7 @@ import { AppService } from './app.service';
 import { envValidationSchema } from './config/env.validation';
 import { OptionalJwtGuard } from './modules/common/guards/optional-jwt.guard';
 import { TenantMatchGuard } from './modules/common/guards/tenant-match.guard';
+import { PasswordChangeRequiredGuard } from './modules/common/guards/password-change-required.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { TenantMiddleware } from './modules/tenant/tenant.middleware';
@@ -30,6 +31,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { CredentialDeliveryModule } from './modules/credential-delivery/credential-delivery.module';
 
 @Module({
   imports: [
@@ -66,6 +68,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     StorageModule,
     AssignmentModule,
     ReportsModule,
+    CredentialDeliveryModule,
   ],
   controllers: [AppController],
   providers: [
@@ -77,6 +80,10 @@ import { ReportsModule } from './modules/reports/reports.module';
     // TenantMatchGuard then rejects any token whose tenant ≠ the resolved tenant.
     { provide: APP_GUARD, useClass: OptionalJwtGuard },
     { provide: APP_GUARD, useClass: TenantMatchGuard },
+    // REG-1 §3: after tenant-match, block a must_change_password user from every
+    // route except @AllowPasswordChangeRequired() (change-password, logout) with
+    // 403 PASSWORD_CHANGE_REQUIRED. Fresh DB read → clears the moment they change.
+    { provide: APP_GUARD, useClass: PasswordChangeRequiredGuard },
   ],
 })
 export class AppModule {

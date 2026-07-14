@@ -86,7 +86,6 @@ describe('AuthService', () => {
       adminFirstName: 'Ram',
       adminLastName: 'Bahadur',
       adminEmail: 'ram@test.edu.np',
-      password: 'Secret123',
     };
 
     beforeEach(() => {
@@ -112,6 +111,15 @@ describe('AuthService', () => {
       expect(result.school.slug).toBe(dto.slug);
       expect(result.user.email).toBe(dto.adminEmail);
       expect(result.accessToken).toBe('mock.jwt.token');
+    });
+
+    it('REG-OBS-5: generates a temp password + forces change (no chosen password)', async () => {
+      const result = await authService.register(dto);
+      const args = (provisioning.provision as jest.Mock).mock.calls[0][0];
+      expect(args.mustChangePassword).toBe(true);
+      expect(typeof args.adminPassword).toBe('string');
+      expect(args.adminPassword.length).toBeGreaterThanOrEqual(12); // generated, not chosen
+      expect(result.user.mustChangePassword).toBe(true);
     });
 
     it('throws 409 ConflictException if slug is already taken', async () => {

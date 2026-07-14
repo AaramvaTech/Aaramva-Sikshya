@@ -13,6 +13,7 @@ import { BsDate } from '@/components/shared/bs-date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { extractApiErrors } from '@/lib/api-errors';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StorageAvatarImage } from '@/components/shared/storage-avatar-image';
 import {
@@ -61,6 +62,7 @@ export default function StaffListPage() {
     joinDate: '', baseSalary: '', employmentType: '',
     phone: '', gender: '', dateOfBirth: '',
   });
+  const [phoneError, setPhoneError] = useState('');
 
   const { data: response, isLoading } = useStaffList({
     page,
@@ -106,8 +108,15 @@ export default function StaffListPage() {
   }
 
   async function handleAddStaff() {
+    setPhoneError('');
     if (!form.firstName || !form.lastName || !form.email || !form.password || !form.role || !form.joinDate || !form.baseSalary) {
       toast.error('Please fill all required fields');
+      return;
+    }
+    // REG-1 §2: phone is mandatory and must be a valid Nepali mobile.
+    if (!/^9[678]\d{8}$/.test(form.phone)) {
+      setPhoneError('Enter a valid Nepali mobile (10 digits starting 96/97/98)');
+      toast.error('A valid phone number is required');
       return;
     }
     try {
@@ -129,8 +138,8 @@ export default function StaffListPage() {
       toast.success('Staff added successfully');
       setAddOpen(false);
       setForm({ firstName: '', lastName: '', email: '', password: '', role: '', departmentId: '', designationId: '', joinDate: '', baseSalary: '', employmentType: '', phone: '', gender: '', dateOfBirth: '' });
-    } catch {
-      toast.error('Failed to add staff');
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to add staff').join(' • '));
     }
   }
 
@@ -380,8 +389,9 @@ export default function StaffListPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="s-phone">Phone</Label>
-              <Input id="s-phone" value={form.phone} onChange={(e) => setField('phone', e.target.value)} placeholder="98XXXXXXXX" />
+              <Label htmlFor="s-phone">Phone *</Label>
+              <Input id="s-phone" value={form.phone} onChange={(e) => { setField('phone', e.target.value); setPhoneError(''); }} placeholder="98XXXXXXXX" />
+              {phoneError && <p className="text-theme-xs text-error-600">{phoneError}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Gender</Label>

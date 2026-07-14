@@ -11,6 +11,12 @@ import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
 import { GuardianInputDto } from './dto/create-student.dto';
 import { GuardianDto, toGuardianDto } from './entities/student.entity';
 import { Role } from '../common/enums/role.enum';
+import {
+  CredentialDeliveryService,
+  DeliveryTarget,
+} from '../credential-delivery/credential-delivery.service';
+import { credentialKeyConfigured } from '../credential-delivery/credential-crypto.util';
+import { toE164Nepal } from '../common/utils/phone.util';
 
 interface GuardianRow {
   id: string;
@@ -49,6 +55,7 @@ export class GuardianService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly events: EventEmitter2,
+    private readonly credentialDelivery: CredentialDeliveryService,
   ) {}
 
   async createGuardianAccount(
@@ -124,17 +131,32 @@ export class GuardianService {
         throw new ConflictException('Guardian already has a linked account');
       }
 
-      return { userId, guardianId, email: dto.email, linked: true as const, createdNewUser };
+      // REG-1 §4: when a NEW parent login was created with a generated temp
+      // password, enqueue delivery in THIS transaction — the encrypted secret +
+      // PENDING ledger rows (EMAIL to the login email, SMS to the guardian phone).
+      // Falls back to the legacy MAIL event only when no encryption key is set.
+      let enqueued = false;
+      if (generated && createdNewUser && credentialKeyConfigured()) {
+        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
+        if (guardian.phone) {
+          targets.push({ channel: 'SMS', recipient: toE164Nepal(guardian.phone) ?? guardian.phone });
+        }
+        await this.credentialDelivery.enqueueInTx(tx, { userId, plaintext: password, targets });
+        enqueued = true;
+      }
+
+      return { userId, guardianId, email: dto.email, linked: true as const, createdNewUser, enqueued };
     });
 
-    if (generated && outcome.createdNewUser) {
+    // Legacy fallback: only when the ledger enqueue did NOT run (no encryption key).
+    if (generated && outcome.createdNewUser && !outcome.enqueued) {
       this.events.emit(MAIL_EVENTS.credentialsIssued, {
         tenantId: this.tenantContext.getOrThrow().tenantId,
         to: dto.email, loginEmail: dto.email,
         password, relatedUserId: outcome.userId, kind: 'new',
       } satisfies CredentialsIssuedEvent);
     }
-    const { createdNewUser: _omit, ...result } = outcome;
+    const { createdNewUser: _omit, enqueued: _omit2, ...result } = outcome;
     return result;
   }
 
@@ -195,6 +217,10 @@ export class GuardianService {
 
     // Hash before the transaction to keep the DB lock duration short.
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    // REG-OBS-4: find-or-create keys on phone — normalize the lookup key to E.164
+    // (matching the backfilled column) so a bare/977… input matches a stored +977…
+    // row instead of creating a duplicate.
+    const phoneE164 = toE164Nepal(dto.phone) ?? dto.phone;
 
     return this.tenantPrisma.run(async (tx) => {
       // 1. Find-or-create the relational guardian, idempotent on (student_id, phone).
@@ -206,7 +232,7 @@ export class GuardianService {
          LIMIT 1
          FOR UPDATE`,
         studentId,
-        dto.phone,
+        phoneE164,
       );
 
       let guardian = existingGuardian[0] ?? null;
@@ -220,7 +246,7 @@ export class GuardianService {
           dto.relation,
           dto.firstName,
           dto.lastName ?? null,
-          dto.phone,
+          phoneE164,
           dto.email,
           dto.isPrimary ?? false,
         );
@@ -267,7 +293,7 @@ export class GuardianService {
           Role.PARENT,
           dto.firstName,
           dto.lastName ?? null,
-          dto.phone,
+          phoneE164,
         );
         userId = newUserRows[0].id;
         parentAccountCreated = true;
@@ -328,13 +354,15 @@ export class GuardianService {
     const inserted: GuardianDto[] = [];
     for (let i = 0; i < guardians.length; i++) {
       const g = guardians[i];
+      // REG-OBS-4: normalize the find-or-create key + stored value to E.164.
+      const phoneE164 = g.phone ? (toE164Nepal(g.phone) ?? g.phone) : null;
 
       const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
         `SELECT id FROM guardians
          WHERE student_id = $1::uuid AND phone IS NOT DISTINCT FROM $2 AND deleted_at IS NULL
          LIMIT 1`,
         studentId,
-        g.phone ?? null,
+        phoneE164,
       );
       if (existing[0]) continue; // idempotent — guardian with this phone already present
 
@@ -346,7 +374,7 @@ export class GuardianService {
         g.relation,
         g.firstName,
         g.lastName ?? null,
-        g.phone ?? null,
+        phoneE164,
         g.email ?? null,
         i === primaryIndex,
       );
