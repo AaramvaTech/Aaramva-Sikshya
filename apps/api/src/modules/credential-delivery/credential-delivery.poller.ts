@@ -12,7 +12,7 @@ import { credentialKeyConfigured } from './credential-crypto.util';
  * PENDING credential deliveries. Idle when CREDENTIAL_SECRET_KEY is unset, or when
  * CREDENTIAL_DELIVERY_POLL=false (test/proof override — use the manual trigger).
  */
-// REG-1 credential-delivery poller (outbox drain).
+// REG-1 credential-delivery poller (outbox drain over the ledger).
 @Injectable()
 export class CredentialDeliveryPoller implements OnModuleInit {
   private readonly logger = new Logger(CredentialDeliveryPoller.name);

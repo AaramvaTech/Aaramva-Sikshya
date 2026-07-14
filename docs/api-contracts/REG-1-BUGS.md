@@ -315,3 +315,33 @@ which carries no `mustChangePassword`, so a flagged user on cold-launch would ge
 store didn't regress); API unchanged at **594**. (No RTL/DOM harness existed in web — added
 vitest for the schema/logic tests; full render tests are covered by the manual walkthrough
 above. API behaviour was already live-proven in Phases 1–4.)
+
+---
+
+## Phase 6 — Security probes & regression (final)
+
+All §6 probes passed live against `demo` (raw output in the session transcript):
+
+| Probe | Result |
+|---|---|
+| **Role probes** | TEACHER / PARENT / STUDEN​T → **403** on all 7: `POST /hr/staff`, `POST /students`, `POST /students/:id/guardians`, `POST /students/:id/account`, `POST /users/:id/resend-credentials`, `GET /credential-deliveries`, `POST /credential-deliveries/run`. |
+| **Cross-tenant** | demo-owner token + `X-Tenant-Slug: motherland-school` → **403** (TenantMatchGuard) on read, drain, and a staff-write; motherland `credential_deliveries` **0 → 0** (no leak). |
+| **Forced-change** | flagged token → **403 `PASSWORD_CHANGE_REQUIRED`** on attendance-write, fee-read, profile-read — **both** web and `X-Client-Type: mobile`; change-password itself → **200**. |
+| **Resend on soft-deleted** | `POST /users/:id/resend-credentials` on a soft-deleted user → **404**, `credential_deliveries` = **0** (no enqueue). |
+| **Concurrency** | 10 PENDING rows, **two simultaneous** `POST /credential-deliveries/run` → A processed 7 + B processed 3 = **10** (= row count); every row `attempts = 1`, **0** rows `attempts > 1`, 0 still PENDING → `FOR UPDATE SKIP LOCKED` prevents double-send. |
+| **Redaction re-run** | fresh generated temp password decrypted from its secret → **full-database `pg_dump` (22,334 lines): 0 plaintext hits**, 1 ciphertext hit. Log-redaction covered by `staff.service.spec` + MOCK-mail-subject-only. |
+
+### REG-OBS-5 owner-path — LIVE-PROVEN + TORN DOWN
+
+`POST /auth/register-school` (no password) → tenant **`p6-throwaway`** provisioned via live HTTP.
+Read-backs in the **new** schema `tenant_p6_throwaway`: owner `SCHOOL_OWNER`
+`p6-owner@throwaway.school`, `phone = +9779819990000` (E.164), `must_change_password = t`;
+`credential_deliveries` = **2 PENDING** (EMAIL + SMS); `credential_delivery_secrets` = **1**
+(encrypted). Drain → `{processed:2, sent:1, dry:1}` → EMAIL **SENT** + SMS **SENT_DRY** + secret
+**deleted (0)**. Response surfaced `mustChangePassword: true`.
+
+> **⛔ TORN DOWN (Phase 6).** `DROP SCHEMA tenant_p6_throwaway CASCADE` (52 objects, incl.
+> `credential_deliveries` + `credential_delivery_secrets`) + `DELETE` of the public
+> `subscriptions`/`tenants` rows (both → 0). Verified: `information_schema.schemata` count for
+> `tenant_p6_throwaway` = **0**, public `tenants` where slug = 0. All demo probe rows
+> (`p6-%` users/staff/deliveries/secrets/email_log) deleted with read-back = 0.
