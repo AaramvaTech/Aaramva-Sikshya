@@ -40,14 +40,14 @@ Out of scope: self-registration, bulk CSV import, iOS, password-reset changes (M
 
 - Generation: `crypto.randomBytes`-derived, 12 chars minimum, satisfies the existing password policy. Never derived from name/phone/DOB.
 - Stored only as a hash (use the existing hashing utility — do not introduce a second hasher).
-- New column on `users`: `must_change_password BOOLEAN NOT NULL DEFAULT false` (set `true` on every REG-1-created account). Forward-only migration via the tenant migration runner; platform users table gets its own migration.
+- New column on `users`: `must_change_password BOOLEAN NOT NULL DEFAULT false` (set `true` on every REG-1-created account). Forward-only migration via the tenant migration runner — **tenant `users` only** (this column already shipped as tenant migration `0006` / POL-1 T4). **`PlatformAdmin` accounts are out of REG-1 scope (REG-OBS-2 ruling); their password hygiene belongs to OPS-1.**
 - Auth guard behavior: a user with `must_change_password = true` can log in and call **only** `POST /auth/change-password` (and logout). Every other authenticated endpoint returns `403` with error code `PASSWORD_CHANGE_REQUIRED`. Successful change clears the flag in the same transaction.
 - Applies on **web and mobile** (mobile uses the same guard; verify with `X-Client-Type: mobile` in tests).
 
 ### Plaintext handling (non-negotiable)
-- Plaintext temp password exists only: (a) in memory during registration, (b) in the BullMQ job payload.
-- Queue config: `removeOnComplete: true`, `removeOnFail: true` after final retry (ledger holds the failure record; the job does not).
-- The plaintext must never appear in structured request logs, Sentry breadcrumbs, or the `credential_deliveries` table. Add an explicit redaction test: register a user, grep captured log output for the generated password, assert absent.
+- Plaintext temp password exists only: (a) in memory during registration, (b) **encrypted at rest in `credential_delivery_secrets`** — AES-256-GCM, key from env `CREDENTIAL_SECRET_KEY`, IV + auth-tag stored alongside, **one row per user**. This replaces the retired BullMQ-job-payload design (BullMQ was removed in OPS-1 — REG-OBS-3 ruling).
+- The secret row is **deleted in the same transaction** that moves the user's last non-terminal delivery row to a terminal state (`SENT` / `SENT_DRY` / `FAILED`).
+- The plaintext must never appear in structured request logs, Sentry breadcrumbs, or the `credential_deliveries` table. Redaction test: register a user, assert the plaintext is absent from captured log output **and from a `pg_dump` of the tenant schema** (the encrypted blob is expected; plaintext is not).
 
 ---
 
@@ -55,29 +55,37 @@ Out of scope: self-registration, bulk CSV import, iOS, password-reset changes (M
 
 **BUG-1 lesson applies: no silent delivery failure, ever.**
 
-### Table (per tenant; platform copy for school-admin deliveries)
+### Tables (per tenant — **NO platform copy**; REG-OBS-2 ruling: school admins are tenant `SCHOOL_OWNER` users, delivered via the tenant's own ledger)
 ```
 credential_deliveries
-  id              UUID PK
-  user_id         UUID NOT NULL      -- account whose credentials were sent
+  id                UUID PK
+  user_id           UUID NOT NULL    -- account whose credentials were sent
   recipient_user_id UUID NULL        -- guardian, when routing student creds
-  channel         TEXT NOT NULL      -- 'EMAIL' | 'SMS'
-  recipient       TEXT NOT NULL      -- email address or E.164 phone
-  status          TEXT NOT NULL      -- 'PENDING' | 'SENT' | 'FAILED' | 'SENT_DRY'
-  attempts        INT NOT NULL DEFAULT 0
-  last_error      TEXT NULL
+  channel           TEXT NOT NULL    -- 'EMAIL' | 'SMS'
+  recipient         TEXT NOT NULL    -- email address or E.164 phone
+  status            TEXT NOT NULL    -- 'PENDING' | 'SENT' | 'FAILED' | 'SENT_DRY'
+  attempts          INT NOT NULL DEFAULT 0
+  next_attempt_at   TIMESTAMPTZ      -- poller backoff gate (migration 0012)
+  last_error        TEXT NULL
   created_at / updated_at
-```
-No `deleted_at` — this is an append-only ledger; rows are never deleted or updated except by the worker.
 
-### Behavior
-- Registration handler writes one PENDING row per (channel × recipient) inside the registration transaction, then enqueues jobs on a `credential-delivery` BullMQ queue after commit.
-- Worker: email via MAIL-1 infra; SMS via Sparrow. 3 attempts, exponential backoff. Final failure → status FAILED with `last_error` populated.
-- **Registration succeeds even if delivery later fails** — the account exists; delivery status is inspectable and resendable. The API response includes the created delivery row IDs so the client can poll.
-- `SMS_DRY_RUN=true` env flag for dev/CI: worker skips the Sparrow call and marks `SENT_DRY`. Real SMS proof is a manual gate step (see §8).
+credential_delivery_secrets           -- migration 0012 (REG-OBS-3)
+  user_id     UUID PK REFERENCES users(id)  -- ONE row per user
+  ciphertext  TEXT NOT NULL                 -- AES-256-GCM ciphertext of the temp password
+  iv          TEXT NOT NULL                 -- GCM IV (base64)
+  auth_tag    TEXT NOT NULL                 -- GCM auth tag (base64)
+  created_at  TIMESTAMPTZ NOT NULL
+```
+`credential_deliveries` has no `deleted_at` — append-only; rows are updated only by the poller. The secret row is **hard-deleted** once the user's delivery reaches a terminal state.
+
+### Behavior — outbox poller (REG-OBS-3 ruling: **NO BullMQ**)
+- Registration writes one PENDING `credential_deliveries` row per (channel × recipient) **and** the encrypted `credential_delivery_secrets` row, **inside the registration transaction**. No broker.
+- **Poller** (`@nestjs/schedule`, iterating tenants like the fine-recalc job): drains PENDING rows whose `next_attempt_at <= now()` via `SELECT ... FOR UPDATE SKIP LOCKED` (safe under concurrent/multi-instance pollers). Per row: decrypt the user's secret, send (email via MAIL-1, SMS via Sparrow). Success → `SENT` (or `SENT_DRY` when `SMS_DRY_RUN=true`). Failure → `attempts++`, `next_attempt_at = now() + backoff(attempts)`; after **3 attempts** → `FAILED` with `last_error`. When the user's **last non-terminal** row goes terminal, the secret row is deleted in that same tx.
+- **Registration succeeds even if delivery later fails** — the account exists; status is inspectable and resendable. The API response includes the created delivery row IDs so the client can poll.
+- `SMS_DRY_RUN=true` (dev/CI): the poller skips the Sparrow call → `SENT_DRY`. Real SMS proof is a manual gate step (see §8).
 - Admin endpoints:
   - `GET /credential-deliveries?userId=` — admin-only, returns ledger rows.
-  - `POST /users/:id/resend-credentials` — admin-only. Generates a **new** temp password (invalidating the old hash), re-sets `must_change_password = true`, writes new ledger rows, enqueues. Never returns or re-sends an old password.
+  - `POST /users/:id/resend-credentials` — admin-only (tenant ADMIN; **no platform variant** — REG-OBS-2). Generates a **new** temp password (invalidating the old hash), re-sets `must_change_password = true`, writes new PENDING rows + a fresh encrypted secret, and lets the poller send. Never returns or re-sends an old password.
 
 ### Student routing
 On student registration, deliveries fan out to:
@@ -94,11 +102,11 @@ On student registration, deliveries fan out to:
 
 Align with existing controllers/DTOs; adjust paths to match current routing rather than inventing parallel ones.
 
-- `POST /platform/schools` (SUPER_ADMIN) — existing tenant provisioning + school-admin creation; extend to enforce mandatory email/phone and wire credential delivery.
+- `POST /platform/schools` (SUPER_ADMIN) — existing tenant provisioning: creates the tenant + its `SCHOOL_OWNER`; enforce mandatory email/phone and deliver the SCHOOL_OWNER's credentials via **the new tenant's own** `credential_deliveries` ledger (REG-OBS-2 — no platform ledger, no platform resend).
 - `POST /staff` (tenant ADMIN)
 - `POST /guardians` (tenant ADMIN)
 - `POST /students` (tenant ADMIN) — accepts guardian links inline (`guardians: [{ guardianId, relationship, isPrimary }]`) or creates guardian + student in one transaction if the existing API shape supports it; primary-guardian rule enforced either way.
-- `POST /users/:id/resend-credentials` (tenant ADMIN; platform variant for SUPER_ADMIN on school admins)
+- `POST /users/:id/resend-credentials` (tenant ADMIN — no platform variant, REG-OBS-2)
 - `GET /credential-deliveries` (tenant ADMIN)
 - `POST /auth/change-password` — verify it clears `must_change_password`; add if the flag path doesn't exist.
 
@@ -123,8 +131,13 @@ Each phase ends at a checkpoint. **Stop and wait for Srijan's explicit "continue
 - **Phase 1 — Data model & validation.** Migrations (`must_change_password`, `credential_deliveries`, primary-guardian partial unique index), DTO validation (email/phone rules, mandatory-field matrix), 400-path tests. Live-write proof: register a staff member via HTTP, `SELECT` read-back of user row + E.164 phone. **Checkpoint 1.**
 - **Phase 2 — Temp password & forced change.** Generation, hashing, auth-guard behavior, change-password clearing, mobile-header variant, redaction test. Live proof: log in with delivered temp password, hit protected endpoint (expect 403 PASSWORD_CHANGE_REQUIRED), change password, hit again (200). **Checkpoint 2.**
 - **Phase 3 — Delivery pipeline & ledger.** Queue, worker, retries, ledger writes, `SMS_DRY_RUN`, ledger read endpoint. Live proof: register guardian, `SELECT * FROM credential_deliveries` showing SENT (email) + SENT_DRY (SMS); kill MinIO-style failure simulation for email path and show FAILED + last_error after retries. **Checkpoint 3.**
-- **Phase 4 — Student routing & resend.** Fan-out to primary guardian + optional student contacts; resend endpoint invalidating old password (prove old password fails login, new one works). **Checkpoint 4.**
-- **Phase 5 — Security probes & regression.** Full §6 probe set; full suite ≥ 511 + new tests, raw output required; CI green on the PR. **Checkpoint 5 — REG-1 code-complete.**
+- **Phase 4 — Student routing & resend.** **Begins with the REG-OBS-4 phone→E.164 backfill migration** (forward-only; normalize `98XXXXXXXX` / `0977…` / `977…` → `+977…`; rows that don't cleanly normalize to `^9[678]\d{8}$` are left untouched and listed in REG-1-BUGS.md — no guessing). **Produce a dry-run report (per-tenant counts + full non-normalizable list) and STOP for approval before applying** — forward-only is irreversible. Find-or-create on phone must normalize the lookup key identically. Then: fan-out to primary guardian + optional student contacts; resend endpoint invalidating the old password (prove old fails login, new one works). **Checkpoint 4.**
+- **Phase 5 — Web admin clients (contract tightening, REG-NOTE).** Update web admin registration forms: staff phone mandatory, guardian email mandatory, primary-guardian selector on the student form, field-level rendering of the 400 errors, and treat `403 PASSWORD_CHANGE_REQUIRED` (REG-NOTE-2) as a redirect-to-change-password signal in the web shell. First confirm whether mobile has any registration or `/auth/me`-polling surface; if it does, add the force-change redirect handling there too, otherwise Phase 5 is web-only. **Checkpoint 5.**
+- **Phase 6 — Security probes & regression (final).** Full §6 probe set; full suite ≥ baseline + new tests, raw output required; CI green on the PR. **Checkpoint 6 — REG-1 code-complete.**
+
+> Numbering note (REG-NOTE ruling): the web-clients phase is inserted as Phase 5, and the
+> existing security-probes phase becomes the **final** phase (5 → 6), so security & regression
+> runs last.
 
 ---
 

@@ -22,7 +22,13 @@ so would duplicate an applied migration (immutable-file rule). Verified present 
 when the flag is set, error code `PASSWORD_CHANGE_REQUIRED`) is **Phase 2** — the flag
 column is the only Phase-1 slice of this item.
 
-### REG-OBS-2 (Phase 1) — Platform-side migrations: is `PlatformAdmin` in REG-1 scope? — **OPEN QUESTION for Srijan**
+### REG-OBS-2 — Platform-side migrations: is `PlatformAdmin` in REG-1 scope? — **RESOLVED (2026-07-14)**
+
+> **RULING:** Tenant side is sufficient. `PlatformAdmin` accounts are out of REG-1 scope; their
+> password hygiene belongs to OPS-1. Spec §3/§4/§5 amended — removed the platform copy of
+> `credential_deliveries` and the platform resend variant. `POST /platform/schools` creates the
+> tenant + its `SCHOOL_OWNER` and delivers credentials via the new tenant's own ledger.
+
 
 Spec §3 ("platform users table gets its own migration") and §4 ("platform copy for
 school-admin deliveries") assume a platform-side `users` table + credential ledger.
@@ -39,7 +45,18 @@ list), or is the platform side satisfied by the tenant tables because school adm
 tenant users? **Not implemented speculatively** (per §9 — Claude Code does not make
 product decisions). Tenant side implemented in full.
 
-### REG-OBS-3 (Phase 3 forward-conflict, flagged now) — spec assumes BullMQ, but BullMQ was removed (OPS-1)
+### REG-OBS-3 — spec assumed BullMQ, but BullMQ was removed (OPS-1) — **RESOLVED (2026-07-14)**
+
+> **RULING:** Outbox poller — do NOT reinstate BullMQ. Spec §4 amended: the delivery worker is a
+> `@nestjs/schedule` poller using `SELECT ... FOR UPDATE SKIP LOCKED` over PENDING ledger rows.
+> Added `next_attempt_at TIMESTAMPTZ` to `credential_deliveries` (migration 0012) for exponential
+> backoff; 3 attempts then `FAILED` with `last_error`. The BullMQ-payload plaintext model is
+> replaced by table `credential_delivery_secrets` (one row per user; temp password encrypted
+> AES-256-GCM, key from env `CREDENTIAL_SECRET_KEY`, IV + auth-tag columns). The secret row is
+> deleted in the same transaction that moves the user's last non-terminal delivery row to
+> `SENT`/`SENT_DRY`/`FAILED`. Plaintext never in the ledger, never in logs; the redaction test
+> also asserts plaintext is absent from a `pg_dump` of the tenant schema (encrypted blob expected).
+
 
 Spec §3/§4 specify a `credential-delivery` **BullMQ** queue with `removeOnComplete`/
 `removeOnFail` and exponential backoff. **BullMQ was fully removed in OPS-1** (zero
@@ -49,7 +66,15 @@ before Phase 3:** reinstate a queue (Redis/BullMQ back on) vs. a `@nestjs/schedu
 outbox worker over the `credential_deliveries` ledger (append-only PENDING rows are
 already an outbox — a poller can drain them without a broker). No Phase-1 impact.
 
-### REG-OBS-4 (Phase 1) — Guardian/student write-path E.164 storage deferred; existing guardian phones not E.164
+### REG-OBS-4 — Guardian/student write-path E.164 storage deferred; existing guardian phones not E.164 — **RESOLVED (2026-07-14)**
+
+> **RULING:** Backfill migration at the **start of Phase 4**, before touching any guardian write
+> path. Forward-only migration normalizing `98XXXXXXXX` / `0977…` / `977…` variants to `+977…`.
+> Rows that don't cleanly normalize to `^9[678]\d{8}$` are left untouched and listed here in
+> REG-1-BUGS.md — no guessing. Before applying: produce a dry-run report (per-tenant counts + full
+> list of non-normalizable rows) and **STOP for approval** at that point within Phase 4 (forward-only
+> is irreversible). Find-or-create on phone must normalize the lookup key the same way.
+
 
 Phase 1 implements E.164 **storage** on the **staff** registration path (proven live).
 It is **not** wired into the guardian/student write paths this phase because:
@@ -65,7 +90,16 @@ E.164 (`UPDATE … WHERE phone ~ '^9[678][0-9]{8}$'`) is a separate migration to
 with Phase 3/4. Send-time delivery is unaffected: `communication/sms.normaliseNepalPhone`
 already tolerates raw input.
 
-### REG-NOTE (Phase 1) — Registration-contract tightening (consumer impact)
+### REG-NOTE — Registration-contract tightening (consumer impact) — **RESOLVED (2026-07-14)**
+
+> **RULING:** In scope as new **Phase 5 (web clients)**. Update web admin registration forms —
+> staff phone mandatory, guardian email mandatory, primary-guardian selector on the student form,
+> field-level rendering of the 400 errors, and treat `403 PASSWORD_CHANGE_REQUIRED` (REG-NOTE-2) as
+> a redirect-to-change-password signal in the web shell. First confirm whether mobile has any
+> registration or `/auth/me`-polling surface; if it does, add the force-change redirect there too,
+> otherwise Phase 5 is web-only. The existing security-probes phase becomes the **final** phase
+> (renumbered 5 → 6). _(Spec §7 numbering note added.)_
+
 
 Making staff `phone` mandatory, guardian `email` mandatory, and requiring **exactly one
 primary guardian** on `POST /students` is a deliberate contract change (§2). Existing
@@ -77,10 +111,8 @@ client phases update the forms.
 
 _No functional bugs found in Phase 1._
 
-> **Pending:** the four Phase-1 dispositions (rulings on REG-OBS-2/3/4 + REG-NOTE)
-> were requested for logging here, but the actual rulings were not provided
-> (the paste placeholder came through literally). They are **not recorded yet** —
-> Claude Code will not invent product/architecture decisions. Awaiting the rulings.
+> **All four Phase-1 flags are now RESOLVED** (rulings recorded above, 2026-07-14) and the
+> spec was amended accordingly (§3/§4/§5/§7).
 
 ---
 
