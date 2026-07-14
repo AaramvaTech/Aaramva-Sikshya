@@ -8,9 +8,10 @@ import { StudentMeService } from './student-me.service';
 import { GuardianService } from './guardian.service';
 import { ImportService } from './import.service';
 import { ExaminationModule } from '../examination/examination.module';
+import { CredentialDeliveryModule } from '../credential-delivery/credential-delivery.module';
 
 @Module({
-  imports: [ExaminationModule, StorageModule], // ResultService for /students/me/results + report-card
+  imports: [ExaminationModule, StorageModule, CredentialDeliveryModule], // + REG-1 guardian credential delivery
   controllers: [StudentController, GuardianController, ImportController],
   providers: [StudentService, StudentMeService, GuardianService, ImportService],
   exports: [StudentService],

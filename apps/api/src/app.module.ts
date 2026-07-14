@@ -31,6 +31,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { CredentialDeliveryModule } from './modules/credential-delivery/credential-delivery.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     StorageModule,
     AssignmentModule,
     ReportsModule,
+    CredentialDeliveryModule,
   ],
   controllers: [AppController],
   providers: [

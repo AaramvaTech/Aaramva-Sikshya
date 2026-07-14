@@ -11,6 +11,12 @@ import { ProvisionGuardianDto } from './dto/provision-guardian.dto';
 import { GuardianInputDto } from './dto/create-student.dto';
 import { GuardianDto, toGuardianDto } from './entities/student.entity';
 import { Role } from '../common/enums/role.enum';
+import {
+  CredentialDeliveryService,
+  DeliveryTarget,
+} from '../credential-delivery/credential-delivery.service';
+import { credentialKeyConfigured } from '../credential-delivery/credential-crypto.util';
+import { toE164Nepal } from '../common/utils/phone.util';
 
 interface GuardianRow {
   id: string;
@@ -49,6 +55,7 @@ export class GuardianService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly events: EventEmitter2,
+    private readonly credentialDelivery: CredentialDeliveryService,
   ) {}
 
   async createGuardianAccount(
@@ -124,17 +131,32 @@ export class GuardianService {
         throw new ConflictException('Guardian already has a linked account');
       }
 
-      return { userId, guardianId, email: dto.email, linked: true as const, createdNewUser };
+      // REG-1 §4: when a NEW parent login was created with a generated temp
+      // password, enqueue delivery in THIS transaction — the encrypted secret +
+      // PENDING ledger rows (EMAIL to the login email, SMS to the guardian phone).
+      // Falls back to the legacy MAIL event only when no encryption key is set.
+      let enqueued = false;
+      if (generated && createdNewUser && credentialKeyConfigured()) {
+        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
+        if (guardian.phone) {
+          targets.push({ channel: 'SMS', recipient: toE164Nepal(guardian.phone) ?? guardian.phone });
+        }
+        await this.credentialDelivery.enqueueInTx(tx, { userId, plaintext: password, targets });
+        enqueued = true;
+      }
+
+      return { userId, guardianId, email: dto.email, linked: true as const, createdNewUser, enqueued };
     });
 
-    if (generated && outcome.createdNewUser) {
+    // Legacy fallback: only when the ledger enqueue did NOT run (no encryption key).
+    if (generated && outcome.createdNewUser && !outcome.enqueued) {
       this.events.emit(MAIL_EVENTS.credentialsIssued, {
         tenantId: this.tenantContext.getOrThrow().tenantId,
         to: dto.email, loginEmail: dto.email,
         password, relatedUserId: outcome.userId, kind: 'new',
       } satisfies CredentialsIssuedEvent);
     }
-    const { createdNewUser: _omit, ...result } = outcome;
+    const { createdNewUser: _omit, enqueued: _omit2, ...result } = outcome;
     return result;
   }
 

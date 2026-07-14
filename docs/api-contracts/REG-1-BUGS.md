@@ -152,3 +152,36 @@ that only change-password + logout are reachable).
   REG-1-provisioned) — consistent with the still-open REG-OBS-2 platform-scope question.
 
 _No functional bugs found in Phase 2._
+
+---
+
+## Phase 3 — Delivery pipeline & ledger (outbox poller, REG-OBS-3 design)
+
+### REG-NOTE-3 (Phase 3) — credential SMS must NOT go through `SmsService` (plaintext-at-rest avoidance)
+
+`communication/SmsService.send` persists the message body into `sms_logs` **and**
+console-logs it in MOCK mode. Routing the credential SMS (which contains the temp
+password) through it would leak the plaintext into `sms_logs` (→ visible in a `pg_dump`)
+and the console. The poller therefore handles credential SMS itself: `SMS_DRY_RUN=true`
+→ `SENT_DRY` with **no message built**; real send → an in-memory Sparrow POST that never
+persists the body. Redaction-safe by construction.
+
+### Design notes (Phase 3)
+
+- **Outbox, no BullMQ** (REG-OBS-3): `CredentialDeliveryPoller` (`@nestjs/schedule` interval,
+  iterates tenants like the fine-recalc job) drains PENDING rows via `SELECT … FOR UPDATE SKIP
+  LOCKED` — one row per tx, safe under concurrent/multi-instance pollers. Backoff via
+  `next_attempt_at`; 3 attempts → `FAILED` + `last_error`. Manual per-tenant trigger:
+  `POST /credential-deliveries/run` (tenant admin).
+- **Secret at rest**: `credential_delivery_secrets` (migration 0012) holds the AES-256-GCM
+  ciphertext + iv + auth_tag (base64), one row per user, key from `CREDENTIAL_SECRET_KEY`.
+  Deleted in the same tx that moves the user's last non-terminal delivery to a terminal state.
+- **Registration never fails on delivery**: the enqueue runs inside the registration tx only
+  when `credentialKeyConfigured()`; with no key it falls back to the legacy MAIL event, so the
+  account is always created. Guardian path (`createGuardianAccount`) wired; staff/student/owner
+  paths migrate in later phases.
+- **Env** (all in the gitignored `.env` for dev): `CREDENTIAL_SECRET_KEY` (64 hex / 32-byte
+  base64), `SMS_DRY_RUN`, `CREDENTIAL_DELIVERY_POLL` (=false to disable the auto-interval; manual
+  trigger still works).
+
+_No functional bugs found in Phase 3._
