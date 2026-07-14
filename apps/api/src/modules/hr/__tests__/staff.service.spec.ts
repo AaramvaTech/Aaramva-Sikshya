@@ -5,6 +5,7 @@ import { StaffService } from '../staff.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
+import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -79,6 +80,7 @@ describe('StaffService', () => {
           },
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: CredentialDeliveryService, useValue: { enqueueInTx: jest.fn() } },
         {
           provide: TenantPrismaService,
           useValue: {
@@ -135,6 +137,9 @@ describe('StaffService', () => {
     });
 
     it('REG-1 §3: never writes the generated temp password to any log output', async () => {
+      // Force the legacy MAIL-event path (no encryption key) so the generated
+      // password flows through the credential event we capture below.
+      delete process.env.CREDENTIAL_SECRET_KEY;
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ value: BigInt(7) }])
         .mockResolvedValueOnce([baseUserRow])

@@ -3,6 +3,7 @@ import { MailModule } from '../mail/mail.module';
 import { CredentialDeliveryService } from './credential-delivery.service';
 import { CredentialDeliveryPoller } from './credential-delivery.poller';
 import { CredentialDeliveryController } from './credential-delivery.controller';
+import { UserCredentialController } from './user-credential.controller';
 
 /**
  * REG-1 Phase 3 — credential-delivery outbox. TenantPrismaService /
@@ -12,7 +13,7 @@ import { CredentialDeliveryController } from './credential-delivery.controller';
  */
 @Module({
   imports: [MailModule],
-  controllers: [CredentialDeliveryController],
+  controllers: [CredentialDeliveryController, UserCredentialController],
   providers: [CredentialDeliveryService, CredentialDeliveryPoller],
   exports: [CredentialDeliveryService],
 })

@@ -214,3 +214,28 @@ rows would also fail the E.164 recipient expectation; the poller records it (no 
 
 **Post-apply verification (live):** `count(*) WHERE phone !~ '^\+977'` across all 4 columns ×
 6 tenants = **4** (exactly the rows above); `phone ~ '^\+977'` = **63**.
+
+### Design notes (Phase 4 — routing, resend, ledger migration)
+
+- **Find-or-create normalization** (REG-OBS-4): `GuardianService.provisionGuardian` +
+  `insertGuardiansTx` normalize the phone lookup key AND the stored value to E.164, so a
+  bare/`977…` input matches a backfilled `+977…` row (no duplicate). Live-proven: an inline
+  guardian phone `9815556666` stored as `+9779815556666`.
+- **Student fan-out** (§4): `createStudentAccount` fans out in-tx — primary guardian email +
+  phone (`recipient_user_id` = the guardian's user id) ALWAYS, plus the student's own login
+  email and phone (when present). Guardian-routed rows use a template that **names the student
+  + username** (signal = `recipient_user_id IS NOT NULL`). Live: 4 rows; `email_log` subject
+  "Login details for Aarav FanOut" (guardian) vs "Your school account credentials" (student).
+- **Ledger migration**: `createStaff`, `createStudentAccount`, and `TenantProvisioningService`
+  (owner) now enqueue on the ledger when a temp password is generated + a key is configured,
+  falling back to the legacy MAIL event otherwise (registration never fails on delivery).
+  Live-proven for staff (`email_log` = 0 → went to the ledger). **Owner path** is code-wired +
+  the tenant-admin MAIL emit gated on `result.enqueued`; its live gate is the **super-admin
+  onboarding** flow (`POST /platform/schools`, generated password) — register-school always
+  carries a chosen password, so it never triggers owner delivery.
+- **Resend** (`POST /users/:id/resend-credentials`, tenant admin): new temp password, old hash
+  invalidated, `must_change_password` re-set, sessions revoked, new ledger rows + secret.
+  Live-proven: old password → **401**, decrypted new password → **200 + mustChangePassword:true**.
+  Soft-deleted / unknown user → **404** (unit-tested), no enqueue.
+- **REG-NOTE-3** comment added at the Sparrow call site (credential SMS bypasses `SmsService`
+  to avoid persisting the password to `sms_logs`).

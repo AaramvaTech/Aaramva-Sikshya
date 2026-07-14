@@ -1,7 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
-import { encryptSecret, decryptSecret } from './credential-crypto.util';
+import { generateTemporaryPassword } from '../mail/password.util';
+import { toE164Nepal } from '../common/utils/phone.util';
+import {
+  encryptSecret,
+  decryptSecret,
+  credentialKeyConfigured,
+} from './credential-crypto.util';
 
 export type DeliveryChannel = 'EMAIL' | 'SMS';
 
@@ -21,6 +33,7 @@ export interface EnqueueParams {
 interface DeliveryRow {
   id: string;
   user_id: string;
+  recipient_user_id: string | null;
   channel: DeliveryChannel;
   recipient: string;
   attempts: number;
@@ -41,6 +54,12 @@ export interface DrainTally {
 }
 
 const MAX_ATTEMPTS = 3;
+
+const escHtml = (s: string) =>
+  s.replace(
+    /[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string,
+  );
 
 @Injectable()
 export class CredentialDeliveryService {
@@ -122,7 +141,7 @@ export class CredentialDeliveryService {
   > {
     return this.tenantPrisma.run(async (tx) => {
       const rows = await tx.$queryRawUnsafe<DeliveryRow[]>(
-        `SELECT id, user_id, channel, recipient, attempts
+        `SELECT id, user_id, recipient_user_id, channel, recipient, attempts
          FROM credential_deliveries
          WHERE status = 'PENDING' AND next_attempt_at <= NOW()
          ORDER BY created_at ASC
@@ -138,7 +157,7 @@ export class CredentialDeliveryService {
         const plaintext = await this.decryptFor(tx, row.user_id);
         result =
           row.channel === 'SMS'
-            ? await this.deliverSms(row.recipient, plaintext)
+            ? await this.deliverSms(tx, row, plaintext)
             : await this.deliverEmail(tx, row, plaintext);
       } catch (err) {
         result = 'RETRY';
@@ -211,21 +230,44 @@ export class CredentialDeliveryService {
     });
   }
 
+  /**
+   * Resolve the account owner (whose credentials these are) + whether this row is
+   * routed to a DIFFERENT person — a guardian — signalled by recipient_user_id.
+   * Guardian-routed rows name the student + their username in the message.
+   */
+  private async ownerContext(
+    tx: TenantTx,
+    row: DeliveryRow,
+  ): Promise<{ ownerName: string; ownerUsername: string; guardianRouted: boolean }> {
+    const u = await tx.$queryRawUnsafe<
+      { first_name: string; last_name: string | null; email: string }[]
+    >(`SELECT first_name, last_name, email FROM users WHERE id = $1::uuid`, row.user_id);
+    const o = u[0];
+    const name = o ? `${o.first_name} ${o.last_name ?? ''}`.trim() : '';
+    return {
+      ownerName: name || (o?.email ?? row.recipient),
+      ownerUsername: o?.email ?? row.recipient,
+      guardianRouted: row.recipient_user_id != null,
+    };
+  }
+
   private async deliverEmail(
     tx: TenantTx,
     row: DeliveryRow,
     plaintext: string,
   ): Promise<'SENT' | 'RETRY'> {
-    const u = await tx.$queryRawUnsafe<{ email: string }[]>(
-      `SELECT email FROM users WHERE id = $1::uuid`,
-      row.user_id,
-    );
-    const username = u[0]?.email ?? row.recipient;
+    const c = await this.ownerContext(tx, row);
     const res = await this.mail.send({
       to: row.recipient,
-      subject: 'Your school account credentials',
-      html: this.credentialHtml(username, plaintext),
-      text: `Username: ${username}\nTemporary password: ${plaintext}\nYou will be asked to change this password on first login.`,
+      subject: c.guardianRouted
+        ? `Login details for ${c.ownerName}`
+        : 'Your school account credentials',
+      html: c.guardianRouted
+        ? this.guardianHtml(c.ownerName, c.ownerUsername, plaintext)
+        : this.selfHtml(c.ownerUsername, plaintext),
+      text: c.guardianRouted
+        ? `Login details for ${c.ownerName} — username: ${c.ownerUsername}, temporary password: ${plaintext}. They will be asked to change it on first login.`
+        : `Username: ${c.ownerUsername}\nTemporary password: ${plaintext}\nYou will be asked to change this password on first login.`,
       type: 'CREDENTIALS',
       relatedUserId: row.user_id,
     });
@@ -234,16 +276,22 @@ export class CredentialDeliveryService {
   }
 
   private async deliverSms(
-    recipient: string,
+    tx: TenantTx,
+    row: DeliveryRow,
     plaintext: string,
   ): Promise<'SENT' | 'SENT_DRY'> {
     if (process.env.SMS_DRY_RUN === 'true') {
       // dev/CI: never call Sparrow, never build a body carrying the password.
       return 'SENT_DRY';
     }
-    // Real send — in-memory only, NOT via SmsService (which persists the body to
-    // sms_logs). Redaction-safe: the password leaves only over the Sparrow wire.
-    const message = `Your school login temporary password: ${plaintext}. Please change it on first login.`;
+    const c = await this.ownerContext(tx, row);
+    const message = c.guardianRouted
+      ? `Login for ${c.ownerName} (username ${c.ownerUsername}): temporary password ${plaintext}. Change it on first login.`
+      : `Your school login temporary password: ${plaintext}. Please change it on first login.`;
+    // REG-NOTE-3: deliberately NOT via communication/SmsService — that service
+    // persists the message body to sms_logs AND console-logs it in MOCK mode, which
+    // would leak the temp password (visible in a pg_dump / logs). This in-memory
+    // Sparrow POST never persists the body — redaction-safe by construction.
     const resp = await fetch('https://api.sparrowsms.com/v2/sms/', {
       method: 'POST',
       headers: {
@@ -252,7 +300,7 @@ export class CredentialDeliveryService {
       },
       body: JSON.stringify({
         from: process.env.SPARROW_SMS_SENDER,
-        to: recipient,
+        to: row.recipient,
         text: message,
       }),
     });
@@ -260,15 +308,60 @@ export class CredentialDeliveryService {
     return 'SENT';
   }
 
-  private credentialHtml(username: string, tempPassword: string): string {
-    const esc = (s: string) =>
-      s.replace(
-        /[&<>"]/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string,
-      );
+  private selfHtml(username: string, tempPassword: string): string {
     return `<p>Your account has been created.</p>
-<p><strong>Username:</strong> ${esc(username)}<br/>
-<strong>Temporary password:</strong> ${esc(tempPassword)}</p>
+<p><strong>Username:</strong> ${escHtml(username)}<br/>
+<strong>Temporary password:</strong> ${escHtml(tempPassword)}</p>
 <p>For your security, you will be asked to change this password the first time you log in.</p>`;
+  }
+
+  private guardianHtml(studentName: string, username: string, tempPassword: string): string {
+    return `<p>Login details for <strong>${escHtml(studentName)}</strong>.</p>
+<p><strong>Username:</strong> ${escHtml(username)}<br/>
+<strong>Temporary password:</strong> ${escHtml(tempPassword)}</p>
+<p>${escHtml(studentName)} will be asked to change this password the first time they log in.</p>`;
+  }
+
+  /**
+   * REG-1 §4 (resend) — POST /users/:id/resend-credentials. Generates a NEW temp
+   * password (invalidating the old hash), re-sets must_change_password, revokes
+   * sessions, and writes fresh PENDING ledger rows + a new encrypted secret. Never
+   * returns or re-sends the old password. Soft-deleted / unknown user → 404 (no enqueue).
+   */
+  async resendForUser(userId: string): Promise<{ userId: string; deliveryIds: string[] }> {
+    if (!credentialKeyConfigured()) {
+      throw new ServiceUnavailableException(
+        'Credential delivery is not configured (CREDENTIAL_SECRET_KEY unset)',
+      );
+    }
+    const rows = await this.tenantPrisma.query<{
+      id: string;
+      email: string;
+      phone: string | null;
+    }>(
+      `SELECT id, email, phone FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
+      userId,
+    );
+    if (!rows[0]) throw new NotFoundException('User not found');
+    const user = rows[0];
+
+    const plaintext = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(plaintext, 10);
+
+    const deliveryIds = await this.tenantPrisma.run(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+         WHERE id = $2::uuid`,
+        passwordHash,
+        userId,
+      );
+      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
+      const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: user.email }];
+      if (user.phone) {
+        targets.push({ channel: 'SMS', recipient: toE164Nepal(user.phone) ?? user.phone });
+      }
+      return this.enqueueInTx(tx, { userId, plaintext, targets });
+    });
+    return { userId, deliveryIds };
   }
 }

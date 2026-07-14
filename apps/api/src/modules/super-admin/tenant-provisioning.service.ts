@@ -6,6 +6,12 @@ import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantMigrationService } from '../tenant/tenant-migration.service';
 import { Role } from '../common/enums/role.enum';
+import {
+  CredentialDeliveryService,
+  DeliveryTarget,
+} from '../credential-delivery/credential-delivery.service';
+import { credentialKeyConfigured } from '../credential-delivery/credential-crypto.util';
+import { toE164Nepal } from '../common/utils/phone.util';
 
 const BCRYPT_ROUNDS = 12;
 const DEFAULT_TRIAL_DAYS = 30;
@@ -29,6 +35,8 @@ export interface ProvisionInput {
 export interface ProvisionResult {
   tenant: { id: string; name: string; slug: string };
   user: { id: string; email: string; firstName: string; lastName: string; role: string };
+  /** REG-1: true when the owner's credentials were enqueued on the tenant ledger. */
+  enqueued: boolean;
 }
 
 @Injectable()
@@ -39,6 +47,7 @@ export class TenantProvisioningService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly tenantMigration: TenantMigrationService,
+    private readonly credentialDelivery: CredentialDeliveryService,
   ) {}
 
   async provision(input: ProvisionInput): Promise<ProvisionResult> {
@@ -102,24 +111,45 @@ export class TenantProvisioningService {
 
       return await this.tenantContext.run(ctx, async () => {
         const passwordHash = await bcrypt.hash(input.adminPassword, BCRYPT_ROUNDS);
-        const rows = await this.tenantPrisma.query<{
-          id: string;
-          email: string;
-          first_name: string;
-          last_name: string;
-          role: string;
-        }>(
-          `INSERT INTO users (email, password_hash, first_name, last_name, role, must_change_password)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, email, first_name, last_name, role`,
-          input.adminEmail,
-          passwordHash,
-          input.adminFirstName,
-          input.adminLastName,
-          Role.SCHOOL_OWNER,
-          input.mustChangePassword ?? false,
-        );
-        const user = rows[0];
+        const generated = input.mustChangePassword ?? false;
+        const phoneE164 = input.phone ? toE164Nepal(input.phone) ?? input.phone : null;
+
+        // REG-1 §4 / REG-OBS-2: create the SCHOOL_OWNER and, when the password was
+        // generated + a key is configured, enqueue delivery on THIS (new) tenant's
+        // own ledger — inside one transaction. No platform ledger.
+        const { user, enqueued } = await this.tenantPrisma.run(async (tx) => {
+          const rows = await tx.$queryRawUnsafe<{
+            id: string;
+            email: string;
+            first_name: string;
+            last_name: string;
+            role: string;
+          }>(
+            `INSERT INTO users (email, password_hash, first_name, last_name, role, phone, must_change_password)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id, email, first_name, last_name, role`,
+            input.adminEmail,
+            passwordHash,
+            input.adminFirstName,
+            input.adminLastName,
+            Role.SCHOOL_OWNER,
+            phoneE164,
+            generated,
+          );
+          const u = rows[0];
+          let enq = false;
+          if (generated && credentialKeyConfigured()) {
+            const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: input.adminEmail }];
+            if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164 });
+            await this.credentialDelivery.enqueueInTx(tx, {
+              userId: u.id,
+              plaintext: input.adminPassword,
+              targets,
+            });
+            enq = true;
+          }
+          return { user: u, enqueued: enq };
+        });
 
         return {
           tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
@@ -130,6 +160,7 @@ export class TenantProvisioningService {
             lastName: user.last_name,
             role: user.role,
           },
+          enqueued,
         };
       });
     } catch (err) {

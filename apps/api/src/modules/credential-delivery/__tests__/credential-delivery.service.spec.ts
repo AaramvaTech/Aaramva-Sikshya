@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { CredentialDeliveryService } from '../credential-delivery.service';
 import { encryptSecret } from '../credential-crypto.util';
 
@@ -23,7 +24,8 @@ function makeHarness(opts: TxOpts) {
       if (sql.includes('FROM credential_delivery_secrets')) {
         return Promise.resolve(opts.secret ?? []);
       }
-      if (sql.includes('FROM users')) return Promise.resolve([{ email: 'u@x.z' }]);
+      if (sql.includes('FROM users'))
+        return Promise.resolve([{ first_name: 'Aarav', last_name: 'Student', email: 'aarav@demo.school' }]);
       if (sql.includes('count(*)')) return Promise.resolve([{ n: opts.pendingCount ?? 0 }]);
       return Promise.resolve([]);
     }),
@@ -139,5 +141,47 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
     expect(tally).toMatchObject({ processed: 1, retried: 1, failed: 0 });
     expect(updates[0].sql).toContain('next_attempt_at = NOW()');
     expect(updates[0].args[0]).toBe(1); // attempts incremented to 1
+  });
+
+  it('guardian-routed row (recipient_user_id set) → template names the student', async () => {
+    const { service, mail } = makeHarness({
+      dueRows: [[
+        { id: 'g1', user_id: 'stu-1', recipient_user_id: 'guardian-1', channel: 'EMAIL', recipient: 'parent@demo.school', attempts: 0 },
+      ], []],
+      secret: encSecret(),
+      pendingCount: 0,
+    });
+    await service.drainCurrentTenant();
+    const sent = (mail.send as jest.Mock).mock.calls[0][0];
+    expect(sent.subject).toContain('Aarav Student'); // owner (student) name from user_id
+    expect(sent.html).toContain('Aarav Student');
+  });
+
+  describe('resendForUser', () => {
+    it('generates a new temp password, invalidates the old hash, revokes sessions, enqueues', async () => {
+      const updates: string[] = [];
+      const tx = {
+        $executeRawUnsafe: jest.fn((sql: string) => { updates.push(sql); return Promise.resolve(1); }),
+        $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: 'del-1' }]),
+      };
+      const tenantPrisma = {
+        query: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@x.z', phone: '+9779812345678' }]),
+        run: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
+      };
+      const svc = new CredentialDeliveryService(tenantPrisma as never, { send: jest.fn() } as never);
+      const res = await svc.resendForUser('u1');
+      expect(res.userId).toBe('u1');
+      expect(res.deliveryIds).toEqual(['del-1', 'del-1']); // email + sms
+      expect(updates.some((s) => s.includes('must_change_password = true'))).toBe(true);
+      expect(updates.some((s) => s.includes('DELETE FROM refresh_tokens'))).toBe(true);
+      expect(updates.some((s) => s.includes('INSERT INTO credential_delivery_secrets'))).toBe(true);
+    });
+
+    it('unknown / soft-deleted user → NotFoundException (no enqueue)', async () => {
+      const tenantPrisma = { query: jest.fn().mockResolvedValue([]), run: jest.fn() };
+      const svc = new CredentialDeliveryService(tenantPrisma as never, {} as never);
+      await expect(svc.resendForUser('missing')).rejects.toBeInstanceOf(NotFoundException);
+      expect(tenantPrisma.run).not.toHaveBeenCalled();
+    });
   });
 });

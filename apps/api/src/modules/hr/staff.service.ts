@@ -10,6 +10,11 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { toE164Nepal } from '../common/utils/phone.util';
 import {
+  CredentialDeliveryService,
+  DeliveryTarget,
+} from '../credential-delivery/credential-delivery.service';
+import { credentialKeyConfigured } from '../credential-delivery/credential-crypto.util';
+import {
   StaffProfileRow,
   StaffDocumentRow,
   toStaffResponse,
@@ -31,6 +36,7 @@ export class StaffService {
     private readonly tenantContext: TenantContextService,
     private readonly events: EventEmitter2,
     private readonly storage: StorageService,
+    private readonly credentialDelivery: CredentialDeliveryService,
   ) {}
 
   async createStaff(dto: CreateStaffDto): Promise<StaffResponseDto> {
@@ -41,6 +47,7 @@ export class StaffService {
     // guarantees a valid mobile for HTTP callers; direct callers (seeds/tests)
     // may omit it → null (no throw here; the mandatory gate is the DTO).
     const phoneE164 = toE164Nepal(dto.phone);
+    let enqueued = false;
 
     const profile = await this.tenantPrisma.run(async (tx) => {
       const bsYear = getBsYear(new Date());
@@ -108,6 +115,20 @@ export class StaffService {
         dto.emergencyContactPhone ?? null,
       );
 
+      // REG-1 §4: enqueue delivery in-tx when a temp password was generated + a key
+      // is configured (self-delivery: staff's own email + phone). Else the legacy
+      // MAIL event below fires — registration never fails on delivery.
+      if (generated && credentialKeyConfigured()) {
+        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
+        if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164 });
+        await this.credentialDelivery.enqueueInTx(tx, {
+          userId: user.id,
+          plaintext: password,
+          targets,
+        });
+        enqueued = true;
+      }
+
       return {
         ...prof,
         email: dto.email,
@@ -120,7 +141,7 @@ export class StaffService {
       };
     });
 
-    if (generated) {
+    if (generated && !enqueued) {
       this.events.emit(MAIL_EVENTS.credentialsIssued, {
         tenantId: this.tenantContext.getOrThrow().tenantId,
         to: dto.email, loginEmail: dto.email,

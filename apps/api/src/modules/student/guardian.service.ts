@@ -217,6 +217,10 @@ export class GuardianService {
 
     // Hash before the transaction to keep the DB lock duration short.
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    // REG-OBS-4: find-or-create keys on phone — normalize the lookup key to E.164
+    // (matching the backfilled column) so a bare/977… input matches a stored +977…
+    // row instead of creating a duplicate.
+    const phoneE164 = toE164Nepal(dto.phone) ?? dto.phone;
 
     return this.tenantPrisma.run(async (tx) => {
       // 1. Find-or-create the relational guardian, idempotent on (student_id, phone).
@@ -228,7 +232,7 @@ export class GuardianService {
          LIMIT 1
          FOR UPDATE`,
         studentId,
-        dto.phone,
+        phoneE164,
       );
 
       let guardian = existingGuardian[0] ?? null;
@@ -242,7 +246,7 @@ export class GuardianService {
           dto.relation,
           dto.firstName,
           dto.lastName ?? null,
-          dto.phone,
+          phoneE164,
           dto.email,
           dto.isPrimary ?? false,
         );
@@ -289,7 +293,7 @@ export class GuardianService {
           Role.PARENT,
           dto.firstName,
           dto.lastName ?? null,
-          dto.phone,
+          phoneE164,
         );
         userId = newUserRows[0].id;
         parentAccountCreated = true;
@@ -350,13 +354,15 @@ export class GuardianService {
     const inserted: GuardianDto[] = [];
     for (let i = 0; i < guardians.length; i++) {
       const g = guardians[i];
+      // REG-OBS-4: normalize the find-or-create key + stored value to E.164.
+      const phoneE164 = g.phone ? (toE164Nepal(g.phone) ?? g.phone) : null;
 
       const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
         `SELECT id FROM guardians
          WHERE student_id = $1::uuid AND phone IS NOT DISTINCT FROM $2 AND deleted_at IS NULL
          LIMIT 1`,
         studentId,
-        g.phone ?? null,
+        phoneE164,
       );
       if (existing[0]) continue; // idempotent — guardian with this phone already present
 
@@ -368,7 +374,7 @@ export class GuardianService {
         g.relation,
         g.firstName,
         g.lastName ?? null,
-        g.phone ?? null,
+        phoneE164,
         g.email ?? null,
         i === primaryIndex,
       );

@@ -24,6 +24,12 @@ import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
 import { Role } from '../common/enums/role.enum';
 import { StorageService } from '../storage/storage.service';
+import {
+  CredentialDeliveryService,
+  DeliveryTarget,
+} from '../credential-delivery/credential-delivery.service';
+import { credentialKeyConfigured } from '../credential-delivery/credential-crypto.util';
+import { toE164Nepal } from '../common/utils/phone.util';
 
 const SORT_WHITELIST: Record<string, string> = {
   created_at: 'created_at',
@@ -72,6 +78,7 @@ export class StudentService {
     private readonly guardianService: GuardianService,
     private readonly events: EventEmitter2,
     private readonly storage: StorageService,
+    private readonly credentialDelivery: CredentialDeliveryService,
   ) {}
 
   /**
@@ -417,6 +424,7 @@ export class StudentService {
     const generated = !dto.password;
     const password = dto.password ?? generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(password, 10);
+    let enqueued = false;
 
     const result = await this.tenantPrisma.run(async (tx) => {
       const rows = await tx.$queryRawUnsafe<{
@@ -424,8 +432,9 @@ export class StudentService {
         user_id: string | null;
         first_name: string;
         last_name: string;
+        phone: string | null;
       }[]>(
-        `SELECT id, user_id, first_name, last_name
+        `SELECT id, user_id, first_name, last_name, phone
          FROM students
          WHERE id = $1::uuid AND tenant_id = $2::uuid AND deleted_at IS NULL
          FOR UPDATE`,
@@ -465,10 +474,39 @@ export class StudentService {
         throw new ConflictException('Student already has a linked login account');
       }
 
+      // REG-1 §4 student routing: when a temp password was generated + a key is
+      // configured, fan out delivery in-tx — the PRIMARY guardian (email + phone,
+      // recipient_user_id = the guardian's user) ALWAYS, plus the student's OWN
+      // email (their login) and phone (only when present). Guardian rows name the
+      // student in the message (recipient_user_id signal). Else the MAIL event below.
+      if (generated && credentialKeyConfigured()) {
+        const gRows = await tx.$queryRawUnsafe<
+          { email: string | null; phone: string | null; user_id: string | null }[]
+        >(
+          `SELECT email, phone, user_id FROM guardians
+           WHERE student_id = $1::uuid AND is_primary = true AND deleted_at IS NULL
+           ORDER BY created_at ASC LIMIT 1`,
+          studentId,
+        );
+        const guardian = gRows[0];
+        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
+        if (student.phone) {
+          targets.push({ channel: 'SMS', recipient: toE164Nepal(student.phone) ?? student.phone });
+        }
+        if (guardian?.email) {
+          targets.push({ channel: 'EMAIL', recipient: guardian.email, recipientUserId: guardian.user_id });
+        }
+        if (guardian?.phone) {
+          targets.push({ channel: 'SMS', recipient: toE164Nepal(guardian.phone) ?? guardian.phone, recipientUserId: guardian.user_id });
+        }
+        await this.credentialDelivery.enqueueInTx(tx, { userId, plaintext: password, targets });
+        enqueued = true;
+      }
+
       return { userId, studentId, email: dto.email, linked: true as const };
     });
 
-    if (generated) {
+    if (generated && !enqueued) {
       this.events.emit(MAIL_EVENTS.credentialsIssued, {
         tenantId, to: dto.email, loginEmail: dto.email,
         password, relatedUserId: result.userId, kind: 'new',
