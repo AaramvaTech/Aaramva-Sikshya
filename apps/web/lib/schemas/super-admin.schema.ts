@@ -18,7 +18,8 @@ export const onboardTenantSchema = z.object({
   adminEmail: z.string().email('Invalid email'),
   adminFirstName: z.string().min(1, 'Required'),
   adminLastName: z.string().min(1, 'Required'),
-  adminPassword: z.string().min(8, 'Min 8 characters'),
+  // REG-OBS-5: no chosen password — the owner gets a generated temp password
+  // (must_change_password) delivered via the new tenant's ledger.
   phone: z.string().optional(),
   address: z.string().optional(),
   panNumber: z.string().optional(),

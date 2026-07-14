@@ -122,10 +122,7 @@ export default function EditStudentPage() {
         sectionId: values.sectionId || undefined,
         academicYearId: values.academicYearId || undefined,
         rollNumber: values.rollNumber || undefined,
-        guardians: values.guardians?.map((g) => ({
-          ...g,
-          email: g.email || undefined,
-        })),
+        guardians: values.guardians, // REG-1 §2: guardian email is now required (string)
       });
       toast.success('Student profile updated');
       router.push(`/students/${id}`);

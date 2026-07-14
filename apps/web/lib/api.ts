@@ -27,6 +27,18 @@ api.interceptors.response.use(
     return res;
   },
   async (error) => {
+    // REG-1: a forced-change 403 is a redirect to change-password, NEVER a hard
+    // error. Fires when a must_change_password session hits any protected endpoint.
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.error?.code === 'PASSWORD_CHANGE_REQUIRED' &&
+      typeof window !== 'undefined' &&
+      window.location.pathname !== '/change-password'
+    ) {
+      window.location.href = '/change-password';
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !(error.config as any)._retry) {
       (error.config as any)._retry = true;
       try {

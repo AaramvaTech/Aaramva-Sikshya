@@ -265,3 +265,53 @@ rows in the **new** tenant schema → drain the poller → SENT/SENT_DRY + secre
 `DROP SCHEMA tenant_<slug> CASCADE` teardown, recorded here with `psql` proof. (Not done now —
 register-school does a full CREATE SCHEMA + DDL; the throwaway tenant + teardown belongs in the
 Phase-6 security/regression sweep.)
+
+### Phase 5 — web admin clients (design notes + manual walkthrough)
+
+**Mobile finding:** mobile has **no registration surface** (only the school-code entry screen —
+staff/student/guardian creation is admin/web-only), so **registration UI is web-only**. But
+mobile **does poll `/auth/me`** (`lib/session.ts`) and its session-restore uses `/auth/refresh`
+which carries no `mustChangePassword`, so a flagged user on cold-launch would get silent 403s.
+**Fixed:** a global `403 PASSWORD_CHANGE_REQUIRED` interceptor in `apps/mobile/lib/api.ts` sets
+`store/auth.setMustChangePassword()` → the root layout redirects to `change-password.tsx`
+(POL-2 T6). So force-change handling now covers mobile too (not web-only).
+
+**Web changes:**
+- **Zod schemas** (client-side field-level, mirroring the API): guardian **email mandatory** +
+  Nepali-mobile phone (`student.schema`); **exactly-one-primary-guardian** refine on the student
+  create/edit arrays; new `createStaffSchema` (mandatory Nepali phone). `staff.schema`.
+- **Student form**: the primary-guardian checkbox is now a **radio** (checking one clears the
+  others → exactly one); the array-level "Select exactly one primary guardian" error renders
+  under the guardians section.
+- **Staff dialog**: phone field marked required with an inline Nepali-mobile error.
+- **Onboard-school form** (`super-admin/schools`): the **admin-password field is removed**
+  (REG-OBS-5) with an info note that a temp password is generated + delivered; `onboardTenantSchema`
+  and `OnboardTenantData.adminPassword` dropped/optional.
+- **Server-error surfacing**: `lib/api-errors.ts` `extractApiErrors` flattens the envelope
+  `error.message` (string **or** the class-validator **array**) into a `string[]`; the staff,
+  student, and onboard forms now show the server's field-level 400 messages instead of a generic
+  "Failed…" toast.
+- **403 redirect**: `lib/api.ts` interceptor redirects to `/change-password` on
+  `error.code === 'PASSWORD_CHANGE_REQUIRED'` (never a hard error), complementing the existing
+  school-shell `user.mustChangePassword` redirect.
+
+**Manual walkthrough — each form's 400 rendering (client behaviour):**
+1. **Staff dialog** → leave Phone blank (or enter `12345`) → **inline red error** under Phone
+   ("Enter a valid Nepali mobile…") + a toast; submit blocked. Valid `98…` clears it. A server
+   400 (e.g. duplicate email) now shows the server message in the toast.
+2. **Student form** → a guardian with no email → **per-field** "Email is required" under that
+   guardian's email input (RHF). Bad guardian phone → per-field Nepali-mobile error. Zero or two
+   primaries → the **"Select exactly one primary guardian"** error under the guardians section
+   (and the radio makes two-primary impossible via the UI). Server 400 → messages joined into the
+   "Admission failed" toast description.
+3. **Onboard-school** → no password field at all; slug/email/required-field misses render per-field
+   (RHF); a server 400 shows the server messages in the toast.
+4. **Force-change** → any flagged session hitting a protected endpoint → **auto-redirect to
+   `/change-password`** (web via the axios interceptor; mobile via the store flag → root layout),
+   never an error screen.
+
+**Proof:** web `tsc --noEmit` exit 0; mobile `tsc --noEmit` exit 0; **web vitest 15/15**
+(student/staff schemas + api-errors); mobile **jest 112/112** (force-change interceptor +
+store didn't regress); API unchanged at **594**. (No RTL/DOM harness existed in web — added
+vitest for the schema/logic tests; full render tests are covered by the manual walkthrough
+above. API behaviour was already live-proven in Phases 1–4.)

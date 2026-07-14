@@ -1129,7 +1129,8 @@ export interface OnboardTenantData {
   adminEmail: string;
   adminFirstName: string;
   adminLastName: string;
-  adminPassword: string;
+  // REG-OBS-5: omitted — the API generates the owner temp password + ledger delivery.
+  adminPassword?: string;
   planId: string;
   phone?: string;
   address?: string;

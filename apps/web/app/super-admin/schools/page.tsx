@@ -37,6 +37,7 @@ import {
 } from '@/lib/hooks/use-super-admin';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { extractApiErrors } from '@/lib/api-errors';
 import { onboardTenantSchema, type OnboardTenantValues } from '@/lib/schemas/super-admin.schema';
 import type { TenantSummary } from '@/types/api.types';
 
@@ -90,7 +91,6 @@ export default function SchoolsPage() {
       adminEmail: '',
       adminFirstName: '',
       adminLastName: '',
-      adminPassword: '',
       phone: '',
       address: '',
       panNumber: '',
@@ -129,8 +129,8 @@ export default function SchoolsPage() {
       toast.success('School onboarded successfully');
       setAddOpen(false);
       reset();
-    } catch {
-      toast.error('Failed to onboard school');
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to onboard school').join(' • '));
     }
   }
 
@@ -499,17 +499,11 @@ export default function SchoolsPage() {
                   <p className="text-theme-xs text-error-600">{errors.adminEmail.message}</p>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="o-pass">Admin Password *</Label>
-                <Input
-                  id="o-pass"
-                  type="password"
-                  placeholder="Min 8 characters"
-                  {...register('adminPassword')}
-                />
-                {errors.adminPassword && (
-                  <p className="text-theme-xs text-error-600">{errors.adminPassword.message}</p>
-                )}
+              <div className="space-y-1.5 sm:col-span-2">
+                <p className="rounded-md bg-muted/50 px-3 py-2 text-theme-xs text-muted-foreground">
+                  A temporary password is generated automatically and delivered to the
+                  school owner — they set their own on first login.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="o-phone">Phone</Label>

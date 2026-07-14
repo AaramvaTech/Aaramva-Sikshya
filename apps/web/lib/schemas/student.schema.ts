@@ -1,17 +1,24 @@
 import { z } from 'zod';
 
+// REG-1 §2 mirror (client-side field-level validation matching the API):
+//  - Nepali mobile: 10 digits starting 96/97/98.
+//  - Guardian email is MANDATORY.
+//  - A student must have EXACTLY ONE primary guardian.
+const NEPAL_MOBILE = /^9[678]\d{8}$/;
+const NEPAL_MOBILE_MSG = 'Enter a valid Nepali mobile (10 digits starting 96/97/98)';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PRIMARY_MSG = 'Select exactly one primary guardian';
+
+const exactlyOnePrimary = (guardians: { isPrimary: boolean }[]) =>
+  guardians.filter((g) => g.isPrimary).length === 1;
+
 const guardianSchema = z.object({
   relation: z.string().min(1, 'Relation is required'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  phone: z.string().min(10, 'Valid phone number required'),
-  email: z
-    .string()
-    .refine(
-      (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      { message: 'Invalid email' },
-    )
-    .optional(),
+  phone: z.string().min(1, 'Phone is required').regex(NEPAL_MOBILE, NEPAL_MOBILE_MSG),
+  // REG-1 §2: guardian email is mandatory (credentials delivered to own email).
+  email: z.string().min(1, 'Email is required').regex(EMAIL_RE, 'Enter a valid email'),
   isPrimary: z.boolean(),
 });
 
@@ -24,13 +31,13 @@ export const createStudentSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER'], {
     error: 'Gender is required',
   }),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => !v || NEPAL_MOBILE.test(v), NEPAL_MOBILE_MSG),
   email: z
     .string()
-    .refine(
-      (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      { message: 'Invalid email' },
-    )
+    .refine((v) => !v || v === '' || EMAIL_RE.test(v), { message: 'Invalid email' })
     .optional(),
   address: z.string().optional(),
   bloodGroup: z.string().optional(),
@@ -39,7 +46,10 @@ export const createStudentSchema = z.object({
   classId: z.string().optional(),
   sectionId: z.string().optional(),
   rollNumber: z.number().int().positive().optional(),
-  guardians: z.array(guardianSchema).min(1, 'At least one guardian is required'),
+  guardians: z
+    .array(guardianSchema)
+    .min(1, 'At least one guardian is required')
+    .refine(exactlyOnePrimary, { message: PRIMARY_MSG }),
 });
 
 export const enrollStudentSchema = z.object({
@@ -53,14 +63,8 @@ const editGuardianSchema = z.object({
   relation: z.string().min(1, 'Relation is required'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  phone: z.string().min(10, 'Valid phone number required'),
-  email: z
-    .string()
-    .refine(
-      (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      { message: 'Invalid email' },
-    )
-    .optional(),
+  phone: z.string().min(1, 'Phone is required').regex(NEPAL_MOBILE, NEPAL_MOBILE_MSG),
+  email: z.string().min(1, 'Email is required').regex(EMAIL_RE, 'Enter a valid email'),
   isPrimary: z.boolean(),
 });
 
@@ -70,13 +74,13 @@ export const editStudentSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(100),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER'], { error: 'Gender is required' }),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => !v || NEPAL_MOBILE.test(v), NEPAL_MOBILE_MSG),
   email: z
     .string()
-    .refine(
-      (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      { message: 'Invalid email' },
-    )
+    .refine((v) => !v || v === '' || EMAIL_RE.test(v), { message: 'Invalid email' })
     .optional(),
   address: z.string().optional(),
   bloodGroup: z.string().optional(),
@@ -85,7 +89,11 @@ export const editStudentSchema = z.object({
   classId: z.string().optional(),
   sectionId: z.string().optional(),
   rollNumber: z.number().int().positive().optional(),
-  guardians: z.array(editGuardianSchema).optional(),
+  guardians: z
+    .array(editGuardianSchema)
+    // When guardians are edited, still require exactly one primary (empty = unchanged).
+    .refine((g) => g.length === 0 || exactlyOnePrimary(g), { message: PRIMARY_MSG })
+    .optional(),
 });
 
 export type CreateStudentFormValues = z.infer<typeof createStudentSchema>;
