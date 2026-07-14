@@ -31,6 +31,22 @@ function prefillMark(em: ExamMark, isSplit: boolean): MarkState {
   return { theory: '', practical: '', marks: em.marksObtained != null ? String(em.marksObtained) : '', isAbsent: false, remarks: em.remarks ?? '' };
 }
 
+// Display-only aggregate for the summary tiles (Average/Highest/Lowest/Passed).
+// Mirrors the row's own Total box formula, but only counts fully-entered
+// (non-absent) marks — partial split entries (only theory OR only practical
+// filled) are excluded, same as an incomplete/unsavable row. Pure + independent
+// of component state — never touches marksMap or the submit payload.
+function computeMarkTotal(state: MarkState, isSplit: boolean): number | null {
+  if (state.isAbsent) return null;
+  if (isSplit) {
+    const t = state.theory !== '' ? parseFloat(state.theory) : NaN;
+    const p = state.practical !== '' ? parseFloat(state.practical) : NaN;
+    return !isNaN(t) && !isNaN(p) ? t + p : null;
+  }
+  const m = state.marks !== '' ? parseFloat(state.marks) : NaN;
+  return isNaN(m) ? null : m;
+}
+
 function validateMarks(_studentId: string, state: MarkState, schedule: ExamSchedule, isSplit: boolean): string | null {
   if (state.isAbsent) return null;
   if (isSplit) {
@@ -262,6 +278,23 @@ export default function TeacherMarks() {
   // Roster rows render as FlatList items (virtualized) — only when ready, loaded and non-empty.
   const showRows = rosterReady && !rosterLoading && !rosterError && students.length > 0;
 
+  // Summary tiles (Average/Highest/Lowest/Passed) — computed CLIENT-SIDE from the
+  // marks currently entered/loaded, display-only (does not touch marksMap or submit).
+  const summaryMarks: number[] = rosterReady
+    ? students
+        .map((s) => marksMap[s.id])
+        .map((st) => (st ? computeMarkTotal(st, isSplit) : null))
+        .filter((v): v is number => v !== null)
+    : [];
+  const showSummary = summaryMarks.length > 0;
+  const summaryAverage = showSummary ? summaryMarks.reduce((a, b) => a + b, 0) / summaryMarks.length : 0;
+  const summaryHighest = showSummary ? Math.max(...summaryMarks) : 0;
+  const summaryLowest = showSummary ? Math.min(...summaryMarks) : 0;
+  const summaryPassMark = selectedSchedule?.passMarks;
+  const summaryPassedCount = summaryPassMark != null
+    ? summaryMarks.filter((v) => v >= summaryPassMark).length
+    : summaryMarks.filter((v) => v > 0).length;
+
   return (
     <FlatList
       className="bg-background"
@@ -363,6 +396,29 @@ export default function TeacherMarks() {
               </Card>
             )}
 
+            {/* Summary tiles — Average/Highest/Lowest/Passed, computed client-side from
+                marks currently entered/loaded (display-only, no fetch, no mutation). */}
+            {showSummary && (
+              <View style={styles.summaryRow}>
+                <View style={[styles.summaryTile, CARD_SHADOW, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.summaryNum, { color: c.primary }]}>{summaryAverage.toFixed(1)}</Text>
+                  <NpText style={[styles.summaryLabel, { color: c.mutedForeground }]}>{t('marks.summaryAverage')}</NpText>
+                </View>
+                <View style={[styles.summaryTile, CARD_SHADOW, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.summaryNum, { color: c.success }]}>{summaryHighest}</Text>
+                  <NpText style={[styles.summaryLabel, { color: c.mutedForeground }]}>{t('marks.summaryHighest')}</NpText>
+                </View>
+                <View style={[styles.summaryTile, CARD_SHADOW, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.summaryNum, { color: c.warning }]}>{summaryLowest}</Text>
+                  <NpText style={[styles.summaryLabel, { color: c.mutedForeground }]}>{t('marks.summaryLowest')}</NpText>
+                </View>
+                <View style={[styles.summaryTile, CARD_SHADOW, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.summaryNum, { color: c.info }]}>{summaryPassedCount}/{summaryMarks.length}</Text>
+                  <NpText style={[styles.summaryLabel, { color: c.mutedForeground }]}>{t('marks.summaryPassed')}</NpText>
+                </View>
+              </View>
+            )}
+
             {/* Step 3 — marks: card header + non-row states (rows render below as FlatList items) */}
             {rosterReady && (
               <View
@@ -438,6 +494,11 @@ const styles = StyleSheet.create({
   rowWrap: { marginHorizontal: 16 },
   hint: { fontSize: 13 },
   pickerList: { gap: 8 },
+  // Summary tiles (mirrors teacher-home's statCard: white CARD_SHADOW surface, colored number, muted uppercase label)
+  summaryRow: { flexDirection: 'row', gap: 10 },
+  summaryTile: { flex: 1, borderRadius: 15, paddingVertical: 14, alignItems: 'center' },
+  summaryNum: { fontFamily: FONT.extrabold, fontSize: 20 },
+  summaryLabel: { fontFamily: FONT.bold, fontSize: 8.5, textTransform: 'uppercase', marginTop: 2, textAlign: 'center' },
   fullMarksCol: { alignItems: 'flex-end', marginLeft: 8 },
   fullMarksNum: { fontSize: 13, fontFamily: FONT.bold },
   fullMarksLabel: { fontSize: 10 },

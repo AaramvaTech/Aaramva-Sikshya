@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useMyTimetable, useMyStaffProfile } from '../../hooks/useTeacher';
 import { EmptyState, ErrorState, ScreenHeader, Icon } from '../../components/ui';
 import { useThemeColors } from '../../lib/theme/colors';
+import type { TeacherSlotItem } from '../../types';
 import { subjectColor } from '../../lib/subjects';
-import { formatPeriodTime } from '../../lib/time';
+import { formatPeriodTime, timeToMinutes } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
 import Skeleton from '../../components/Skeleton';
 
@@ -19,6 +20,14 @@ function nepalNow(): Date {
   return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + offset * 60000);
 }
 
+// Pure: is `nowMinutes` inside this slot's [start, end)? Used only for the
+// "NOW" highlight — rendering only, no data/state change.
+function isSlotNow(slot: TeacherSlotItem, nowMinutes: number): boolean {
+  const s = timeToMinutes(slot.startTime);
+  const e = timeToMinutes(slot.endTime);
+  return s !== null && e !== null && nowMinutes >= s && nowMinutes < e;
+}
+
 export default function TeacherRoutine() {
   const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, isError, refetch } = useMyTimetable();
@@ -27,6 +36,9 @@ export default function TeacherRoutine() {
   const { t } = useLocale('teacher');
   const todayDow = nepalNow().getDay();
   const [selectedDay, setSelectedDay] = useState<number>(todayDow);
+  const isToday = selectedDay === todayDow;
+  const nowNepal = nepalNow();
+  const nowMinutes = nowNepal.getHours() * 60 + nowNepal.getMinutes();
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -136,6 +148,7 @@ export default function TeacherRoutine() {
           ) : (
             slots.map((slot, idx) => {
               const sc = subjectColor(idx);
+              const isNow = isToday && isSlotNow(slot, nowMinutes);
               return (
                 <View key={slot.slotId} style={styles.slotRow}>
                   {/* Time gutter */}
@@ -148,8 +161,14 @@ export default function TeacherRoutine() {
                     </Text>
                   </View>
 
-                  {/* Slot card */}
-                  <View style={[styles.slotCard, { backgroundColor: c.surface }]}>
+                  {/* Slot card — brand-tinted border/background + NOW badge when current */}
+                  <View
+                    style={[
+                      styles.slotCard,
+                      { backgroundColor: isNow ? c.brandSurface : c.surface },
+                      isNow && [styles.slotCardNow, { borderColor: c.primary }],
+                    ]}
+                  >
                     {/* Period pill — top-right */}
                     <View style={[styles.periodPill, { backgroundColor: sc.bg }]}>
                       <Text style={[styles.periodPillText, { color: sc.text }]}>P{slot.periodNumber}</Text>
@@ -163,9 +182,16 @@ export default function TeacherRoutine() {
 
                       {/* Info column */}
                       <View style={styles.info}>
-                        <NpText style={[styles.className, { color: c.foreground }]}>
-                          {slot.className}{slot.section}
-                        </NpText>
+                        <View style={styles.classNameRow}>
+                          <NpText style={[styles.className, { color: c.foreground }]}>
+                            {slot.className}{slot.section}
+                          </NpText>
+                          {isNow && (
+                            <View style={[styles.nowBadge, { backgroundColor: c.primary }]}>
+                              <NpText style={styles.nowBadgeText}>{t('timetable.now')}</NpText>
+                            </View>
+                          )}
+                        </View>
                         <View style={styles.metaRow}>
                           {/* Subject */}
                           <View style={styles.metaItem}>
@@ -247,10 +273,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, zIndex: 1,
   },
   periodPillText: { fontFamily: FONT.extrabold, fontSize: 10 },
+  slotCardNow: { borderWidth: 2 },
   slotBody: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 36 },
   iconSquare: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   info: { flex: 1, minWidth: 0 },
+  classNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   className: { fontFamily: FONT.extrabold, fontSize: 13.5 },
+  nowBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  nowBadgeText: { fontSize: 8.5, color: '#FFFFFF', fontFamily: FONT.extrabold, letterSpacing: 0.4 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontFamily: FONT.semibold, fontSize: 11 },
