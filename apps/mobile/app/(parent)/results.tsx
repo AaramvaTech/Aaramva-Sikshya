@@ -9,23 +9,25 @@ import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import {
   EmptyState, ErrorState, ScreenHeader, Icon,
-  ResultHero, GpaTrendBars, InsightCard, SubjectRow,
+  ResultHero, InsightCard, SubjectRow,
 } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 import { FONT } from '../../lib/theme/fonts';
-import { gpaTrend, subjectInsights } from '../../lib/results';
+import { subjectInsights } from '../../lib/results';
 import type { ExamResult } from '../../types';
 
 // Per-exam-type block — GPA/grade/rank hero + top-subject/needs-focus insight
 // tiles + subject rows, all shared with the student results screen (DRY). The
 // parent screen has no single "active term" (every published exam is shown at
-// once), so unlike the student screen this omits the gpaChange/rankChange
-// strip on ResultHero — useChildResults doesn't sort `results` by
-// examType.orderIndex the way the student hook defensively does, so a
-// delta-vs-previous-block would silently assume an ordering the API doesn't
-// guarantee. The GPA trend chart (self-labeled per point, order-agnostic) is
-// rendered once for the whole history instead — see ParentResults below.
+// once). It also omits BOTH the ResultHero gpaChange/rankChange delta strip AND
+// the GpaTrendBars chart: useChildResults returns exams in the backend's
+// `computed_at DESC` order and (unlike the student hook) does NOT re-sort by
+// examType.orderIndex, and the ExamResult shape carries no orderIndex / date /
+// term-sequence field to sort on. Any term-over-term rendering would therefore
+// be reverse-chronological — a child improving 2.5→3.5→4.0 would read as a
+// decline. Per-block ResultHero / InsightCard / SubjectRow are order-agnostic
+// and safe.
 function ResultBlock({ result }: { result: ExamResult }) {
   const c = useThemeColors();
   const { t } = useLocale('parent');
@@ -124,10 +126,6 @@ export default function ParentResults() {
   };
 
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
-  // Trend across every published exam for this child — order-agnostic (each
-  // bar is self-labeled by exam name), so it's safe even though the API order
-  // isn't guaranteed chronological. GpaTrendBars itself hides below 2 points.
-  const trendData = gpaTrend(results.map((r) => ({ name: r.examTypeName, gpa: r.gpa })));
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -162,12 +160,6 @@ export default function ParentResults() {
             </View>
           ) : (
             <>
-              {trendData.length >= 2 && (
-                <View style={{ marginBottom: 16 }}>
-                  <GpaTrendBars data={trendData} />
-                </View>
-              )}
-
               {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
 
               {/* Download report card PDF — mirrors the student results screen */}
