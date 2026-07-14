@@ -1,5 +1,4 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { todayBs, formatBs } from 'bs-calendar';
 

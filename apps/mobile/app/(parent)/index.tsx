@@ -1,5 +1,4 @@
 import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { todayBs, formatBs } from 'bs-calendar';
@@ -12,17 +11,21 @@ import { useBranding } from '../../lib/theme/provider';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import {
-  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, HeaderBell, type TodayPeriod,
+  AttendanceSummaryCard, TodayClasses, EmptyState, ErrorState, ScreenHeader, HeaderBell, Icon, type TodayPeriod,
 } from '../../components/ui';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
 
+// Material icon names (see lib/icons/names.ts) — mirrors the equivalent tiles
+// on the student dashboard (grade/how_to_reg/campaign/assignment) so the same
+// concept always reads as the same glyph across roles; 'payments' for Fees is
+// parent-only (no student equivalent).
 const QUICK = [
-  { icon: 'ribbon-outline', label: 'Results', route: '/(parent)/results' },
-  { icon: 'calendar-number-outline', label: 'Attendance', route: '/(parent)/attendance' },
-  { icon: 'megaphone-outline', label: 'Notices', route: '/(parent)/notices' },
-  { icon: 'card-outline', label: 'Fees', route: '/(parent)/fees' },
-  { icon: 'clipboard-outline', label: 'Homework', route: '/(parent)/assignments' },
+  { icon: 'grade', label: 'Results', route: '/(parent)/results' },
+  { icon: 'how_to_reg', label: 'Attendance', route: '/(parent)/attendance' },
+  { icon: 'campaign', label: 'Notices', route: '/(parent)/notices' },
+  { icon: 'payments', label: 'Fees', route: '/(parent)/fees' },
+  { icon: 'assignment', label: 'Homework', route: '/(parent)/assignments' },
 ] as const;
 
 const QUICK_KEYS: Record<string, string> = {
@@ -224,7 +227,7 @@ export default function ParentDashboard() {
                 onPress={() => router.push(q.route)}
               >
                 <View style={[styles.quickIcon, { backgroundColor: c.brandSurface }]}>
-                  <Ionicons name={q.icon} size={21} color={c.primary} />
+                  <Icon name={q.icon} size={21} color={c.primary} />
                 </View>
                 <NpText style={[styles.quickLabel, { color: c.foreground }]}>{t(QUICK_KEYS[q.label] ?? q.label)}</NpText>
               </TouchableOpacity>
@@ -240,7 +243,7 @@ export default function ParentDashboard() {
               accessibilityRole="button"
             >
               <NpText style={[styles.fullRoutineText, { color: c.primary }]}>{t('dashboard.fullRoutine')}</NpText>
-              <Ionicons name="chevron-forward" size={13} color={c.primary} />
+              <Icon name="chevron_right" size={13} color={c.primary} />
             </TouchableOpacity>
           </View>
           <TodayClasses periods={todayPeriods} isSchoolDay={isSchoolDay} style={styles.lastCard} />
