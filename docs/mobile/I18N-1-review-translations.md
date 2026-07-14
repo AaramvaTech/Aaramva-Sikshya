@@ -480,6 +480,15 @@ Numerals stay Arabic (0–9) in v1; dates render BS with Nepali month names. Kee
 | `today.markedLeave` | On leave | बिदामा |
 | `today.newNotice` | Notices | सूचनाहरू |
 
+## Redesign Slice 2 — Parent (added 2026-07, awaiting native review)
+
+**Note:** `parent.results.topSubject`/`needsFocus` back the same shared `InsightCard` tiles the student results screen already uses (now also adopted on the parent results screen). Verbatim reuse of the already-listed `student.results.topSubject`/`needsFocus` strings above — same concept, no new phrasing to review.
+
+| Key | English | Nepali (नेपाली) |
+|---|---|---|
+| `results.topSubject` | Top subject | उत्कृष्ट विषय |
+| `results.needsFocus` | Needs focus | ध्यान दिनुपर्ने |
+
 ---
 
-**Totals:** 436 strings across 5 namespaces (417 existing + 19 added in Redesign Slice 1).
+**Totals:** 438 strings across 5 namespaces (417 existing + 19 added in Redesign Slice 1 + 2 added in Redesign Slice 2).

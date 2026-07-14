@@ -1,9 +1,8 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useChildrenAssignments } from '../../hooks/useAssignments';
-import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, SelectChip, StatusBadge } from '../../components/ui';
+import { EmptyState, ErrorState, Icon, LoadingBlock, ScreenHeader, SelectChip, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { SUBMISSION_CHIPS, isPastDue } from '../../lib/assignmentStatus';
 import { useThemeColors } from '../../lib/theme/colors';
@@ -46,7 +45,7 @@ function ChildAssignmentList({ child }: { child: ChildAssignments }) {
             </View>
             <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>{a.title}</Text>
             <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
+              <Icon name="schedule" size={13} color={c.mutedForeground} />
               <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
               {a.submission?.marks != null && (
                 <NpText style={[styles.marks, { color: c.primary }]}>{t('common:common.marks', { value: a.submission.marks })}</NpText>

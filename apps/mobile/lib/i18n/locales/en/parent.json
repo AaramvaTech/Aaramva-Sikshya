@@ -94,7 +94,9 @@
     "gradeRank": "Grade · Rank",
     "fullMarks": "Full marks {{value}}",
     "downloadPdf": "Download report card PDF",
-    "downloading": "Downloading…"
+    "downloading": "Downloading…",
+    "topSubject": "Top subject",
+    "needsFocus": "Needs focus"
   },
   "timetable": {
     "title": "Timetable",

@@ -94,7 +94,9 @@
     "gradeRank": "ग्रेड · र्‍याङ्क",
     "fullMarks": "पूर्णाङ्क {{value}}",
     "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
-    "downloading": "डाउनलोड हुँदैछ…"
+    "downloading": "डाउनलोड हुँदैछ…",
+    "topSubject": "उत्कृष्ट विषय",
+    "needsFocus": "ध्यान दिनुपर्ने"
   },
   "timetable": {
     "title": "रुटिन",
