@@ -40,15 +40,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       const raw = exception.getResponse();
 
+      let customCode: string | undefined;
       if (typeof raw === 'string') {
         message = raw;
       } else if (typeof raw === 'object' && raw !== null) {
         const r = raw as Record<string, unknown>;
         message = (r['message'] as string) ?? exception.message;
         details = r['details'] ?? null;
+        // Allow an exception to carry a stable machine-readable code
+        // (e.g. REG-1 PASSWORD_CHANGE_REQUIRED) instead of the HTTP status name.
+        if (typeof r['code'] === 'string') customCode = r['code'];
       }
 
-      code = HttpStatus[status] ?? 'HTTP_ERROR';
+      code = customCode ?? HttpStatus[status] ?? 'HTTP_ERROR';
     } else {
       // Unexpected (non-HTTP) errors — log stack, hide details from client
       this.logger.error(

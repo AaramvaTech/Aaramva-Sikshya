@@ -76,3 +76,47 @@ client phases update the forms.
 ---
 
 _No functional bugs found in Phase 1._
+
+> **Pending:** the four Phase-1 dispositions (rulings on REG-OBS-2/3/4 + REG-NOTE)
+> were requested for logging here, but the actual rulings were not provided
+> (the paste placeholder came through literally). They are **not recorded yet** —
+> Claude Code will not invent product/architecture decisions. Awaiting the rulings.
+
+---
+
+## Phase 2 — Temp password & forced-change auth guard
+
+### REG-VERIFY-1 (Phase 2) — temp-password generation meets §3 (no change)
+
+`generateTemporaryPassword` (`mail/password.util.ts`) is CSPRNG-based
+(`crypto.randomInt`), default length **12**, guarantees ≥1 lower/upper/digit/symbol,
+excludes ambiguous chars, and is never derived from name/phone/DOB. Already covered by
+`password.util.spec` (length, charset, all-classes, distinctness across 200 calls).
+Meets §3 — verified, no change. All REG-1-created accounts set `must_change_password=true`
+(already true from Phase 1 / POL-1).
+
+### REG-NOTE-2 (Phase 2) — the forced-change guard blocks `GET /auth/me` (consumer impact)
+
+Per §3, a flagged user may reach ONLY change-password + logout, so **every** other
+authenticated route — including `GET /auth/me` — returns **403 `PASSWORD_CHANGE_REQUIRED`**.
+Clients already receive `mustChangePassword` in the **login** response (POL-1/POL-2), so
+they can route to change-password without `/auth/me`; and a `403 PASSWORD_CHANGE_REQUIRED`
+from any endpoint is itself an unambiguous "go change your password" signal. **Web/mobile
+shells that poll `/auth/me` mid-session must treat that 403 as the force-change state**
+(not a hard error). Flagged for the client phases; no backend change (the spec is explicit
+that only change-password + logout are reachable).
+
+### Design notes (Phase 2)
+
+- **Flag read FRESH from the DB** in `PasswordChangeRequiredGuard`, not baked into the JWT,
+  so a successful change-password unblocks the **same access token** immediately (no
+  re-login, no stale-token window). change-password already clears the flag in-transaction
+  and revokes refresh tokens (access token stays valid to expiry — the proof's "→ 200").
+- **`HttpExceptionFilter`** was extended to honor a machine-readable `code` on the exception
+  body (it previously hardcoded `code = HttpStatus[status]`), so the guard can surface the
+  exact `PASSWORD_CHANGE_REQUIRED` code the spec mandates. Backward-compatible (absent code →
+  HTTP status name); regression-tested both ways.
+- **Platform admins (tenantId null)** are skipped by the guard (no tenant users row; not
+  REG-1-provisioned) — consistent with the still-open REG-OBS-2 platform-scope question.
+
+_No functional bugs found in Phase 2._

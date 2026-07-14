@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { StaffService } from '../staff.service';
@@ -63,6 +63,7 @@ describe('StaffService', () => {
   let service: StaffService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let storage: jest.Mocked<StorageService>;
+  let events: jest.Mocked<EventEmitter2>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -102,6 +103,7 @@ describe('StaffService', () => {
     service = module.get(StaffService);
     storage = module.get(StorageService) as jest.Mocked<StorageService>;
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    events = module.get(EventEmitter2) as jest.Mocked<EventEmitter2>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -130,6 +132,42 @@ describe('StaffService', () => {
 
       expect(tenantPrisma.run).toHaveBeenCalledTimes(1);
       expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(3);
+    });
+
+    it('REG-1 §3: never writes the generated temp password to any log output', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ value: BigInt(7) }])
+        .mockResolvedValueOnce([baseUserRow])
+        .mockResolvedValueOnce([baseProfileRow]);
+
+      const consoleSpies = (['log', 'error', 'warn', 'debug', 'info'] as const).map(
+        (m) => jest.spyOn(console, m).mockImplementation(() => undefined),
+      );
+      const loggerSpies = (['log', 'error', 'warn', 'debug', 'verbose'] as const).map(
+        (m) => jest.spyOn(Logger.prototype, m).mockImplementation(() => undefined),
+      );
+
+      // No password → the service generates one and hands it to the credential
+      // MAIL event; that payload is the only place the plaintext legitimately lives.
+      await service.createStaff({
+        email: 'redact@school.com', firstName: 'Red', lastName: 'Act',
+        role: 'TEACHER', joinDate: '2024-01-01', baseSalary: 25000, phone: '9812345678',
+      });
+
+      const issued = (events.emit as jest.Mock).mock.calls.find(
+        (c) => c[1] && typeof (c[1] as { password?: unknown }).password === 'string',
+      );
+      expect(issued).toBeDefined();
+      const generatedPw = (issued![1] as { password: string }).password;
+      expect(generatedPw.length).toBeGreaterThanOrEqual(12);
+
+      const captured = [...consoleSpies, ...loggerSpies]
+        .flatMap((s) => s.mock.calls as unknown[][])
+        .map((args) => args.map((a) => String(a)).join(' '))
+        .join('\n');
+      expect(captured).not.toContain(generatedPw);
+
+      [...consoleSpies, ...loggerSpies].forEach((s) => s.mockRestore());
     });
 
     it('generates employee ID in EMP-YEAR-NNNN format', async () => {
