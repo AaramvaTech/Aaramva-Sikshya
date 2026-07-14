@@ -1,11 +1,11 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import NpText from '../components/NpText';
 import { useLocale } from '../hooks/useLocale';
-import { Ionicons } from '@expo/vector-icons';
 import BsDate from '../components/BsDate';
 import { logout } from '../lib/session';
 import { useThemeColors } from '../lib/theme/colors';
 import { FONT } from '../lib/theme/fonts';
+import { Icon } from '../components/ui';
 
 export default function WebPortalScreen() {
   const c = useThemeColors();
@@ -14,7 +14,7 @@ export default function WebPortalScreen() {
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
       <View style={[styles.iconWrap, { backgroundColor: `${c.primary}14` }]}>
-        <Ionicons name="desktop-outline" size={30} color={c.primary} />
+        <Icon name="desktop_windows" size={30} color={c.primary} />
       </View>
       <NpText style={[styles.title, { color: c.foreground }]}>{t('webPortal.title')}</NpText>
       <Text style={[styles.message, { color: c.mutedForeground }]}>
@@ -29,7 +29,7 @@ export default function WebPortalScreen() {
         accessibilityLabel={t('common:action.signOut')}
         activeOpacity={0.85}
       >
-        <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
+        <Icon name="logout" size={19} color={c.danger} style={{ marginRight: 8 }} />
         <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
       </TouchableOpacity>
     </View>

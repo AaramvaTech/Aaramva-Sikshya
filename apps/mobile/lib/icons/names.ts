@@ -34,7 +34,10 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * S4A1 (`receipt`, `sms`, `info`) for the help-code screen's "where to find your code"
  * bullets and closing note (replacing Ionicons `receipt-outline`,
  * `chatbubble-ellipses-outline`, `information-circle-outline`) — also verified against
- * MaterialIcons' glyphMap.
+ * MaterialIcons' glyphMap. Plus 3 added in Task S4A2 (`visibility`, `key`,
+ * `desktop_windows`) for the login password-visibility toggle, the change-password icon
+ * chip, and the web-portal admin-redirect icon (replacing Ionicons `eye-outline`, `key`,
+ * `desktop-outline`) — also verified against MaterialIcons' glyphMap.
  */
 export type IconName =
   | 'account_balance_wallet'
@@ -53,6 +56,7 @@ export type IconName =
   | 'check_circle'
   | 'chevron_left'
   | 'chevron_right'
+  | 'desktop_windows'
   | 'done_all'
   | 'download'
   | 'edit_note'
@@ -67,6 +71,7 @@ export type IconName =
   | 'help'
   | 'how_to_reg'
   | 'info'
+  | 'key'
   | 'lock'
   | 'logout'
   | 'mail'
@@ -91,6 +96,7 @@ export type IconName =
   | 'swap_horiz'
   | 'tag'
   | 'trending_up'
+  | 'visibility'
   | 'visibility_off'
   | 'wifi'
   | 'home'
