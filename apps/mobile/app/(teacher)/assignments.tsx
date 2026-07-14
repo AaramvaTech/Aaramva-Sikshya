@@ -1,10 +1,9 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useTeacherAssignments } from '../../hooks/useAssignments';
-import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, SelectChip, StatusBadge } from '../../components/ui';
+import { EmptyState, ErrorState, Icon, LoadingBlock, ScreenHeader, SelectChip, StatusBadge } from '../../components/ui';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
 import { CARD_SHADOW } from '../../components/ui/Card';
@@ -105,10 +104,10 @@ export default function TeacherAssignments() {
                     </View>
                     <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>{a.title}</Text>
                     <View style={styles.metaRow}>
-                      <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
+                      <Icon name="schedule" size={13} color={c.mutedForeground} />
                       <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
                       <View style={styles.metaItem}>
-                        <Ionicons name="people-outline" size={13} color={c.mutedForeground} />
+                        <Icon name="groups" size={13} color={c.mutedForeground} />
                         <NpText style={[styles.meta, { color: c.mutedForeground }]}>
                           {t('assignments.submittedCount', { count: a.submissionCount ?? 0 })}
                         </NpText>

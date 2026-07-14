@@ -3,7 +3,6 @@ import {
 } from 'react-native';
 import { useLocale } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
-import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import {
   useMyExamSchedules, useMySections, useSectionStudents, useExamMarks, useBulkSubmitMarks,
@@ -14,7 +13,7 @@ import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
-  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState,
+  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState, Icon,
 } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 
@@ -403,7 +402,7 @@ export default function TeacherMarks() {
           {rosterReady && students.length > 0 && !rosterLoading && !rosterError && (
             submitted ? (
               <View style={styles.savedBanner}>
-                <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
+                <Icon name="check_circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
                 <NpText style={styles.savedText}>{t('marks.saved')}</NpText>
               </View>
             ) : (
