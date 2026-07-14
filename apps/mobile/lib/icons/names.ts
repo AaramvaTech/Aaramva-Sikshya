@@ -27,7 +27,10 @@ import type { MaterialIcons } from '@expo/vector-icons';
  * in Task E5 (`attach_file`) for the Student Assignments list/detail attachment rows —
  * also verified against MaterialIcons' glyphMap. Plus 1 added in Task S2P3 (`error`) for
  * the Parent request-leave error banner (replacing Ionicons `alert-circle`) — also
- * verified against MaterialIcons' glyphMap.
+ * verified against MaterialIcons' glyphMap. Plus 2 added in Task S3T1 (`expand_less`,
+ * `swap_horiz`) for the Teacher attendance screen's "show all sections" toggle
+ * (replacing Ionicons `chevron-up` / `swap-horizontal-outline`) — also verified against
+ * MaterialIcons' glyphMap (kebab keys `expand-less` / `swap-horiz`).
  */
 export type IconName =
   | 'account_balance_wallet'
@@ -52,6 +55,7 @@ export type IconName =
   | 'error'
   | 'event'
   | 'event_upcoming'
+  | 'expand_less'
   | 'flag'
   | 'free_breakfast'
   | 'grade'
@@ -77,6 +81,7 @@ export type IconName =
   | 'settings'
   | 'share'
   | 'signal_cellular_alt'
+  | 'swap_horiz'
   | 'tag'
   | 'trending_up'
   | 'visibility_off'

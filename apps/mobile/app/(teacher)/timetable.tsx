@@ -2,9 +2,8 @@ import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, St
 import { useLocale } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useMyTimetable, useMyStaffProfile } from '../../hooks/useTeacher';
-import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader, Icon } from '../../components/ui';
 import { useThemeColors } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
@@ -69,7 +68,7 @@ export default function TeacherRoutine() {
             </View>
             {/* Calendar icon button — decorative; no week endpoint yet */}
             <View style={[styles.calBtn, { backgroundColor: c.surface }]}>
-              <Ionicons name="calendar-outline" size={20} color={c.primary} />
+              <Icon name="calendar_month" size={20} color={c.primary} />
             </View>
           </View>
 
@@ -159,7 +158,7 @@ export default function TeacherRoutine() {
                     <View style={styles.slotBody}>
                       {/* Tinted icon square */}
                       <View style={[styles.iconSquare, { backgroundColor: sc.bg }]}>
-                        <Ionicons name="people-outline" size={23} color={sc.text} />
+                        <Icon name="groups" size={23} color={sc.text} />
                       </View>
 
                       {/* Info column */}
@@ -170,7 +169,7 @@ export default function TeacherRoutine() {
                         <View style={styles.metaRow}>
                           {/* Subject */}
                           <View style={styles.metaItem}>
-                            <Ionicons name="calculator-outline" size={13} color={c.mutedForeground} />
+                            <Icon name="calculate" size={13} color={c.mutedForeground} />
                             <Text style={[styles.metaText, { color: c.mutedForeground }]}>
                               {slot.subject.name}
                             </Text>
@@ -178,7 +177,7 @@ export default function TeacherRoutine() {
                           {/* Room */}
                           {slot.room ? (
                             <View style={styles.metaItem}>
-                              <Ionicons name="business-outline" size={13} color={c.mutedForeground} />
+                              <Icon name="meeting_room" size={13} color={c.mutedForeground} />
                               <Text style={[styles.metaText, { color: c.mutedForeground }]}>
                                 {slot.room}
                               </Text>

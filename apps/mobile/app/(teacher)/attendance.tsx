@@ -3,7 +3,6 @@ import {
 } from 'react-native';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
-import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
   useMySections, useSectionStudents, useSectionAttendance, useBulkMarkAttendance,
@@ -16,7 +15,7 @@ import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
-  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState,
+  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState, Icon,
 } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 
@@ -51,13 +50,13 @@ function DateSelector({ selectedBs, onSelect }: { selectedBs: BsDate; onSelect: 
     <View>
       <View style={styles.monthNav}>
         <TouchableOpacity onPress={() => setViewMonth(prevMonth(viewMonth))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Previous month">
-          <Ionicons name="chevron-back" size={20} color={c.primary} />
+          <Icon name="chevron_left" size={20} color={c.primary} />
         </TouchableOpacity>
         <Text className="text-foreground" style={styles.monthLabel}>
           {BS_MONTH_NAMES_EN[viewMonth.month - 1]} {viewMonth.year}
         </Text>
         <TouchableOpacity onPress={() => setViewMonth(nextMonth(viewMonth))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Next month">
-          <Ionicons name="chevron-forward" size={20} color={c.primary} />
+          <Icon name="chevron_right" size={20} color={c.primary} />
         </TouchableOpacity>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
@@ -259,7 +258,7 @@ export default function TeacherAttendance() {
                 </View>
               )}
               <TouchableOpacity onPress={() => setShowAllSections(!showAllSections)} style={styles.toggleRow} activeOpacity={0.7}>
-                <Ionicons name={showAllSections ? 'chevron-up' : 'swap-horizontal-outline'} size={14} color={c.mutedForeground} />
+                <Icon name={showAllSections ? 'expand_less' : 'swap_horiz'} size={14} color={c.mutedForeground} />
                 <Text className="text-muted-foreground" style={styles.toggleText}>
                   {showAllSections ? 'Show my sections only' : 'Mark a different section'}
                 </Text>
@@ -329,7 +328,7 @@ export default function TeacherAttendance() {
             <View style={styles.submitWrap}>
               {submitted ? (
                 <View style={styles.savedBanner}>
-                  <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
+                  <Icon name="check_circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
                   <NpText style={styles.savedText}>{t('attendance.saved')}</NpText>
                 </View>
               ) : (
