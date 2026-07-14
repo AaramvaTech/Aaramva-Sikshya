@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { MAIL_EVENTS } from '../mail/mail.events';
 import type { PasswordResetRequestedEvent } from '../mail/mail.events';
+import { generateTemporaryPassword } from '../mail/password.util';
 import {
   TenantContext,
   TenantContextService,
@@ -52,13 +53,18 @@ export class AuthService {
 
   // ─── Register a new school + first SCHOOL_OWNER ────────────────────────────
   async register(dto: CreateSchoolDto) {
+    // REG-OBS-5: the SCHOOL_OWNER is a REG-1 account like any other — a generated
+    // temp password, must_change_password = true, delivered via the new tenant's
+    // ledger (the Phase-4 enqueue in provision fires because mustChangePassword=true).
+    const adminPassword = generateTemporaryPassword();
     const { tenant, user } = await this.provisioning.provision({
       schoolName: dto.schoolName,
       slug: dto.slug,
       adminEmail: dto.adminEmail,
       adminFirstName: dto.adminFirstName,
       adminLastName: dto.adminLastName,
-      adminPassword: dto.password,
+      adminPassword,
+      mustChangePassword: true,
       phone: dto.phone,
       address: dto.address,
     });
@@ -76,7 +82,8 @@ export class AuthService {
     return {
       ...tokens,
       school: tenant,
-      user,
+      // REG-OBS-5: flag the forced change so the web form redirects to change-password.
+      user: { ...user, mustChangePassword: true },
     };
   }
 

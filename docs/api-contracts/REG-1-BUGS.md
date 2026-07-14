@@ -239,3 +239,29 @@ rows would also fail the E.164 recipient expectation; the poller records it (no 
   Soft-deleted / unknown user → **404** (unit-tested), no enqueue.
 - **REG-NOTE-3** comment added at the Sparrow call site (credential SMS bypasses `SmsService`
   to avoid persisting the password to `sms_logs`).
+
+---
+
+## Phase 5 — Web admin clients
+
+### REG-OBS-5 — register-school must not accept a chosen password — **RESOLVED (2026-07-14)**
+
+> **RULING:** `register-school` no longer accepts a `password`. The `SCHOOL_OWNER` receives a
+> **generated** temp password with `must_change_password = true` and **ledger delivery**,
+> identical to every other REG-1 account (no more chosen-password special case). This closes the
+> gap where the owner was the one REG-1 account NOT delivered via the ledger.
+
+**Change (API + DTO):** `CreateSchoolDto.password` removed. `AuthService.register` generates the
+temp password (`generateTemporaryPassword`) and calls `provision({ ..., mustChangePassword: true })`,
+so the Phase-4 owner enqueue fires (owner creds delivered on the new tenant's own ledger). The
+register-school response surfaces `mustChangePassword: true` so the web form redirects to
+change-password. `register-school` still auto-issues a session (the flag gates it); the owner
+completes the forced change with the emailed temp password.
+
+**Phase-6 live-proof plan (owner path, deferred here per the Phase-4 note):** provision a
+**throwaway tenant via live HTTP** `POST /auth/register-school` (no password) → `SELECT` the
+`SCHOOL_OWNER` user (`must_change_password = t`, phone E.164) + `credential_deliveries` ledger
+rows in the **new** tenant schema → drain the poller → SENT/SENT_DRY + secret deleted → then
+`DROP SCHEMA tenant_<slug> CASCADE` teardown, recorded here with `psql` proof. (Not done now —
+register-school does a full CREATE SCHEMA + DDL; the throwaway tenant + teardown belongs in the
+Phase-6 security/regression sweep.)

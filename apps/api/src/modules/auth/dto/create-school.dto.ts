@@ -34,10 +34,9 @@ export class CreateSchoolDto {
   @IsEmail()
   adminEmail!: string;
 
-  @IsString()
-  @MinLength(8)
-  @Matches(/\d/, { message: 'password must contain at least one number' })
-  password!: string;
+  // REG-OBS-5: no chosen password — the SCHOOL_OWNER gets a generated temp password
+  // (must_change_password = true) delivered via the new tenant's ledger, like every
+  // other REG-1 account.
 
   @IsOptional()
   @IsString()
