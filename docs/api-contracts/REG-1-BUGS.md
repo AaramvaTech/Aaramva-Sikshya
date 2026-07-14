@@ -185,3 +185,32 @@ persists the body. Redaction-safe by construction.
   trigger still works).
 
 _No functional bugs found in Phase 3._
+
+---
+
+## Phase 4 — Data quality (REG-OBS-4 backfill)
+
+### REG-DQ-1 (Phase 4) — 4 non-normalizable phones left untouched by migration 0013
+
+The REG-OBS-4 backfill (`0013_backfill_phone_e164.sql`) normalized **63** bare/`977…`/`0977…`
+phones to E.164 across `guardians`/`staff_profiles`/`students`/`users` (demo 3, motherland 60).
+Per the ruling, rows that don't cleanly match `^9[678]\d{8}$` were **left untouched and are
+recorded here** (no guessing). All 4 are US-format faker-seed numbers in `tenant_motherland_school`:
+
+| Table | id | raw_phone |
+|---|---|---|
+| guardians | `3a93c18f-8a6e-48c1-a352-c7257042a3bc` | `+1 (533) 285-4301` |
+| guardians | `c07c54c2-eb08-45fe-b333-b20557837dd1` | `+1 (561) 677-3876` |
+| students  | `00dac627-b436-422b-a3d1-7825d67de3b3` | `+1 (189) 689-9076` |
+| students  | `f7fe32fe-3e46-4991-8798-222de993f226` | `+1 (981) 957-3077` |
+
+**Edit-path 400 note:** REG-1 Phase 1 made the registration phone rules strict
+(`^9[678]\d{8}$`). These 4 stored values are not valid Nepali mobiles, so any attempt to
+**update** these rows through the validated write path (which re-validates `phone`) will
+**400** until the phone is first corrected to a valid Nepali number. They cannot be
+silently normalized (ambiguous origin) — correction is a manual data-quality task for the
+school (or a targeted re-seed of motherland's faker data). Credential delivery to these
+rows would also fail the E.164 recipient expectation; the poller records it (no silent loss).
+
+**Post-apply verification (live):** `count(*) WHERE phone !~ '^\+977'` across all 4 columns ×
+6 tenants = **4** (exactly the rows above); `phone ~ '^\+977'` = **63**.
