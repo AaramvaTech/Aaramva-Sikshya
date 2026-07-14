@@ -15,13 +15,13 @@ import {
 import { useLocale } from '../hooks/useLocale';
 import NpText from '../components/NpText';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
 import { logout } from '../lib/session';
 import { useAuthStore } from '../store/auth';
 import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { FONT } from '../lib/theme/fonts';
+import { Icon } from '../components/ui';
 
 const MIN_LENGTH = 8;
 
@@ -92,7 +92,7 @@ export default function ChangePasswordScreen() {
     placeholder: string,
   ) => (
     <View style={[styles.inputRow, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
-      <Ionicons name="lock-closed-outline" size={18} color={c.brandMuted} />
+      <Icon name="lock" size={18} color={c.brandMuted} />
       <TextInput
         style={[styles.textInput, { color: c.foreground }]}
         placeholder={placeholder}
@@ -119,7 +119,7 @@ export default function ChangePasswordScreen() {
       >
         <View style={[styles.band, { paddingTop: insets.top + 26, backgroundColor: c.brandSurface, borderBottomColor: c.brandBorder }]}>
           <View style={[styles.iconChip, { backgroundColor: c.primary, shadowColor: c.primary }]}>
-            <Ionicons name="key" size={26} color={c.primaryForeground} />
+            <Icon name="key" size={26} color={c.primaryForeground} />
           </View>
           <NpText style={[styles.title, { color: c.foreground }]}>{t('changePassword.title')}</NpText>
           <NpText style={[styles.bandSub, { color: c.brandMuted }]}>
@@ -129,7 +129,7 @@ export default function ChangePasswordScreen() {
 
         <View style={styles.body}>
           <View style={[styles.notice, { backgroundColor: `${c.primary}12`, borderColor: c.brandBorder }]}>
-            <Ionicons name="information-circle-outline" size={16} color={c.primary} style={{ marginTop: 1 }} />
+            <Icon name="info" size={16} color={c.primary} style={{ marginTop: 1 }} />
             <NpText style={[styles.noticeText, { color: c.foreground }]}>
               {t('changePassword.notice')}
             </NpText>
@@ -147,13 +147,13 @@ export default function ChangePasswordScreen() {
           {inputRow(confirmPassword, setConfirmPassword, t('changePassword.repeatPlaceholder'))}
 
           <TouchableOpacity onPress={() => setShow((v) => !v)} style={styles.showToggle} activeOpacity={0.7}>
-            <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={16} color={c.brandMuted} />
+            <Icon name={show ? 'visibility_off' : 'visibility'} size={16} color={c.brandMuted} />
             <NpText style={[styles.showToggleText, { color: c.brandMuted }]}>{show ? t('changePassword.hidePasswords') : t('changePassword.showPasswords')}</NpText>
           </TouchableOpacity>
 
           {error !== null && (
             <View style={[styles.errorRow, { backgroundColor: `${c.danger}1A`, borderColor: c.danger }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={c.danger} style={{ marginTop: 1 }} />
+              <Icon name="error" size={16} color={c.danger} style={{ marginTop: 1 }} />
               <Text style={[styles.errorText, { color: c.danger }]}>{error}</Text>
             </View>
           )}
@@ -174,7 +174,7 @@ export default function ChangePasswordScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.signOut} onPress={signOut} activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={17} color={c.danger} style={{ marginRight: 6 }} />
+            <Icon name="logout" size={17} color={c.danger} style={{ marginRight: 6 }} />
             <NpText style={[styles.signOutText, { color: c.danger }]}>{t('changePassword.signOutInstead')}</NpText>
           </TouchableOpacity>
         </View>

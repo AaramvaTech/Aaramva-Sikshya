@@ -19,13 +19,28 @@
     "notices": "सूचना",
     "profile": "प्रोफाइल"
   },
+  "today": {
+    "title": "आज",
+    "markedPresent": "उपस्थित चिह्नित",
+    "markedAbsent": "अनुपस्थित चिह्नित",
+    "markedLate": "ढिलो चिह्नित",
+    "markedLeave": "बिदामा",
+    "notMarked": "अझै चिह्नित छैन",
+    "nextClass": "अर्को कक्षा · {{time}}",
+    "homeworkDue": "बाँकी गृहकार्य",
+    "newNotice": "सूचनाहरू"
+  },
   "assignments": {
     "title": "गृहकार्य",
     "subtitle": "तपाईंका शिक्षकहरूबाट गृहकार्य",
     "emptyTitle": "अहिलेसम्म कुनै गृहकार्य छैन",
     "emptySubtitle": "तपाईंका शिक्षकहरूले दिनुभएको नयाँ गृहकार्य यहाँ देखिनेछ।",
     "toSubmit": "पेश गर्न बाँकी",
-    "submitted": "पेश गरिएको"
+    "submitted": "पेश गरिएको",
+    "pendingCount_one": "{{count}} बाँकी",
+    "pendingCount_other": "{{count}} बाँकी",
+    "submittedCount_one": "{{count}} पेश गरिएको",
+    "submittedCount_other": "{{count}} पेश गरिएको"
   },
   "assignmentDetail": {
     "title": "गृहकार्य",
@@ -63,7 +78,8 @@
     "errorTitle": "हाजिरी लोड गर्न सकिएन",
     "academicYearThis": "यस शैक्षिक सत्र",
     "errorMonth": "यो महिना लोड गर्न सकिएन।",
-    "classPrefix": "कक्षा {{label}}"
+    "classPrefix": "कक्षा {{label}}",
+    "presentRate": "{{value}}% उपस्थिति दर"
   },
   "notices": {
     "title": "सूचना",
@@ -80,16 +96,25 @@
     "gradeRank": "ग्रेड · र्‍याङ्क",
     "fullMarks": "पूर्णाङ्क {{value}}",
     "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
-    "downloading": "डाउनलोड हुँदैछ…"
+    "downloading": "डाउनलोड हुँदैछ…",
+    "aggregatePct": "{{value}}% समग्र",
+    "rankHash": "र्‍याङ्क #{{value}}",
+    "gpaChangeLabel": "GPA परिवर्तन",
+    "rankChangeLabel": "र्‍याङ्क",
+    "gpaTrend": "GPA प्रवृत्ति",
+    "topSubject": "उत्कृष्ट विषय",
+    "needsFocus": "ध्यान दिनुपर्ने"
   },
   "profile": {
-    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
+    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",
     "personalInfo": "व्यक्तिगत जानकारी",
     "enrollment": "भर्ना विवरण",
     "errorTitle": "विवरण लोड गर्न सकिएन",
+    "lockedNote": "प्रोफाइलको जानकारी तपाईंको विद्यालयद्वारा व्यवस्थापन गरिन्छ।\nपरिवर्तनका लागि कार्यालयलाई सम्पर्क गर्नुहोस्।",
     "fields": {
       "firstName": "पहिलो नाम",
       "lastName": "थर",
@@ -105,11 +130,13 @@
     "title": "कक्षा रुटिन",
     "weekly": "साप्ताहिक रुटिन",
     "errorTitle": "तपाईंको रुटिन लोड गर्न सकिएन",
-    "emptyDay": "{{day}} का लागि कुनै कक्षा तालिका छैन।"
+    "emptyDay": "{{day}} का लागि कुनै कक्षा तालिका छैन।",
+    "breakDuration": "{{minutes}} मिनेट ब्रेक"
   },
   "settingsRow": {
     "notifications": "सूचना सेटिङ",
     "privacy": "गोपनीयता र सुरक्षा",
-    "help": "सहयोग"
+    "help": "सहयोग",
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   }
 }

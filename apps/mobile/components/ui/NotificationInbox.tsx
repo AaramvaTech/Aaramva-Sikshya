@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useLocaleStore } from '../../store/locale';
 import { bsLang } from '../../hooks/useLocale';
 import { View, Text, TouchableOpacity, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { adToBs, formatBs } from 'bs-calendar';
 import NpText from '../NpText';
@@ -11,6 +10,7 @@ import Skeleton from '../Skeleton';
 import { ScreenHeader } from './ScreenHeader';
 import { EmptyState, ErrorState } from './StateViews';
 import { CARD_SHADOW } from './Card';
+import { Icon } from './Icon';
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -19,6 +19,7 @@ import {
 import { routeForPush } from '../../lib/notifications';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
+import type { IconName } from '../../lib/icons/names';
 import type { NotificationItem } from '../../types';
 
 /**
@@ -28,13 +29,17 @@ import type { NotificationItem } from '../../types';
  */
 
 // Notification type → icon + accent (semantic, matches NoticeFeed's palette — not brand).
-const TYPE_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; tint: string; accent: string }> = {
-  ATTENDANCE: { icon: 'calendar-number-outline', tint: '#FCE9E9', accent: '#E5484D' },
-  FEE:        { icon: 'card-outline',            tint: '#FEF3E2', accent: '#D9892B' },
-  EXAM:       { icon: 'ribbon-outline',          tint: '#EAF0FE', accent: '#5B7FE0' },
-  NOTICE:     { icon: 'megaphone-outline',       tint: '#E4F6F1', accent: '#0E9F77' },
+const TYPE_CONFIG: Record<string, { icon: IconName; tint: string; accent: string }> = {
+  ATTENDANCE: { icon: 'how_to_reg', tint: '#FCE9E9', accent: '#E5484D' },
+  FEE:        { icon: 'payments',   tint: '#FEF3E2', accent: '#D9892B' },
+  EXAM:       { icon: 'grade',      tint: '#EAF0FE', accent: '#5B7FE0' },
+  NOTICE:     { icon: 'campaign',   tint: '#E4F6F1', accent: '#0E9F77' },
 };
-const DEFAULT_TYPE = { icon: 'notifications-outline' as const, tint: '#E4F6F1', accent: '#0E9F77' };
+const DEFAULT_TYPE: { icon: IconName; tint: string; accent: string } = {
+  icon: 'notifications',
+  tint: '#E4F6F1',
+  accent: '#0E9F77',
+};
 
 function timeLabel(iso: string, locale: 'en' | 'np'): string {
   try {
@@ -66,7 +71,7 @@ function InboxRow({
       style={[styles.row, CARD_SHADOW, { backgroundColor: c.surface }]}
     >
       <View style={[styles.iconWrap, { backgroundColor: cfg.tint }]}>
-        <Ionicons name={cfg.icon} size={18} color={cfg.accent} />
+        <Icon name={cfg.icon} size={18} color={cfg.accent} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.titleRow}>

@@ -1,9 +1,8 @@
 import {
-  View, Text, ScrollView, FlatList, TouchableOpacity, Alert, RefreshControl, StyleSheet,
+  View, Text, ScrollView, FlatList, TouchableOpacity, Alert, RefreshControl, TextInput, StyleSheet,
 } from 'react-native';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
-import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
   useMySections, useSectionStudents, useSectionAttendance, useBulkMarkAttendance,
@@ -16,7 +15,7 @@ import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
 import { STATUS_CONFIG } from '../../lib/attendance';
 import {
-  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState,
+  ScreenHeader, Card, CardLabel, PrimaryButton, SelectableRow, EmptyState, LoadingBlock, ErrorState, Icon,
 } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 
@@ -51,13 +50,13 @@ function DateSelector({ selectedBs, onSelect }: { selectedBs: BsDate; onSelect: 
     <View>
       <View style={styles.monthNav}>
         <TouchableOpacity onPress={() => setViewMonth(prevMonth(viewMonth))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Previous month">
-          <Ionicons name="chevron-back" size={20} color={c.primary} />
+          <Icon name="chevron_left" size={20} color={c.primary} />
         </TouchableOpacity>
         <Text className="text-foreground" style={styles.monthLabel}>
           {BS_MONTH_NAMES_EN[viewMonth.month - 1]} {viewMonth.year}
         </Text>
         <TouchableOpacity onPress={() => setViewMonth(nextMonth(viewMonth))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Next month">
-          <Ionicons name="chevron-forward" size={20} color={c.primary} />
+          <Icon name="chevron_right" size={20} color={c.primary} />
         </TouchableOpacity>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
@@ -113,6 +112,7 @@ export default function TeacherAttendance() {
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [showAllSections, setShowAllSections] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const c = useThemeColors();
   const { t, locale } = useLocale('teacher');
 
@@ -186,16 +186,24 @@ export default function TeacherAttendance() {
   const presentCount = students.filter((s) => (statusMap[s.id] ?? 'PRESENT') === 'PRESENT').length;
   const absentCount = students.filter((s) => (statusMap[s.id] ?? 'PRESENT') === 'ABSENT').length;
 
+  // Display-only name filter — the underlying roster (`students`), `statusMap`,
+  // and submission (`handleSubmit`, which maps over `studentsResult.data`) are
+  // untouched; this only narrows what's rendered in the FlatList.
+  const searchTerm = searchQuery.trim().toLowerCase();
+  const filteredStudents = searchTerm
+    ? students.filter((s) => `${s.firstName} ${s.lastName}`.toLowerCase().includes(searchTerm))
+    : students;
+
   const rosterLoading = studentsResult.isLoading || existingResult.isLoading;
   const rosterError = studentsResult.isError || existingResult.isError;
   // Roster rows render as FlatList items (virtualized) — only when ready, loaded and non-empty.
-  const showRows = !!selectedSection && !rosterLoading && !rosterError && students.length > 0;
+  const showRows = !!selectedSection && !rosterLoading && !rosterError && filteredStudents.length > 0;
 
   return (
     <FlatList
       className="bg-background"
       style={styles.fill}
-      data={showRows ? students : []}
+      data={showRows ? filteredStudents : []}
       keyExtractor={(item) => item.id}
       extraData={statusMap}
       showsVerticalScrollIndicator={false}
@@ -259,7 +267,7 @@ export default function TeacherAttendance() {
                 </View>
               )}
               <TouchableOpacity onPress={() => setShowAllSections(!showAllSections)} style={styles.toggleRow} activeOpacity={0.7}>
-                <Ionicons name={showAllSections ? 'chevron-up' : 'swap-horizontal-outline'} size={14} color={c.mutedForeground} />
+                <Icon name={showAllSections ? 'expand_less' : 'swap_horiz'} size={14} color={c.mutedForeground} />
                 <Text className="text-muted-foreground" style={styles.toggleText}>
                   {showAllSections ? 'Show my sections only' : 'Mark a different section'}
                 </Text>
@@ -289,6 +297,21 @@ export default function TeacherAttendance() {
                     <NpText style={styles.allPresentText}>{t('attendance.allPresent')}</NpText>
                   </TouchableOpacity>
                 </View>
+                {!rosterLoading && !rosterError && students.length > 0 && (
+                  <View style={[styles.searchRow, { backgroundColor: c.surfaceMuted, borderColor: c.border }]}>
+                    <Icon name="search" size={18} color={c.mutedForeground} />
+                    <TextInput
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      placeholder={t('attendance.searchPlaceholder')}
+                      placeholderTextColor={c.placeholderIcon}
+                      style={[styles.searchInput, { color: c.foreground }]}
+                      accessibilityLabel={t('attendance.searchPlaceholder')}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                )}
                 {rosterLoading ? (
                   <LoadingBlock label={t('attendance.loadingStudents')} />
                 ) : rosterError ? (
@@ -299,6 +322,8 @@ export default function TeacherAttendance() {
                   />
                 ) : students.length === 0 ? (
                   <EmptyState compact icon="people-outline" title={t('attendance.noStudents')} />
+                ) : filteredStudents.length === 0 ? (
+                  <EmptyState compact icon="search-outline" title={t('attendance.noSearchResults')} />
                 ) : null}
               </View>
             )}
@@ -329,13 +354,13 @@ export default function TeacherAttendance() {
             <View style={styles.submitWrap}>
               {submitted ? (
                 <View style={styles.savedBanner}>
-                  <Ionicons name="checkmark-circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
+                  <Icon name="check_circle" size={22} color={STATUS_CONFIG.PRESENT.color} />
                   <NpText style={styles.savedText}>{t('attendance.saved')}</NpText>
                 </View>
               ) : (
                 <PrimaryButton
                   label={markMutation.isPending ? t('attendance.saving') : t('attendance.saveWithCount', { count: students.length })}
-                  icon="save-outline"
+                  icon="save"
                   loading={markMutation.isPending}
                   onPress={handleSubmit}
                 />
@@ -368,6 +393,13 @@ const styles = StyleSheet.create({
   pickerList: { gap: 8 },
   toggleRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24 },
   toggleText: { fontSize: 12, fontFamily: FONT.semibold },
+  // roster search (display-only filter — see filteredStudents)
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 12,
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 44,
+  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: FONT.medium, paddingVertical: 0 },
   // date
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   monthLabel: { fontSize: 15, fontFamily: FONT.bold },

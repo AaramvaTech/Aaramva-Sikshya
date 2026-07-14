@@ -15,7 +15,7 @@ import {
 import { useLocale } from '../hooks/useLocale';
 import NpText from '../components/NpText';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../components/ui';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -174,7 +174,7 @@ export default function SchoolEntryScreen() {
 
             {/* Input */}
             <View style={styles.inputRow}>
-              <Ionicons name="school" size={19} color={OB.green} />
+              <Icon name="school" size={19} color={OB.green} />
               <TextInput
                 style={styles.textInput}
                 placeholder={t('schoolCode.codePlaceholder')}
@@ -191,7 +191,7 @@ export default function SchoolEntryScreen() {
                   onPress={() => { setSlug(''); setError(null); }}
                   accessibilityLabel="Clear input"
                 >
-                  <Ionicons name="close-circle" size={18} color={OB.cancel} />
+                  <Icon name="cancel" size={18} color={OB.cancel} />
                 </TouchableOpacity>
               )}
             </View>
@@ -199,7 +199,7 @@ export default function SchoolEntryScreen() {
             {/* Inline error */}
             {error !== null && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={16} color={OB.danger} style={{ marginTop: 1 }} />
+                <Icon name="error" size={16} color={OB.danger} style={{ marginTop: 1 }} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -221,7 +221,7 @@ export default function SchoolEntryScreen() {
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="search" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Icon name="search" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
                     <NpText style={styles.ctaText}>{t('schoolCode.findSchoolBtn')}</NpText>
                   </>
                 )}
@@ -234,13 +234,13 @@ export default function SchoolEntryScreen() {
               onPress={() => router.push('/help-code')}
               activeOpacity={0.7}
             >
-              <Ionicons name="help-circle-outline" size={16} color={OB.faint} style={{ marginRight: 6 }} />
+              <Icon name="help" size={16} color={OB.faint} style={{ marginRight: 6 }} />
               <Text style={styles.helpText}>Don&apos;t know your code?</Text>
             </TouchableOpacity>
 
             {/* Trust note */}
             <View style={[styles.trust, { marginTop: 'auto' }]}>
-              <Ionicons name="lock-closed" size={18} color={OB.green} style={{ marginRight: 10 }} />
+              <Icon name="lock" size={18} color={OB.green} style={{ marginRight: 10 }} />
               <Text style={styles.trustText}>
                 Private to your school. Secured by Aaramva Shikshya.
               </Text>
@@ -269,11 +269,11 @@ export default function SchoolEntryScreen() {
               <View style={styles.foundInfo}>
                 <NpText style={styles.foundName}>{tenant.name}</NpText>
                 <View style={styles.slugChip}>
-                  <Ionicons name="pricetag" size={12} color={OB.green} style={{ marginRight: 4 }} />
+                  <Icon name="tag" size={12} color={OB.green} style={{ marginRight: 4 }} />
                   <Text style={styles.slugChipText}>{tenant.slug}</Text>
                 </View>
               </View>
-              <Ionicons name="checkmark-circle" size={24} color={OB.check} />
+              <Icon name="check_circle" size={24} color={OB.check} />
             </View>
 
             {/* Continue to login */}
@@ -285,7 +285,7 @@ export default function SchoolEntryScreen() {
                 style={styles.ctaFill}
               >
                 <NpText style={[styles.ctaText, { marginRight: 8 }]}>{t('schoolCode.continueToLogin')}</NpText>
-                <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+                <Icon name="arrow_forward" size={19} color="#FFFFFF" />
               </LinearGradient>
             </TouchableOpacity>
 

@@ -1,5 +1,4 @@
-import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ScrollView, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 
 import { useMyChildren, useGuardianProfile } from '../../hooks/useParentChild';
@@ -9,7 +8,7 @@ import { logout } from '../../lib/session';
 import { useThemeColors } from '../../lib/theme/colors';
 import { useLocale } from '../../hooks/useLocale';
 import { FONT } from '../../lib/theme/fonts';
-import { ErrorState, ScreenHeader, LanguageToggle } from '../../components/ui';
+import { ErrorState, ScreenHeader, LanguageToggle, Icon, SchoolBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
@@ -44,17 +43,7 @@ export default function ParentProfile() {
         {/* Hero band */}
         <ScreenHeader variant="hero" bare padTop={18} padBottom={20} align="center">
           <View style={styles.schoolRow}>
-            {branding?.logoUrl ? (
-              <View style={[styles.schoolChip, { backgroundColor: c.surface }]}>
-                <Image source={{ uri: branding.logoUrl }} style={{ width: 18, height: 18 }} resizeMode="contain" />
-              </View>
-            ) : (
-              <View style={[styles.schoolChip, { backgroundColor: c.primary }]}>
-                <Text style={[styles.schoolChipText, { color: c.primaryForeground }]}>
-                  {schoolName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}
-                </Text>
-              </View>
-            )}
+            <SchoolBadge name={schoolName} logoUrl={branding?.logoUrl} size={26} />
             <NpText style={[styles.schoolName, { color: c.brandMuted }]}>{schoolName}</NpText>
           </View>
 
@@ -85,9 +74,22 @@ export default function ParentProfile() {
             onPress={() => router.push('/(parent)/profile-details')}
             activeOpacity={0.8}
           >
-            <Ionicons name="person-circle-outline" size={18} color={c.primary} />
+            <Icon name="person" size={18} color={c.primary} />
             <NpText style={[styles.detailsRowLabel, { color: c.foreground }]}>{t('profile.viewDetails')}</NpText>
-            <Ionicons name="chevron-forward" size={16} color={c.mutedForeground} style={{ marginLeft: 'auto' }} />
+            <Icon name="chevron_right" size={16} color={c.mutedForeground} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+
+          {/* Change password — nav row, mirrors the student profile treatment (E4). */}
+          <TouchableOpacity
+            style={[styles.detailsRow, CARD_SHADOW, { backgroundColor: c.surface }]}
+            onPress={() => router.push('/change-password')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('settingsRow.changePassword')}
+          >
+            <Icon name="lock" size={18} color={c.primary} />
+            <NpText style={[styles.detailsRowLabel, { color: c.foreground }]}>{t('settingsRow.changePassword')}</NpText>
+            <Icon name="chevron_right" size={16} color={c.mutedForeground} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
 
           {/* My children */}
@@ -118,7 +120,7 @@ export default function ParentProfile() {
                       <NpText style={[styles.childName, { color: c.foreground }]}>{ch.firstName} {ch.lastName}</NpText>
                       <Text style={[styles.childSub, { color: c.mutedForeground }]}>{sub}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={c.border} />
+                    <Icon name="chevron_right" size={18} color={c.border} />
                   </View>
                 );
               })}
@@ -137,9 +139,12 @@ export default function ParentProfile() {
             onPress={() => { void logout(); }}
             activeOpacity={0.85}
           >
-            <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
+            <Icon name="logout" size={19} color={c.danger} style={{ marginRight: 8 }} />
             <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
           </TouchableOpacity>
+
+          {/* Version footer (mirrors the student profile treatment (E4)) */}
+          <NpText style={[styles.footer, { color: c.mutedForeground }]}>{t('profile.footer')}</NpText>
         </View>
       </ScrollView>
     </View>
@@ -151,8 +156,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
-  schoolChip: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  schoolChipText: { fontFamily: FONT.extrabold, fontSize: 10 },
   schoolName: { fontFamily: FONT.bold, fontSize: 12 },
   avatar: { width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: FONT.extrabold, fontSize: 26 },
@@ -180,4 +183,5 @@ const styles = StyleSheet.create({
     height: 48, marginTop: 16, borderRadius: 14, borderWidth: 1.5,
   },
   signOutText: { fontFamily: FONT.bold, fontSize: 14 },
+  footer: { fontFamily: FONT.regular, fontSize: 10.5, textAlign: 'center', marginTop: 14 },
 });

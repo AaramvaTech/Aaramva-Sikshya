@@ -1,6 +1,5 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import NpText from '../../components/NpText';
 import { useAttendanceHistory, useMyAttendanceSummary, useMyProfile } from '../../hooks/useStudentMe';
 import { STATUS_CONFIG, type AttendanceStatus } from '../../lib/attendance';
@@ -8,11 +7,29 @@ import { todayBs, daysInBsMonth, bsToAd, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import { localDateKey } from '../../lib/time';
 import { SATURDAY_HIGHLIGHT, useThemeColors, brandMuted } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader, Icon, StatTile, type IconName } from '../../components/ui';
 import { useLocale } from '../../hooks/useLocale';
 import { bsMonthName } from '../../lib/i18n/date';
 import { FONT } from '../../lib/theme/fonts';
 import type { AttendanceHistoryItem } from '../../types';
+
+// Recent-activity status icon (Material, via the shared Icon component). Local to this
+// screen — STATUS_CONFIG.icon stays Ionicons-named for the other screens still on Ionicons
+// (e.g. app/(parent)/attendance.tsx), so it is deliberately not touched here.
+const RECENT_ICON: Record<AttendanceStatus, IconName> = {
+  PRESENT: 'check_circle',
+  ABSENT: 'cancel',
+  LATE: 'schedule',
+  LEAVE: 'calendar_month',
+};
+
+// Soft-tile tone per status, matching the design's success/danger/warning/info palette.
+const TONE_BY_STATUS: Record<AttendanceStatus, 'success' | 'danger' | 'warning' | 'info'> = {
+  PRESENT: 'success',
+  ABSENT: 'danger',
+  LATE: 'warning',
+  LEAVE: 'info',
+};
 
 function prevMonthOf(curr: BsDate): BsDate {
   if (curr.month === 1) return { year: curr.year - 1, month: 12, day: 1 };
@@ -24,7 +41,6 @@ function nextMonthOf(curr: BsDate): BsDate {
 }
 
 const STATUS_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
-const STAT_KEYS: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE'];
 const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function StudentAttendance() {
@@ -98,20 +114,25 @@ export default function StudentAttendance() {
             {summary?.academicYearName ?? t('attendance.academicYearThis')}
           </NpText>
 
-          {/* 3 stat tiles */}
+          {/* 4-up stat tiles (present/absent/late/leave) + present-rate line */}
           {summary && (
-            <View style={styles.statRow}>
-              {STAT_KEYS.map((key) => {
-                const cfg = STATUS_CONFIG[key];
-                const val = key === 'PRESENT' ? summary.present : key === 'ABSENT' ? summary.absent : summary.late;
-                return (
-                  <View key={key} style={[styles.statTile, { backgroundColor: c.surface }]}>
-                    <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
-                    <NpText style={[styles.statLabel, { color: cfg.color }]}>{t(cfg.labelKey).toUpperCase()}</NpText>
-                  </View>
-                );
-              })}
-            </View>
+            <>
+              <View style={styles.statRow}>
+                {STATUS_KEYS.map((key) => {
+                  const val =
+                    key === 'PRESENT' ? summary.present
+                    : key === 'ABSENT' ? summary.absent
+                    : key === 'LATE' ? summary.late
+                    : summary.leave;
+                  return (
+                    <StatTile key={key} value={val} label={t(STATUS_CONFIG[key].labelKey)} tone={TONE_BY_STATUS[key]} />
+                  );
+                })}
+              </View>
+              <NpText style={[styles.presentRate, { color: subtitleColor }]}>
+                {t('attendance.presentRate', { value: summary.attendancePercent })}
+              </NpText>
+            </>
           )}
         </ScreenHeader>
 
@@ -164,7 +185,7 @@ export default function StudentAttendance() {
                       style={[styles.activityRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}
                     >
                       <View style={[styles.activityIcon, { backgroundColor: cfg.bg }]}>
-                        <Ionicons name={cfg.icon as any} size={19} color={cfg.dot} />
+                        <Icon name={RECENT_ICON[item.status as AttendanceStatus]} size={19} color={cfg.dot} />
                       </View>
                       <View style={styles.activityText}>
                         <Text style={[styles.activityDate, { color: c.foreground }]}>{bsLabel}</Text>
@@ -197,15 +218,7 @@ const styles = StyleSheet.create({
 
   // Stat tiles in the header
   statRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
-  statTile: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    alignItems: 'center',
-  },
-  statNum: { fontFamily: FONT.extrabold, fontSize: 14 },
-  statLabel: { fontFamily: FONT.bold, fontSize: 8.5, marginTop: 1 },
+  presentRate: { fontFamily: FONT.semibold, fontSize: 11, textAlign: 'center', marginTop: 9 },
 
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
 

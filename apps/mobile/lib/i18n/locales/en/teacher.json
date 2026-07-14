@@ -33,7 +33,9 @@
     "alertFailedTitle": "Failed",
     "alertSaveFailed": "Could not save attendance. Please try again.",
     "saving": "Saving…",
-    "saveWithCount": "Save Attendance ({{count}})"
+    "saveWithCount": "Save Attendance ({{count}})",
+    "searchPlaceholder": "Search student",
+    "noSearchResults": "No students match your search."
   },
   "marks": {
     "eyebrow": "Marks entry",
@@ -41,6 +43,10 @@
     "total": "Total",
     "full": "Full",
     "save": "Save marks",
+    "summaryAverage": "Average",
+    "summaryHighest": "Highest",
+    "summaryLowest": "Lowest",
+    "summaryPassed": "Passed",
     "loadingStudents": "Loading students…",
     "errorExams": "Couldn't load exams",
     "noExams": "No exam schedules assigned to you.",
@@ -92,7 +98,11 @@
     "subtitle": "Announcements from your school"
   },
   "profile": {
-    "errorTitle": "Couldn't load your profile"
+    "errorTitle": "Couldn't load your profile",
+    "footer": "Aaramva Shikshya · v1.0.0"
+  },
+  "settingsRow": {
+    "changePassword": "Change password"
   },
   "profileDetails": {
     "title": "Profile details",
@@ -118,7 +128,8 @@
     "errorTitle": "Couldn't load your routine",
     "emptySubtitle": "Your schedule will appear here.",
     "saturdayRest": "Saturday — rest day",
-    "emptyDay": "No classes on this day"
+    "emptyDay": "No classes on this day",
+    "now": "NOW"
   },
   "assignments": {
     "title": "Assignments",

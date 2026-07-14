@@ -1,6 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet, Share } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { useMyChildren, useChildResults } from '../../hooks/useParentChild';
@@ -8,62 +6,90 @@ import { useReportCardDownload } from '../../hooks/useReportCardDownload';
 import { useLocale } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
 import { useAuthStore } from '../../store/auth';
-import { useThemeColors, headerGradient } from '../../lib/theme/colors';
-import { EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
+import { useThemeColors } from '../../lib/theme/colors';
+import {
+  EmptyState, ErrorState, ScreenHeader, Icon,
+  ResultHero, GpaTrendBars, InsightCard, SubjectRow,
+} from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 import { FONT } from '../../lib/theme/fonts';
-import { gradeColors } from '../../lib/gradeColors';
+import {
+  gpaTrend, gpaChange as computeGpaChange, rankChange as computeRankChange, subjectInsights,
+} from '../../lib/results';
 import type { ExamResult } from '../../types';
 
-function ResultBlock({ result }: { result: ExamResult }) {
+// Per-exam-type block — GPA/grade/rank hero + top-subject/needs-focus insight
+// tiles + subject rows, all shared with the student results screen (DRY). The
+// parent screen has no single "active term" (every published exam is shown at
+// once, oldest → newest), so each block gets its OWN term-over-term
+// gpaChange/rankChange (vs the block before it) rather than a single active-term
+// delta. The exams now carry `orderIndex` (backend examType.orderIndex) so the
+// caller can sort chronologically before computing changes — see ParentResults.
+function ResultBlock({
+  result, gpaChange, rankChange,
+}: { result: ExamResult; gpaChange?: number | null; rankChange?: number | null }) {
   const c = useThemeColors();
   const { t } = useLocale('parent');
-  const ramp = headerGradient(c.primary);
-  const gpa = result.gpa != null ? result.gpa.toFixed(2) : '—';
   const rows = result.results ?? [];
+  const pct = result.percentage != null ? Math.round(result.percentage) : 0;
+  const insights = subjectInsights(
+    rows.map((r) => ({
+      subjectName: r.subjectName,
+      percentage: r.marksObtained != null && r.fullMark > 0 ? (r.marksObtained / r.fullMark) * 100 : null,
+      marksObtained: r.marksObtained,
+      fullMarks: r.fullMark,
+      grade: r.grade,
+    })),
+  );
 
   return (
     <View style={{ marginBottom: 16 }}>
       <Text style={[styles.examName, { color: c.foreground }]}>{result.examTypeName}</Text>
 
-      {/* GPA summary (brand gradient) */}
-      <LinearGradient
-        colors={[ramp[0], ramp[1]]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.gpaCard, { shadowColor: c.primary }]}
-      >
-        <View>
-          <NpText style={styles.gpaLabel}>{t('results.gpa')}</NpText>
-          <Text style={styles.gpaValue}>{gpa}</Text>
+      {/* GPA/grade/rank hero (shared with the student results screen) */}
+      <View style={{ marginBottom: 14 }}>
+        <ResultHero
+          gpa={result.gpa}
+          pct={pct}
+          grade={result.overallGrade}
+          rank={result.rank}
+          gpaChange={gpaChange}
+          rankChange={rankChange}
+        />
+      </View>
+
+      {/* Top-subject / needs-focus insight tiles — hidden when nothing is graded */}
+      {(insights.top || insights.focus) && (
+        <View style={styles.insightRow}>
+          {insights.top && (
+            <InsightCard
+              tone="success"
+              icon="trending_up"
+              label={t('results.topSubject')}
+              subject={insights.top.subjectName}
+              detail={`${insights.top.marksObtained}/${insights.top.fullMarks} · ${insights.top.grade}`}
+            />
+          )}
+          {insights.focus && (
+            <InsightCard
+              tone="warning"
+              icon="flag"
+              label={t('results.needsFocus')}
+              subject={insights.focus.subjectName}
+              detail={`${insights.focus.marksObtained}/${insights.focus.fullMarks} · ${insights.focus.grade}`}
+            />
+          )}
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <NpText style={styles.gpaLabel}>{t('results.gradeRank')}</NpText>
-          <Text style={styles.gpaGrade}>
-            {result.overallGrade ?? '—'} · #{result.rank ?? '—'}
-          </Text>
-        </View>
-      </LinearGradient>
+      )}
 
       {/* Subject rows */}
       <View style={[styles.rowsCard, CARD_SHADOW, { backgroundColor: c.surface }]}>
         {rows.map((r, idx) => {
-          const gc = gradeColors(r.grade);
           const last = idx === rows.length - 1;
           return (
-            <View
-              key={r.subjectId}
-              style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: c.border }]}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <NpText style={[styles.subject, { color: c.foreground }]}>{r.subjectName}</NpText>
-                <NpText style={[styles.fullMark, { color: c.mutedForeground }]}>{t('results.fullMarks', { value: r.fullMark })}</NpText>
-              </View>
-              <Text style={[styles.obtained, { color: c.foreground }]}>{r.marksObtained ?? '—'}</Text>
-              <View style={[styles.gradeChip, { backgroundColor: gc.bg }]}>
-                <Text style={[styles.gradeChipText, { color: gc.fg }]}>{r.grade ?? '—'}</Text>
-              </View>
+            <View key={r.subjectId} style={!last ? { borderBottomWidth: 1, borderBottomColor: c.border } : undefined}>
+              <SubjectRow name={r.subjectName} obtained={r.marksObtained} fullMarks={r.fullMark} grade={r.grade} />
             </View>
           );
         })}
@@ -88,7 +114,9 @@ export default function ParentResults() {
   const selectedChild = children.find((ch) => ch.id === effectiveChildId) ?? null;
 
   const resultsQuery = useChildResults(effectiveChildId ?? '');
-  const results = resultsQuery.data ?? [];
+  // Chronological order (oldest → newest) via the backend's examType.orderIndex —
+  // required for the trend chart and term-over-term change strips to read correctly.
+  const results = [...(resultsQuery.data ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
 
   // POL-2 T4: own-child report-card PDF. Passing the childId routes the shared
   // download hook to the parent-scoped endpoint (/exams/results/report-card/:id/pdf),
@@ -102,6 +130,27 @@ export default function ParentResults() {
   };
 
   const childName = selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName}` : '';
+
+  // GPA trend across all published terms — hidden below 2 data points (component self-guards too).
+  const trendData = gpaTrend(results.map((r) => ({ name: r.examTypeName, gpa: r.gpa })));
+
+  // Text-only share (no PDF) — summarises the most recent published term.
+  const latestResult = results.length > 0 ? results[results.length - 1] : null;
+  const handleShare = async () => {
+    if (!latestResult) return;
+    try {
+      await Share.share({
+        message: t('results.shareMessage', {
+          name: childName || t('results.title'),
+          term: latestResult.examTypeName,
+          gpa: latestResult.gpa != null ? latestResult.gpa.toFixed(2) : '—',
+          grade: latestResult.overallGrade ?? '—',
+        }),
+      });
+    } catch {
+      // Share sheet dismissed/failed — nothing to surface to the user.
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -136,20 +185,45 @@ export default function ParentResults() {
             </View>
           ) : (
             <>
-              {results.map((r) => <ResultBlock key={`${r.examTypeId}-${r.studentId}`} result={r} />)}
+              {/* GPA trend across published terms — hidden below 2 data points */}
+              {trendData.length >= 2 && (
+                <View style={{ marginBottom: 16 }}>
+                  <GpaTrendBars data={trendData} />
+                </View>
+              )}
 
-              {/* Download report card PDF — mirrors the student results screen */}
-              <TouchableOpacity
-                onPress={download}
-                disabled={downloading}
-                activeOpacity={0.85}
-                style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
-              >
-                <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
-                <Text style={[styles.downloadBtnText, { color: c.primary }]}>
-                  {downloading ? t('results.downloading') : t('results.downloadPdf')}
-                </Text>
-              </TouchableOpacity>
+              {results.map((r, idx) => (
+                <ResultBlock
+                  key={`${r.examTypeId}-${r.studentId}`}
+                  result={r}
+                  gpaChange={computeGpaChange(results.map((t) => ({ gpa: t.gpa })), idx)}
+                  rankChange={computeRankChange(results.map((t) => ({ rankInClass: t.rank })), idx)}
+                />
+              ))}
+
+              {/* Download report card PDF + share summary — mirrors the student results screen */}
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  onPress={download}
+                  disabled={downloading}
+                  activeOpacity={0.85}
+                  style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+                >
+                  <Icon name="download" size={19} color={c.primary} style={{ marginRight: 8 }} />
+                  <NpText style={[styles.downloadBtnText, { color: c.primary }]}>
+                    {downloading ? t('results.downloading') : t('results.downloadPdf')}
+                  </NpText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleShare}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('results.share')}
+                  style={[styles.shareBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
+                >
+                  <Icon name="share" size={19} color={c.primary} />
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </View>
@@ -164,26 +238,22 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   examName: { fontFamily: FONT.extrabold, fontSize: 13, marginBottom: 10, marginLeft: 2 },
 
-  gpaCard: {
-    borderRadius: 18, padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 5,
-  },
-  gpaLabel: { fontFamily: FONT.bold, fontSize: 11, color: 'rgba(255,255,255,0.82)', textTransform: 'uppercase', letterSpacing: 0.6 },
-  gpaValue: { fontFamily: FONT.extrabold, fontSize: 32, color: '#FFFFFF', marginTop: 2 },
-  gpaGrade: { fontFamily: FONT.extrabold, fontSize: 24, color: '#FFFFFF', marginTop: 2 },
+  // Insight tiles row — top subject / needs focus (shared InsightCard)
+  insightRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
 
-  rowsCard: { borderRadius: 16, paddingHorizontal: 14, marginTop: 14 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
-  subject: { fontFamily: FONT.bold, fontSize: 13 },
-  fullMark: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
-  obtained: { fontFamily: FONT.extrabold, fontSize: 13.5 },
-  gradeChip: { width: 38, alignItems: 'center', paddingVertical: 3, borderRadius: 7 },
-  gradeChipText: { fontFamily: FONT.extrabold, fontSize: 11 },
+  // Subject rows — shared SubjectRow, wrapped in a bordered card
+  rowsCard: { borderRadius: 16, paddingHorizontal: 14 },
 
-  // Download PDF button — same treatment as the student results screen
+  // Download PDF + share row
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 48, borderRadius: 14, borderWidth: 1.5, marginTop: 4,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: 14, borderWidth: 1.5,
   },
   downloadBtnText: { fontFamily: FONT.bold, fontSize: 14 },
+  // Share button — same tinted treatment as download, icon-only square
+  shareBtn: {
+    width: 48, height: 48, borderRadius: 14, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
+  },
 });

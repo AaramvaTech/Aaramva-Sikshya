@@ -1,21 +1,21 @@
 import {
   View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { router } from 'expo-router';
 
 import { useMyResults } from '../../hooks/useStudentMe';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { Card, EmptyState, ErrorState, ScreenHeader } from '../../components/ui';
+import {
+  Card, EmptyState, ErrorState, ScreenHeader,
+  ResultHero, GpaTrendBars, InsightCard, SubjectRow, Icon,
+} from '../../components/ui';
 import { useReportCardDownload } from '../../hooks/useReportCardDownload';
-import { useThemeColors, headerGradient } from '../../lib/theme/colors';
+import { useThemeColors } from '../../lib/theme/colors';
 import { useLocale } from '../../hooks/useLocale';
 import { FONT } from '../../lib/theme/fonts';
-import { gradeColors } from '../../lib/gradeColors';
-import type { ExamTermResult, ResultSubject } from '../../types';
+import { gpaTrend, gpaChange as computeGpaChange, rankChange as computeRankChange, subjectInsights } from '../../lib/results';
 
 // Deduped "Grade N · Section X" — the API class label may arrive as "Grade 9",
 // "Class 9" or bare "9"; normalise to a single "Grade …" so we never render the
@@ -24,54 +24,6 @@ function gradeSectionLine(grade: string, section: string): string {
   const g = grade.trim();
   const normalized = /^(grade|class)\b/i.test(g) ? g.replace(/^class\b/i, 'Grade') : `Grade ${g}`;
   return `${normalized} · Section ${section}`;
-}
-
-// Subject row — matches comp sResults rows (subject name, "Full marks X", obtained, grade chip).
-function SubjectRow({ subject, isLast }: { subject: ResultSubject; isLast: boolean }) {
-  const { t } = useLocale('student');
-  const c = useThemeColors();
-  const gc = gradeColors(subject.grade);
-  const fullMarks = subject.fullMarks;
-
-  return (
-    <View style={[styles.subjectRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}>
-      <View style={styles.subjectInfo}>
-        <NpText style={[styles.subjectName, { color: c.foreground }]}>{subject.name}</NpText>
-        <NpText style={[styles.subjectFullMarks, { color: c.mutedForeground }]}>
-          {t('results.fullMarks', { value: fullMarks > 0 ? fullMarks : '—' })}
-        </NpText>
-      </View>
-      <Text style={[styles.totalValue, { color: c.foreground }]}>{subject.total}</Text>
-      <View style={[styles.gradeChip, { backgroundColor: gc.bg }]}>
-        <Text style={[styles.gradeChipText, { color: gc.fg }]}>{subject.grade}</Text>
-      </View>
-    </View>
-  );
-}
-
-// GPA gradient card — brand-primary gradient (NOT a literal maroon).
-// Layout mirrors comp sResults: GPA on the left, Grade · Rank on the right.
-function SummaryCard({ term }: { term: ExamTermResult }) {
-  const c = useThemeColors();
-  const { t } = useLocale('student');
-  const ramp = headerGradient(c.primary);
-  return (
-    <LinearGradient
-      colors={[ramp[0], ramp[1]]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.summaryCard, { shadowColor: c.primary }]}
-    >
-      <View style={styles.summaryLeft}>
-        <NpText style={styles.summaryLabel}>{t('results.gpa')}</NpText>
-        <Text style={styles.summaryGpaValue}>{term.gpa.toFixed(2)}</Text>
-      </View>
-      <View style={styles.summaryRight}>
-        <NpText style={styles.summaryLabel}>{t('results.gradeRank')}</NpText>
-        <Text style={styles.summaryGradeRank}>{term.grade} · #{term.rank}</Text>
-      </View>
-    </LinearGradient>
-  );
 }
 
 export default function StudentResults() {
@@ -136,6 +88,26 @@ export default function StudentResults() {
       : examResults.length - 1;
   const activeTerm = examResults[activeIndex];
 
+  // Aggregate percentage across the active term's subjects (no percentage field on the API).
+  const fmSum = activeTerm ? activeTerm.subjects.reduce((sum, s) => sum + s.fullMarks, 0) : 0;
+  const totalSum = activeTerm ? activeTerm.subjects.reduce((sum, s) => sum + s.total, 0) : 0;
+  const pct = fmSum > 0 ? Math.round((totalSum / fmSum) * 100) : 0;
+
+  const gpaChangeVal = computeGpaChange(examResults.map((t) => ({ gpa: t.gpa })), activeIndex);
+  const rankChangeVal = computeRankChange(examResults.map((t) => ({ rankInClass: t.rank })), activeIndex);
+  const trendData = gpaTrend(examResults.map((t) => ({ name: t.examName, gpa: t.gpa })));
+  const insights = activeTerm
+    ? subjectInsights(
+        activeTerm.subjects.map((s) => ({
+          subjectName: s.name,
+          percentage: s.fullMarks > 0 ? (s.total / s.fullMarks) * 100 : null,
+          marksObtained: s.total,
+          fullMarks: s.fullMarks,
+          grade: s.grade,
+        })),
+      )
+    : { top: null, focus: null };
+
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
       <StatusBar barStyle="dark-content" />
@@ -188,16 +160,62 @@ export default function StudentResults() {
               )}
 
               {/* Headline summary for the selected term */}
-              <SummaryCard term={activeTerm} />
+              <View style={{ marginBottom: 14 }}>
+                <ResultHero
+                  gpa={activeTerm.gpa}
+                  pct={pct}
+                  grade={activeTerm.grade}
+                  rank={activeTerm.rank}
+                  gpaChange={gpaChangeVal}
+                  rankChange={rankChangeVal}
+                />
+              </View>
+
+              {/* GPA trend across published terms — hidden below 2 data points */}
+              {trendData.length >= 2 && (
+                <View style={{ marginBottom: 14 }}>
+                  <GpaTrendBars data={trendData} />
+                </View>
+              )}
+
+              {/* Top-subject / needs-focus insight tiles — hidden when nothing is graded */}
+              {(insights.top || insights.focus) && (
+                <View style={styles.insightRow}>
+                  {insights.top && (
+                    <InsightCard
+                      tone="success"
+                      icon="trending_up"
+                      label={t('results.topSubject')}
+                      subject={insights.top.subjectName}
+                      detail={`${insights.top.marksObtained}/${insights.top.fullMarks} · ${insights.top.grade}`}
+                    />
+                  )}
+                  {insights.focus && (
+                    <InsightCard
+                      tone="warning"
+                      icon="flag"
+                      label={t('results.needsFocus')}
+                      subject={insights.focus.subjectName}
+                      detail={`${insights.focus.marksObtained}/${insights.focus.fullMarks} · ${insights.focus.grade}`}
+                    />
+                  )}
+                </View>
+              )}
 
               {/* Per-subject marks */}
               <View style={[styles.subjectCard, { backgroundColor: c.surface }]}>
                 {activeTerm.subjects.map((subject, idx) => (
-                  <SubjectRow
+                  <View
                     key={subject.name}
-                    subject={subject}
-                    isLast={idx === activeTerm.subjects.length - 1}
-                  />
+                    style={idx !== activeTerm.subjects.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }}
+                  >
+                    <SubjectRow
+                      name={subject.name}
+                      obtained={subject.total}
+                      fullMarks={subject.fullMarks}
+                      grade={subject.grade}
+                    />
+                  </View>
                 ))}
               </View>
 
@@ -230,7 +248,7 @@ export default function StudentResults() {
                 activeOpacity={0.85}
                 style={[styles.downloadBtn, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}
               >
-                <Ionicons name="download-outline" size={19} color={c.primary} style={{ marginRight: 8 }} />
+                <Icon name="download" size={19} color={c.primary} style={{ marginRight: 8 }} />
                 <NpText style={[styles.downloadBtnText, { color: c.primary }]}>
                   {downloading ? t('results.downloading') : t('results.downloadPdf')}
                 </NpText>
@@ -254,34 +272,15 @@ const styles = StyleSheet.create({
   termPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   termPillText: { fontFamily: FONT.bold, fontSize: 12 },
 
-  // Summary card — brand gradient, horizontal GPA | Grade·Rank layout (comp lines 438-443)
-  summaryCard: {
-    borderRadius: 18, padding: 18, flexDirection: 'row',
-    justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14,
-    shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 5,
-  },
-  summaryLeft: {},
-  summaryRight: { alignItems: 'flex-end' },
-  summaryLabel: {
-    fontFamily: FONT.bold, fontSize: 11, color: 'rgba(255,255,255,0.8)',
-    textTransform: 'uppercase', letterSpacing: 0.6,
-  },
-  summaryGpaValue: { fontFamily: FONT.extrabold, fontSize: 32, color: '#FFFFFF', marginTop: 2, lineHeight: 36 },
-  summaryGradeRank: { fontFamily: FONT.extrabold, fontSize: 24, color: '#FFFFFF', marginTop: 2 },
+  // Insight tiles row — top subject / needs focus (shared InsightCard)
+  insightRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
 
-  // Subject rows — comp sResults style (name + full marks, obtained, grade chip)
+  // Subject rows — shared SubjectRow, wrapped in a bordered card
   subjectCard: {
     borderRadius: 16, paddingHorizontal: 14, marginBottom: 14,
     shadowColor: '#10231A', shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.07, shadowRadius: 13, elevation: 2,
   },
-  subjectRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
-  subjectInfo: { flex: 1, minWidth: 0 },
-  subjectName: { fontFamily: FONT.bold, fontSize: 13 },
-  subjectFullMarks: { fontFamily: FONT.regular, fontSize: 10.5, marginTop: 1 },
-  totalValue: { fontFamily: FONT.extrabold, fontSize: 13.5 },
-  gradeChip: { width: 38, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7 },
-  gradeChipText: { fontFamily: FONT.extrabold, fontSize: 11 },
 
   // Annual result — comp sReport stat panel (lines 481-489)
   annualCard: {

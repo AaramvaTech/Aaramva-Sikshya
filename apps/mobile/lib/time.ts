@@ -35,6 +35,17 @@ export function formatPeriodTime(raw: string): string {
   return `${String(hm.h).padStart(2, '0')}:${String(hm.m).padStart(2, '0')}`;
 }
 
+/**
+ * Minutes since midnight for a wall-clock time string. Same parsing as
+ * `formatPeriodTime` (handles both "HH:MM" and stringified-Date forms).
+ * Returns null if unparseable. Used to compare a period's [start, end)
+ * against "now" for current-period highlighting.
+ */
+export function timeToMinutes(raw: string): number | null {
+  const hm = parseHm(raw);
+  return hm ? hm.h * 60 + hm.m : null;
+}
+
 /** 12-hour wall clock with meridiem, e.g. "10:00 AM". Used on the Home card. */
 export function formatPeriodTime12(raw: string): string {
   const hm = parseHm(raw);

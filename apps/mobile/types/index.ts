@@ -112,12 +112,19 @@ export interface ChildAttendanceSummary {
   late: number;
   leave: number;
   attendancePercent: number;
+  // Last-30-days rows from GET /attendance/students/:studentId/summary (backend
+  // StudentSummaryDto, attendance.entity.ts) — note field is `ad`, not `dateAd`
+  // (unlike the student /me summary's recentHistory shape).
+  recentHistory?: { ad: string; bs: string; status: string }[];
 }
 
 export interface ExamResult {
   studentId: string;
   examTypeId: string;
   examTypeName: string;
+  /** Exam term sequence (backend `examType.orderIndex`) — sort ascending for
+   * chronological order. Needed for term-over-term trend/change (parent results). */
+  orderIndex: number;
   results: {
     subjectId: string;
     subjectName: string;

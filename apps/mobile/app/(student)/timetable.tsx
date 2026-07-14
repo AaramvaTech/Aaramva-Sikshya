@@ -1,9 +1,8 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useMyWeeklyTimetable, useMyProfile } from '../../hooks/useStudentMe';
 import Skeleton from '../../components/Skeleton';
-import { Card, EmptyState, ErrorState, SubjectSlot, ScreenHeader } from '../../components/ui';
+import { Card, EmptyState, ErrorState, SubjectSlot, ScreenHeader, Icon } from '../../components/ui';
 import { subjectColor } from '../../lib/subjects';
 import type { SectionTimetableSlot } from '../../types';
 import { useThemeColors } from '../../lib/theme/colors';
@@ -14,6 +13,9 @@ import { formatBs, todayBs } from 'bs-calendar';
 
 // Platform convention: the school week is Sunday–Friday (Saturday is the weekend).
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+// Minimum inter-period gap (minutes) that reads as a real break, not a short passing gap.
+const MIN_BREAK_MINUTES = 15;
 
 function minutesNow(): number {
   const now = new Date();
@@ -78,7 +80,7 @@ export default function StudentTimetable() {
               </NpText>
             </View>
             <View style={[styles.calendarChip, { backgroundColor: c.surface, shadowColor: c.foreground }]}>
-              <Ionicons name="calendar-outline" size={20} color={c.primary} />
+              <Icon name="calendar_month" size={20} color={c.primary} />
             </View>
           </View>
           <View style={[styles.datePill, { backgroundColor: c.surface }]}>
@@ -137,36 +139,54 @@ export default function StudentTimetable() {
                 const isCurrent = isToday && nowMin >= startMinutes(period.startTime) && nowMin < endMinutes(period.endTime);
                 const isUpcoming = isToday && !isCurrent && startMinutes(period.startTime) > nowMin;
                 const isPast = isToday && !isCurrent && !isUpcoming;
+                // Free gap before this period (derived purely from adjoining start/end
+                // times already in hand — no dedicated "break" field exists on
+                // timetable_slots). Rendered as a lightweight divider row above the period.
+                const prev = idx > 0 ? daySlots[idx - 1] : null;
+                const gapMin = prev ? startMinutes(period.startTime) - endMinutes(prev.endTime) : 0;
                 return (
-                  <SubjectSlot
-                    key={period.slotId}
-                    color={color}
-                    startTime={period.startTime}
-                    endTime={period.endTime}
-                    periodNumber={period.periodNumber}
-                    subjectName={period.subject.name}
-                    subjectCode={period.subject.code ?? 'SUB'}
-                    banner={isCurrent ? 'NOW' : undefined}
-                    meta={[
-                      { icon: 'person', text: period.teacher.fullName },
-                      ...(period.room ? [{ icon: 'enter-outline' as const, text: period.room }] : []),
-                    ]}
-                    style={
-                      isCurrent
-                        ? {
-                            borderWidth: 2,
-                            borderColor: color.bar,
-                            shadowColor: color.bar,
-                            shadowOffset: { width: 0, height: 6 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 16,
-                            elevation: 8,
-                          }
-                        : isPast
-                          ? { opacity: 0.55 }
-                          : undefined
-                    }
-                  />
+                  <View key={period.slotId}>
+                    {gapMin >= MIN_BREAK_MINUTES && (
+                      <View style={styles.breakRow}>
+                        <View style={[styles.breakLine, { backgroundColor: c.border }]} />
+                        <View style={[styles.breakPill, { backgroundColor: c.surface }]}>
+                          <Icon name="restaurant" size={13} color={c.mutedForeground} />
+                          <NpText style={[styles.breakText, { color: c.mutedForeground, fontFamily: FONT.semibold }]}>
+                            {t('timetable.breakDuration', { minutes: gapMin })}
+                          </NpText>
+                        </View>
+                        <View style={[styles.breakLine, { backgroundColor: c.border }]} />
+                      </View>
+                    )}
+                    <SubjectSlot
+                      color={color}
+                      startTime={period.startTime}
+                      endTime={period.endTime}
+                      periodNumber={period.periodNumber}
+                      subjectName={period.subject.name}
+                      subjectCode={period.subject.code ?? 'SUB'}
+                      banner={isCurrent ? 'NOW' : undefined}
+                      meta={[
+                        { icon: 'person', text: period.teacher.fullName },
+                        ...(period.room ? [{ icon: 'meeting_room' as const, text: period.room }] : []),
+                      ]}
+                      style={
+                        isCurrent
+                          ? {
+                              borderWidth: 2,
+                              borderColor: color.bar,
+                              shadowColor: color.bar,
+                              shadowOffset: { width: 0, height: 6 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 16,
+                              elevation: 8,
+                            }
+                          : isPast
+                            ? { opacity: 0.55 }
+                            : undefined
+                      }
+                    />
+                  </View>
                 );
               })}
             </View>
@@ -198,4 +218,11 @@ const styles = StyleSheet.create({
   },
   dayChipText: { fontSize: 13, fontWeight: '600' },
   todayDot: { width: 4, height: 4, borderRadius: 2, marginTop: 3 },
+  breakRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 62, marginBottom: 12, marginTop: -2 },
+  breakLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  breakPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12,
+  },
+  breakText: { fontSize: 10.5 },
 });

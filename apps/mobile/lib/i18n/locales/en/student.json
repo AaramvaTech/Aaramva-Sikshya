@@ -19,13 +19,28 @@
     "notices": "Notices",
     "profile": "Profile"
   },
+  "today": {
+    "title": "Today",
+    "markedPresent": "Marked present",
+    "markedAbsent": "Marked absent",
+    "markedLate": "Marked late",
+    "markedLeave": "On leave",
+    "notMarked": "Attendence not yet marked",
+    "nextClass": "Next class · {{time}}",
+    "homeworkDue": "Homework due",
+    "newNotice": "Notices"
+  },
   "assignments": {
     "title": "Assignments",
     "subtitle": "Homework from your teachers",
     "emptyTitle": "No assignments yet",
     "emptySubtitle": "New homework from your teachers will show up here.",
     "toSubmit": "To submit",
-    "submitted": "Submitted"
+    "submitted": "Submitted",
+    "pendingCount_one": "{{count}} pending",
+    "pendingCount_other": "{{count}} pending",
+    "submittedCount_one": "{{count}} submitted",
+    "submittedCount_other": "{{count}} submitted"
   },
   "assignmentDetail": {
     "title": "Assignment",
@@ -63,7 +78,8 @@
     "errorTitle": "Couldn't load attendance",
     "academicYearThis": "This academic year",
     "errorMonth": "Couldn't load this month.",
-    "classPrefix": "Class {{label}}"
+    "classPrefix": "Class {{label}}",
+    "presentRate": "{{value}}% present rate"
   },
   "notices": {
     "title": "Notices",
@@ -80,16 +96,25 @@
     "gradeRank": "Grade · Rank",
     "fullMarks": "Full marks {{value}}",
     "downloadPdf": "Download report card PDF",
-    "downloading": "Downloading…"
+    "downloading": "Downloading…",
+    "aggregatePct": "{{value}}% aggregate",
+    "rankHash": "Rank #{{value}}",
+    "gpaChangeLabel": "GPA change",
+    "rankChangeLabel": "Rank",
+    "gpaTrend": "GPA trend",
+    "topSubject": "Top subject",
+    "needsFocus": "Needs focus"
   },
   "profile": {
-    "errorTitle": "Couldn't load your profile"
+    "errorTitle": "Couldn't load your profile",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "Profile details",
     "personalInfo": "Personal information",
     "enrollment": "Enrollment",
     "errorTitle": "Couldn't load details",
+    "lockedNote": "Profile information is managed by your school.\nContact the office to request changes.",
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",
@@ -105,11 +130,13 @@
     "title": "Class routine",
     "weekly": "Weekly timetable",
     "errorTitle": "Couldn't load your timetable",
-    "emptyDay": "Nothing scheduled for {{day}}."
+    "emptyDay": "Nothing scheduled for {{day}}.",
+    "breakDuration": "{{minutes}} min break"
   },
   "settingsRow": {
     "notifications": "Notifications",
     "privacy": "Privacy & security",
-    "help": "Help & support"
+    "help": "Help & support",
+    "changePassword": "Change password"
   }
 }

@@ -5,7 +5,6 @@ import {
 import { useLocale } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
 import { bsMonthName } from '../../lib/i18n/date';
-import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo, useEffect } from 'react';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -15,7 +14,7 @@ import { useMyChildren } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import {
-  ScreenHeader, ChildPicker, Card, CardLabel, PrimaryButton, HeaderIconButton, MonthNav,
+  ScreenHeader, ChildPicker, Card, CardLabel, PrimaryButton, HeaderIconButton, MonthNav, Icon,
 } from '../../components/ui';
 import { localDateKey } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
@@ -250,7 +249,7 @@ export default function ParentRequestLeave() {
 
           {/* Range summary / validity */}
           <View style={[styles.summaryRow, { backgroundColor: c.brandSurface, borderColor: c.brandBorder }]}>
-            <Ionicons name="calendar-outline" size={16} color={c.primary} />
+            <Icon name="calendar_month" size={16} color={c.primary} />
             {datesValid ? (
               <Text style={[styles.summaryText, { color: c.foreground }]}>
                 {formatBs(fromBs, 'en')} → {formatBs(toBs, 'en')}
@@ -279,7 +278,7 @@ export default function ParentRequestLeave() {
           {/* Status banners */}
           {status === 'success' ? (
             <View style={[styles.banner, { backgroundColor: `${c.success}1A`, borderColor: `${c.success}55` }]}>
-              <Ionicons name="checkmark-circle" size={18} color={c.success} />
+              <Icon name="check_circle" size={18} color={c.success} />
               <NpText style={[styles.bannerText, { color: c.success }]}>
                 {t('requestLeave.successBanner')}
               </NpText>
@@ -287,7 +286,7 @@ export default function ParentRequestLeave() {
           ) : null}
           {status === 'error' ? (
             <View style={[styles.banner, { backgroundColor: `${c.danger}14`, borderColor: `${c.danger}40` }]}>
-              <Ionicons name="alert-circle" size={18} color={c.danger} />
+              <Icon name="error" size={18} color={c.danger} />
               <NpText style={[styles.bannerText, { color: c.danger }]}>
                 {t('requestLeave.errorBanner')}
               </NpText>
@@ -296,7 +295,7 @@ export default function ParentRequestLeave() {
 
           <PrimaryButton
             label={submitting ? t('requestLeave.submitting') : buttonLabel}
-            icon={status === 'error' ? 'refresh-outline' : 'send-outline'}
+            icon={status === 'error' ? 'refresh' : 'send'}
             loading={submitting}
             disabled={!canSubmit && status !== 'error'}
             onPress={handleSubmit}

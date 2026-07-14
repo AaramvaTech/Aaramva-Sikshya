@@ -1,7 +1,6 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useMyChildren, useChildAttendanceSummary, useChildAttendanceHistory } from '../../hooks/useParentChild';
 import { useAuthStore } from '../../store/auth';
@@ -10,12 +9,31 @@ import { useLocale } from '../../hooks/useLocale';
 import { bsMonthName } from '../../lib/i18n/date';
 import NpText from '../../components/NpText';
 import { useThemeColors, SATURDAY_HIGHLIGHT, brandSurface, brandMuted } from '../../lib/theme/colors';
-import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader } from '../../components/ui';
+import { MonthNav, AttendanceCalendar, Legend, ErrorState, ScreenHeader, Icon, StatTile, type IconName } from '../../components/ui';
 import { FONT } from '../../lib/theme/fonts';
 import { localDateKey } from '../../lib/time';
 import { todayBs, daysInBsMonth, bsToAd, adToBs } from 'bs-calendar';
 import type { BsDate } from 'bs-calendar';
 import type { AttendanceHistoryItem } from '../../types';
+
+// Recent-activity status icon (Material, via the shared Icon component). Local to this
+// screen, mirroring app/(student)/attendance.tsx — STATUS_CONFIG.icon stays Ionicons-named
+// for other consumers (e.g. NotificationInbox's own TYPE_CONFIG is separate), so it is
+// deliberately not touched here.
+const RECENT_ICON: Record<AttendanceStatus, IconName> = {
+  PRESENT: 'check_circle',
+  ABSENT: 'cancel',
+  LATE: 'schedule',
+  LEAVE: 'calendar_month',
+};
+
+// Soft-tile tone per status, matching STATUS_CONFIG's palette (mirrors the student screen).
+const TONE_BY_STATUS: Record<AttendanceStatus, 'success' | 'danger' | 'warning' | 'info'> = {
+  PRESENT: 'success',
+  ABSENT: 'danger',
+  LATE: 'warning',
+  LEAVE: 'info',
+};
 
 function prevMonthOf(curr: BsDate): BsDate {
   if (curr.month === 1) return { year: curr.year - 1, month: 12, day: 1 };
@@ -127,13 +145,9 @@ export default function ParentAttendance() {
               {s && (
                 <View style={styles.statRow}>
                   {STAT_KEYS.map((key) => {
-                    const cfg = STATUS_CONFIG[key];
                     const val = key === 'PRESENT' ? s.present : key === 'ABSENT' ? s.absent : s.late;
                     return (
-                      <View key={key} style={[styles.statTile, { backgroundColor: c.surface }]}>
-                        <Text style={[styles.statNum, { color: cfg.color }]}>{val}</Text>
-                        <NpText style={[styles.statLabel, { color: cfg.color }]}>{t(cfg.labelKey).toUpperCase()}</NpText>
-                      </View>
+                      <StatTile key={key} value={val} label={t(STATUS_CONFIG[key].labelKey)} tone={TONE_BY_STATUS[key]} />
                     );
                   })}
                 </View>
@@ -188,7 +202,7 @@ export default function ParentAttendance() {
             onPress={() => router.push('/(parent)/request-leave')}
             style={[styles.leaveBtn, { borderColor: c.primary }]}
           >
-            <Ionicons name="add-circle-outline" size={18} color={c.primary} />
+            <Icon name="add_circle" size={18} color={c.primary} />
             <NpText style={[styles.leaveBtnText, { color: c.primary }]}>{t('attendance.requestLeave')}</NpText>
           </TouchableOpacity>
 
@@ -211,7 +225,7 @@ export default function ParentAttendance() {
                       style={[styles.activityRow, !isLast && { borderBottomWidth: 1, borderBottomColor: c.border }]}
                     >
                       <View style={[styles.activityIcon, { backgroundColor: cfg.bg }]}>
-                        <Ionicons name={cfg.icon as any} size={19} color={cfg.dot} />
+                        <Icon name={RECENT_ICON[item.status as AttendanceStatus]} size={19} color={cfg.dot} />
                       </View>
                       <View style={styles.activityText}>
                         <Text style={[styles.activityDate, { color: c.foreground }]}>{bsLabel}</Text>
@@ -238,16 +252,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: FONT.extrabold, fontSize: 17 },
   headerSub: { fontFamily: FONT.semibold, fontSize: 11.5, marginTop: 2 },
 
-  // Stat tiles in the header
+  // Stat tiles in the header (StatTile component owns its own tile/value/label styling)
   statRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
-  statTile: {
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    alignItems: 'center',
-  },
-  statNum: { fontFamily: FONT.extrabold, fontSize: 14 },
-  statLabel: { fontFamily: FONT.bold, fontSize: 8.5, marginTop: 1 },
 
   // Percentage ring
   ringOuter: {

@@ -1,12 +1,11 @@
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import NpText from '../NpText';
+import { Icon } from './Icon';
 import { useThemeColors } from '../../lib/theme/colors';
 import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
 import type { SubjectColor } from '../../lib/subjects';
-
-type IconName = keyof typeof Ionicons.glyphMap;
+import type { IconName } from '../../lib/icons/names';
 
 export interface SlotMeta {
   icon: IconName;
@@ -77,7 +76,7 @@ export function SubjectSlot({
         <View style={styles.cardBody}>
           {/* Tinted icon square */}
           <View style={[styles.iconSquare, { backgroundColor: color.bg }]}>
-            <Ionicons name="book-outline" size={22} color={color.text} />
+            <Icon name="menu_book" size={22} color={color.text} />
           </View>
 
           {/* Subject info */}
@@ -102,7 +101,7 @@ export function SubjectSlot({
               <View style={styles.metaRow}>
                 {meta.map((m, i) => (
                   <View key={i} style={styles.metaItem}>
-                    <Ionicons name={m.icon} size={13} color={c.mutedForeground} />
+                    <Icon name={m.icon} size={13} color={c.mutedForeground} />
                     <NpText style={[styles.metaText, { color: c.mutedForeground, fontFamily: FONT.semibold }]}>
                       {m.text}
                     </NpText>

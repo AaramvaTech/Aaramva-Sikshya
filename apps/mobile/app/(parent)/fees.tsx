@@ -2,7 +2,6 @@ import { View, Text, ScrollView, RefreshControl, StyleSheet, Alert, AppState } f
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import type { TFunction } from 'i18next';
 import NpText from '../../components/NpText';
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
 import { adToBs, formatBs } from 'bs-calendar';
@@ -14,7 +13,7 @@ import { useAuthStore } from '../../store/auth';
 import { useThemeColors } from '../../lib/theme/colors';
 import { API_BASE_URL } from '../../lib/api';
 import {
-  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, PayChooser, type PayGateway,
+  ScreenHeader, ChildPicker, Card, StatusBadge, EmptyState, ErrorState, PayChooser, Icon, type PayGateway,
 } from '../../components/ui';
 import Skeleton from '../../components/Skeleton';
 import type { Invoice } from '../../types';
@@ -63,7 +62,7 @@ function InvoiceCard({
           <NpText className="text-foreground" style={styles.feeName}>{invoiceTitle(inv, t)}</NpText>
           {bsDue && (
             <View style={styles.dueRow}>
-              <Ionicons name="time-outline" size={12} color={c.mutedForeground} />
+              <Icon name="schedule" size={12} color={c.mutedForeground} />
               <NpText className="text-muted-foreground" style={styles.dueText}>{t('common:pay.due', { value: bsDue })}</NpText>
             </View>
           )}

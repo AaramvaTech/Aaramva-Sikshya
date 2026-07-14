@@ -1,12 +1,11 @@
 import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useMyProfile } from '../../hooks/useStudentMe';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import NpText from '../../components/NpText';
 import Skeleton from '../../components/Skeleton';
-import { ErrorState, ScreenHeader , LanguageToggle } from '../../components/ui';
+import { ErrorState, ScreenHeader, LanguageToggle, Icon, SchoolBadge, type IconName } from '../../components/ui';
 import { useLocale } from '../../hooks/useLocale';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useAuthStore } from '../../store/auth';
@@ -15,10 +14,10 @@ import { logout } from '../../lib/session';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 
-const SETTINGS: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; label: string; key: string }[] = [
-  { icon: 'notifications-outline', label: 'Notifications', key: 'settingsRow.notifications' },
-  { icon: 'lock-closed-outline', label: 'Privacy & security', key: 'settingsRow.privacy' },
-  { icon: 'help-circle-outline', label: 'Help & support', key: 'settingsRow.help' },
+const SETTINGS: { icon: IconName; label: string; key: string }[] = [
+  { icon: 'notifications', label: 'Notifications', key: 'settingsRow.notifications' },
+  { icon: 'lock', label: 'Privacy & security', key: 'settingsRow.privacy' },
+  { icon: 'help', label: 'Help & support', key: 'settingsRow.help' },
 ];
 
 export default function StudentProfile() {
@@ -89,22 +88,12 @@ export default function StudentProfile() {
               accessibilityLabel="View profile details"
               activeOpacity={0.8}
             >
-              <Ionicons name="settings-outline" size={19} color={c.primary} />
+              <Icon name="settings" size={19} color={c.primary} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.schoolRow}>
-            {branding?.logoUrl ? (
-              <View style={[styles.schoolChip, { backgroundColor: c.surface }]}>
-                <Image source={{ uri: branding.logoUrl }} style={{ width: 18, height: 18 }} resizeMode="contain" />
-              </View>
-            ) : (
-              <View style={[styles.schoolChip, { backgroundColor: c.primary }]}>
-                <Text style={[styles.schoolChipText, { color: c.primaryForeground }]}>
-                  {schoolName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}
-                </Text>
-              </View>
-            )}
+            <SchoolBadge name={schoolName} logoUrl={branding?.logoUrl} size={26} />
             <NpText style={[styles.schoolName, { color: c.brandMuted }]}>{schoolName}</NpText>
           </View>
 
@@ -135,16 +124,28 @@ export default function StudentProfile() {
 
           {/* Settings rows */}
           <View style={[styles.card, CARD_SHADOW, { backgroundColor: c.surface, marginTop: 16 }]}>
-            {SETTINGS.map((s, idx) => (
+            {SETTINGS.map((s) => (
               <View
                 key={s.label}
-                style={[styles.settingRow, idx < SETTINGS.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}
+                style={[styles.settingRow, { borderBottomWidth: 1, borderBottomColor: c.border }]}
               >
-                <Ionicons name={s.icon} size={20} color={c.primary} />
+                <Icon name={s.icon} size={20} color={c.primary} />
                 <NpText style={[styles.settingLabel, { color: c.foreground }]}>{t(s.key)}</NpText>
-                <Ionicons name="chevron-forward" size={18} color={c.border} />
+                <Icon name="chevron_right" size={18} color={c.border} />
               </View>
             ))}
+            {/* Change password — nav row, added per design's Settings content (comp sSettings). */}
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => router.push('/change-password')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={t('settingsRow.changePassword')}
+            >
+              <Icon name="lock" size={20} color={c.primary} />
+              <NpText style={[styles.settingLabel, { color: c.foreground }]}>{t('settingsRow.changePassword')}</NpText>
+              <Icon name="chevron_right" size={18} color={c.border} />
+            </TouchableOpacity>
           </View>
 
           {/* I18N-1: language selector */}
@@ -159,9 +160,12 @@ export default function StudentProfile() {
             onPress={() => { void logout(); }}
             activeOpacity={0.85}
           >
-            <Ionicons name="log-out-outline" size={19} color={c.danger} style={{ marginRight: 8 }} />
+            <Icon name="logout" size={19} color={c.danger} style={{ marginRight: 8 }} />
             <NpText style={[styles.signOutText, { color: c.danger }]}>{t('common:action.signOut')}</NpText>
           </TouchableOpacity>
+
+          {/* Version footer (comp sSettings line 562) */}
+          <NpText style={[styles.footer, { color: c.mutedForeground }]}>{t('profile.footer')}</NpText>
         </View>
       </ScrollView>
     </View>
@@ -179,8 +183,6 @@ const styles = StyleSheet.create({
     shadowColor: '#10231A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
   },
   schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
-  schoolChip: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  schoolChipText: { fontFamily: FONT.extrabold, fontSize: 10 },
   schoolName: { fontFamily: FONT.bold, fontSize: 12 },
   avatar: { width: 78, height: 78, borderRadius: 39 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -200,4 +202,5 @@ const styles = StyleSheet.create({
     height: 48, marginTop: 16, borderRadius: 14, borderWidth: 1.5,
   },
   signOutText: { fontFamily: FONT.bold, fontSize: 14 },
+  footer: { fontFamily: FONT.regular, fontSize: 10.5, textAlign: 'center', marginTop: 14 },
 });

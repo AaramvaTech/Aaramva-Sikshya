@@ -33,7 +33,9 @@
     "alertFailedTitle": "असफल",
     "alertSaveFailed": "हाजिरी सुरक्षित गर्न सकिएन। फेरि प्रयास गर्नुहोस्।",
     "saving": "सुरक्षित हुँदैछ…",
-    "saveWithCount": "हाजिरी सुरक्षित गर्नुहोस् ({{count}})"
+    "saveWithCount": "हाजिरी सुरक्षित गर्नुहोस् ({{count}})",
+    "searchPlaceholder": "विद्यार्थी खोज्नुहोस्",
+    "noSearchResults": "तपाईंको खोजसँग मिल्ने विद्यार्थी भेटिएन।"
   },
   "marks": {
     "eyebrow": "अंक प्रविष्टि",
@@ -41,6 +43,10 @@
     "total": "जम्मा",
     "full": "पूर्णाङ्क",
     "save": "अंक सुरक्षित गर्नुहोस्",
+    "summaryAverage": "औसत",
+    "summaryHighest": "उच्चतम",
+    "summaryLowest": "न्यूनतम",
+    "summaryPassed": "उत्तीर्ण",
     "loadingStudents": "विद्यार्थी लोड हुँदैछ…",
     "errorExams": "परीक्षाहरू लोड गर्न सकिएन",
     "noExams": "तपाईंलाई कुनै परीक्षा तालिका तोकिएको छैन।",
@@ -92,7 +98,11 @@
     "subtitle": "तपाईंको विद्यालयका सूचनाहरू"
   },
   "profile": {
-    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
+    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
+  },
+  "settingsRow": {
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",
@@ -118,7 +128,8 @@
     "errorTitle": "तपाईंको रुटिन लोड गर्न सकिएन",
     "emptySubtitle": "तपाईंको तालिका यहाँ देखिनेछ।",
     "saturdayRest": "शनिबार — बिदाको दिन",
-    "emptyDay": "यो दिन कुनै कक्षा छैन"
+    "emptyDay": "यो दिन कुनै कक्षा छैन",
+    "now": "अहिले"
   },
   "assignments": {
     "title": "गृहकार्य",

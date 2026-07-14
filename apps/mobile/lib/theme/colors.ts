@@ -31,6 +31,18 @@ export const PLACEHOLDER_ICON = '#d1d5db';
 // Saturday calendar highlight (Nepal weekend). Documented exception — amber tint, no token.
 export const SATURDAY_HIGHLIGHT = { bg: '#fef9ee', text: '#d97706' };
 
+// Decorative semantic soft-pairs used by tinted tiles/chips/insights across the
+// design. Documented literal exception (like SATURDAY_HIGHLIGHT / STATUS_CONFIG):
+// NOT brand-coupled — never replace with --primary. fg = accent, fgDeep = darker
+// label ink, bg = soft tint surface.
+export const SEMANTIC_SOFT = {
+  success: { fg: '#0E9F77', fgDeep: '#0B7B5C', bg: '#E4F6F1' },
+  warning: { fg: '#D9892B', fgDeep: '#B9721F', bg: '#FEF3E2' },
+  info:    { fg: '#5B7FE0', fgDeep: '#4A6BC8', bg: '#EAF0FE' },
+  danger:  { fg: '#E5484D', fgDeep: '#C93A3F', bg: '#FDF1F1' },
+  neutral: { fg: '#5C7068', fgDeep: '#3F554B', bg: '#F1F4F1' },
+} as const;
+
 // Derives on-primary header accent tints from the resolved primary.
 // Preserves the primary's hue, softens saturation, fixes lightness stops so
 // the tints read as "light ink on the brand header" for ANY brand color.

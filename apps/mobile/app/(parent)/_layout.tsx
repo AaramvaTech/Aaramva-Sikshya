@@ -1,24 +1,27 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { View, type ColorValue } from 'react-native';
+import { Icon } from '../../components/ui';
+import type { IconName } from '../../lib/icons/names';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 
 function TabIcon({ name, color, focused }: {
-  name: keyof typeof Ionicons.glyphMap;
+  name: IconName;
   color: ColorValue;
   focused: boolean;
 }) {
   const c = useThemeColors();
   return (
-    <View style={{ alignItems: 'center' }}>
-      {focused && (
-        <View style={{
-          width: 4, height: 4, borderRadius: 2,
-          backgroundColor: c.primary, marginBottom: 2,
-        }} />
-      )}
-      <Ionicons name={name} size={23} color={color} />
+    <View
+      style={{
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 3,
+        borderRadius: 11,
+        backgroundColor: focused ? c.brandSurface : 'transparent',
+      }}
+    >
+      <Icon name={name} size={22} color={color as string} fill={focused} />
     </View>
   );
 }
@@ -53,7 +56,7 @@ export default function ParentLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
+            <TabIcon name="home" color={color} focused={focused} />
           ),
         }}
       />
@@ -62,7 +65,7 @@ export default function ParentLayout() {
         options={{
           title: 'Attendance',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'calendar-number' : 'calendar-number-outline'} color={color} focused={focused} />
+            <TabIcon name="event_available" color={color} focused={focused} />
           ),
         }}
       />
@@ -71,7 +74,7 @@ export default function ParentLayout() {
         options={{
           title: 'Results',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'ribbon' : 'ribbon-outline'} color={color} focused={focused} />
+            <TabIcon name="grade" color={color} focused={focused} />
           ),
         }}
       />
@@ -80,7 +83,7 @@ export default function ParentLayout() {
         options={{
           title: 'Notices',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'megaphone' : 'megaphone-outline'} color={color} focused={focused} />
+            <TabIcon name="campaign" color={color} focused={focused} />
           ),
         }}
       />
@@ -89,7 +92,7 @@ export default function ParentLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
+            <TabIcon name="person" color={color} focused={focused} />
           ),
         }}
       />

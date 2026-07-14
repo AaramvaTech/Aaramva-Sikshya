@@ -1,16 +1,16 @@
 import { View, Text, ScrollView, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import { useMyAssignments } from '../../hooks/useAssignments';
-import { EmptyState, ErrorState, LoadingBlock, ScreenHeader, StatusBadge } from '../../components/ui';
+import { EmptyState, ErrorState, Icon, LoadingBlock, ScreenHeader, StatusBadge } from '../../components/ui';
 import NpText from '../../components/NpText';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import type { AppLocale } from '../../lib/i18n';
 import type { TFunction } from 'i18next';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { chipFor } from '../../lib/assignmentStatus';
+import { subjectColor } from '../../lib/subjects';
 import { useThemeColors } from '../../lib/theme/colors';
 import { FONT } from '../../lib/theme/fonts';
 import type { MyAssignment } from '../../types';
@@ -19,10 +19,11 @@ function dueBs(dueDate: string, locale: AppLocale): string {
   return formatBs(adToBs(new Date(`${dueDate}T00:00:00`)), bsLang(locale));
 }
 
-function AssignmentCard({ a }: { a: MyAssignment }) {
+function AssignmentCard({ a, colorIndex }: { a: MyAssignment; colorIndex: number }) {
   const c = useThemeColors();
   const { t, locale } = useLocale('student');
   const chip = chipFor(a);
+  const color = subjectColor(colorIndex);
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: c.surface }, CARD_SHADOW]}
@@ -32,7 +33,14 @@ function AssignmentCard({ a }: { a: MyAssignment }) {
       }
     >
       <View style={styles.cardTop}>
-        <Text style={[styles.subject, { color: c.primary }]}>{a.subjectName}</Text>
+        <View style={styles.subjectRow}>
+          <View style={[styles.subjectChip, { backgroundColor: color.bg }]}>
+            <Icon name="menu_book" size={13} color={color.text} />
+          </View>
+          <Text style={[styles.subject, { color: color.text }]} numberOfLines={1}>
+            {a.subjectName}
+          </Text>
+        </View>
         <StatusBadge label={t(chip.labelKey)} bg={chip.bg} color={chip.color} />
       </View>
       <Text style={[styles.title, { color: c.foreground }]} numberOfLines={2}>
@@ -40,12 +48,12 @@ function AssignmentCard({ a }: { a: MyAssignment }) {
       </Text>
       <View style={styles.cardBottom}>
         <View style={styles.metaItem}>
-          <Ionicons name="calendar-outline" size={13} color={c.mutedForeground} />
+          <Icon name="schedule" size={13} color={c.mutedForeground} />
           <NpText style={[styles.meta, { color: c.mutedForeground }]}>{t('common:common.due', { date: dueBs(a.dueDate, locale) })}</NpText>
         </View>
         {a.attachmentKeys.length > 0 && (
           <View style={styles.metaItem}>
-            <Ionicons name="attach-outline" size={14} color={c.mutedForeground} />
+            <Icon name="attach_file" size={13} color={c.mutedForeground} />
             <Text style={[styles.meta, { color: c.mutedForeground }]}>
               {a.attachmentKeys.length}
             </Text>
@@ -73,6 +81,7 @@ export default function StudentAssignments() {
 
   const pending = data?.filter((a) => !a.mySubmission) ?? [];
   const done = data?.filter((a) => a.mySubmission) ?? [];
+  const countSubtitle = `${t('assignments.pendingCount', { count: pending.length })} · ${t('assignments.submittedCount', { count: done.length })}`;
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -82,12 +91,13 @@ export default function StudentAssignments() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         <ScreenHeader
-          variant="plain"
-          compact
+          variant="bar"
+          onBack={() => router.back()}
           padTop={12}
           padBottom={16}
           title={t('assignments.title')}
-          subtitle={t('assignments.subtitle')}
+          subtitle={countSubtitle}
+          npSubtitle
         />
 
         <View style={styles.body}>
@@ -107,13 +117,13 @@ export default function StudentAssignments() {
               {pending.length > 0 && (
                 <>
                   <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('assignments.toSubmit')}</NpText>
-                  {pending.map((a) => <AssignmentCard key={a.id} a={a} />)}
+                  {pending.map((a, idx) => <AssignmentCard key={a.id} a={a} colorIndex={idx} />)}
                 </>
               )}
               {done.length > 0 && (
                 <>
                   <NpText style={[styles.sectionLabel, { color: c.foreground }]}>{t('assignments.submitted')}</NpText>
-                  {done.map((a) => <AssignmentCard key={a.id} a={a} />)}
+                  {done.map((a, idx) => <AssignmentCard key={a.id} a={a} colorIndex={idx} />)}
                 </>
               )}
             </>
@@ -129,8 +139,10 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32 },
   sectionLabel: { fontFamily: FONT.bold, fontSize: 13, marginTop: 14, marginBottom: 8 },
   card: { borderRadius: 14, padding: 14, marginBottom: 10 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  subject: { fontFamily: FONT.bold, fontSize: 12 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
+  subjectRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  subjectChip: { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  subject: { fontFamily: FONT.bold, fontSize: 12, flexShrink: 1 },
   title: { fontFamily: FONT.semibold, fontSize: 15, marginBottom: 8 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

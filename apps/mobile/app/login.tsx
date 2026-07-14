@@ -13,7 +13,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
 import { persistLoginSession } from '../lib/session';
@@ -22,7 +21,7 @@ import { deleteSecureItem } from '../lib/secureStore';
 import { useAuthStore } from '../store/auth';
 import NpText from '../components/NpText';
 import { useLocale } from '../hooks/useLocale';
-import { LanguageToggle } from '../components/ui';
+import { LanguageToggle, Icon } from '../components/ui';
 import { useThemeColors, headerGradient } from '../lib/theme/colors';
 import { useBranding } from '../lib/theme/provider';
 import { FONT } from '../lib/theme/fonts';
@@ -157,7 +156,7 @@ export default function LoginScreen() {
           {/* Email */}
           <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('login.emailLabel')}</NpText>
           <View style={[styles.inputRow, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
-            <Ionicons name="mail-outline" size={18} color={c.brandMuted} />
+            <Icon name="mail" size={18} color={c.brandMuted} />
             <TextInput
               style={[styles.textInput, { color: c.foreground }]}
               placeholder={t('login.emailPlaceholder')}
@@ -174,7 +173,7 @@ export default function LoginScreen() {
           {/* Password */}
           <NpText style={[styles.fieldLabel, { color: c.mutedForeground }]}>{t('login.passwordLabel')}</NpText>
           <View style={[styles.inputRow, styles.inputRowLast, { backgroundColor: c.brandField, borderColor: c.brandFieldBorder }]}>
-            <Ionicons name="lock-closed-outline" size={18} color={c.brandMuted} />
+            <Icon name="lock" size={18} color={c.brandMuted} />
             <TextInput
               style={[styles.textInput, styles.textInputPassword, { color: c.foreground }]}
               placeholder="••••••••"
@@ -186,14 +185,14 @@ export default function LoginScreen() {
               onSubmitEditing={handleLogin}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeToggle}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={c.brandMuted} />
+              <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={18} color={c.brandMuted} />
             </TouchableOpacity>
           </View>
 
           {/* Error */}
           {error !== null && (
             <View style={[styles.errorRow, { backgroundColor: `${c.danger}1A`, borderColor: c.danger }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={c.danger} style={{ marginTop: 1 }} />
+              <Icon name="error" size={16} color={c.danger} style={{ marginTop: 1 }} />
               <Text style={[styles.errorText, { color: c.danger }]}>{error}</Text>
             </View>
           )}
@@ -216,7 +215,7 @@ export default function LoginScreen() {
               ) : (
                 <>
                   <NpText style={[styles.ctaText, { color: c.primaryForeground, marginRight: 8 }]}>{t('login.signIn')}</NpText>
-                  <Ionicons name="arrow-forward" size={19} color={c.primaryForeground} />
+                  <Icon name="arrow_forward" size={19} color={c.primaryForeground} />
                 </>
               )}
             </LinearGradient>
@@ -238,7 +237,7 @@ export default function LoginScreen() {
         {/* Trust footer                                                      */}
         {/* ---------------------------------------------------------------- */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Ionicons name="lock-closed" size={12} color={c.mutedForeground} style={{ marginRight: 5 }} />
+          <Icon name="lock" size={12} color={c.mutedForeground} style={{ marginRight: 5 }} />
           <NpText style={[styles.footerText, { color: c.mutedForeground }]}>
             {t('login.footer')}
           </NpText>

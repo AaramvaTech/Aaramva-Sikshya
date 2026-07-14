@@ -13,7 +13,6 @@ import {
 import NpText from '../../components/NpText';
 import { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { adToBs, formatBs } from 'bs-calendar';
 import {
   useAssignmentSubmissions,
@@ -22,7 +21,7 @@ import {
 } from '../../hooks/useAssignments';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import { SUBMISSION_CHIPS } from '../../lib/assignmentStatus';
-import { EmptyState, ErrorState, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
+import { EmptyState, ErrorState, Icon, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import { useThemeColors } from '../../lib/theme/colors';
 import { useLocale, bsLang } from '../../hooks/useLocale';
@@ -41,7 +40,7 @@ function SubmissionFileLink({ fileKey }: { fileKey: string }) {
       onPress={() => url && Linking.openURL(url)}
       activeOpacity={0.7}
     >
-      <Ionicons name="document-attach-outline" size={15} color={c.primary} />
+      <Icon name="attach_file" size={15} color={c.primary} />
       <Text style={[styles.fileLinkText, { color: c.primary }]}>{t('assignmentDetail.openFile')}</Text>
     </TouchableOpacity>
   );

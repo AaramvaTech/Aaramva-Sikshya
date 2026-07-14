@@ -18,6 +18,17 @@
     "routine": "Routine",
     "homework": "Homework"
   },
+  "today": {
+    "title": "Today",
+    "markedPresent": "Marked present",
+    "markedAbsent": "Marked absent",
+    "markedLate": "Marked late",
+    "markedLeave": "On leave",
+    "notMarked": "Attendence not yet marked",
+    "feeDue": "Fee due",
+    "feeOutstanding": "{{amount}} outstanding",
+    "pay": "Pay"
+  },
   "assignments": {
     "title": "Assignments",
     "subtitle": "Homework across your children",
@@ -54,7 +65,8 @@
   "profile": {
     "viewDetails": "View profile details",
     "myChildren": "My children",
-    "errorTitle": "Couldn't load children"
+    "errorTitle": "Couldn't load children",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "Profile details",
@@ -92,9 +104,12 @@
     "emptyTitle": "No results yet",
     "emptySubtitle": "Exam results will appear here once published.",
     "gradeRank": "Grade · Rank",
-    "fullMarks": "Full marks {{value}}",
     "downloadPdf": "Download report card PDF",
-    "downloading": "Downloading…"
+    "downloading": "Downloading…",
+    "topSubject": "Top subject",
+    "needsFocus": "Needs focus",
+    "share": "Share",
+    "shareMessage": "{{name}}'s {{term}} result: GPA {{gpa}} ({{grade}})."
   },
   "timetable": {
     "title": "Timetable",
@@ -102,5 +117,8 @@
     "saturdayNoSchool": "Saturday — no school",
     "emptyTitle": "No periods",
     "dayPeriods": "{{day}} Periods"
+  },
+  "settingsRow": {
+    "changePassword": "Change password"
   }
 }

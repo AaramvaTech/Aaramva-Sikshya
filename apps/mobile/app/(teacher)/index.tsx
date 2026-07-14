@@ -1,5 +1,4 @@
-import { View, Text, Image, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StatusBar, StyleSheet } from 'react-native';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +13,7 @@ import { useThemeColors, headerGradient } from '../../lib/theme/colors';
 import { subjectColor } from '../../lib/subjects';
 import { formatPeriodTime } from '../../lib/time';
 import { FONT } from '../../lib/theme/fonts';
-import { EmptyState, ErrorState, ScreenHeader, HeaderBell } from '../../components/ui';
+import { EmptyState, ErrorState, ScreenHeader, HeaderBell, Icon, SchoolBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
 import Skeleton from '../../components/Skeleton';
 
@@ -69,7 +68,6 @@ export default function TeacherHome() {
   const desig = p?.designationTitle ?? p?.role ?? 'Teacher';
   const schoolName = branding?.name ?? tenant?.name ?? 'Aaramva Shikshya';
   const schoolHead = splitName(schoolName);
-  const initials = schoolHead.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
   const stats = [
     { num: sectionsResult.data?.length ?? 0, label: t('dashboard.statClasses'), color: c.primary },
@@ -117,15 +115,7 @@ export default function TeacherHome() {
         <ScreenHeader variant="hero" bare padTop={12} padBottom={18}>
           <View style={styles.bandTop}>
             <View style={styles.schoolWrap}>
-              {branding?.logoUrl ? (
-                <View style={[styles.logoChip, { backgroundColor: c.surface }]}>
-                  <Image source={{ uri: branding.logoUrl }} style={{ width: 24, height: 24 }} resizeMode="contain" />
-                </View>
-              ) : (
-                <View style={[styles.logoChip, { backgroundColor: c.primary }]}>
-                  <Text style={[styles.logoChipText, { color: c.primaryForeground }]}>{initials}</Text>
-                </View>
-              )}
+              <SchoolBadge name={schoolName} logoUrl={branding?.logoUrl} size={34} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <NpText numberOfLines={1} style={[styles.schoolHead, { color: c.foreground }]}>{schoolHead}</NpText>
                 <NpText style={[styles.schoolTail, { color: c.brandMuted }]}>{t('dashboard.teacherPortal')}</NpText>
@@ -158,7 +148,7 @@ export default function TeacherHome() {
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={styles.actionFill}
               >
-                <Ionicons name="checkbox-outline" size={23} color="#fff" />
+                <Icon name="how_to_reg" size={23} color="#fff" />
                 <NpText style={styles.actionTextSolid}>{t('dashboard.markAttendance')}</NpText>
               </LinearGradient>
             </TouchableOpacity>
@@ -167,7 +157,7 @@ export default function TeacherHome() {
               activeOpacity={0.85}
               onPress={() => router.push('/(teacher)/marks')}
             >
-              <Ionicons name="create-outline" size={23} color={c.primary} />
+              <Icon name="edit_note" size={23} color={c.primary} />
               <NpText style={[styles.actionTextSoft, { color: c.primary }]}>{t('dashboard.enterMarks')}</NpText>
             </TouchableOpacity>
           </View>
@@ -178,9 +168,9 @@ export default function TeacherHome() {
             activeOpacity={0.85}
             onPress={() => router.push('/(teacher)/assignments')}
           >
-            <Ionicons name="clipboard-outline" size={20} color={c.primary} />
+            <Icon name="assignment" size={20} color={c.primary} />
             <NpText style={[styles.actionTextSoft, { color: c.primary }]}>{t('dashboard.assignments')}</NpText>
-            <Ionicons name="chevron-forward" size={16} color={c.primary} style={{ marginLeft: 'auto' }} />
+            <Icon name="chevron_right" size={16} color={c.primary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
 
           {/* Today's classes */}
@@ -219,7 +209,7 @@ export default function TeacherHome() {
                         {slot.className} · {slot.section}{slot.room ? ` · ${slot.room}` : ''}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={c.border} />
+                    <Icon name="chevron_right" size={18} color={c.border} />
                   </TouchableOpacity>
                 );
               })}
@@ -237,8 +227,6 @@ const styles = StyleSheet.create({
 
   bandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   schoolWrap: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 },
-  logoChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  logoChipText: { fontFamily: FONT.extrabold, fontSize: 12.5, letterSpacing: 0.5 },
   schoolHead: { fontFamily: FONT.extrabold, fontSize: 12.5, lineHeight: 15 },
   schoolTail: { fontFamily: FONT.medium, fontSize: 10, marginTop: 1 },
   greeting: { fontFamily: FONT.bold, fontSize: 11.5, marginTop: 16, letterSpacing: 0.3 },

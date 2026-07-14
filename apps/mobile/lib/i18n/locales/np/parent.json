@@ -18,6 +18,17 @@
     "routine": "रुटिन",
     "homework": "गृहकार्य"
   },
+  "today": {
+    "title": "आज",
+    "markedPresent": "उपस्थित चिह्नित",
+    "markedAbsent": "अनुपस्थित चिह्नित",
+    "markedLate": "ढिलो चिह्नित",
+    "markedLeave": "बिदामा",
+    "notMarked": "अझै चिह्नित छैन",
+    "feeDue": "बाँकी शुल्क",
+    "feeOutstanding": "{{amount}} बाँकी",
+    "pay": "तिर्नुहोस्"
+  },
   "assignments": {
     "title": "गृहकार्य",
     "subtitle": "तपाईंका बालबालिकाको गृहकार्य",
@@ -54,7 +65,8 @@
   "profile": {
     "viewDetails": "प्रोफाइल विवरण हेर्नुहोस्",
     "myChildren": "मेरा बालबालिका",
-    "errorTitle": "बालबालिका लोड गर्न सकिएन"
+    "errorTitle": "बालबालिका लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",
@@ -92,9 +104,12 @@
     "emptyTitle": "अहिलेसम्म कुनै नतिजा छैन",
     "emptySubtitle": "प्रकाशित भएपछि परीक्षाको नतिजा यहाँ देखिनेछ।",
     "gradeRank": "ग्रेड · र्‍याङ्क",
-    "fullMarks": "पूर्णाङ्क {{value}}",
     "downloadPdf": "प्रगति-पत्र PDF डाउनलोड गर्नुहोस्",
-    "downloading": "डाउनलोड हुँदैछ…"
+    "downloading": "डाउनलोड हुँदैछ…",
+    "topSubject": "उत्कृष्ट विषय",
+    "needsFocus": "ध्यान दिनुपर्ने",
+    "share": "सेयर गर्नुहोस्",
+    "shareMessage": "{{name}}को {{term}} नतिजा: GPA {{gpa}} ({{grade}})।"
   },
   "timetable": {
     "title": "रुटिन",
@@ -102,5 +117,8 @@
     "saturdayNoSchool": "शनिबार — विद्यालय बिदा",
     "emptyTitle": "कुनै कक्षा छैन",
     "dayPeriods": "{{day}} का कक्षाहरू"
+  },
+  "settingsRow": {
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   }
 }
