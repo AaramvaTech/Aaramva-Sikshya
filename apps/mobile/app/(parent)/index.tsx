@@ -140,11 +140,21 @@ export default function ParentDashboard() {
         todayAd,
       )
     : null;
+  // Distinguish a failed/empty summary fetch from a genuine "not yet marked":
+  // if the summary query isn't loading and produced no data (error or no rows),
+  // the status row shows a neutral "unavailable" treatment (preserving the old
+  // AttendanceSummaryCard's error/empty branch) rather than misreporting the
+  // failure as PRESENT/not-marked.
+  const summaryUnavailable = !summaryQuery.isLoading && !s;
   const statusMeta = attendanceStatus ? STATUS_META[attendanceStatus] : undefined;
   const statusTone: keyof typeof SEMANTIC_SOFT = statusMeta?.tone ?? 'neutral';
   const statusSoft = SEMANTIC_SOFT[statusTone];
-  const statusIcon: IconName = statusMeta?.icon ?? 'check_circle';
-  const statusLabel = statusMeta ? t(statusMeta.labelKey) : t('today.notMarked');
+  const statusIcon: IconName = summaryUnavailable ? 'error' : (statusMeta?.icon ?? 'check_circle');
+  const statusLabel = summaryUnavailable
+    ? t('dashboard.attendanceUnavailable')
+    : statusMeta
+      ? t(statusMeta.labelKey)
+      : t('today.notMarked');
 
   const outstanding = ledgerQuery.data?.summary.totalBalance ?? 0;
   const todayBsLabel = formatBs(todayBs(), bsLang(locale));
@@ -280,7 +290,7 @@ export default function ParentDashboard() {
                     </NpText>
                   </View>
                   <View style={[styles.payChip, { backgroundColor: SEMANTIC_SOFT.warning.fg }]}>
-                    <NpText style={styles.payChipText}>{t('today.pay')}</NpText>
+                    <NpText style={[styles.payChipText, { color: c.primaryForeground }]}>{t('today.pay')}</NpText>
                   </View>
                 </TouchableOpacity>
               )}
@@ -371,5 +381,5 @@ const styles = StyleSheet.create({
   todayRowTitle: { fontFamily: FONT.bold, fontSize: 13 },
   todayRowSub: { fontFamily: FONT.medium, fontSize: 11.5, marginTop: 2 },
   payChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
-  payChipText: { fontFamily: FONT.extrabold, fontSize: 11, color: '#fff' },
+  payChipText: { fontFamily: FONT.extrabold, fontSize: 11 },
 });
