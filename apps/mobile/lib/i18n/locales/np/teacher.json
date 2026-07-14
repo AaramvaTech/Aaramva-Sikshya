@@ -92,7 +92,11 @@
     "subtitle": "तपाईंको विद्यालयका सूचनाहरू"
   },
   "profile": {
-    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन"
+    "errorTitle": "तपाईंको प्रोफाइल लोड गर्न सकिएन",
+    "footer": "Aaramva Shikshya · v1.0.0"
+  },
+  "settingsRow": {
+    "changePassword": "पासवर्ड परिवर्तन गर्नुहोस्"
   },
   "profileDetails": {
     "title": "प्रोफाइल विवरण",

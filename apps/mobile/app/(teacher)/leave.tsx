@@ -5,7 +5,6 @@ import {
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import NpText from '../../components/NpText';
 import { bsMonthName } from '../../lib/i18n/date';
-import { Ionicons } from '@expo/vector-icons';
 import { useState, useMemo } from 'react';
 import { useMyLeaveRequests, useLeaveTypes, useApplyLeave } from '../../hooks/useTeacher';
 import { todayBs, bsToAd, adToBs, BS_MONTH_NAMES_EN, formatBs, daysInBsMonth } from 'bs-calendar';
@@ -15,7 +14,7 @@ import { useThemeColors } from '../../lib/theme/colors';
 import { localDateKey } from '../../lib/time';
 import {
   ScreenHeader, Card, CardLabel, PrimaryButton, StatusBadge, SelectChip,
-  MonthNav, EmptyState, ErrorState,
+  MonthNav, EmptyState, ErrorState, Icon,
 } from '../../components/ui';
 import Skeleton from '../../components/Skeleton';
 
@@ -112,7 +111,7 @@ function LeaveCard({ req }: { req: LeaveRequest }) {
       </View>
       <View style={styles.leaveMeta}>
         <View style={styles.leaveMetaItem}>
-          <Ionicons name="calendar-outline" size={12} color={c.mutedForeground} />
+          <Icon name="calendar_month" size={12} color={c.mutedForeground} />
           <Text className="text-muted-foreground" style={styles.leaveMetaText}>
             {formatLeaveDate(req.fromDate)} → {formatLeaveDate(req.toDate)}
           </Text>
@@ -167,7 +166,7 @@ function ApplyLeaveModal({ visible, onClose, leaveTypes }: { visible: boolean; o
           <View style={styles.modalHeader}>
             <NpText className="text-foreground" style={styles.modalTitle}>{t('leave.applyForLeave')}</NpText>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close">
-              <Ionicons name="close" size={24} color={c.mutedForeground} />
+              <Icon name="cancel" size={24} color={c.mutedForeground} />
             </TouchableOpacity>
           </View>
 

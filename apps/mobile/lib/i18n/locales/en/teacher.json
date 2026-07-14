@@ -92,7 +92,11 @@
     "subtitle": "Announcements from your school"
   },
   "profile": {
-    "errorTitle": "Couldn't load your profile"
+    "errorTitle": "Couldn't load your profile",
+    "footer": "Aaramva Shikshya · v1.0.0"
+  },
+  "settingsRow": {
+    "changePassword": "Change password"
   },
   "profileDetails": {
     "title": "Profile details",
