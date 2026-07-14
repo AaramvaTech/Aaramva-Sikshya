@@ -7,7 +7,8 @@ import { useLocale } from '../../hooks/useLocale';
 import { CARD_SHADOW_LG } from './Card';
 
 interface ResultHeroProps {
-  gpa: number;
+  /** Null on a percentage-based (non-GPA) school's result — renders "—" rather than a misleading 0.00. */
+  gpa: number | null;
   pct: number;
   grade: string | null;
   /** Student's rank within their section/class for this term. No rank total is
@@ -45,7 +46,7 @@ export function ResultHero({ gpa, pct, grade, rank, gpaChange, rankChange }: Res
       <View style={styles.row}>
         <View>
           <NpText style={[styles.label, { color: onPrimary.pale }]}>{t('results.gpa')}</NpText>
-          <Text style={styles.gpaValue}>{gpa.toFixed(2)}</Text>
+          <Text style={styles.gpaValue}>{gpa == null ? '—' : gpa.toFixed(2)}</Text>
           <NpText style={[styles.sub, { color: onPrimary.pale }]}>
             {t('results.aggregatePct', { value: pct })}
           </NpText>

@@ -50,7 +50,7 @@ function ResultBlock({ result }: { result: ExamResult }) {
       {/* GPA/grade/rank hero (shared with the student results screen) */}
       <View style={{ marginBottom: 14 }}>
         <ResultHero
-          gpa={result.gpa ?? 0}
+          gpa={result.gpa}
           pct={pct}
           grade={result.overallGrade}
           rank={result.rank}
