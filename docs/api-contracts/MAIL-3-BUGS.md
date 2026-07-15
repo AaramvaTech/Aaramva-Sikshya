@@ -204,3 +204,21 @@ separate look; workaround = log out / incognito before switching tenants.
 
 **Checkpoint 2 — MAIL-3 code-complete; live proof done, tenant-send visual confirmation pending
 (non-blocking). PR opened, not merged.**
+
+---
+
+## Incidents
+
+### MAIL-3-INC-1 — accidental fast-forward push of Phase 1 to `origin/main` (self-reported, rewound)
+
+During the Phase-2 wrap-up, an accidental `git checkout main` + fast-forward `merge feat/mail-3`
+moved the Phase-1 commit `862d48d` onto local `main`, and it reached **`origin/main`** — MAIL-3
+Phase 1 was meant to live only on the feature branch (Phase 1 was "commit, do not push"; Phase 2 is
+"push + PR, do not merge"). **Self-reported:** caught before opening the PR via a `git ls-remote`
+sanity check (the `[main …]` commit output + reflog gave it away).
+
+**Rewound** with `git push --force-with-lease origin 18055e9:main` — `origin/main` back to the clean
+`18055e9`; the `--force-with-lease` guard would have aborted had `origin/main` not still been exactly
+the accidental `862d48d`. **No work lost:** `862d48d` (Phase 1) + `a7c0f27` (Phase 2 doc) are both on
+`feat/mail-3` (`origin/feat/mail-3 = a7c0f27`). PR opens from `feat/mail-3 → main` with the full,
+correct MAIL-3 diff. Verified authoritative origin state: `main = 18055e9`, `feat/mail-3 = a7c0f27`.
