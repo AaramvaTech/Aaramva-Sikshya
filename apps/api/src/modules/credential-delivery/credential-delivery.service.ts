@@ -22,6 +22,15 @@ import {
   rateLimitBackoffSeconds,
   MAX_RETRY_HOLDS,
 } from './retry-classifier.util';
+import {
+  CredentialTemplateType,
+  CredentialContext,
+  SchoolIdentity,
+  deriveTemplateType,
+  renderCredentialEmail,
+  renderCredentialSms,
+  resolveSenderIdentity,
+} from './credential-template.util';
 
 export type DeliveryChannel = 'EMAIL' | 'SMS';
 
@@ -29,6 +38,8 @@ export interface DeliveryTarget {
   channel: DeliveryChannel;
   recipient: string; // email address or E.164 phone
   recipientUserId?: string | null; // guardian's user id, when routing student creds
+  /** MAIL-3: per-recipient template type, stored on the ledger (enqueue MUST set it). */
+  templateType: CredentialTemplateType;
 }
 
 export interface EnqueueParams {
@@ -46,6 +57,7 @@ interface DeliveryRow {
   recipient: string;
   attempts: number;
   retry_holds: number;
+  template_type: CredentialTemplateType;
 }
 
 interface SecretRow {
@@ -65,19 +77,6 @@ export interface DrainTally {
 }
 
 const MAX_ATTEMPTS = 3;
-
-/** School identity woven into the credential email (MAIL-2-OBS-1 fix). */
-interface SchoolInfo {
-  name: string;
-  code: string; // the tenant slug — what the mobile app asks for
-  loginUrl: string;
-}
-
-const escHtml = (s: string) =>
-  s.replace(
-    /[&<>"]/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string,
-  );
 
 @Injectable()
 export class CredentialDeliveryService {
@@ -113,13 +112,14 @@ export class CredentialDeliveryService {
     for (const t of params.targets) {
       const rows = await tx.$queryRawUnsafe<{ id: string }[]>(
         `INSERT INTO credential_deliveries
-           (user_id, recipient_user_id, channel, recipient, status, next_attempt_at)
-         VALUES ($1::uuid, $2::uuid, $3, $4, 'PENDING', NOW())
+           (user_id, recipient_user_id, channel, recipient, status, next_attempt_at, template_type)
+         VALUES ($1::uuid, $2::uuid, $3, $4, 'PENDING', NOW(), $5)
          RETURNING id`,
         params.userId,
         t.recipientUserId ?? null,
         t.channel,
         t.recipient,
+        t.templateType,
       );
       ids.push(rows[0].id);
     }
@@ -170,7 +170,7 @@ export class CredentialDeliveryService {
   > {
     return this.tenantPrisma.run(async (tx) => {
       const rows = await tx.$queryRawUnsafe<DeliveryRow[]>(
-        `SELECT id, user_id, recipient_user_id, channel, recipient, attempts, retry_holds
+        `SELECT id, user_id, recipient_user_id, channel, recipient, attempts, retry_holds, template_type
          FROM credential_deliveries
          WHERE status = 'PENDING' AND next_attempt_at <= NOW()
          ORDER BY created_at ASC
@@ -320,37 +320,50 @@ export class CredentialDeliveryService {
   }
 
   /**
-   * MAIL-2-OBS-1 — the school identity the recipient needs to actually log in:
-   * name (framing), code (= tenant slug, what the mobile app asks for) and the web
-   * login URL. Resolved from the current tenant context + the public tenants table
-   * (slug is a plain lowercase text column, unlike the camelCase/TEXT id).
+   * MAIL-3 — the school identity for framing + Reply-To. name + code (tenant slug)
+   * + login URL, plus the school's official email (`tenants.email`, reused as
+   * Reply-To). All plain lowercase text columns on the public tenants table.
    */
-  private async schoolContext(): Promise<SchoolInfo> {
+  private async schoolContext(): Promise<SchoolIdentity> {
     const code = this.tenantContext.get()?.slug ?? '';
     let name = 'your school';
+    let officialEmail: string | null = null;
     if (code) {
-      const rows = await this.publicPrisma.query<{ name: string }>(
-        `SELECT name FROM tenants WHERE slug = $1`,
+      const rows = await this.publicPrisma.query<{ name: string; email: string | null }>(
+        `SELECT name, email FROM tenants WHERE slug = $1`,
         code,
       );
-      if (rows[0]?.name) name = rows[0].name;
+      if (rows[0]) {
+        if (rows[0].name) name = rows[0].name;
+        officialEmail = rows[0].email ?? null;
+      }
     }
     const domain = this.config.get<string>('APP_DOMAIN') || 'aaramvashikshya.com';
-    return { name, code, loginUrl: code ? `https://${code}.${domain}` : `https://${domain}` };
+    return {
+      name,
+      code,
+      loginUrl: code ? `https://${code}.${domain}` : `https://${domain}`,
+      officialEmail,
+    };
   }
 
-  /** Friendly account-type label so the recipient knows what the credentials are for. */
-  private accountTypeLabel(role: string | null): string {
-    switch (role) {
-      case 'STUDENT':
-        return 'student';
-      case 'PARENT':
-        return 'parent';
-      case 'SCHOOL_OWNER':
-        return 'school owner';
-      default:
-        return 'staff';
-    }
+  /** Build the render context for a due row (MAIL-3). */
+  private async buildContext(
+    tx: TenantTx,
+    row: DeliveryRow,
+    plaintext: string,
+  ): Promise<CredentialContext> {
+    const c = await this.ownerContext(tx, row);
+    const school = await this.schoolContext();
+    return {
+      school,
+      loginEmail: c.ownerUsername,
+      tempPassword: plaintext,
+      ownerName: c.ownerName,
+      ownerRole: c.ownerRole,
+      // STUDENT_VIA_GUARDIAN names the student (= the account owner, since user_id is the student).
+      studentName: row.template_type === 'STUDENT_VIA_GUARDIAN' ? c.ownerName : undefined,
+    };
   }
 
   private async deliverEmail(
@@ -358,22 +371,19 @@ export class CredentialDeliveryService {
     row: DeliveryRow,
     plaintext: string,
   ): Promise<'SENT'> {
-    const c = await this.ownerContext(tx, row);
-    const school = await this.schoolContext();
-    const accountType = this.accountTypeLabel(c.ownerRole);
+    const ctx = await this.buildContext(tx, row, plaintext);
+    const { subject, html, text } = renderCredentialEmail(row.template_type, ctx);
+    // MAIL-3: tenant-aware From display name + Reply-To (platform identity for NEW_SCHOOL_OWNER).
+    const identity = resolveSenderIdentity(row.template_type, ctx.school);
     const res = await this.mail.send({
       to: row.recipient,
-      subject: c.guardianRouted
-        ? `Login details for ${c.ownerName} at ${school.name}`
-        : `Your ${school.name} ${accountType} login is ready`,
-      html: c.guardianRouted
-        ? this.guardianHtml(c.ownerName, c.ownerUsername, plaintext, school)
-        : this.selfHtml(c.ownerUsername, plaintext, school, accountType),
-      text: c.guardianRouted
-        ? this.guardianText(c.ownerName, c.ownerUsername, plaintext, school)
-        : this.selfText(c.ownerUsername, plaintext, school, accountType),
+      subject,
+      html,
+      text,
       type: 'CREDENTIALS',
       relatedUserId: row.user_id,
+      fromName: identity.fromName,
+      replyTo: identity.replyTo,
     });
     // MAIL-1: dev without SMTP → MOCK (treated as delivered). MAIL-2: a real send
     // failure THROWS the transport error text (never a body) so the poller's
@@ -394,10 +404,8 @@ export class CredentialDeliveryService {
       // dev/CI: never call Sparrow, never build a body carrying the password.
       return 'SENT_DRY';
     }
-    const c = await this.ownerContext(tx, row);
-    const message = c.guardianRouted
-      ? `Login for ${c.ownerName} (username ${c.ownerUsername}): temporary password ${plaintext}. Change it on first login.`
-      : `Your school login temporary password: ${plaintext}. Please change it on first login.`;
+    const ctx = await this.buildContext(tx, row, plaintext);
+    const message = renderCredentialSms(row.template_type, ctx); // MAIL-3: ASCII, ≤160 chars
     // REG-NOTE-3: deliberately NOT via communication/SmsService — that service
     // persists the message body to sms_logs AND console-logs it in MOCK mode, which
     // would leak the temp password (visible in a pg_dump / logs). This in-memory
@@ -418,91 +426,6 @@ export class CredentialDeliveryService {
     return 'SENT';
   }
 
-  /** Shared "how to log in" block (web + mobile school-code instructions). */
-  private howToLogIn(school: SchoolInfo): string {
-    return `<p><strong>How to log in</strong><br/>
-Web: <a href="${school.loginUrl}">${escHtml(school.loginUrl)}</a><br/>
-Mobile: open the Aaramva Shikshya app, enter the school code "<strong>${escHtml(school.code)}</strong>", then log in.</p>`;
-  }
-
-  private credentialList(username: string, tempPassword: string, school: SchoolInfo): string {
-    return `<ul>
-  <li><strong>School code:</strong> ${escHtml(school.code)}</li>
-  <li><strong>Login email:</strong> ${escHtml(username)}</li>
-  <li><strong>Temporary password:</strong> ${escHtml(tempPassword)}</li>
-</ul>`;
-  }
-
-  private selfHtml(
-    username: string,
-    tempPassword: string,
-    school: SchoolInfo,
-    accountType: string,
-  ): string {
-    return `<p>Your Aaramva Shikshya ${escHtml(accountType)} account for <strong>${escHtml(school.name)}</strong> has been created.</p>
-${this.credentialList(username, tempPassword, school)}
-${this.howToLogIn(school)}
-<p>For your security, you will be asked to change this password the first time you log in.</p>`;
-  }
-
-  private guardianHtml(
-    studentName: string,
-    username: string,
-    tempPassword: string,
-    school: SchoolInfo,
-  ): string {
-    return `<p>Login details for <strong>${escHtml(studentName)}</strong>'s student account at <strong>${escHtml(school.name)}</strong>.</p>
-${this.credentialList(username, tempPassword, school)}
-${this.howToLogIn(school)}
-<p>${escHtml(studentName)} will be asked to change this password the first time they log in.</p>`;
-  }
-
-  private howToLogInText(school: SchoolInfo): string[] {
-    return [
-      `How to log in:`,
-      `Web: ${school.loginUrl}`,
-      `Mobile: open the Aaramva Shikshya app, enter the school code "${school.code}", then log in.`,
-    ];
-  }
-
-  private selfText(
-    username: string,
-    tempPassword: string,
-    school: SchoolInfo,
-    accountType: string,
-  ): string {
-    return [
-      `Your Aaramva Shikshya ${accountType} account for ${school.name} has been created.`,
-      ``,
-      `School code: ${school.code}`,
-      `Login email: ${username}`,
-      `Temporary password: ${tempPassword}`,
-      ``,
-      ...this.howToLogInText(school),
-      ``,
-      `For your security, you will be asked to change this password the first time you log in.`,
-    ].join('\n');
-  }
-
-  private guardianText(
-    studentName: string,
-    username: string,
-    tempPassword: string,
-    school: SchoolInfo,
-  ): string {
-    return [
-      `Login details for ${studentName}'s student account at ${school.name}.`,
-      ``,
-      `School code: ${school.code}`,
-      `Login email: ${username}`,
-      `Temporary password: ${tempPassword}`,
-      ``,
-      ...this.howToLogInText(school),
-      ``,
-      `${studentName} will be asked to change this password the first time they log in.`,
-    ].join('\n');
-  }
-
   /**
    * REG-1 §4 (resend) — POST /users/:id/resend-credentials. Generates a NEW temp
    * password (invalidating the old hash), re-sets must_change_password, revokes
@@ -519,8 +442,9 @@ ${this.howToLogIn(school)}
       id: string;
       email: string;
       phone: string | null;
+      role: string | null;
     }>(
-      `SELECT id, email, phone FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
+      `SELECT id, email, phone, role FROM users WHERE id = $1::uuid AND deleted_at IS NULL`,
       userId,
     );
     if (!rows[0]) throw new NotFoundException('User not found');
@@ -528,6 +452,9 @@ ${this.howToLogIn(school)}
 
     const plaintext = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(plaintext, 10);
+    // MAIL-3: re-derive the template type from the owner's role. A resend goes to the
+    // account's OWN contacts (not guardian-routed) — a STUDENT resend is STUDENT_SELF.
+    const templateType = deriveTemplateType(user.role, false);
 
     const deliveryIds = await this.tenantPrisma.run(async (tx) => {
       await tx.$executeRawUnsafe(
@@ -537,9 +464,11 @@ ${this.howToLogIn(school)}
         userId,
       );
       await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
-      const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: user.email }];
+      const targets: DeliveryTarget[] = [
+        { channel: 'EMAIL', recipient: user.email, templateType },
+      ];
       if (user.phone) {
-        targets.push({ channel: 'SMS', recipient: toE164Nepal(user.phone) ?? user.phone });
+        targets.push({ channel: 'SMS', recipient: toE164Nepal(user.phone) ?? user.phone, templateType });
       }
       return this.enqueueInTx(tx, { userId, plaintext, targets });
     });

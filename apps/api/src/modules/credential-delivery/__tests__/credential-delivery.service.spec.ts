@@ -21,7 +21,10 @@ function makeHarness(opts: TxOpts) {
   const tx = {
     $queryRawUnsafe: jest.fn((sql: string) => {
       if (sql.includes('FOR UPDATE SKIP LOCKED')) {
-        return Promise.resolve(opts.dueRows[dueIdx++] ?? []);
+        // MAIL-3: every ledger row carries a template_type; default to STAFF so
+        // tests that don't care about content still render a valid email.
+        const batch = (opts.dueRows[dueIdx++] ?? []) as Array<Record<string, unknown>>;
+        return Promise.resolve(batch.map((r) => ({ template_type: 'STAFF', ...r })));
       }
       if (sql.includes('FROM credential_delivery_secrets')) {
         return Promise.resolve(opts.secret ?? []);
@@ -87,8 +90,8 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
       userId: 'u1',
       plaintext: 'TempPw@123456',
       targets: [
-        { channel: 'EMAIL', recipient: 'a@b.c' },
-        { channel: 'SMS', recipient: '+9779812345678' },
+        { channel: 'EMAIL', recipient: 'a@b.c', templateType: 'STAFF' },
+        { channel: 'SMS', recipient: '+9779812345678', templateType: 'STAFF' },
       ],
     });
     expect(ids).toEqual(['row-x', 'row-x']);
@@ -152,39 +155,69 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
     expect(updates[0].args[0]).toBe(1); // attempts incremented to 1
   });
 
-  it('guardian-routed row (recipient_user_id set) → template names the student', async () => {
+  it('MAIL-3: STUDENT_VIA_GUARDIAN email names the student + tenant sender identity', async () => {
     const { service, mail } = makeHarness({
       dueRows: [[
-        { id: 'g1', user_id: 'stu-1', recipient_user_id: 'guardian-1', channel: 'EMAIL', recipient: 'parent@demo.school', attempts: 0 },
+        { id: 'g1', user_id: 'stu-1', recipient_user_id: 'guardian-1', channel: 'EMAIL', recipient: 'parent@demo.school', attempts: 0, template_type: 'STUDENT_VIA_GUARDIAN' },
       ], []],
       secret: encSecret(),
       pendingCount: 0,
     });
     await service.drainCurrentTenant();
     const sent = (mail.send as jest.Mock).mock.calls[0][0];
-    expect(sent.subject).toContain('Aarav Student'); // owner (student) name from user_id
-    expect(sent.subject).toContain('Demo School'); // MAIL-2: school name in the subject
+    expect(sent.subject).toBe('Login details for Aarav Student at Demo School');
+    expect(sent.html).toContain('for your child');
     expect(sent.html).toContain('Aarav Student');
-    expect(sent.text).toContain('School code: demo'); // MAIL-2: school code present
-    expect(sent.text).toContain('https://demo.aaramvashikshya.com'); // MAIL-2: login URL
+    expect(sent.text).toContain('School code: demo');
+    expect(sent.text).toContain('https://demo.aaramvashikshya.com');
+    // MAIL-3: tenant From display name; no Reply-To (school has no official email in this fixture).
+    expect(sent.fromName).toBe('Demo School (via Aaramva Shikshya)');
+    expect(sent.replyTo).toBeUndefined();
   });
 
-  it('MAIL-2 (OBS-1): self credential email carries school name, code, login URL, and account type', async () => {
+  it('MAIL-3: STAFF email uses the school-scoped staff template + footer', async () => {
     const { service, mail } = makeHarness({
-      dueRows: [[{ id: 'e1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'staff@demo.school', attempts: 0, retry_holds: 0 }], []],
+      dueRows: [[{ id: 'e1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'staff@demo.school', attempts: 0, retry_holds: 0, template_type: 'STAFF' }], []],
       secret: encSecret(),
       pendingCount: 0,
-      userRole: 'TEACHER', // → account type "staff"
+      userRole: 'TEACHER',
     });
     await service.drainCurrentTenant();
     const sent = (mail.send as jest.Mock).mock.calls[0][0];
-    expect(sent.subject).toBe('Your Demo School staff login is ready');
-    expect(sent.text).toContain('staff account for Demo School');
+    expect(sent.subject).toBe('Your Demo School staff account');
+    expect(sent.text).toContain('Your staff account at Demo School (Teacher)');
     expect(sent.text).toContain('School code: demo');
-    expect(sent.text).toContain('https://demo.aaramvashikshya.com');
     expect(sent.text).toContain('enter the school code "demo"');
-    expect(sent.html).toContain('School code:');
-    expect(sent.html).toContain('<strong>demo</strong>'); // code rendered in the HTML
+    expect(sent.text).toContain('powered by Aaramva Shikshya'); // tenant footer
+    expect(sent.html).toContain('<strong>demo</strong>');
+    expect(sent.fromName).toBe('Demo School (via Aaramva Shikshya)');
+  });
+
+  it('MAIL-3: officialEmail present → Reply-To set to it', async () => {
+    const { service, mail, publicPrisma } = makeHarness({
+      dueRows: [[{ id: 'e2', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'staff@demo.school', attempts: 0, template_type: 'STAFF' }], []],
+      secret: encSecret(),
+      pendingCount: 0,
+    });
+    (publicPrisma.query as jest.Mock).mockResolvedValue([{ name: 'Demo School', email: 'office@demo.school' }]);
+    await service.drainCurrentTenant();
+    const sent = (mail.send as jest.Mock).mock.calls[0][0];
+    expect(sent.replyTo).toBe('office@demo.school');
+  });
+
+  it('MAIL-3: NEW_SCHOOL_OWNER uses plain platform identity (no Reply-To, no via)', async () => {
+    const { service, mail } = makeHarness({
+      dueRows: [[{ id: 'o1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'owner@new.school', attempts: 0, template_type: 'NEW_SCHOOL_OWNER' }], []],
+      secret: encSecret(),
+      pendingCount: 0,
+      userRole: 'SCHOOL_OWNER',
+    });
+    await service.drainCurrentTenant();
+    const sent = (mail.send as jest.Mock).mock.calls[0][0];
+    expect(sent.fromName).toBe('Aaramva Shikshya');
+    expect(sent.fromName).not.toContain('via');
+    expect(sent.replyTo).toBeUndefined();
+    expect(sent.subject).toContain('administrator account on Aaramva Shikshya');
   });
 
   // ── MAIL-2: rate-limit-aware retry (classifier + retry_holds) ──────────────

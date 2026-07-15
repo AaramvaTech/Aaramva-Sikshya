@@ -75,7 +75,7 @@ export const studentsApi = {
       data,
     ),
   resendAccount: (id: string) =>
-    api.post<ApiResponse<{ userId: string; email: string; sent: true }>>(
+    api.post<ApiResponse<{ userId: string; deliveryIds: string[] }>>(
       `/students/${id}/account/resend`,
     ),
   createGuardianAccount: (studentId: string, guardianId: string, data: { email: string }) =>
@@ -91,7 +91,7 @@ export const studentsApi = {
       }>
     >(`/students/${studentId}/guardians/${guardianId}/account`, data),
   resendGuardianAccount: (studentId: string, guardianId: string) =>
-    api.post<ApiResponse<{ email: string; sent: true }>>(
+    api.post<ApiResponse<{ userId: string; deliveryIds: string[] }>>(
       `/students/${studentId}/guardians/${guardianId}/account/resend`,
     ),
 };
