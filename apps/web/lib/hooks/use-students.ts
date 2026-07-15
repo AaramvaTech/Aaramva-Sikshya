@@ -76,6 +76,39 @@ export function useEnrollStudent(studentId: string) {
   });
 }
 
+// ── Login accounts (REG-1): create/resend student + guardian logins (emails
+// credentials). Invalidate the student query so account status refreshes.
+export function useCreateStudentAccount(studentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) =>
+      studentsApi.createAccount(studentId, { email }).then((r) => r.data.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['student', studentId] }),
+  });
+}
+
+export function useResendStudentAccount(studentId: string) {
+  return useMutation({
+    mutationFn: () => studentsApi.resendAccount(studentId).then((r) => r.data.data),
+  });
+}
+
+export function useCreateGuardianAccount(studentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ guardianId, email }: { guardianId: string; email: string }) =>
+      studentsApi.createGuardianAccount(studentId, guardianId, { email }).then((r) => r.data.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['student', studentId] }),
+  });
+}
+
+export function useResendGuardianAccount(studentId: string) {
+  return useMutation({
+    mutationFn: (guardianId: string) =>
+      studentsApi.resendGuardianAccount(studentId, guardianId).then((r) => r.data.data),
+  });
+}
+
 export function useClasses() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

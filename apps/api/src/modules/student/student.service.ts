@@ -672,7 +672,7 @@ export class StudentService {
     if (studentIds.length === 0) return byStudent;
 
     const rows = await this.tenantPrisma.query<GuardianRowLite & { student_id: string }>(
-      `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary
+      `SELECT id, student_id, relation, first_name, last_name, phone, email, is_primary, user_id
        FROM guardians
        WHERE student_id = ANY($1::uuid[])
        ORDER BY is_primary DESC, created_at ASC`,

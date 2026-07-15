@@ -85,6 +85,8 @@ export interface Guardian {
   phone: string;
   email: string | null;
   isPrimary: boolean;
+  /** REG-1: true when this guardian has a linked PARENT login account. */
+  hasAccount: boolean;
 }
 
 export interface Enrollment {
@@ -103,6 +105,8 @@ export interface StudentDetail {
   id: string;
   studentId: string;
   tenantId: string;
+  /** REG-1: the student's linked STUDENT login account id (null = no account yet). */
+  userId: string | null;
   firstName: string;
   lastName: string;
   fullName: string;

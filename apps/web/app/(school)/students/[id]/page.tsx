@@ -31,6 +31,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { EnrollmentForm } from '@/components/students/enrollment-form';
+import { LoginAccountsCard } from '@/components/students/login-accounts-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -549,6 +550,14 @@ export default function StudentProfilePage() {
               </div>
             </div>
           </div>
+
+          <LoginAccountsCard
+            studentId={id}
+            studentUserId={student.userId}
+            studentName={student.fullName}
+            studentEmail={student.email}
+            guardians={validGuardians}
+          />
         </div>
       )}
 
