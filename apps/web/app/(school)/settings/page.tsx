@@ -17,6 +17,7 @@ import {
 import { PageHeader } from '@/components/shared/page-header';
 import { ChangePasswordCard } from '@/components/shared/change-password-card';
 import { authApi } from '@/lib/api/auth.api';
+import { extractApiErrors } from '@/lib/api-errors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,8 +110,10 @@ export default function SettingsPage() {
       toast.success('School profile updated');
       setEditing(false);
       setPendingFiles({});
-    } catch {
-      toast.error('Failed to update profile');
+    } catch (err) {
+      // MAIL-3 §3 / REG-1 Phase 5: surface the server's field-level 400 (e.g. an
+      // invalid official Email) instead of a generic message.
+      toast.error(extractApiErrors(err, 'Failed to update profile').join(' • '));
     }
   }
 

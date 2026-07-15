@@ -139,8 +139,10 @@ export class TenantProvisioningService {
           const u = rows[0];
           let enq = false;
           if (generated && credentialKeyConfigured()) {
-            const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: input.adminEmail }];
-            if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164 });
+            const targets: DeliveryTarget[] = [
+              { channel: 'EMAIL', recipient: input.adminEmail, templateType: 'NEW_SCHOOL_OWNER' },
+            ];
+            if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164, templateType: 'NEW_SCHOOL_OWNER' });
             await this.credentialDelivery.enqueueInTx(tx, {
               userId: u.id,
               plaintext: input.adminPassword,

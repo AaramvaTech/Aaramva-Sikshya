@@ -119,8 +119,10 @@ export class StaffService {
       // is configured (self-delivery: staff's own email + phone). Else the legacy
       // MAIL event below fires — registration never fails on delivery.
       if (generated && credentialKeyConfigured()) {
-        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
-        if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164 });
+        const targets: DeliveryTarget[] = [
+          { channel: 'EMAIL', recipient: dto.email, templateType: 'STAFF' },
+        ];
+        if (phoneE164) targets.push({ channel: 'SMS', recipient: phoneE164, templateType: 'STAFF' });
         await this.credentialDelivery.enqueueInTx(tx, {
           userId: user.id,
           plaintext: password,
@@ -157,7 +159,7 @@ export class StaffService {
    */
   async resendStaffCredentials(
     staffProfileId: string,
-  ): Promise<{ userId: string; email: string; sent: true }> {
+  ): Promise<{ userId: string; deliveryIds: string[] }> {
     const rows = await this.tenantPrisma.query<{ user_id: string; email: string | null }>(
       `SELECT sp.user_id, u.email
        FROM staff_profiles sp JOIN users u ON u.id = sp.user_id
@@ -166,25 +168,10 @@ export class StaffService {
     );
     if (!rows[0]) throw new NotFoundException(`Staff ${staffProfileId} not found`);
     if (!rows[0].email) throw new BadRequestException('Staff login has no email');
-    const { user_id: userId, email } = rows[0] as { user_id: string; email: string };
-
-    const password = generateTemporaryPassword();
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    await this.tenantPrisma.run(async (tx) => {
-      await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
-         WHERE id = $2::uuid`,
-        passwordHash, userId,
-      );
-      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
-    });
-
-    this.events.emit(MAIL_EVENTS.credentialsIssued, {
-      tenantId: this.tenantContext.getOrThrow().tenantId,
-      to: email, loginEmail: email,
-      password, relatedUserId: userId, kind: 'reset',
-    } satisfies CredentialsIssuedEvent);
-    return { userId, email, sent: true };
+    // MAIL-3: resend is unified on the ledger — resendForUser regenerates the temp
+    // password, revokes sessions, and enqueues with the re-derived template_type (STAFF),
+    // so the recipient gets the same identity + template as the original registration.
+    return this.credentialDelivery.resendForUser(rows[0].user_id);
   }
 
   async listStaff(query: StaffQueryDto): Promise<{

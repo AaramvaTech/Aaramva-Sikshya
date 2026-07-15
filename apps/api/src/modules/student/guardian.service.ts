@@ -137,9 +137,15 @@ export class GuardianService {
       // Falls back to the legacy MAIL event only when no encryption key is set.
       let enqueued = false;
       if (generated && createdNewUser && credentialKeyConfigured()) {
-        const targets: DeliveryTarget[] = [{ channel: 'EMAIL', recipient: dto.email }];
+        const targets: DeliveryTarget[] = [
+          { channel: 'EMAIL', recipient: dto.email, templateType: 'GUARDIAN_SELF' },
+        ];
         if (guardian.phone) {
-          targets.push({ channel: 'SMS', recipient: toE164Nepal(guardian.phone) ?? guardian.phone });
+          targets.push({
+            channel: 'SMS',
+            recipient: toE164Nepal(guardian.phone) ?? guardian.phone,
+            templateType: 'GUARDIAN_SELF',
+          });
         }
         await this.credentialDelivery.enqueueInTx(tx, { userId, plaintext: password, targets });
         enqueued = true;
@@ -167,7 +173,7 @@ export class GuardianService {
   async resendGuardianCredentials(
     studentId: string,
     guardianId: string,
-  ): Promise<{ userId: string; email: string; sent: true }> {
+  ): Promise<{ userId: string; deliveryIds: string[] }> {
     const rows = await this.tenantPrisma.query<{ user_id: string | null; email: string | null }>(
       `SELECT g.user_id, u.email
        FROM guardians g LEFT JOIN users u ON u.id = g.user_id
@@ -178,25 +184,8 @@ export class GuardianService {
     if (!rows[0].user_id || !rows[0].email) {
       throw new BadRequestException('Guardian has no linked login account');
     }
-    const { user_id: userId, email } = rows[0] as { user_id: string; email: string };
-
-    const password = generateTemporaryPassword();
-    const passwordHash = await bcrypt.hash(password, 10);
-    await this.tenantPrisma.run(async (tx) => {
-      await tx.$executeRawUnsafe(
-        `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
-         WHERE id = $2::uuid`,
-        passwordHash, userId,
-      );
-      await tx.$executeRawUnsafe(`DELETE FROM refresh_tokens WHERE user_id = $1::uuid`, userId);
-    });
-
-    this.events.emit(MAIL_EVENTS.credentialsIssued, {
-      tenantId: this.tenantContext.getOrThrow().tenantId,
-      to: email, loginEmail: email,
-      password, relatedUserId: userId, kind: 'reset',
-    } satisfies CredentialsIssuedEvent);
-    return { userId, email, sent: true };
+    // MAIL-3: unified on the ledger — re-derives GUARDIAN_SELF (see resendForUser).
+    return this.credentialDelivery.resendForUser(rows[0].user_id);
   }
 
   /**

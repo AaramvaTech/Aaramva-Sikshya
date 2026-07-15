@@ -12,6 +12,13 @@ export interface SendMailInput {
   type: string;
   tenantId?: string | null;
   relatedUserId?: string | null;
+  /**
+   * MAIL-3: tenant-aware sender identity. `fromName` overrides the display name in
+   * the From header (e.g. "{School} (via Aaramva Shikshya)"); `replyTo` sets a
+   * Reply-To (e.g. the school's official email). Absent → platform defaults.
+   */
+  fromName?: string;
+  replyTo?: string;
 }
 
 export interface SendMailResult {
@@ -139,13 +146,16 @@ export class MailService implements OnModuleInit {
   private async deliver(
     input: SendMailInput,
   ): Promise<{ messageId: string | null; previewUrl?: string }> {
-    const fromName = this.config.get<string>('MAIL_FROM_NAME') || 'Aaramva Shikshya';
+    // MAIL-3: per-send display name (tenant identity) overrides the platform default.
+    const fromName =
+      input.fromName || this.config.get<string>('MAIL_FROM_NAME') || 'Aaramva Shikshya';
     const fromAddr =
       this.fromAddress() ||
       (this.mode === 'ethereal' && this.etherealUser ? this.etherealUser : 'no-reply@aaramvashikshya.com');
     const transporter = await this.getTransporter();
     const info = await transporter.sendMail({
       from: `"${fromName}" <${fromAddr}>`,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
       to: input.to,
       subject: input.subject,
       text: input.text,
