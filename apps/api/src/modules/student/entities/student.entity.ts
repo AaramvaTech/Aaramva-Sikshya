@@ -51,6 +51,8 @@ export interface GuardianDto {
   phone: string;
   email: string | null;
   isPrimary: boolean;
+  /** True when this guardian has a linked PARENT login account (user_id set). */
+  hasAccount: boolean;
 }
 
 /** Minimal shape of a row from the normalized `guardians` table. */
@@ -62,6 +64,7 @@ export interface GuardianRowLite {
   phone: string | null;
   email: string | null;
   is_primary: boolean;
+  user_id: string | null;
 }
 
 /** Map a normalized guardians-table row to the API GuardianDto. */
@@ -74,6 +77,7 @@ export function toGuardianDto(g: GuardianRowLite): GuardianDto {
     phone: g.phone ?? '',
     email: g.email ?? null,
     isPrimary: g.is_primary,
+    hasAccount: g.user_id != null,
   };
 }
 
