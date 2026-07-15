@@ -5,7 +5,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
+import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { generateTemporaryPassword } from '../mail/password.util';
 import { toE164Nepal } from '../common/utils/phone.util';
@@ -14,6 +17,11 @@ import {
   decryptSecret,
   credentialKeyConfigured,
 } from './credential-crypto.util';
+import {
+  isRateLimitError,
+  rateLimitBackoffSeconds,
+  MAX_RETRY_HOLDS,
+} from './retry-classifier.util';
 
 export type DeliveryChannel = 'EMAIL' | 'SMS';
 
@@ -37,6 +45,7 @@ interface DeliveryRow {
   channel: DeliveryChannel;
   recipient: string;
   attempts: number;
+  retry_holds: number;
 }
 
 interface SecretRow {
@@ -51,9 +60,18 @@ export interface DrainTally {
   dry: number;
   failed: number;
   retried: number;
+  /** MAIL-2: rate-limit holds (rescheduled with NO attempt burned). */
+  held: number;
 }
 
 const MAX_ATTEMPTS = 3;
+
+/** School identity woven into the credential email (MAIL-2-OBS-1 fix). */
+interface SchoolInfo {
+  name: string;
+  code: string; // the tenant slug — what the mobile app asks for
+  loginUrl: string;
+}
 
 const escHtml = (s: string) =>
   s.replace(
@@ -68,6 +86,9 @@ export class CredentialDeliveryService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly mail: MailService,
+    private readonly tenantContext: TenantContextService,
+    private readonly publicPrisma: PublicPrismaService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -123,7 +144,14 @@ export class CredentialDeliveryService {
    * terminates once every currently-due row has been handled.
    */
   async drainCurrentTenant(maxRows = 500): Promise<DrainTally> {
-    const tally: DrainTally = { processed: 0, sent: 0, dry: 0, failed: 0, retried: 0 };
+    const tally: DrainTally = {
+      processed: 0,
+      sent: 0,
+      dry: 0,
+      failed: 0,
+      retried: 0,
+      held: 0,
+    };
     for (let i = 0; i < maxRows; i++) {
       const outcome = await this.processOneDueRow();
       if (!outcome) break;
@@ -131,17 +159,18 @@ export class CredentialDeliveryService {
       if (outcome === 'SENT') tally.sent++;
       else if (outcome === 'SENT_DRY') tally.dry++;
       else if (outcome === 'FAILED') tally.failed++;
+      else if (outcome === 'HELD') tally.held++;
       else tally.retried++;
     }
     return tally;
   }
 
   private async processOneDueRow(): Promise<
-    'SENT' | 'SENT_DRY' | 'FAILED' | 'RETRY' | null
+    'SENT' | 'SENT_DRY' | 'FAILED' | 'RETRY' | 'HELD' | null
   > {
     return this.tenantPrisma.run(async (tx) => {
       const rows = await tx.$queryRawUnsafe<DeliveryRow[]>(
-        `SELECT id, user_id, recipient_user_id, channel, recipient, attempts
+        `SELECT id, user_id, recipient_user_id, channel, recipient, attempts, retry_holds
          FROM credential_deliveries
          WHERE status = 'PENDING' AND next_attempt_at <= NOW()
          ORDER BY created_at ASC
@@ -151,7 +180,7 @@ export class CredentialDeliveryService {
       const row = rows[0];
       if (!row) return null;
 
-      let result: 'SENT' | 'SENT_DRY' | 'FAILED' | 'RETRY';
+      let result: 'SENT' | 'SENT_DRY' | 'FAILED' | 'RETRY' | 'HELD';
       let lastError: string | null = null;
       try {
         const plaintext = await this.decryptFor(tx, row.user_id);
@@ -172,6 +201,39 @@ export class CredentialDeliveryService {
           result,
           row.id,
         );
+      } else if (isRateLimitError(lastError)) {
+        // MAIL-2 §2 — RETRYABLE_NO_ATTEMPT: a provider rate-limit / greylist must
+        // NOT burn an attempt. Reschedule, bump retry_holds, keep status PENDING.
+        // A genuinely stuck row hits the cap → FAILED.
+        const holds = (row.retry_holds ?? 0) + 1;
+        if (holds >= MAX_RETRY_HOLDS) {
+          result = 'FAILED';
+          await tx.$executeRawUnsafe(
+            `UPDATE credential_deliveries
+               SET status = 'FAILED', retry_holds = $1, last_error = $2, updated_at = NOW()
+             WHERE id = $3::uuid`,
+            holds,
+            'retry hold cap exceeded',
+            row.id,
+          );
+        } else {
+          result = 'HELD';
+          const backoffSec = rateLimitBackoffSeconds(holds);
+          this.logger.warn(
+            `Credential delivery ${row.id} (${row.channel}) held on rate-limit ` +
+              `(retry_holds=${holds}/${MAX_RETRY_HOLDS}) — no attempt burned, retry in ${backoffSec}s`,
+          );
+          await tx.$executeRawUnsafe(
+            `UPDATE credential_deliveries
+               SET retry_holds = $1, last_error = $2,
+                   next_attempt_at = NOW() + ($3 || ' seconds')::interval, updated_at = NOW()
+             WHERE id = $4::uuid`,
+            holds,
+            lastError,
+            String(backoffSec),
+            row.id,
+          );
+        }
       } else {
         const attempts = row.attempts + 1;
         if (attempts >= MAX_ATTEMPTS) {
@@ -238,41 +300,89 @@ export class CredentialDeliveryService {
   private async ownerContext(
     tx: TenantTx,
     row: DeliveryRow,
-  ): Promise<{ ownerName: string; ownerUsername: string; guardianRouted: boolean }> {
+  ): Promise<{
+    ownerName: string;
+    ownerUsername: string;
+    ownerRole: string | null;
+    guardianRouted: boolean;
+  }> {
     const u = await tx.$queryRawUnsafe<
-      { first_name: string; last_name: string | null; email: string }[]
-    >(`SELECT first_name, last_name, email FROM users WHERE id = $1::uuid`, row.user_id);
+      { first_name: string; last_name: string | null; email: string; role: string | null }[]
+    >(`SELECT first_name, last_name, email, role FROM users WHERE id = $1::uuid`, row.user_id);
     const o = u[0];
     const name = o ? `${o.first_name} ${o.last_name ?? ''}`.trim() : '';
     return {
       ownerName: name || (o?.email ?? row.recipient),
       ownerUsername: o?.email ?? row.recipient,
+      ownerRole: o?.role ?? null,
       guardianRouted: row.recipient_user_id != null,
     };
+  }
+
+  /**
+   * MAIL-2-OBS-1 — the school identity the recipient needs to actually log in:
+   * name (framing), code (= tenant slug, what the mobile app asks for) and the web
+   * login URL. Resolved from the current tenant context + the public tenants table
+   * (slug is a plain lowercase text column, unlike the camelCase/TEXT id).
+   */
+  private async schoolContext(): Promise<SchoolInfo> {
+    const code = this.tenantContext.get()?.slug ?? '';
+    let name = 'your school';
+    if (code) {
+      const rows = await this.publicPrisma.query<{ name: string }>(
+        `SELECT name FROM tenants WHERE slug = $1`,
+        code,
+      );
+      if (rows[0]?.name) name = rows[0].name;
+    }
+    const domain = this.config.get<string>('APP_DOMAIN') || 'aaramvashikshya.com';
+    return { name, code, loginUrl: code ? `https://${code}.${domain}` : `https://${domain}` };
+  }
+
+  /** Friendly account-type label so the recipient knows what the credentials are for. */
+  private accountTypeLabel(role: string | null): string {
+    switch (role) {
+      case 'STUDENT':
+        return 'student';
+      case 'PARENT':
+        return 'parent';
+      case 'SCHOOL_OWNER':
+        return 'school owner';
+      default:
+        return 'staff';
+    }
   }
 
   private async deliverEmail(
     tx: TenantTx,
     row: DeliveryRow,
     plaintext: string,
-  ): Promise<'SENT' | 'RETRY'> {
+  ): Promise<'SENT'> {
     const c = await this.ownerContext(tx, row);
+    const school = await this.schoolContext();
+    const accountType = this.accountTypeLabel(c.ownerRole);
     const res = await this.mail.send({
       to: row.recipient,
       subject: c.guardianRouted
-        ? `Login details for ${c.ownerName}`
-        : 'Your school account credentials',
+        ? `Login details for ${c.ownerName} at ${school.name}`
+        : `Your ${school.name} ${accountType} login is ready`,
       html: c.guardianRouted
-        ? this.guardianHtml(c.ownerName, c.ownerUsername, plaintext)
-        : this.selfHtml(c.ownerUsername, plaintext),
+        ? this.guardianHtml(c.ownerName, c.ownerUsername, plaintext, school)
+        : this.selfHtml(c.ownerUsername, plaintext, school, accountType),
       text: c.guardianRouted
-        ? `Login details for ${c.ownerName} — username: ${c.ownerUsername}, temporary password: ${plaintext}. They will be asked to change it on first login.`
-        : `Username: ${c.ownerUsername}\nTemporary password: ${plaintext}\nYou will be asked to change this password on first login.`,
+        ? this.guardianText(c.ownerName, c.ownerUsername, plaintext, school)
+        : this.selfText(c.ownerUsername, plaintext, school, accountType),
       type: 'CREDENTIALS',
       relatedUserId: row.user_id,
     });
-    // MAIL-1: dev without SMTP → MOCK (handled). Only a real send failure → FAILED.
-    return res.status === 'FAILED' ? 'RETRY' : 'SENT';
+    // MAIL-1: dev without SMTP → MOCK (treated as delivered). MAIL-2: a real send
+    // failure THROWS the transport error text (never a body) so the poller's
+    // channel-generic classifier can see SMTP 421/450/451 etc. and hold vs. burn
+    // an attempt. A null error still throws a generic message → normal retry path.
+    if (res.status === 'FAILED') {
+      throw new Error(res.error ?? 'email delivery failed');
+    }
+    return 'SENT';
   }
 
   private async deliverSms(
@@ -308,18 +418,89 @@ export class CredentialDeliveryService {
     return 'SENT';
   }
 
-  private selfHtml(username: string, tempPassword: string): string {
-    return `<p>Your account has been created.</p>
-<p><strong>Username:</strong> ${escHtml(username)}<br/>
-<strong>Temporary password:</strong> ${escHtml(tempPassword)}</p>
+  /** Shared "how to log in" block (web + mobile school-code instructions). */
+  private howToLogIn(school: SchoolInfo): string {
+    return `<p><strong>How to log in</strong><br/>
+Web: <a href="${school.loginUrl}">${escHtml(school.loginUrl)}</a><br/>
+Mobile: open the Aaramva Shikshya app, enter the school code "<strong>${escHtml(school.code)}</strong>", then log in.</p>`;
+  }
+
+  private credentialList(username: string, tempPassword: string, school: SchoolInfo): string {
+    return `<ul>
+  <li><strong>School code:</strong> ${escHtml(school.code)}</li>
+  <li><strong>Login email:</strong> ${escHtml(username)}</li>
+  <li><strong>Temporary password:</strong> ${escHtml(tempPassword)}</li>
+</ul>`;
+  }
+
+  private selfHtml(
+    username: string,
+    tempPassword: string,
+    school: SchoolInfo,
+    accountType: string,
+  ): string {
+    return `<p>Your Aaramva Shikshya ${escHtml(accountType)} account for <strong>${escHtml(school.name)}</strong> has been created.</p>
+${this.credentialList(username, tempPassword, school)}
+${this.howToLogIn(school)}
 <p>For your security, you will be asked to change this password the first time you log in.</p>`;
   }
 
-  private guardianHtml(studentName: string, username: string, tempPassword: string): string {
-    return `<p>Login details for <strong>${escHtml(studentName)}</strong>.</p>
-<p><strong>Username:</strong> ${escHtml(username)}<br/>
-<strong>Temporary password:</strong> ${escHtml(tempPassword)}</p>
+  private guardianHtml(
+    studentName: string,
+    username: string,
+    tempPassword: string,
+    school: SchoolInfo,
+  ): string {
+    return `<p>Login details for <strong>${escHtml(studentName)}</strong>'s student account at <strong>${escHtml(school.name)}</strong>.</p>
+${this.credentialList(username, tempPassword, school)}
+${this.howToLogIn(school)}
 <p>${escHtml(studentName)} will be asked to change this password the first time they log in.</p>`;
+  }
+
+  private howToLogInText(school: SchoolInfo): string[] {
+    return [
+      `How to log in:`,
+      `Web: ${school.loginUrl}`,
+      `Mobile: open the Aaramva Shikshya app, enter the school code "${school.code}", then log in.`,
+    ];
+  }
+
+  private selfText(
+    username: string,
+    tempPassword: string,
+    school: SchoolInfo,
+    accountType: string,
+  ): string {
+    return [
+      `Your Aaramva Shikshya ${accountType} account for ${school.name} has been created.`,
+      ``,
+      `School code: ${school.code}`,
+      `Login email: ${username}`,
+      `Temporary password: ${tempPassword}`,
+      ``,
+      ...this.howToLogInText(school),
+      ``,
+      `For your security, you will be asked to change this password the first time you log in.`,
+    ].join('\n');
+  }
+
+  private guardianText(
+    studentName: string,
+    username: string,
+    tempPassword: string,
+    school: SchoolInfo,
+  ): string {
+    return [
+      `Login details for ${studentName}'s student account at ${school.name}.`,
+      ``,
+      `School code: ${school.code}`,
+      `Login email: ${username}`,
+      `Temporary password: ${tempPassword}`,
+      ``,
+      ...this.howToLogInText(school),
+      ``,
+      `${studentName} will be asked to change this password the first time they log in.`,
+    ].join('\n');
   }
 
   /**

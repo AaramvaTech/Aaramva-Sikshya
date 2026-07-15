@@ -19,6 +19,13 @@ export interface SendMailResult {
   logId: string;
   /** Ethereal dev mode only: message preview URL (live-proof evidence). */
   previewUrl?: string;
+  /**
+   * MAIL-2: transport error text on a FAILED transport send (never bodies — the
+   * provider's status line). Lets the credential-delivery poller's channel-generic
+   * rate-limit classifier see SMTP 421/450/451 etc. Absent on MOCK/SENT and on a
+   * pre-send log-INSERT failure.
+   */
+  error?: string;
 }
 
 type MailMode = 'smtp' | 'ethereal' | 'disabled';
@@ -41,19 +48,62 @@ export class MailService implements OnModuleInit {
   ) {}
 
   get mode(): MailMode {
+    // MAIL-2 §2 — explicit transport selector overrides the legacy resolution.
+    const transport = this.config.get<string>('MAIL_TRANSPORT');
+    if (transport === 'SMTP') return 'smtp';
+    if (transport === 'MOCK') return 'disabled';
+    // MAIL_TRANSPORT unset ⇒ legacy MAIL-1 behavior (backward compatible).
     if (this.config.get<string>('SMTP_HOST')) return 'smtp';
     if (this.config.get<boolean>('MAIL_ETHEREAL')) return 'ethereal';
     return 'disabled';
   }
 
   onModuleInit(): void {
+    // MAIL-2 §2 fail-fast: MAIL_TRANSPORT=SMTP with any required var missing must
+    // refuse to boot — never silently fall back to mock (the BUG-1 lesson).
+    if (this.config.get<string>('MAIL_TRANSPORT') === 'SMTP') {
+      this.assertSmtpConfigured();
+    }
+    // MAIL-2 §2 — boot log line stating the ACTIVE transport.
     const mode = this.mode;
     if (mode === 'smtp') {
-      this.logger.log(`Mail ENABLED via SMTP (${this.config.get<string>('SMTP_HOST')})`);
+      this.logger.log(`Mail transport ACTIVE: SMTP (${this.config.get<string>('SMTP_HOST')})`);
     } else if (mode === 'ethereal') {
-      this.logger.log('Mail in ETHEREAL dev mode — sends go to a nodemailer test inbox with preview URLs');
+      this.logger.log(
+        'Mail transport ACTIVE: ETHEREAL — sends go to a nodemailer test inbox with preview URLs',
+      );
     } else {
-      this.logger.log('Mail disabled (no SMTP_HOST, MAIL_ETHEREAL off) — sends are logged as MOCK and skipped');
+      this.logger.log(
+        'Mail transport ACTIVE: MOCK — sends are logged (recipient + subject only) and skipped; no real email',
+      );
+    }
+  }
+
+  /** Resolved sender address: MAIL-2 MAIL_FROM_ADDRESS preferred, MAIL_FROM fallback. */
+  private fromAddress(): string | undefined {
+    return (
+      this.config.get<string>('MAIL_FROM_ADDRESS') ||
+      this.config.get<string>('MAIL_FROM') ||
+      undefined
+    );
+  }
+
+  /**
+   * MAIL-2 §2 fail-fast. Throws (aborts boot) when MAIL_TRANSPORT=SMTP is selected
+   * but the transport is not fully configured. Required: host, user, pass, and a
+   * from address. Port/secure/from-name have safe defaults.
+   */
+  private assertSmtpConfigured(): void {
+    const missing: string[] = [];
+    if (!this.config.get<string>('SMTP_HOST')) missing.push('SMTP_HOST');
+    if (!this.config.get<string>('SMTP_USER')) missing.push('SMTP_USER');
+    if (!this.config.get<string>('SMTP_PASS')) missing.push('SMTP_PASS');
+    if (!this.fromAddress()) missing.push('MAIL_FROM_ADDRESS (or MAIL_FROM)');
+    if (missing.length > 0) {
+      throw new Error(
+        `MAIL_TRANSPORT=SMTP but required mail env vars are missing: ${missing.join(', ')}. ` +
+          'Refusing to start — no silent mock fallback. Set them, or use MAIL_TRANSPORT=MOCK.',
+      );
     }
   }
 
@@ -91,7 +141,7 @@ export class MailService implements OnModuleInit {
   ): Promise<{ messageId: string | null; previewUrl?: string }> {
     const fromName = this.config.get<string>('MAIL_FROM_NAME') || 'Aaramva Shikshya';
     const fromAddr =
-      this.config.get<string>('MAIL_FROM') ||
+      this.fromAddress() ||
       (this.mode === 'ethereal' && this.etherealUser ? this.etherealUser : 'no-reply@aaramvashikshya.com');
     const transporter = await this.getTransporter();
     const info = await transporter.sendMail({
@@ -149,7 +199,9 @@ export class MailService implements OnModuleInit {
       const message = (err as Error)?.message ?? 'Unknown email error';
       this.logger.error(`Email send failed to ${input.to}: ${message}`);
       await this.updateStatus(logId, 'FAILED', null, message);
-      return { status: 'FAILED', logId };
+      // MAIL-2: hand the transport error back so the poller's rate-limit
+      // classifier can inspect it (SMTP 421/450/451, 429, quota/throttle).
+      return { status: 'FAILED', logId, error: message };
     }
   }
 

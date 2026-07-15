@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MailModule } from '../mail/mail.module';
+import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { CredentialDeliveryService } from './credential-delivery.service';
 import { CredentialDeliveryPoller } from './credential-delivery.poller';
 import { CredentialDeliveryController } from './credential-delivery.controller';
@@ -14,7 +15,7 @@ import { UserCredentialController } from './user-credential.controller';
 @Module({
   imports: [MailModule],
   controllers: [CredentialDeliveryController, UserCredentialController],
-  providers: [CredentialDeliveryService, CredentialDeliveryPoller],
+  providers: [CredentialDeliveryService, CredentialDeliveryPoller, PublicPrismaService],
   exports: [CredentialDeliveryService],
 })
 export class CredentialDeliveryModule {}

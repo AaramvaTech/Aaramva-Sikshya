@@ -54,10 +54,19 @@ export const envValidationSchema = Joi.object({
   SMTP_USER: Joi.string().optional().allow(''),
   SMTP_PASS: Joi.string().optional().allow(''),
   MAIL_FROM: Joi.string().optional().allow(''),
+  // MAIL-2 §2 name for the sender address (preferred over the MAIL-1 MAIL_FROM
+  // alias; MAIL_FROM stays a fallback — see MAIL-2-BUGS MAIL-OBS-1).
+  MAIL_FROM_ADDRESS: Joi.string().optional().allow(''),
   MAIL_FROM_NAME: Joi.string().optional().allow(''),
   // Dev-proof mode: auto-provisions a nodemailer Ethereal test inbox; every
   // send logs a preview URL. Ignored when SMTP_HOST is set.
   MAIL_ETHEREAL: Joi.boolean().truthy('true').falsy('false').default(false),
+  // MAIL-2 §2 — explicit transport selector. NOT defaulted (so "unset" stays a
+  // real state): unset ⇒ the legacy MAIL-1 resolution (SMTP_HOST → smtp,
+  // MAIL_ETHEREAL → ethereal, else disabled/MOCK). MOCK ⇒ never send. SMTP ⇒
+  // real send AND fail-fast at boot if any required SMTP var is missing (no
+  // silent mock fallback — the BUG-1 lesson). CI must run with MOCK/unset.
+  MAIL_TRANSPORT: Joi.string().valid('MOCK', 'SMTP').optional(),
 
   // SMS / integrations — optional (mock path when disabled).
   SPARROW_SMS_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
