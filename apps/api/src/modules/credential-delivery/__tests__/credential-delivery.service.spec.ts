@@ -9,6 +9,8 @@ interface TxOpts {
   dueRows: unknown[][]; // successive FOR UPDATE results
   secret: unknown[] | null; // credential_delivery_secrets SELECT result
   pendingCount?: number;
+  userRole?: string; // MAIL-2: owner role → account-type label
+  schoolName?: string; // MAIL-2: public tenants.name lookup result
 }
 
 function makeHarness(opts: TxOpts) {
@@ -25,7 +27,7 @@ function makeHarness(opts: TxOpts) {
         return Promise.resolve(opts.secret ?? []);
       }
       if (sql.includes('FROM users'))
-        return Promise.resolve([{ first_name: 'Aarav', last_name: 'Student', email: 'aarav@demo.school' }]);
+        return Promise.resolve([{ first_name: 'Aarav', last_name: 'Student', email: 'aarav@demo.school', role: opts.userRole ?? 'TEACHER' }]);
       if (sql.includes('count(*)')) return Promise.resolve([{ n: opts.pendingCount ?? 0 }]);
       return Promise.resolve([]);
     }),
@@ -41,11 +43,18 @@ function makeHarness(opts: TxOpts) {
     query: jest.fn(),
   };
   const mail = { send: jest.fn().mockResolvedValue({ status: 'MOCK' }) };
+  // MAIL-2: school-context deps for the enriched credential email.
+  const tenantContext = { get: jest.fn().mockReturnValue({ tenantId: 't1', slug: 'demo', schemaName: 'tenant_demo' }) };
+  const publicPrisma = { query: jest.fn().mockResolvedValue([{ name: opts.schoolName ?? 'Demo School' }]) };
+  const config = { get: jest.fn((k: string, d?: unknown) => (k === 'APP_DOMAIN' ? 'aaramvashikshya.com' : d)) };
   const service = new CredentialDeliveryService(
     tenantPrisma as never,
     mail as never,
+    tenantContext as never,
+    publicPrisma as never,
+    config as never,
   );
-  return { service, tx, updates, deletes, mail };
+  return { service, tx, updates, deletes, mail, tenantContext, publicPrisma };
 }
 
 describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
@@ -73,7 +82,7 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
       }),
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: 'row-x' }]),
     };
-    const svc = new CredentialDeliveryService({} as never, {} as never);
+    const svc = new CredentialDeliveryService({} as never, {} as never, {} as never, {} as never, {} as never);
     const ids = await svc.enqueueInTx(tx as never, {
       userId: 'u1',
       plaintext: 'TempPw@123456',
@@ -154,7 +163,104 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
     await service.drainCurrentTenant();
     const sent = (mail.send as jest.Mock).mock.calls[0][0];
     expect(sent.subject).toContain('Aarav Student'); // owner (student) name from user_id
+    expect(sent.subject).toContain('Demo School'); // MAIL-2: school name in the subject
     expect(sent.html).toContain('Aarav Student');
+    expect(sent.text).toContain('School code: demo'); // MAIL-2: school code present
+    expect(sent.text).toContain('https://demo.aaramvashikshya.com'); // MAIL-2: login URL
+  });
+
+  it('MAIL-2 (OBS-1): self credential email carries school name, code, login URL, and account type', async () => {
+    const { service, mail } = makeHarness({
+      dueRows: [[{ id: 'e1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'staff@demo.school', attempts: 0, retry_holds: 0 }], []],
+      secret: encSecret(),
+      pendingCount: 0,
+      userRole: 'TEACHER', // → account type "staff"
+    });
+    await service.drainCurrentTenant();
+    const sent = (mail.send as jest.Mock).mock.calls[0][0];
+    expect(sent.subject).toBe('Your Demo School staff login is ready');
+    expect(sent.text).toContain('staff account for Demo School');
+    expect(sent.text).toContain('School code: demo');
+    expect(sent.text).toContain('https://demo.aaramvashikshya.com');
+    expect(sent.text).toContain('enter the school code "demo"');
+    expect(sent.html).toContain('School code:');
+    expect(sent.html).toContain('<strong>demo</strong>'); // code rendered in the HTML
+  });
+
+  // ── MAIL-2: rate-limit-aware retry (classifier + retry_holds) ──────────────
+
+  it('MAIL-2: rate-limit (429) → HELD, no attempt burned, retry_holds bumped, still PENDING', async () => {
+    const { service, updates, mail } = makeHarness({
+      dueRows: [[{ id: 'r1', user_id: 'u1', channel: 'EMAIL', recipient: 'a@b.c', attempts: 0, retry_holds: 0 }], []],
+      secret: encSecret(),
+      pendingCount: 1, // the row stays PENDING after a hold
+    });
+    mail.send.mockResolvedValueOnce({ status: 'FAILED', error: 'Message failed: 429 Too Many Requests' });
+    const tally = await service.drainCurrentTenant();
+    expect(tally).toMatchObject({ processed: 1, held: 1, retried: 0, failed: 0, sent: 0 });
+    // exactly one UPDATE: bump retry_holds + reschedule; NEVER touches attempts or status
+    expect(updates).toHaveLength(1);
+    expect(updates[0].sql).toContain('retry_holds = $1');
+    expect(updates[0].sql).toContain('next_attempt_at = NOW()');
+    expect(updates[0].sql).not.toContain('attempts');
+    expect(updates[0].sql).not.toContain("status = 'FAILED'");
+    expect(updates[0].args[0]).toBe(1); // retry_holds 0 → 1
+  });
+
+  it('MAIL-2: rate-limit hold cap (50) → FAILED with "retry hold cap exceeded"', async () => {
+    const { service, updates, mail } = makeHarness({
+      dueRows: [[{ id: 'r2', user_id: 'u1', channel: 'EMAIL', recipient: 'a@b.c', attempts: 0, retry_holds: 49 }], []],
+      secret: encSecret(),
+      pendingCount: 0,
+    });
+    mail.send.mockResolvedValueOnce({ status: 'FAILED', error: 'SMTP 421 rate limit exceeded' });
+    const tally = await service.drainCurrentTenant();
+    expect(tally).toMatchObject({ processed: 1, failed: 1, held: 0 });
+    expect(updates[0].sql).toContain("status = 'FAILED'");
+    expect(updates[0].sql).toContain('retry_holds = $1');
+    expect(updates[0].args[0]).toBe(50); // retry_holds 49 → 50 (cap)
+    expect(updates[0].args[1]).toBe('retry hold cap exceeded');
+  });
+
+  it('MAIL-2: non-rate-limit email failure → normal retry (attempts++), not a hold', async () => {
+    const { service, updates, mail } = makeHarness({
+      dueRows: [[{ id: 'r3', user_id: 'u1', channel: 'EMAIL', recipient: 'a@b.c', attempts: 0, retry_holds: 0 }], []],
+      secret: encSecret(),
+      pendingCount: 1,
+    });
+    mail.send.mockResolvedValueOnce({ status: 'FAILED', error: 'connect ECONNREFUSED 127.0.0.1:587' });
+    const tally = await service.drainCurrentTenant();
+    expect(tally).toMatchObject({ processed: 1, retried: 1, held: 0, failed: 0 });
+    expect(updates[0].sql).toContain('attempts = $1');
+    expect(updates[0].sql).toContain('next_attempt_at = NOW()');
+    expect(updates[0].sql).not.toContain('retry_holds');
+    expect(updates[0].args[0]).toBe(1); // attempts 0 → 1
+  });
+
+  it('MAIL-2 classifier (forced-429 stub): a 429 holds the row (no attempt burned), then it drains to SENT on the next run', async () => {
+    // Run 1 — a rate-limit (429) send: HELD, attempts stays 0, retry_holds → 1, still PENDING.
+    const h1 = makeHarness({
+      dueRows: [[{ id: 'seq1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'a@b.c', attempts: 0, retry_holds: 0 }], []],
+      secret: encSecret(),
+      pendingCount: 1, // still pending after the hold
+    });
+    h1.mail.send.mockResolvedValueOnce({ status: 'FAILED', error: '429 Too Many Requests' });
+    const t1 = await h1.service.drainCurrentTenant();
+    expect(t1).toMatchObject({ held: 1, retried: 0, failed: 0, sent: 0 });
+    expect(h1.updates[0].sql).toContain('retry_holds = $1');
+    expect(h1.updates[0].sql).not.toContain('attempts'); // the hold never touches the attempt budget
+    expect(h1.updates[0].args[0]).toBe(1); // retry_holds 0 → 1
+
+    // Run 2 — same row, now due again with attempts STILL 0 (proving run 1 burned none) and
+    // retry_holds=1; this time the send succeeds → SENT.
+    const h2 = makeHarness({
+      dueRows: [[{ id: 'seq1', user_id: 'u1', recipient_user_id: null, channel: 'EMAIL', recipient: 'a@b.c', attempts: 0, retry_holds: 1 }], []],
+      secret: encSecret(),
+      pendingCount: 0,
+    });
+    const t2 = await h2.service.drainCurrentTenant();
+    expect(t2).toMatchObject({ sent: 1, held: 0, failed: 0 });
+    expect(h2.updates[0].args[0]).toBe('SENT');
   });
 
   describe('resendForUser', () => {
@@ -168,7 +274,7 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
         query: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@x.z', phone: '+9779812345678' }]),
         run: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
       };
-      const svc = new CredentialDeliveryService(tenantPrisma as never, { send: jest.fn() } as never);
+      const svc = new CredentialDeliveryService(tenantPrisma as never, { send: jest.fn() } as never, {} as never, {} as never, {} as never);
       const res = await svc.resendForUser('u1');
       expect(res.userId).toBe('u1');
       expect(res.deliveryIds).toEqual(['del-1', 'del-1']); // email + sms
@@ -179,7 +285,7 @@ describe('CredentialDeliveryService (REG-1 Phase 3)', () => {
 
     it('unknown / soft-deleted user → NotFoundException (no enqueue)', async () => {
       const tenantPrisma = { query: jest.fn().mockResolvedValue([]), run: jest.fn() };
-      const svc = new CredentialDeliveryService(tenantPrisma as never, {} as never);
+      const svc = new CredentialDeliveryService(tenantPrisma as never, {} as never, {} as never, {} as never, {} as never);
       await expect(svc.resendForUser('missing')).rejects.toBeInstanceOf(NotFoundException);
       expect(tenantPrisma.run).not.toHaveBeenCalled();
     });

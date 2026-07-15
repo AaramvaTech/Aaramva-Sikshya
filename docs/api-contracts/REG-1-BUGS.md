@@ -345,3 +345,35 @@ Read-backs in the **new** schema `tenant_p6_throwaway`: owner `SCHOOL_OWNER`
 > `subscriptions`/`tenants` rows (both → 0). Verified: `information_schema.schemata` count for
 > `tenant_p6_throwaway` = **0**, public `tenants` where slug = 0. All demo probe rows
 > (`p6-%` users/staff/deliveries/secrets/email_log) deleted with read-back = 0.
+
+---
+
+## §8 gate — SPLIT for MAIL-2 (recorded 2026-07-15)
+
+The single §8 manual gate ("Real Sparrow SMS proof" + "Real email receipt proof") is split
+into two independently-closeable gates so the **email** half can close on MAIL-2 without
+waiting on the still-blocked **SMS** half. (§8 item 3 — remove "force-change-temp-password"
+from the PAY-1 backlog — was already satisfied by POL-1 T4 / REG-OBS-1; nothing left to do.)
+
+### REG-G-EMAIL — real email receipt proof — **CLOSED (MAIL-2 Checkpoint 2, 2026-07-15)**
+
+The §8 email half (item 2). Real inbox delivery cannot be self-certified by Claude Code
+(§5 / MAIL-2 §5). It was the acceptance bar for **MAIL-2 Phase 2** and is now **CLOSED**:
+with `MAIL_TRANSPORT=SMTP` + Brevo creds, a test staff user was registered (no password) →
+ledger EMAIL + SMS `PENDING` → drain → SMS `SENT_DRY`, EMAIL `SENT` with a real Brevo
+`provider_message_id` (`email_log` never `MOCK`) → **Srijan confirmed real inbox receipt**
+(subject + temp password present, renders correctly) → login with the delivered temp password
+→ forced-change flow → change (`must_change_password` cleared) → soft-delete the test user →
+ledger read-back (audit trail retained). One live blocker (Brevo `525 Unauthorized IP`) and one
+UX gap (bare email → enriched with school code / account type / login URL) were found and handled
+during the proof — see MAIL-2-BUGS MAIL-2-OBS-1 / OBS-2. Full evidence: MAIL-2-BUGS "Checkpoint 2".
+
+### REG-G-SMS — real Sparrow SMS proof — **OPEN, blocked on Sparrow demo account**
+
+The §8 SMS half (item 1). Blocked on a Sparrow SMS demo/sender account (not yet provisioned).
+Until it arrives, **`SMS_DRY_RUN=true` stays set** everywhere (dev/CI): the poller marks
+credential SMS rows `SENT_DRY` and never calls Sparrow, never builds a body carrying the temp
+password (REG-NOTE-3). When the account is available this becomes its own short session:
+`SMS_DRY_RUN=false` + real creds → register a test user with Srijan's own phone → photo of the
+received SMS → ledger row `SENT` → template ≤160 ASCII chars (1 credit) check → soft-delete the
+test user. **Not in MAIL-2 scope** (MAIL-2 §4).

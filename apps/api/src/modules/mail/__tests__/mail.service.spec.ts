@@ -60,6 +60,50 @@ describe('MailService', () => {
     expect(mockPublicPrisma.execute).not.toHaveBeenCalled();
   });
 
+  // ── MAIL-2: transport selection + fail-fast boot ──────────────────────────
+
+  it('MAIL-2: MAIL_TRANSPORT=SMTP selects smtp mode', () => {
+    configValues['MAIL_TRANSPORT'] = 'SMTP';
+    configValues['SMTP_HOST'] = 'smtp.brevo.com';
+    expect(service.mode).toBe('smtp');
+  });
+
+  it('MAIL-2: MAIL_TRANSPORT=MOCK forces disabled even when SMTP_HOST is set', () => {
+    configValues['MAIL_TRANSPORT'] = 'MOCK';
+    configValues['SMTP_HOST'] = 'smtp.brevo.com';
+    expect(service.mode).toBe('disabled');
+  });
+
+  it('MAIL-2: unset MAIL_TRANSPORT keeps legacy SMTP_HOST → smtp resolution', () => {
+    configValues['SMTP_HOST'] = 'smtp.brevo.com';
+    expect(service.mode).toBe('smtp');
+  });
+
+  it('MAIL-2: onModuleInit fails fast when MAIL_TRANSPORT=SMTP and SMTP vars are missing', () => {
+    configValues['MAIL_TRANSPORT'] = 'SMTP'; // no host/user/pass/from
+    expect(() => service.onModuleInit()).toThrow(/MAIL_TRANSPORT=SMTP/);
+  });
+
+  it('MAIL-2: onModuleInit does not throw when MAIL_TRANSPORT=SMTP is fully configured (MAIL_FROM_ADDRESS accepted)', () => {
+    configValues['MAIL_TRANSPORT'] = 'SMTP';
+    configValues['SMTP_HOST'] = 'smtp.brevo.com';
+    configValues['SMTP_USER'] = 'user@brevo';
+    configValues['SMTP_PASS'] = 'secret';
+    // MAIL_FROM absent — proves MAIL_FROM_ADDRESS (spec §2 name) is read.
+    configValues['MAIL_FROM_ADDRESS'] = 'no-reply@school.np';
+    expect(() => service.onModuleInit()).not.toThrow();
+  });
+
+  it('MAIL-2: CI safety — the CI environment must not select real SMTP', () => {
+    // Spec §2: CI must never send real email. Assert ONLY when actually running in
+    // CI (CI=true) — locally a dev may legitimately set MAIL_TRANSPORT=SMTP for a
+    // live proof, and that must not fail their suite. In CI a stray SMTP opt-in
+    // (no Brevo creds present there anyway) fails loudly here.
+    if (process.env.CI) {
+      expect(process.env.MAIL_TRANSPORT ?? 'unset').not.toBe('SMTP');
+    }
+  });
+
   it('never throws and records FAILED when the transport throws', async () => {
     configValues['SMTP_HOST'] = 'smtp.example.com';
     // Force the transporter to fail by stubbing the private send.
