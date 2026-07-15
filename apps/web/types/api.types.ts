@@ -904,7 +904,10 @@ export interface SalarySlip {
 }
 
 export interface CreateStaffData {
-  email: string; password: string;
+  // REG-1 / MAIL-2-OBS-3: password is optional. Omitting it makes the backend
+  // generate a temporary password and email the credentials (forced change on
+  // first login). The web staff form no longer collects one.
+  email: string; password?: string;
   firstName: string; lastName: string; role: string;
   departmentId?: string; designationId?: string;
   dateOfBirth?: string; gender?: string; phone?: string;

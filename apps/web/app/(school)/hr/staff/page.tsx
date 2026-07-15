@@ -57,7 +57,7 @@ export default function StaffListPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', password: '', role: '',
+    firstName: '', lastName: '', email: '', role: '',
     departmentId: '', designationId: '',
     joinDate: '', baseSalary: '', employmentType: '',
     phone: '', gender: '', dateOfBirth: '',
@@ -109,7 +109,7 @@ export default function StaffListPage() {
 
   async function handleAddStaff() {
     setPhoneError('');
-    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.role || !form.joinDate || !form.baseSalary) {
+    if (!form.firstName || !form.lastName || !form.email || !form.role || !form.joinDate || !form.baseSalary) {
       toast.error('Please fill all required fields');
       return;
     }
@@ -124,7 +124,8 @@ export default function StaffListPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
-        password: form.password,
+        // No password: the backend generates a temp password + emails the
+        // credentials (MAIL-2-OBS-3). Sending one here would skip that flow.
         role: form.role,
         departmentId: form.departmentId || undefined,
         designationId: form.designationId || undefined,
@@ -135,9 +136,9 @@ export default function StaffListPage() {
         gender: form.gender || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
       });
-      toast.success('Staff added successfully');
+      toast.success('Staff added — login credentials are being emailed');
       setAddOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', password: '', role: '', departmentId: '', designationId: '', joinDate: '', baseSalary: '', employmentType: '', phone: '', gender: '', dateOfBirth: '' });
+      setForm({ firstName: '', lastName: '', email: '', role: '', departmentId: '', designationId: '', joinDate: '', baseSalary: '', employmentType: '', phone: '', gender: '', dateOfBirth: '' });
     } catch (err) {
       toast.error(extractApiErrors(err, 'Failed to add staff').join(' • '));
     }
@@ -305,6 +306,9 @@ export default function StaffListPage() {
             <DialogTitle>Add Staff Member</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 rounded-md bg-brand-50 px-3 py-2 text-xs text-gray-600">
+              A temporary password is generated automatically and <strong>emailed</strong> to the staff member — they set their own password on first login. You don’t set a password here.
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="s-first">First Name *</Label>
               <Input id="s-first" value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} placeholder="First name" />
@@ -313,13 +317,9 @@ export default function StaffListPage() {
               <Label htmlFor="s-last">Last Name *</Label>
               <Input id="s-last" value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} placeholder="Last name" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 col-span-2">
               <Label htmlFor="s-email">Email *</Label>
               <Input id="s-email" type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} placeholder="email@school.edu" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-pass">Password *</Label>
-              <Input id="s-pass" type="password" value={form.password} onChange={(e) => setField('password', e.target.value)} placeholder="••••••••" />
             </div>
             <div className="space-y-1.5">
               <Label>Role *</Label>
