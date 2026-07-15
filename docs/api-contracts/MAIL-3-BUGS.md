@@ -152,3 +152,55 @@ and body**. Push + PR then. **Checkpoint 2 — Srijan's inbox confirmation is th
 
 **⏹ STOP — Checkpoint 1.** Phase 1 code complete, migration applied + read-back on all 6 tenants,
 floors held, redaction re-run green. Committed (not pushed). Awaiting review before Phase 2.
+
+---
+
+## Phase 2 — Live proof (Brevo)
+
+Checkpoint 1 approved; OBS-1/OBS-2 dispositions accepted. Five live sends (recipient = Srijan's
+Gmail; bare + `+staff`/`+guardian`/`+m3student` tags — kept out of this doc). For each: ledger
+`SELECT` showed the correct `template_type` **PENDING** → drain → **SENT** with a real Brevo
+`provider_message_id` (SMS rows `SENT_DRY`, `SMS_DRY_RUN=true`).
+
+| # | template_type | From display name | Reply-To | Brevo msgid |
+|---|---|---|---|---|
+| 1 | `NEW_SCHOOL_OWNER` | **Aaramva Shikshya** (platform, no "via") | none | `<148c2121…>` |
+| 2 | `STAFF` | **Demo School Nepal (via Aaramva Shikshya)** | owner@demo.school | `<375dc1bf…>` |
+| 3 | `GUARDIAN_SELF` | Demo School Nepal (via Aaramva Shikshya) | owner@demo.school | `<9d5f275c…>` |
+| 4 | `STUDENT_SELF` | Demo School Nepal (via Aaramva Shikshya) | owner@demo.school | `<0020713b…>` |
+| 5 | `STUDENT_VIA_GUARDIAN` | Demo School Nepal (via Aaramva Shikshya) | owner@demo.school | `<3c6b763a…>` |
+
+Sends 4 & 5 came from **one** student registration (fan-out: student-own email + primary-guardian
+email, both to `+m3student`). demo's `tenants.email` = `owner@demo.school` → the Reply-To source.
+
+**Confirmation status (§4 acceptance bar is human — Claude Code cannot self-certify inbox
+presentation):**
+- **#1 NEW_SCHOOL_OWNER — human-confirmed** by Srijan (screenshot): From *"Aaramva Shikshya"*
+  (plain platform, no "via"), subject *"Your MAIL-3 Probe School administrator account on Aaramva
+  Shikshya"*, correct body, **no "powered by" footer** (platform template omits it). ✅
+- **#2–#5 (tenant sends) — SENT + code-proven, final visual From/Reply-To confirmation pending.**
+  Identical `MailService.send` + template pipeline as the confirmed #1; the tenant identity
+  (`resolveSenderIdentity` → From *"Demo School Nepal (via Aaramva Shikshya)"* + Reply-To
+  `owner@demo.school`) is deterministic from demo's name/email and unit-tested. **Non-blocking — the
+  PR is not merged; Srijan does the reply-target/From visual check before merge.**
+
+### Cleanup + teardown
+
+- Demo probes **soft-deleted**: 3 users (`+staff`/`+guardian`/`+m3student`), 1 staff_profile
+  (EMP-2083-0016), 2 students (2083-0002/0003), 2 guardians. Ledger `credential_deliveries` rows
+  retained (append-only audit, no `deleted_at` by design).
+- **⛔ TORN DOWN:** `DROP SCHEMA tenant_mail3_probe CASCADE` (52 objects, incl. `credential_deliveries`
+  + `credential_delivery_secrets`) + `DELETE` of the public `subscriptions`/`tenants` rows for
+  `mail3-probe`. Verified: `information_schema.schemata` for `tenant_mail3_probe` = **0**, public
+  `tenants` where slug = **0**, subscriptions = **0**.
+
+### MAIL-3-OBS-4 (Phase 2) — login rejects a stale cross-tenant token (out of MAIL-3 scope)
+
+While logging into the throwaway tenant, a `403 "Token tenant does not match the requested tenant"`
+(TenantMatchGuard) fired because the browser still held a **demo** access token, which the web client
+auto-attaches to the `mail3-probe` login. This is a **login-UX rough edge** (a fresh login should
+replace a stale cross-tenant token, not 403), **unrelated to MAIL-3** (email sending). Flagged for a
+separate look; workaround = log out / incognito before switching tenants.
+
+**Checkpoint 2 — MAIL-3 code-complete; live proof done, tenant-send visual confirmation pending
+(non-blocking). PR opened, not merged.**
