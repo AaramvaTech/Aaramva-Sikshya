@@ -446,6 +446,15 @@ describe('deriveBrandScale', () => {
     expect(deriveBrandScale(AARAMVA)![500]).toBe(AARAMVA);
   });
 
+  // REGRESSION GUARD (a real bug shipped without this): the MIN_ANCHOR_L floor
+  // must not rewrite dark colours that are already legible. At floor 0.12,
+  // #001a33 (17.56:1 vs white) came back as #001f3d. Every other exactness
+  // fixture sits above the floor, so nothing else catches this.
+  it.each(['#001a33', '#003318'])('keeps the dark-but-legible %s exact at step 500', (hex) => {
+    expect(contrastRatio(hex, '#FFFFFF')).toBeGreaterThan(4.5);
+    expect(deriveBrandScale(hex)![500]).toBe(hex);
+  });
+
   it('leaves a maroon untouched at step 500 — 9.98:1 on white', () => {
     // normaliseHex lowercases, so compare against the lowercased input —
     // otherwise this fails on case alone and tells you nothing.
@@ -579,11 +588,14 @@ export const DARK_SURFACE = '#101828';
 const WHITE = '#FFFFFF';
 const MIN_CONTRAST = 4.5;
 
-/** The dark half is scaled proportionally off step 500, so an anchor at L=0
- *  (a school picking pure black) would collapse steps 600-950 to identical
- *  black and break strict monotonicity — there is simply no room below zero.
- *  Floor the anchor so six darker steps still fit. 950 then lands at ~0.017. */
-const MIN_ANCHOR_L = 0.12;
+/** The dark half is scaled proportionally off step 500, so an anchor at L≈0
+ *  (a school picking pure black) would collapse steps 600-950 onto the same
+ *  black and break strict monotonicity — there is no room below zero. This
+ *  floor exists ONLY to prevent that degenerate collapse, and is deliberately
+ *  low: raising it silently rewrites ordinary dark brand colours that were
+ *  already perfectly legible. At 0.12, #001a33 navy (17.56:1 vs white!) came
+ *  back as #001f3d. Keep it just above the degenerate band. */
+const MIN_ANCHOR_L = 0.04;
 
 /** Measured from the Aaramva literals: L per step, and S as a ratio of S(500). */
 const CURVE: Record<BrandStep, { l: number; sRatio: number }> = {
