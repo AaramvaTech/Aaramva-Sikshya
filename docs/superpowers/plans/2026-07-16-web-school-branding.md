@@ -13,7 +13,8 @@
 ## Global Constraints
 
 - **No DB migration, no new endpoint.** `primaryColor` / `primaryForeground` already exist on `public.tenants`.
-- **Zero edits to the 79 `brand-*` consumer files** and zero edits to the `globals.css` token literals.
+- **Theming requires zero edits to the 79 `brand-*` consumer files**, and zero edits to the `globals.css` token literals. (This constrains the *theming mechanism* — it is not a freeze on those files. Task 1 edits `sidebar.tsx`, which is itself a `brand-*` consumer, for an unrelated logo fix. That is expected, not a violation.)
+- **`apps/web` is self-contained** — its own lockfile, no cross-package imports, documented at `next.config.ts:5-7`. `packages/shared` is not reachable from here, so colour maths that also exists in `apps/api` cannot be shared and is duplicated deliberately.
 - **Aaramva's default look must not change.** Variables are written only when a school is active.
 - **Never break the app.** Branding is cosmetic; every failure path degrades to Aaramva green, never a crash and never a blocked login.
 - **Contrast floors:** `brand-500` ≥ **4.5:1 vs `#FFFFFF`**; `brand-400` ≥ **4.5:1 vs `#101828`** (`--color-gray-900`, the dark surface the existing scale was tuned against — its `brand-400` measures 4.53:1 there).
@@ -605,7 +606,7 @@ const CURVE: Record<BrandStep, { l: number; sRatio: number }> = {
   500: { l: 0.302, sRatio: 1 },
   600: { l: 0.2373, sRatio: 0.837 },
   700: { l: 0.198, sRatio: 0.882 },
-  800: { l: 0.1451, sRatio: 0.895 },
+  800: { l: 0.1451, sRatio: 0.899 },
   900: { l: 0.0902, sRatio: 0.92 },
   950: { l: 0.0431, sRatio: 0.961 },
 };
@@ -1383,8 +1384,10 @@ and never blocks the login form."
 - Modify: `apps/web/app/layout.tsx`
 
 **Interfaces:**
-- Consumes: the cache key/shape from Task 5 and the property names from Task 4 — **inlined by hand**, because this script must be self-contained with no imports.
+- Consumes: `BRAND_STEPS` from `@/lib/branding/scale` (Task 3), `BRANDING_CACHE_VERSION` and `brandingCacheKey` from `@/lib/branding/cache` (Task 5).
 - Produces: nothing.
+
+**The script text is import-free, but the component is not.** This is a **server** component, so its imports are evaluated at render time on the server and their values are interpolated into the emitted string — the browser still receives a self-contained script with no module loading, but the step list, the cache key and the version are the *same constants* `lib/branding` uses and cannot drift from them.
 
 **Placement — a deliberate deviation from the spec.** The spec says `<head>`. Implement it as the **first child of `<body>`** instead. `next/script` with `strategy="beforeInteractive"` is documented as *"execution does not block page hydration"* (`node_modules/next/dist/docs/01-app/03-api-reference/02-components/script.md:71`) and is aimed at `src`-based scripts, which is not the anti-FOUC guarantee we need. The proven pattern — used by `next-themes`, already a dependency here and already doing exactly this for dark mode — is a raw `<script dangerouslySetInnerHTML>` with `suppressHydrationWarning`, rendered in the tree and executed synchronously during HTML parse. First child of `<body>` runs before any content paints.
 
@@ -1402,19 +1405,26 @@ Create `apps/web/components/branding/branding-script.tsx`:
  * <script> + suppressHydrationWarning), rather than next/script
  * beforeInteractive, whose execution explicitly does not block hydration.
  *
- * Self-contained by necessity — it runs before any bundle loads, so the cache
- * key, the version and the property names are duplicated here from
- * lib/branding/{cache,apply}.ts. If you change them there, change them here.
+ * The emitted SCRIPT text is import-free (it runs before any bundle loads), but
+ * this component is a server component — so the constants below are evaluated at
+ * render time and interpolated in. They are the same values lib/branding uses and
+ * cannot drift from them.
  */
+import { BRAND_STEPS } from '@/lib/branding/scale';
+import { BRANDING_CACHE_VERSION, brandingCacheKey } from '@/lib/branding/cache';
+
+// brandingCacheKey('') yields the bare 'branding:' prefix, which the script
+// concatenates with the slug it reads — same key shape as lib/branding/cache.ts.
+const KEY_PREFIX = JSON.stringify(brandingCacheKey(''));
 
 // Reads the finished scale from the cache — no colour maths before paint.
 const SCRIPT = `(function(){try{
 if(location.pathname.indexOf('/super-admin')===0)return;
 var slug=localStorage.getItem('tenant-slug');if(!slug)return;
-var raw=localStorage.getItem('branding:'+slug);if(!raw)return;
-var b=JSON.parse(raw);if(!b||b.v!==1||!b.scale)return;
+var raw=localStorage.getItem(${KEY_PREFIX}+slug);if(!raw)return;
+var b=JSON.parse(raw);if(!b||b.v!==${BRANDING_CACHE_VERSION}||!b.scale)return;
 var el=document.documentElement;
-var steps=[25,50,100,200,300,400,500,600,700,800,900,950];
+var steps=${JSON.stringify(BRAND_STEPS)};
 for(var i=0;i<steps.length;i++){var v=b.scale[steps[i]];if(v)el.style.setProperty('--color-brand-'+steps[i],v);}
 if(b.scale[500])el.style.setProperty('--primary',b.scale[500]);
 el.style.setProperty('--primary-foreground',b.fg||'#FFFFFF');
@@ -1452,12 +1462,19 @@ with:
       </body>
 ```
 
-- [ ] **Step 3: Verify the version constants agree**
+- [ ] **Step 3: Verify the constants really interpolated**
+
+The interpolation is what stops the script drifting from `lib/branding`, so confirm it happened
+rather than assuming. With the dev server running, view source on any page:
 
 ```bash
-cd apps/web && grep -n "BRANDING_CACHE_VERSION = " lib/branding/cache.ts && grep -n "b.v!==" components/branding/branding-script.tsx
+curl -s http://localhost:3000/login | grep -o "b.v!==[0-9]*" | head -1
 ```
-Expected: the cache exports `1` and the script checks `!==1`. **If these ever disagree, every cached entry is silently ignored and every load flashes.**
+Expected: `b.v!==1` — the literal value of `BRANDING_CACHE_VERSION`, baked in at render.
+
+If it renders as `b.v!==NaN` or the raw text `${BRANDING_CACHE_VERSION}`, the import is not
+resolving — check that `branding-script.tsx` has **no** `'use client'` directive (a client
+component would not evaluate these at render time on the server).
 
 - [ ] **Step 4: Verify no-flash in the browser**
 
