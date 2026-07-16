@@ -77,4 +77,26 @@ describe('branding cache', () => {
     expect(readBrandingCache('geetanjali', null)).toBeNull();
     expect(() => writeBrandingCache('geetanjali', ENTRY, null)).not.toThrow();
   });
+
+  it('never throws when the localStorage getter itself is blocked (Chrome "Block all cookies")', () => {
+    const g = globalThis as { window?: unknown };
+    const had = 'window' in g;
+    const prev = g.window;
+    // A window whose localStorage GETTER throws, as blocked-cookie Chrome does.
+    g.window = Object.defineProperty({}, 'localStorage', {
+      get() {
+        throw new Error('SecurityError');
+      },
+      configurable: true,
+    });
+    try {
+      // NOTE: no explicit storage arg — this is the production call shape and the
+      // only one that evaluates defaultStorage().
+      expect(readBrandingCache('geetanjali')).toBeNull();
+      expect(() => writeBrandingCache('geetanjali', ENTRY)).not.toThrow();
+    } finally {
+      if (had) g.window = prev;
+      else delete g.window;
+    }
+  });
 });

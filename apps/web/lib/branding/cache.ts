@@ -29,7 +29,17 @@ export function brandingCacheKey(slug: string): string {
 }
 
 function defaultStorage(): StorageLike | null {
-  return typeof window === 'undefined' ? null : window.localStorage;
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    // Not paranoia: `window.localStorage` is a GETTER that throws SecurityError
+    // outright under Chrome's "Block all cookies", in sandboxed iframes, and
+    // under some storage-partitioning policies — before any method is called.
+    // This runs as a default-parameter expression, i.e. OUTSIDE the try/catch in
+    // the function bodies below, so it must guard itself or the throw escapes.
+    return null;
+  }
 }
 
 export function readBrandingCache(
