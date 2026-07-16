@@ -698,13 +698,26 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   white ink on a `bg-brand-500` fill; 400 >= 4.5:1 vs gray-900 `#101828`, the surface the
   original scale was tuned against at 4.53:1). **`MIN_ANCHOR_L` is `0.04`**, not the plan's
   original 0.12 — at 0.12 the floor rewrote ordinary dark colours that were already legible
-  (`#001a33` navy, 17.56:1 vs white, came back as `#001f3d`). `apply.ts` writes 14 inline vars on
+  (`#001a33` navy, 17.56:1 vs white, came back as `#001f3d`). `apply.ts` writes inline vars on
   `<html>`, which outrank Tailwind's `@theme` `:root` rule — **all 79 `brand-*` consumer files
   re-theme with zero edits**, and Aaramva's look cannot regress because vars are written only
-  when a school is active. Pre-paint `<script>` at the top of `<body>` (the next-themes pattern;
-  NOT `next/script` beforeInteractive, whose execution doesn't block hydration) applies the
-  cached scale — `branding:<slug>`, versioned, keyed by slug so impersonation can't bleed
-  colours. **`BrandingSync` gates on BOTH `accessToken` and the auth store's `isInitialized`** —
+  when a school is active. **The write set is THEME-AWARE and `applyBrandScale` removes-then-sets**
+  (a stale light-mode key would otherwise outrank `.dark`'s own rule): light = 12 steps +
+  `--primary`(500) + ink + `--accent`(50) + `--accent-foreground`(500) + `--ring`(500) = 17;
+  dark = 12 steps + `--primary`(**400**) + a contrast-picked dark ink = 14, deliberately NOT
+  setting accent/ring because `.dark` already makes them neutral greys (chroma 0). **Why 400 in
+  dark:** `:root` and `.dark` disagree on purpose — `.dark` sets `--primary` near-white
+  (light fill + dark ink). Forcing the *clamped-dark* step 500 there put a navy school's
+  `bg-primary` at **1.13:1** on the dark bg (invisible checkbox + floating white tick); step 400
+  is clamped >= 4.5:1 vs `#101828`, giving 5.05:1. This is the same per-mode step rule the 79
+  `brand-*` files already follow (`text-brand-500` light / `dark:text-brand-400`). `--accent`
+  /`--accent-foreground`/`--ring` in `:root` are byte-identical to brand-50/500/500 — leaving
+  them unset gave maroon schools **Aaramva-green dropdown hovers and focus rings**. Pre-paint
+  `<script>` at the top of `<body>` (the next-themes pattern; NOT `next/script` beforeInteractive,
+  whose execution doesn't block hydration) applies the cached scale — `branding:<slug>`,
+  versioned, keyed by slug so impersonation can't bleed colours. It writes **only the 12 steps**,
+  never `--primary`: it runs before React and cannot know the theme, so the ~5 `--primary`
+  consumers may flash one frame — an accepted trade to keep the 79-file ramp flash-free. **`BrandingSync` gates on BOTH `accessToken` and the auth store's `isInitialized`** —
   without both, the authed panel hit the throttled `/tenants/verify` (10/min per IP) on every
   load for any school whose `primaryColor` is NULL, which is the *normal* case for an unbranded
   school (4 of 7 dev tenants). **Impersonated sessions need `/auth/me` backfill:** the
