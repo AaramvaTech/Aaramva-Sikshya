@@ -231,7 +231,9 @@ The `guardians` table has a nullable `user_id UUID REFERENCES users(id)`. Most g
 
 **Session 21 needs:** When adding a new screen under a role group, create `app/(student)/newscreen.tsx` (or parent/teacher). Update `app/(student)/_layout.tsx` Stack if a new route needs header config. The root layout's useEffect in `_layout.tsx` controls auth routing — don't add `router.replace()` in individual screens to avoid race conditions.
 
-**Canonical brand color (mobile):** Aaramva primary is `#0B6B43` (`--primary: 11 107 67`), single source of truth in `apps/mobile/lib/theme/tokens.ts` (updated from `#065f46` to match the brand design). Auth + student screens read it only via the `--primary` token / `useThemeColors()` — never a second green literal. **Exception:** the pre-school onboarding flow (`app/index.tsx`) uses an exact-design literal palette (`OB` constant: `#0B6B43`/`#064E33` gradient, `#E9F4EE` band, etc.) plus the design logo assets `assets/images/aaramva-mark.png` + `aaramva-wordmark.png` (rendered untinted) — a documented exception, since onboarding is Aaramva-branded and must match the design pixel-for-pixel. Per-school themes override `--primary` at runtime (ThemeSync → applySchool). (Web's `#1a8055` reconciliation is out of scope.)
+**Canonical brand color (mobile):** Aaramva primary is `#0B6B43` (`--primary: 11 107 67`), single source of truth in `apps/mobile/lib/theme/tokens.ts` (updated from `#065f46` to match the brand design). Auth + student screens read it only via the `--primary` token / `useThemeColors()` — never a second green literal. **Exception:** the pre-school onboarding flow (`app/index.tsx`) uses an exact-design literal palette (`OB` constant: `#0B6B43`/`#064E33` gradient, `#E9F4EE` band, etc.) plus the design logo assets `assets/images/aaramva-mark.png` + `aaramva-wordmark.png` (rendered untinted) — a documented exception, since onboarding is Aaramva-branded and must match the design pixel-for-pixel. Per-school themes override `--primary` at runtime (ThemeSync → applySchool).
+  (BRAND-1: web now derives its full `--color-brand-*` ramp from the same
+  per-school `primaryColor`, so `#1a8055` is the Aaramva default only.)
 
 ## Mobile shared UI library (added Session: UI/UX top-level pass)
 
@@ -682,6 +684,43 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   i18n switch/plural/fallback/BS-date + locale-store persistence), mobile tsc clean, api 511
   UNCHANGED** (zero apps/api diff). GOTCHA: naming collision — screens that do `const t = todayBs()`
   clash with the translation `t`; rename the date var to `tbs`. Web i18n is out of scope (I18N-2).
+
+- [x] Per-school web branding (BRAND-1, `docs/superpowers/specs/2026-07-16-web-school-branding-design.md`)
+  — **the logo fix:** `sidebar.tsx` was the only `next/image` in the app with a dynamic src;
+  FILE-1 turned school logos from base64 `data:` URIs (which next/image passes through
+  unoptimized, never reaching the hostname check) into real storage URLs (which do), so the
+  panel crashed for any school with a post-FILE-1 logo. Now a plain `<img>`, matching the five
+  sites that already did. **The theming:** `/auth/login` + `/auth/me` now return
+  `primaryColor`/`primaryForeground` (2 columns onto existing SELECTs — no migration, and NOT
+  via `/tenants/verify`, which is throttled 10/min per IP). `lib/branding/scale.ts` derives the
+  12-step ramp client-side, reusing the hand-tuned Aaramva curve as its shape and clamping at
+  both ends (500 >= 4.5:1 vs white — one constraint covering both `text-brand-500` on white and
+  white ink on a `bg-brand-500` fill; 400 >= 4.5:1 vs gray-900 `#101828`, the surface the
+  original scale was tuned against at 4.53:1). **`MIN_ANCHOR_L` is `0.04`**, not the plan's
+  original 0.12 — at 0.12 the floor rewrote ordinary dark colours that were already legible
+  (`#001a33` navy, 17.56:1 vs white, came back as `#001f3d`). `apply.ts` writes 14 inline vars on
+  `<html>`, which outrank Tailwind's `@theme` `:root` rule — **all 79 `brand-*` consumer files
+  re-theme with zero edits**, and Aaramva's look cannot regress because vars are written only
+  when a school is active. Pre-paint `<script>` at the top of `<body>` (the next-themes pattern;
+  NOT `next/script` beforeInteractive, whose execution doesn't block hydration) applies the
+  cached scale — `branding:<slug>`, versioned, keyed by slug so impersonation can't bleed
+  colours. **`BrandingSync` gates on BOTH `accessToken` and the auth store's `isInitialized`** —
+  without both, the authed panel hit the throttled `/tenants/verify` (10/min per IP) on every
+  load for any school whose `primaryColor` is NULL, which is the *normal* case for an unbranded
+  school (4 of 7 dev tenants). **Impersonated sessions need `/auth/me` backfill:** the
+  `impersonation_handoff` payload carries no branding, so `providers.tsx` best-effort backfills
+  via **`rawApi`** — NOT `api`, whose 401 interceptor would retry via `/auth/refresh`, and an
+  impersonation token has no refresh cookie, so a failed call would log the impersonator straight
+  out. **GOTCHA:** the tenant store is fed by `/auth/me`, which is not refetched after
+  `PATCH /settings/profile` — Settings and onboarding must push saved branding into the store or
+  a colour change is invisible until re-login. Super-admin console and `--chart-1..5` /
+  `STATUS_CONFIG` stay Aaramva by design. **Known limit:** `--color-brand-500` is one variable
+  serving 132 fills and 94 text usages, so an extreme pick (neon yellow) darkens for legibility
+  rather than rendering vivid — the exact hex still shows in the settings swatch, report cards
+  and mobile. `cache.ts`'s `defaultStorage()` guards the `window.localStorage` getter itself, not
+  just its methods — as a default-parameter expression it evaluates OUTSIDE the function body's
+  try/catch, and the getter itself throws `SecurityError` under Chrome "Block all cookies" and in
+  sandboxed iframes.
 
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
