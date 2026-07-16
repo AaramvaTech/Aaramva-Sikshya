@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -48,11 +48,22 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { slug, setSession, clearSlug, setStatus } = useAuthStore();
+  const { slug, setSession, clearSlug, setStatus, sessionExpired, clearSessionExpired } =
+    useAuthStore();
   const { branding } = useBranding();
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const { t } = useLocale('auth');
+
+  // ERR-1 §1.3 rule 3: show one non-blocking AUTH_SESSION_EXPIRED notice when the
+  // interceptor force-expired an active session, then clear the flag. Cold starts
+  // never set the flag (rule 4 → silent redirect, no notice).
+  useEffect(() => {
+    if (sessionExpired) {
+      setError(t('login.sessionExpired', 'Your session has expired. Please log in again.'));
+      clearSessionExpired();
+    }
+  }, [sessionExpired, clearSessionExpired, t]);
 
   const schoolName = branding?.name ?? slug ?? 'Aaramva Shikshya';
   // Design's Sign-In button darkens left→right; reuse the derived ramp's mid+dark stops.
@@ -93,11 +104,17 @@ export default function LoginScreen() {
       });
       void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
+      // ERR-1 §1.3 / BUG-1: the login 401 now surfaces the server envelope directly
+      // (the interceptor no longer runs its refresh flow on /auth/login). Show the
+      // safe server message ("Invalid email or password."), never a raw axios or
+      // interceptor-internal string like "No refresh token available".
+      const envMsg = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
       let msg = t('login.errorGeneric');
-      if (err instanceof Error) {
-        msg = err.message.includes(': ')
-          ? err.message.split(': ').slice(1).join(': ')
-          : err.message;
+      if (typeof envMsg === 'string' && envMsg) {
+        msg = envMsg;
+      } else if (err instanceof Error && err.message && !err.message.startsWith('Request failed')) {
+        msg = err.message.includes(': ') ? err.message.split(': ').slice(1).join(': ') : err.message;
       }
       setError(msg);
     } finally {

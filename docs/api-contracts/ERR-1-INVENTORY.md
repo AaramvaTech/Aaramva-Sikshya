@@ -131,5 +131,6 @@ New source of truth to create in Phase 1: `apps/api/src/common/errors/error-code
 5. **`getErrorDisplay` modules**: `apps/web/src/lib/errors.ts`, `apps/mobile/src/lib/errors.ts` (keyed by `errorCode`; raw `error.message` never rendered).
 6. **Network/offline class** (§1.4): first-rate on mobile (airplane-mode), plus web.
 7. **Raw-message render offenders**: mobile `login.tsx`/`change-password.tsx`/`assignment-detail.tsx`/`marks.tsx`; web hardcoded-fallback toasts.
+8. **Align `FORBIDDEN_SCOPE` throw-site messages to the catalog default** (Phase 3/4 sweep): Phase 1 kept each site's original `message` (e.g. "Access denied", "Not allowed to view this file.", "This assignment is not for your class.", "You can only file leave for your own children") while setting `code: FORBIDDEN_SCOPE`. Since clients render the catalog message for known codes, these bespoke strings are inconsistent noise — normalize them to the `FORBIDDEN_SCOPE` default ("You don't have access to this record.") during the client sweep, keeping only any that carry genuinely useful, non-sensitive context.
 
 **Out of scope (noted, not touched):** Nepali translations (structure only); `fee-structures dueDate` cast bug stays on PAY-1 backlog; authorization status codes on scope probes stay 403.

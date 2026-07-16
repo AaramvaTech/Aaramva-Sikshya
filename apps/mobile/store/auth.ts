@@ -21,6 +21,11 @@ interface AuthState {
   // temporary password is in effect. Not persisted; the root layout routes a
   // flagged session to /change-password before any role app.
   mustChangePassword: boolean;
+  // ERR-1 §1.3 rule 3: transient, set ONLY by the axios interceptor when a
+  // refresh fails on a protected request (an ACTIVE session expired). The login
+  // screen shows one AUTH_SESSION_EXPIRED notice and clears it. Never set on a
+  // cold start with no tokens (rule 4 → silent redirect, no notice).
+  sessionExpired: boolean;
   // Derived from active session — kept as top-level for backward compat:
   accessToken: string | null;
   slug: string | null;
@@ -59,6 +64,9 @@ interface AuthActions {
   // REG-1: set the force-change flag (from the global 403 PASSWORD_CHANGE_REQUIRED
   // interceptor) so the root layout redirects to change-password.
   setMustChangePassword: () => void;
+  // ERR-1 §1.3: session-expiry notice flag, toggled by the interceptor + login screen.
+  setSessionExpired: () => void;
+  clearSessionExpired: () => void;
   // ─── Legacy compat (used by session.ts and login.tsx) ───────────────────────
   setSession: (params: {
     accessToken: string;
@@ -77,6 +85,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   activeSessionId: null,
   selectedChildId: null,
   mustChangePassword: false,
+  sessionExpired: false,
   accessToken: null,
   slug: null,
   user: null,
@@ -152,6 +161,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   clearMustChangePassword: () => set({ mustChangePassword: false }),
   setMustChangePassword: () => set({ mustChangePassword: true }),
+
+  setSessionExpired: () => set({ sessionExpired: true }),
+  clearSessionExpired: () => set({ sessionExpired: false }),
 
   // ── Legacy compat wrappers ──────────────────────────────────────────────────
   setSession: ({ accessToken, user, tenant, slug, mustChangePassword }) => {
