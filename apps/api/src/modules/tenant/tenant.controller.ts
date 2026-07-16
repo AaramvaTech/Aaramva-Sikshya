@@ -2,6 +2,7 @@
 import { Controller, Get, NotFoundException, Param, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from '../../prisma/prisma.service';
+import { errorBody } from '../common/errors/error-codes';
 
 @Controller('tenants')
 export class TenantController {
@@ -25,7 +26,7 @@ export class TenantController {
     });
 
     if (!tenant) {
-      throw new NotFoundException('School not found');
+      throw new NotFoundException(errorBody('TENANT_NOT_FOUND', 'School not found'));
     }
 
     return {

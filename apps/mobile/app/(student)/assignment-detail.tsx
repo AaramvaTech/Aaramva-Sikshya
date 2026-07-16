@@ -16,6 +16,7 @@ import { adToBs, formatBs } from 'bs-calendar';
 import { useMyAssignments, useMySubmission, useSubmitAssignment } from '../../hooks/useAssignments';
 import { useFileUrl } from '../../hooks/useFileUrl';
 import { pickSubmissionFile, uploadSubmissionFile, type PickedFile } from '../../lib/submissionUpload';
+import { getErrorDisplay } from '../../lib/errors';
 import { chipFor, SUBMISSION_CHIPS } from '../../lib/assignmentStatus';
 import { ErrorState, Icon, LoadingBlock, PrimaryButton, ScreenHeader, StatusBadge } from '../../components/ui';
 import { CARD_SHADOW } from '../../components/ui/Card';
@@ -71,7 +72,9 @@ export default function AssignmentDetail() {
       const file = await pickSubmissionFile();
       if (file) setPicked(file);
     } catch (err) {
-      Alert.alert(t('assignmentDetail.alertFileNotAcceptedTitle'), (err as Error).message);
+      // The picker throws a controlled, user-facing message (userMessage) —
+      // getErrorDisplay surfaces it; never renders a raw err.message.
+      Alert.alert(t('assignmentDetail.alertFileNotAcceptedTitle'), getErrorDisplay(err).message);
     }
   }
 
@@ -97,12 +100,13 @@ export default function AssignmentDetail() {
       await Promise.all([assignments.refetch(), submission.refetch()]);
       Alert.alert(t('assignmentDetail.alertSubmittedTitle'), t('assignmentDetail.alertSubmittedBody'));
     } catch (err) {
-      const resp = (err as { response?: { status?: number; data?: { error?: { message?: string } } } }).response;
-      // The after-review 409 is a designed state, not an error — surface it honestly.
-      const msg = resp?.data?.error?.message
-        ?? (err as Error).message
-        ?? t('assignmentDetail.couldNotSubmit');
-      Alert.alert(resp?.status === 409 ? t('assignmentDetail.alertLockedTitle') : t('assignmentDetail.alertFailedTitle'), msg);
+      // The after-review 409 is a designed "locked" state, not a failure — keep
+      // its own title; the message maps through the ONE client contract.
+      const status = (err as { response?: { status?: number } }).response?.status;
+      Alert.alert(
+        status === 409 ? t('assignmentDetail.alertLockedTitle') : t('assignmentDetail.alertFailedTitle'),
+        getErrorDisplay(err).message,
+      );
       await submission.refetch();
     } finally {
       setPhase('idle');

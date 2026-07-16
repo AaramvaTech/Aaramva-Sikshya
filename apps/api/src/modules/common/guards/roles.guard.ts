@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '../../auth/auth.types';
 import { Role } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { errorBody } from '../errors/error-codes';
 
 /**
  * Checks that req.user.role is in the set of roles attached by @Roles().
@@ -27,12 +28,15 @@ export class RolesGuard implements CanActivate {
 
     const { user } = ctx.switchToHttp().getRequest<{ user: AuthUser }>();
     if (!user) {
-      throw new ForbiddenException('No authenticated user');
+      throw new ForbiddenException(errorBody('FORBIDDEN_ROLE', 'No authenticated user'));
     }
 
     if (!required.includes(user.role)) {
       throw new ForbiddenException(
-        `Role ${user.role} is not allowed. Required: ${required.join(', ')}`,
+        errorBody(
+          'FORBIDDEN_ROLE',
+          `Role ${user.role} is not allowed. Required: ${required.join(', ')}`,
+        ),
       );
     }
 

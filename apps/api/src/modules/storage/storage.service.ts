@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { errorBody } from '../common/errors/error-codes';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -123,9 +124,7 @@ export class StorageService implements OnModuleInit {
 
   private requireClient(): S3Client {
     if (!this.client) {
-      throw new ServiceUnavailableException(
-        'File storage is not configured on this server.',
-      );
+      throw new ServiceUnavailableException(errorBody('STORAGE_UNAVAILABLE'));
     }
     return this.client;
   }

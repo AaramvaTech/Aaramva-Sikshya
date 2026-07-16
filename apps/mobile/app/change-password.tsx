@@ -13,6 +13,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useLocale } from '../hooks/useLocale';
+import { getErrorDisplay } from '../lib/errors';
 import NpText from '../components/NpText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -71,11 +72,9 @@ export default function ChangePasswordScreen() {
       Alert.alert(t('changePassword.successTitle'), t('changePassword.successBody'));
       await logout();
     } catch (err: unknown) {
-      let msg = 'Could not change password. Please try again.';
-      if (err instanceof Error) {
-        msg = err.message.includes(': ') ? err.message.split(': ').slice(1).join(': ') : err.message;
-      }
-      setError(msg);
+      // ERR-1 §1.4: map through the ONE client contract (e.g. "Current password
+      // is incorrect."), never a raw axios/JS string.
+      setError(getErrorDisplay(err).message);
       setLoading(false);
     }
   };

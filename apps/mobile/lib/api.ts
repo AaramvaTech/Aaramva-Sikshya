@@ -9,6 +9,7 @@ import {
   getMsActiveSessionId,
   saveMsSessions,
 } from './secureStore';
+import { isAuthEndpoint } from './authEndpoints';
 
 const API_PORT = 3001;
 const API_PATH = '/api/v1';
@@ -111,7 +112,11 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !isAuthEndpoint(originalRequest.url) &&
+      !originalRequest._retry
+    ) {
       // Another refresh is already in flight — queue this request until it resolves.
       if (isRefreshing) {
         return (new Promise<string>((resolve, reject) => {
@@ -170,7 +175,9 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
 
-        // Clear in-memory session state; keep slug so we route to login not school-code entry.
+        // ERR-1 §1.3 rule 3: an active session expired → flag the one-shot notice,
+        // then clear session state (keep slug so we route to login, not school-code entry).
+        useAuthStore.getState().setSessionExpired();
         useAuthStore.getState().clearSession();
 
         // Remove only the active session from persisted store (keep other school sessions).

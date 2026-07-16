@@ -1,5 +1,6 @@
 import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { errorBody } from '../common/errors/error-codes';
 import { NextFunction, Request, Response } from 'express';
 import { TenantContextService } from './tenant-context.service';
 import { TenantService } from './tenant.service';
@@ -37,7 +38,10 @@ export class TenantMiddleware implements NestMiddleware {
 
     if (!slug) {
       throw new NotFoundException(
-        'No tenant specified. Provide a subdomain (school.domain) or an X-Tenant-Slug header.',
+        errorBody(
+          'TENANT_NOT_FOUND',
+          'No tenant specified. Provide a subdomain (school.domain) or an X-Tenant-Slug header.',
+        ),
       );
     }
 

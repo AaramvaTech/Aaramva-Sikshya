@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth.api';
+import { SESSION_EXPIRED_KEY } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { homeRoute } from '@/lib/route-access';
@@ -28,6 +29,18 @@ export default function LoginPage() {
   const { setTenant } = useTenantStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // ERR-1 §1.3 rule 3: surface one non-blocking AUTH_SESSION_EXPIRED notice after
+  // the interceptor force-logged-out an expired session (carried via sessionStorage
+  // across the hard redirect). A cold visit to /login never sets it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+      sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      toast.info('Your session has expired. Please log in again.');
+    }
+  }, []);
 
   const {
     register,
@@ -47,6 +60,7 @@ export default function LoginPage() {
 
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
+    setFormError(null);
     setTenant({ slug: values.schoolSlug.trim().toLowerCase() });
     try {
       const { data } = await authApi.login({ email: values.email, password: values.password });
@@ -72,10 +86,13 @@ export default function LoginPage() {
       // everyone else → /dashboard. Avoids dropping a role onto a page it can't see.
       router.push(homeRoute(role));
     } catch (err: unknown) {
+      // ERR-1 BUG-1: /auth/login 401 now surfaces the server envelope directly
+      // (the interceptor no longer runs its refresh flow on auth endpoints), so
+      // the safe message shows INLINE on the form instead of a swallowed reload.
       const message =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message ?? 'Invalid email or password';
-      toast.error('Login failed', { description: message });
+          ?.message ?? 'Invalid email or password.';
+      setFormError(message);
     } finally {
       setIsLoading(false);
     }
@@ -188,6 +205,16 @@ export default function LoginPage() {
                 <p className="mt-1.5 text-theme-xs text-error-500">{errors.password.message}</p>
               )}
             </div>
+
+            {/* ERR-1 BUG-1: inline login error (e.g. "Invalid email or password.") */}
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-lg bg-error-50 px-4 py-3 text-theme-sm text-error-600 dark:bg-error-500/10 dark:text-error-400"
+              >
+                {formError}
+              </p>
+            )}
 
             {/* Submit */}
             <button

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
+import { getErrorDisplay } from '../lib/errors';
 import { persistLoginSession } from '../lib/session';
 import { registerPushToken } from '../lib/notifications';
 import { deleteSecureItem } from '../lib/secureStore';
@@ -48,11 +49,22 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { slug, setSession, clearSlug, setStatus } = useAuthStore();
+  const { slug, setSession, clearSlug, setStatus, sessionExpired, clearSessionExpired } =
+    useAuthStore();
   const { branding } = useBranding();
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const { t } = useLocale('auth');
+
+  // ERR-1 §1.3 rule 3: show one non-blocking AUTH_SESSION_EXPIRED notice when the
+  // interceptor force-expired an active session, then clear the flag. Cold starts
+  // never set the flag (rule 4 → silent redirect, no notice).
+  useEffect(() => {
+    if (sessionExpired) {
+      setError(t('login.sessionExpired', 'Your session has expired. Please log in again.'));
+      clearSessionExpired();
+    }
+  }, [sessionExpired, clearSessionExpired, t]);
 
   const schoolName = branding?.name ?? slug ?? 'Aaramva Shikshya';
   // Design's Sign-In button darkens left→right; reuse the derived ramp's mid+dark stops.
@@ -93,13 +105,9 @@ export default function LoginScreen() {
       });
       void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
-      let msg = t('login.errorGeneric');
-      if (err instanceof Error) {
-        msg = err.message.includes(': ')
-          ? err.message.split(': ').slice(1).join(': ')
-          : err.message;
-      }
-      setError(msg);
+      // ERR-1 §1.4 / BUG-1: map through the ONE client contract — the login 401
+      // surfaces "Invalid email or password.", never a raw axios/interceptor string.
+      setError(getErrorDisplay(err).message);
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { AuthUser } from '../../auth/auth.types';
+import { errorBody } from '../errors/error-codes';
 
 interface ResolvedTenant {
   tenantId: string;
@@ -81,7 +82,7 @@ export class TenantMatchGuard implements CanActivate {
           method: req.method,
         }),
       );
-      throw new ForbiddenException('Token tenant does not match the requested tenant.');
+      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
 
     return true;

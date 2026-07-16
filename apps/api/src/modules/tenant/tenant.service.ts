@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -34,7 +35,7 @@ export class TenantService {
     });
 
     if (!tenant) {
-      throw new NotFoundException(`School "${slug}" not found`);
+      throw new NotFoundException(errorBody('TENANT_NOT_FOUND', `School "${slug}" not found`));
     }
 
     return {

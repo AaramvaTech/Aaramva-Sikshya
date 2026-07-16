@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/auth.store';
@@ -10,12 +10,44 @@ import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
 import { clearAuthMarker } from '@/lib/auth-marker';
 import { SidebarProvider } from '@/context/sidebar-context';
+import { toast } from 'sonner';
+import { getErrorDisplay } from '@/lib/errors';
+
+// ERR-1 §1.4 — map an error to a safe toast. Validation is left to forms
+// (inline field errors); session-expiry is already handled by the axios
+// interceptor (logout + one notice) — don't double-notify either here.
+function notifyQueryError(error: unknown): void {
+  const display = getErrorDisplay(error);
+  if (display.kind === 'validation' || display.kind === 'session-expired') return;
+  toast.error(display.message);
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
+        // §1.4: UNHANDLED query errors get a mapped toast by default (opt out per
+        // query via meta.suppressGlobalError). Queries render inline error states
+        // (QueryErrorState) but don't toast, so there is no double-notify.
+        queryCache: new QueryCache({
+          onError: (error, query) => {
+            if (query.meta?.suppressGlobalError) return;
+            notifyQueryError(error);
+          },
+        }),
+        // Mutations are NOT blanket-toasted: every mutation in this app is awaited
+        // inside a try/catch (mutateAsync, ~100 sites) whose catch already renders
+        // the error, so a MutationCache-level toast would fire a SECOND time for
+        // each. Mutations therefore stay explicitly handled by their local
+        // handlers (routed through getErrorDisplay / extractApiErrors). This hook
+        // is opt-IN for the rare mutation with no local catch (meta.globalError).
+        mutationCache: new MutationCache({
+          onError: (error, _vars, _ctx, mutation) => {
+            if (mutation.meta?.globalError !== true) return;
+            notifyQueryError(error);
+          },
+        }),
       }),
   );
 

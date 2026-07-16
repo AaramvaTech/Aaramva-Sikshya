@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { SmsService } from '../communication/sms.service';
@@ -30,7 +31,7 @@ export class LeaveService {
         appliedById,
       );
       if (!linked[0]) {
-        throw new ForbiddenException('No student record is linked to this account');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
       studentId = linked[0].id;
     } else if (callerRole === Role.PARENT) {
@@ -42,7 +43,7 @@ export class LeaveService {
       );
       const childIds = new Set(children.map((c) => c.student_id));
       if (!childIds.has(dto.studentId)) {
-        throw new ForbiddenException('You can only file leave for your own children');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
       studentId = dto.studentId;
     } else {

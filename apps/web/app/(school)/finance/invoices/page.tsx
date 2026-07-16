@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { getErrorDisplay } from '@/lib/errors';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { BsDate } from '@/components/shared/bs-date';
@@ -100,7 +101,7 @@ export default function InvoicesPage() {
     if (!confirm(`Void invoice ${invoiceNumber}? This cannot be undone.`)) return;
     voidMutation.mutate(id, {
       onSuccess: () => toast.success('Invoice voided'),
-      onError: () => toast.error('Failed to void invoice'),
+      onError: (err) => toast.error(getErrorDisplay(err).message),
     });
   }
 
