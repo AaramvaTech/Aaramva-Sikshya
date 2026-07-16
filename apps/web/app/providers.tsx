@@ -14,6 +14,7 @@ import { clearAuthMarker } from '@/lib/auth-marker';
 import { SidebarProvider } from '@/context/sidebar-context';
 import { toast } from 'sonner';
 import { getErrorDisplay } from '@/lib/errors';
+import type { ApiResponse, MeResponse } from '@/types/api.types';
 
 // ERR-1 §1.4 — map an error to a safe toast. Validation is left to forms
 // (inline field errors); session-expiry is already handled by the axios
@@ -122,7 +123,39 @@ function SessionRestorer() {
               tenantId: null,
               tenantSlug: handoff.tenantSlug,
             });
-            setInitialized();
+            // Best-effort backfill the tenant's branding for the impersonation
+            // session — the handoff payload only carries { slug, name } (no
+            // branding), so without this the tenant store's primaryColor stays
+            // null and BrandingSync (accessToken truthy => no verify fallback)
+            // silently paints Aaramva green for the whole session. Mirror the
+            // ordinary refresh path's /auth/me call below, but through rawApi
+            // with explicit headers: `api`'s response interceptor retries a 401
+            // by calling /auth/refresh, and an impersonation token has NO
+            // refresh cookie — a failed /auth/me here must never cascade into a
+            // failed refresh that logs the impersonator straight out. Session is
+            // already live via setAuth above, so this is purely a branding
+            // nice-to-have. try/catch/finally (not a .then/.catch/.finally
+            // chain) so even a SYNCHRONOUS throw from rawApi.get still reaches
+            // setInitialized().
+            (async () => {
+              try {
+                const meRes = await rawApi.get<ApiResponse<MeResponse>>('/auth/me', {
+                  headers: {
+                    Authorization: `Bearer ${handoff.accessToken}`,
+                    'X-Tenant-Slug': handoff.tenantSlug,
+                  },
+                });
+                const meUser = meRes.data.data;
+                if (meUser.tenant) {
+                  setTenant(meUser.tenant);
+                }
+              } catch {
+                // Non-critical — impersonation session still works with just
+                // the token; branding stays at the Aaramva default.
+              } finally {
+                setInitialized();
+              }
+            })();
             return;
           }
         } catch {
