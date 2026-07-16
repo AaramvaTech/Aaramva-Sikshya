@@ -1059,6 +1059,26 @@ describe('branding cache', () => {
     expect(readBrandingCache('geetanjali', s)).toBeNull();
   });
 
+  // REGRESSION GUARD (a real bug shipped without this): every other test passes an
+  // explicit fake `storage`, so none of them ever evaluate defaultStorage() — which
+  // is exactly why the escape below went unnoticed. This one must use the DEFAULT
+  // path, because that is the production call shape.
+  it('never throws when the localStorage getter itself is blocked (Chrome "Block all cookies")', () => {
+    const g = globalThis as { window?: unknown };
+    const had = 'window' in g;
+    const prev = g.window;
+    g.window = Object.defineProperty({}, 'localStorage', {
+      get() { throw new Error('SecurityError'); },
+      configurable: true,
+    });
+    try {
+      expect(readBrandingCache('geetanjali')).toBeNull();
+      expect(() => writeBrandingCache('geetanjali', ENTRY)).not.toThrow();
+    } finally {
+      if (had) g.window = prev; else delete g.window;
+    }
+  });
+
   it('never throws when storage is unavailable (private mode)', () => {
     const hostile = {
       getItem: () => {
@@ -1123,7 +1143,19 @@ export function brandingCacheKey(slug: string): string {
 }
 
 function defaultStorage(): StorageLike | null {
-  return typeof window === 'undefined' ? null : window.localStorage;
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    // Not paranoia: `window.localStorage` is a GETTER that throws SecurityError
+    // outright under Chrome's "Block all cookies", in sandboxed iframes, and
+    // under some storage-partitioning policies — before any method is called.
+    // This runs as a default-parameter expression, i.e. OUTSIDE the try/catch in
+    // the function bodies below, so it MUST guard itself or the throw escapes
+    // uncaught out of readBrandingCache/writeBrandingCache — which is the
+    // production call shape (no explicit storage arg).
+    return null;
+  }
 }
 
 export function readBrandingCache(
