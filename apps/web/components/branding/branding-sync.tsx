@@ -42,6 +42,7 @@ function paint(slug: string, color: string | null, fg: string | null): void {
 export function BrandingSync() {
   const pathname = usePathname();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
   const slug = useTenantStore((s) => s.slug);
   const primaryColor = useTenantStore((s) => s.primaryColor);
   const primaryForeground = useTenantStore((s) => s.primaryForeground);
@@ -53,6 +54,17 @@ export function BrandingSync() {
   useEffect(() => {
     if (isPlatform || !slug) {
       resetBrandScale();
+      return;
+    }
+    // Auth state is still unknown (cold-load boot window, before
+    // SessionRestorer's /auth/refresh -> /auth/me round-trip settles):
+    // accessToken reads null here regardless of whether the user is
+    // actually authed, so we can't yet tell "logged out, use verify" apart
+    // from "authed, verify is off-limits" (10/min per IP — a school office
+    // behind one NAT would 429 on ordinary loads). Do nothing and leave the
+    // pre-paint script's cached branding on screen until isInitialized
+    // flips true; every SessionRestorer path terminates by setting it.
+    if (!isInitialized) {
       return;
     }
     if (primaryColor) {
@@ -85,7 +97,7 @@ export function BrandingSync() {
     return () => {
       cancelled = true;
     };
-  }, [isPlatform, slug, primaryColor, primaryForeground, accessToken]);
+  }, [isPlatform, slug, primaryColor, primaryForeground, accessToken, isInitialized]);
 
   return null;
 }
