@@ -5,6 +5,7 @@ import type {
   StaffSummary,
   StaffDetail,
   StaffDocument,
+  ResendStaffCredentialsResult,
   Department,
   Designation,
   LeaveType,
@@ -29,6 +30,10 @@ export const hrApi = {
   updateStaff: (id: string, data: Partial<CreateStaffData>) =>
     api.patch<ApiResponse<StaffDetail>>(`/hr/staff/${id}`, data),
   deleteStaff: (id: string) => api.delete(`/hr/staff/${id}`),
+  // MAIL-1 resend: regenerates the staff member's temp password, revokes
+  // their sessions, and emails the new credentials. Throttled 5/h server-side.
+  resendStaffCredentials: (id: string) =>
+    api.post<ApiResponse<ResendStaffCredentialsResult>>(`/hr/staff/${id}/resend-credentials`, {}),
   getStaffDocuments: (id: string) =>
     api.get<ApiResponse<StaffDocument[]>>(`/hr/staff/${id}/documents`),
   addStaffDocument: (id: string, data: { documentType: string; fileUrl?: string; fileKey?: string; fileName?: string }) =>

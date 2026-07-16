@@ -850,6 +850,12 @@ export interface StaffDetail extends StaffSummary {
   emergencyContactPhone: string | null;
 }
 
+// MAIL-1 resend: POST /hr/staff/:id/resend-credentials
+export interface ResendStaffCredentialsResult {
+  userId: string;
+  deliveryIds: string[];
+}
+
 export interface Department { id: string; name: string; }
 export interface Designation { id: string; title: string; departmentId: string | null; departmentName?: string | null; }
 export interface LeaveType { id: string; name: string; daysPerYear: number; isPaid: boolean; }
@@ -1122,6 +1128,13 @@ export interface ImpersonationToken {
   tenantSlug: string;
   schoolName: string;
   warning: string;
+}
+
+// MAIL-1 resend: POST /super-admin/tenants/:id/resend-owner-credentials
+export interface ResendOwnerCredentialsResult {
+  userId: string;
+  email: string;
+  sent: boolean;
 }
 
 export interface AuditLog {
