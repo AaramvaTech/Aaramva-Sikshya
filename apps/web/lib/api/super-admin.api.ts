@@ -8,6 +8,7 @@ import type {
   TenantSummary,
   TenantDetail,
   ImpersonationToken,
+  ResendOwnerCredentialsResult,
   AuditLog,
   OnboardTenantData,
   UpdateTenantData,
@@ -68,6 +69,13 @@ export const superAdminApi = {
     api.patch(`/super-admin/tenants/${id}/suspend`, {}),
   activateTenant: (id: string) =>
     api.patch(`/super-admin/tenants/${id}/activate`, {}),
+  // MAIL-1 resend: regenerates the owner's temp password, revokes their
+  // sessions, and emails the new credentials.
+  resendOwnerCredentials: (id: string) =>
+    api.post<ApiResponse<ResendOwnerCredentialsResult>>(
+      `/super-admin/tenants/${id}/resend-owner-credentials`,
+      {},
+    ),
 
   // Subscription
   updateSubscription: (

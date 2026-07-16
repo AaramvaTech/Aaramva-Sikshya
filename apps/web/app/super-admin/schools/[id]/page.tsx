@@ -2,10 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ExternalLink, ArrowLeft, Pencil, Upload } from 'lucide-react';
+import { ExternalLink, ArrowLeft, KeyRound, Pencil, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { uploadFile } from '@/lib/upload';
+import { extractApiErrors } from '@/lib/api-errors';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -32,6 +33,7 @@ import {
   useSuspendTenant,
   useActivateTenant,
   useImpersonate,
+  useResendOwnerCredentials,
   useUpdateSubscription,
   useUpdateTenant,
 } from '@/lib/hooks/use-super-admin';
@@ -57,6 +59,7 @@ export default function SchoolDetailPage() {
   const suspendTenant = useSuspendTenant();
   const activateTenant = useActivateTenant();
   const impersonate = useImpersonate();
+  const resendOwnerCreds = useResendOwnerCredentials();
   const updateSubscription = useUpdateSubscription();
   const updateTenant = useUpdateTenant();
   const { setAuth } = useAuthStore();
@@ -150,6 +153,16 @@ export default function SchoolDetailPage() {
     }
   }
 
+  async function handleResendOwnerCredentials() {
+    if (!school) return;
+    try {
+      const res = await resendOwnerCreds.mutateAsync(school.id);
+      toast.success(`New credentials emailed to ${res.email}`);
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to resend owner credentials').join(' • '));
+    }
+  }
+
   async function handleImpersonate() {
     if (!school) return;
     try {
@@ -223,6 +236,18 @@ export default function SchoolDetailPage() {
               <Pencil className="h-4 w-4 mr-1.5" />
               Edit
             </Button>
+            <ConfirmDialog
+              title="Resend Owner Credentials"
+              description={`Reset the ${school.name} owner's password and email them new login credentials? Their current password will stop working and they will be signed out everywhere.`}
+              confirmLabel="Reset & Email"
+              trigger={
+                <Button variant="outline" size="sm" disabled={resendOwnerCreds.isPending}>
+                  <KeyRound className="h-4 w-4 mr-1.5" />
+                  Resend Credentials
+                </Button>
+              }
+              onConfirm={handleResendOwnerCredentials}
+            />
             <ConfirmDialog
               title="Impersonate School Owner"
               description={`You are about to access ${school.name} as SCHOOL_OWNER. All actions will be audited. Continue?`}

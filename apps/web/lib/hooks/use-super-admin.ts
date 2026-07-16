@@ -70,6 +70,14 @@ export function useImpersonate() {
   });
 }
 
+// MAIL-1 resend: no cache invalidation — nothing displayed changes.
+export function useResendOwnerCredentials() {
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      superAdminApi.resendOwnerCredentials(tenantId).then((r) => r.data.data),
+  });
+}
+
 export function usePlans() {
   return useQuery({
     queryKey: ['platform', 'plans'],

@@ -4,22 +4,25 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Camera, Edit2, FileText, Loader2, Mail, Phone, User,
+  Camera, Edit2, FileText, KeyRound, Loader2, Mail, Phone, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useStaffDetail,
   useUpdateStaff,
+  useResendStaffCredentials,
   useLeaveBalance,
   useStaffDocuments,
 } from '@/lib/hooks/use-hr';
 import { hrApi } from '@/lib/api/hr.api';
+import { extractApiErrors } from '@/lib/api-errors';
 import { uploadFile } from '@/lib/upload';
 import { useFileUrl } from '@/lib/hooks/use-file-url';
 import { FileDownloadLink } from '@/components/shared/file-download-link';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { BsDate } from '@/components/shared/bs-date';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -77,6 +80,7 @@ export default function StaffProfilePage() {
 
   const { data: staff, isLoading } = useStaffDetail(id);
   const updateStaff = useUpdateStaff(id);
+  const resendCreds = useResendStaffCredentials(id);
 
   const { data: documents, isLoading: docsLoading } = useStaffDocuments(id);
 
@@ -171,6 +175,17 @@ export default function StaffProfilePage() {
     }
   }
 
+  // MAIL-1 resend: regenerates the temp password + emails it (revokes sessions).
+  async function handleResendCredentials() {
+    if (!staff) return;
+    try {
+      await resendCreds.mutateAsync();
+      toast.success(`New credentials emailed to ${staff.email}`);
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to resend credentials').join(' • '));
+    }
+  }
+
   // FILE-1: storage keys resolve to presigned GETs; legacy values pass through.
   const resolvedPhotoUrl = useFileUrl(staff?.photoUrl);
 
@@ -215,14 +230,28 @@ export default function StaffProfilePage() {
         title={staff.fullName}
         description={`Employee ID: ${staff.employeeId}`}
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/hr/staff/${id}/edit`)}
-          >
-            <Edit2 className="h-4 w-4 mr-1.5" />
-            Edit Profile
-          </Button>
+          <div className="flex items-center gap-2">
+            <ConfirmDialog
+              title="Resend login credentials"
+              description={`Reset ${staff.fullName}'s password and email new login credentials to ${staff.email}? Their current password will stop working and they will be signed out everywhere.`}
+              confirmLabel="Reset & Email"
+              trigger={
+                <Button variant="outline" size="sm" disabled={resendCreds.isPending}>
+                  <KeyRound className="h-4 w-4 mr-1.5" />
+                  Resend Credentials
+                </Button>
+              }
+              onConfirm={handleResendCredentials}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/hr/staff/${id}/edit`)}
+            >
+              <Edit2 className="h-4 w-4 mr-1.5" />
+              Edit Profile
+            </Button>
+          </div>
         }
       />
 

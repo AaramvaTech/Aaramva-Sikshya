@@ -42,6 +42,13 @@ export function useUpdateStaff(id: string) {
   });
 }
 
+// MAIL-1 resend: no cache invalidation — nothing displayed changes.
+export function useResendStaffCredentials(id: string) {
+  return useMutation({
+    mutationFn: () => hrApi.resendStaffCredentials(id).then((r) => r.data.data),
+  });
+}
+
 export function useStaffDocuments(id: string) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
