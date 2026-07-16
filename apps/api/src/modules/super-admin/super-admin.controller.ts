@@ -9,8 +9,13 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
+import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -33,10 +38,19 @@ import { AnalyticsService } from './analytics.service';
 import { AuditService } from './audit.service';
 import { PlatformSettingsService, PlatformSettingsDto } from './platform-settings.service';
 
+/**
+ * Platform session cookie. Deliberately a DIFFERENT name + path from the school's
+ * `refresh_token` (/api/v1/auth) so the two never collide in one browser, and so
+ * it is only ever sent to the platform auth routes.
+ */
+const PLATFORM_REFRESH_COOKIE = 'platform_refresh_token';
+const PLATFORM_REFRESH_COOKIE_PATH = '/api/v1/super-admin/auth';
+
 @Controller('super-admin')
 export class SuperAdminController {
   constructor(
     private readonly platformAuth: PlatformAuthService,
+    private readonly config: ConfigService,
     private readonly planService: PlanService,
     private readonly tenantAdmin: TenantAdminService,
     private readonly impersonation: ImpersonationService,
@@ -49,8 +63,25 @@ export class SuperAdminController {
 
   @Post('auth/login')
   @HttpCode(200)
-  login(@Body() dto: PlatformLoginDto) {
-    return this.platformAuth.login(dto);
+  async login(@Body() dto: PlatformLoginDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.platformAuth.login(dto);
+    this.setPlatformRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+    return { accessToken: result.accessToken, admin: result.admin };
+  }
+
+  /**
+   * Platform sessions survive a reload: the access JWT lives in memory only, so
+   * the web app exchanges this httpOnly cookie for a fresh pair on boot (and on
+   * a 401 mid-session). Rotating + throttled like the school refresh.
+   */
+  @Post('auth/refresh')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @HttpCode(200)
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const token = (req.cookies as Record<string, string> | undefined)?.[PLATFORM_REFRESH_COOKIE];
+    const result = await this.platformAuth.refresh(token);
+    this.setPlatformRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+    return { accessToken: result.accessToken, admin: result.admin };
   }
 
   // MAIL-1 T4: platform-admin change-password (closes the OPS-1 script gap).
@@ -66,8 +97,21 @@ export class SuperAdminController {
   @HttpCode(200)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PLATFORM_ADMIN)
-  logout() {
-    return this.platformAuth.logout();
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const token = (req.cookies as Record<string, string> | undefined)?.[PLATFORM_REFRESH_COOKIE];
+    await this.platformAuth.logout(token);
+    res.clearCookie(PLATFORM_REFRESH_COOKIE, { path: PLATFORM_REFRESH_COOKIE_PATH });
+    return { loggedOut: true };
+  }
+
+  private setPlatformRefreshCookie(res: Response, token: string, expiresAt: Date): void {
+    res.cookie(PLATFORM_REFRESH_COOKIE, token, {
+      httpOnly: true,
+      secure: this.config.get<string>('NODE_ENV') === 'production',
+      sameSite: 'strict',
+      maxAge: expiresAt.getTime() - Date.now(),
+      path: PLATFORM_REFRESH_COOKIE_PATH,
+    });
   }
 
   // ─── Plans ─────────────────────────────────────────────────────────────────

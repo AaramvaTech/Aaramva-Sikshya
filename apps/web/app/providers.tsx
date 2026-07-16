@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
+import { superAdminApi } from '@/lib/api/super-admin.api';
 import { clearAuthMarker } from '@/lib/auth-marker';
 import { SidebarProvider } from '@/context/sidebar-context';
 import { toast } from 'sonner';
@@ -71,6 +72,30 @@ function SessionRestorer() {
   useEffect(() => {
     if (accessToken) {
       setInitialized();
+      return;
+    }
+
+    // Platform admins hold a DIFFERENT session: public schema, no tenant, its own
+    // httpOnly cookie. Restore it from the platform refresh so a reload no longer
+    // drops the super-admin session (the access token is memory-only). A failure
+    // clears the marker, so a dead session can't bounce the user around.
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/super-admin')) {
+      superAdminApi
+        .refresh()
+        .then((res) => {
+          const { accessToken: token, admin } = res.data.data;
+          setAuth(token, {
+            id: admin.id,
+            email: admin.email,
+            firstName: admin.firstName,
+            lastName: admin.lastName,
+            role: 'PLATFORM_ADMIN',
+            tenantId: null,
+            tenantSlug: null,
+          });
+        })
+        .catch(() => clearAuthMarker())
+        .finally(() => setInitialized());
       return;
     }
 

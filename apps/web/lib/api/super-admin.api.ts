@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import api, { rawApi } from '@/lib/api';
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -21,6 +21,14 @@ export const superAdminApi = {
     api.post<ApiResponse<{ accessToken: string; admin: PlatformAdmin }>>(
       '/super-admin/auth/login',
       data,
+    ),
+  // Platform session restore/rotate. rawApi is interceptor-free (mirrors the school
+  // refresh) so a 401 here can never recurse into the refresh flow. The input is the
+  // httpOnly platform_refresh_token cookie — rawApi already sends credentials.
+  refresh: () =>
+    rawApi.post<ApiResponse<{ accessToken: string; admin: PlatformAdmin }>>(
+      '/super-admin/auth/refresh',
+      {},
     ),
   logout: () => api.post('/super-admin/auth/logout'),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
