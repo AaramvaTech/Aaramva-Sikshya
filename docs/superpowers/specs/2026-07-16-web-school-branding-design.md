@@ -196,13 +196,19 @@ ramp* from one colour.
    - This single constraint solves **both** directions: `text-brand-500` legible on white,
      *and* white text legible on a `bg-brand-500` fill.
    - It is a **no-op for essentially every colour a school actually picks** — `#1a8055`
-     passes at 4.8:1 untouched, maroon `#7C1D3F` at 9.1:1 untouched. It only bites on
-     pastels and neons.
+     passes at **4.93:1** untouched, maroon `#7C1D3F` at **9.98:1** untouched. It only bites
+     on pastels and neons (`#FFD700` sits at **1.40:1**).
 4. **Clamp the 400 step for the dark end.** The codebase switches *steps* per mode
    (`text-brand-500` on light, `dark:text-brand-400` on dark), so one scale serves both modes
    — but 400 must stay light enough to read on the dark surface. Raise its L until it does.
    The ramp is therefore legibility-clamped at **both** ends, with two anchors: 500 (white)
    and 400 (dark).
+   - **The dark surface is `--color-gray-900` = `#101828`** (`globals.css:123`), and this is
+     evidence-based, not a guess: the existing hand-tuned `brand-400` (`#2e9168`) lands at
+     **4.53:1** against it — just barely over the 4.5 line — which is what the scale was
+     tuned against. (It measures 3.76:1 on `gray-800` `#1d2939`, i.e. it fails there; so
+     `gray-900` is the surface the original author had in mind.) Using the same anchor means
+     the rule is a **no-op for Aaramva**, exactly like the 500 clamp.
 5. **Interpolate the remaining 10 steps**, holding H and S, using the **existing Aaramva
    scale's lightness curve as the shape**. It is already hand-tuned and known-good, so rather
    than inventing targets we reuse its spacing: extract L for each of the 12 literals in
@@ -323,11 +329,30 @@ can be tested against a fake `style` object.
 
 **New (5):** `lib/branding/{scale,apply,cache}.ts`,
 `components/branding/{branding-sync,branding-script}.tsx`
-**New tests (2):** `lib/branding/__tests__/{scale,apply}.test.ts`
-**Edited (6):** `app/layout.tsx`, `store/tenant.store.ts`, `components/layout/sidebar.tsx`,
-`app/(school)/settings/page.tsx`, `components/onboarding/branding-step.tsx`,
+**New tests (3):** `lib/branding/__tests__/{scale,apply,cache}.test.ts`
+**Edited (8):** `app/layout.tsx`, `app/providers.tsx`, `store/tenant.store.ts`,
+`components/layout/sidebar.tsx`, `app/(school)/settings/page.tsx`,
+`components/onboarding/branding-step.tsx`, `types/api.types.ts`,
 `apps/api/src/modules/auth/auth.service.ts`
+**Edited during planning (2, discovered late):**
+- `apps/api/src/modules/settings/settings.service.ts` — `PROFILE_SELECT` selects
+  `"primaryColor"` but **never** `"primaryForeground"`, and `toProfileResponse` doesn't map
+  it. §5's repaint-on-save has no foreground to work with until it does.
+- `types/api.types.ts` `SchoolProfile` — same field, plus note its `primaryColor` is
+  non-nullable here while `TenantInfo`'s is nullable.
+
 **Docs:** `CLAUDE.md` — replace the "(Web's `#1a8055` reconciliation is out of scope.)" note.
 
 Unchanged: all 79 `brand-*` consumer files, `app/globals.css` token literals,
 `--chart-1..5`, `lib/attendance.ts` `STATUS_CONFIG`, `apps/mobile`.
+
+---
+
+## 8. Out of scope, found while planning
+
+`dark:bg-boxdark` appears in **83 files**, but `boxdark` is defined nowhere in
+`app/globals.css` — the app's only CSS file, and Tailwind v4 has no JS config here. Verified
+against the built output: `brand-500` appears 71× in the compiled CSS, `boxdark` **zero**
+times, so the utility is never generated and those classes are dead. Pre-existing and
+unrelated to BRAND-1, but it means the surface under `dark:text-brand-400` is not always the
+`#101828` the ramp clamps against. Own ticket; do not widen this work.
