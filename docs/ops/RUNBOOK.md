@@ -198,9 +198,15 @@ Exact commands used (binaries live in the gitignored `tools/minio/`):
 curl -sSL -o tools/minio/minio.exe https://dl.min.io/server/minio/release/windows-amd64/minio.exe
 curl -sSL -o tools/minio/mc.exe    https://dl.min.io/client/mc/release/windows-amd64/mc.exe
 
-# 2. Start the server (API :9000, web console :9001; data dir is local)
+# 2. Start the server (API :9000, web console :9001)
+#    DATA LIVES ON D: — moved 2026-07-16. C: hit 100% full (312 MB free of 238 GB)
+#    and MinIO answers 507 Insufficient Storage on every PUT when the disk is
+#    that full. Uploads then fail with a misleading "Failed to update profile".
+#    D: has ~570 GB free, and object storage only grows (logos, photos, PDFs).
+#    The app never needs to know: it talks to 127.0.0.1:9000 either way — only
+#    the server's storage path changed, so no .env change accompanies this.
 $env:MINIO_ROOT_USER = 'minioadmin'; $env:MINIO_ROOT_PASSWORD = 'minioadmin'
-tools/minio/minio.exe server tools/minio/data --console-address ":9001"
+tools/minio/minio.exe server "D:/aaramva/minio-data" --console-address ":9001"
 
 # 3. One-time: bucket + dedicated access keys
 tools/minio/mc.exe alias set local http://127.0.0.1:9000 minioadmin minioadmin
@@ -212,6 +218,21 @@ tools/minio/mc.exe admin user svcacct add local minioadmin `
 #    policy JSON: Action s3:GetObject on arn:aws:s3:::aaramva-dev/tenant_*/school-logo/*
 tools/minio/mc.exe anonymous set-json logo-public-policy.json local/aaramva-dev
 ```
+
+**If uploads fail, check MinIO before you read any application code.** Two failures
+look identical from the UI (`Failed to update profile`) and neither is a code bug:
+
+| symptom in devtools | cause | fix |
+|---|---|---|
+| PUT fails with no HTTP status; `curl 127.0.0.1:9000` refuses | MinIO not running | start it (step 2). It is **not** in `docker-compose.yml` — `docker compose up` will not start it |
+| PUT returns **507 Insufficient Storage** | host disk full | free space, or move the data dir (that is why it is on D:) |
+
+The presign call returns **200 in both cases** — signing is offline maths with no
+network — so the API happily hands the browser an upload URL pointing at a dead or
+full server. `lib/upload.ts` only falls back to base64 on a presign **503**, which
+never fires here, so the PUT dies with no fallback and the toast blames the
+profile. Storage is treated as "enabled" purely because the four `S3_*` env vars
+exist; nothing checks reachability. Known gap, not yet fixed.
 
 Then in `apps/api/.env`:
 
