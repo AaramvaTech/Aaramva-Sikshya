@@ -8,10 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSchoolProfile, useUpdateSchoolProfile } from '@/lib/hooks/use-settings';
 import { uploadFile } from '@/lib/upload';
+import { useTenantStore } from '@/store/tenant.store';
 
 export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
   const { data: profile, isLoading } = useSchoolProfile();
   const update = useUpdateSchoolProfile();
+  const { slug, setTenant } = useTenantStore();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
@@ -32,6 +34,19 @@ export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
     if (profile?.primaryColor) setManualColor(profile.primaryColor);
   }, [profile?.primaryColor]);
 
+  // Same reason as the settings page: the tenant store is fed by /auth/me, which
+  // is not refetched here, so a saved colour would otherwise stay invisible.
+  function syncTenantBranding(res: Awaited<ReturnType<typeof update.mutateAsync>>) {
+    const saved = res.data.data;
+    setTenant({
+      slug: slug ?? undefined,
+      name: saved.name,
+      logoUrl: saved.logoUrl,
+      primaryColor: saved.primaryColor,
+      primaryForeground: saved.primaryForeground,
+    });
+  }
+
   async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -44,8 +59,10 @@ export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
       // Either way the server runs node-vibrant on the logo bytes and stores
       // the auto-derived theme colour.
       const uploaded = await uploadFile(file, 'school-logo');
-      await update.mutateAsync(
-        uploaded.mode === 'key' ? { logoFileKey: uploaded.key } : { logoUrl: uploaded.dataUrl },
+      syncTenantBranding(
+        await update.mutateAsync(
+          uploaded.mode === 'key' ? { logoFileKey: uploaded.key } : { logoUrl: uploaded.dataUrl },
+        ),
       );
       toast.success('Logo uploaded — theme colour derived from it');
       onChanged?.();
@@ -71,7 +88,7 @@ export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
   async function applyColor() {
     try {
       // Manual override → server flags colorSource = 'manual'.
-      await update.mutateAsync({ primaryColor: manualColor });
+      syncTenantBranding(await update.mutateAsync({ primaryColor: manualColor }));
       toast.success('Theme colour updated');
       onChanged?.();
     } catch {

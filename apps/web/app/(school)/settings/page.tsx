@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSchoolProfile, useUpdateSchoolProfile } from '@/lib/hooks/use-settings';
 import { uploadFile } from '@/lib/upload';
 import { useFileUrl } from '@/lib/hooks/use-file-url';
+import { useTenantStore } from '@/store/tenant.store';
 import type { SchoolProfile, UpdateProfileData } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 
@@ -54,6 +55,7 @@ function fromProfile(p: SchoolProfile): FormState {
 export default function SettingsPage() {
   const { data: profile, isLoading } = useSchoolProfile();
   const update = useUpdateSchoolProfile();
+  const { slug, setTenant } = useTenantStore();
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editing, setEditing] = useState(false);
@@ -106,7 +108,22 @@ export default function SettingsPage() {
           delete payload[urlField];
         }
       }
-      await update.mutateAsync(payload);
+      const res = await update.mutateAsync(payload);
+      // `useUpdateSchoolProfile`'s mutationFn returns settingsApi.updateProfile(data)
+      // — the RAW axios response, not an unwrapped body. ResponseInterceptor wraps
+      // as { success, data }, so the profile is at .data.data (the codebase's
+      // documented "simple list -> .data.data" rule).
+      const saved = res.data.data;
+      // The tenant store is fed by /auth/me, which is not refetched here — so
+      // without this the panel keeps the old branding until the next login.
+      // BrandingSync repaints (and rewrites the pre-paint cache) off this.
+      setTenant({
+        slug: slug ?? undefined,
+        name: saved.name,
+        logoUrl: saved.logoUrl,
+        primaryColor: saved.primaryColor,
+        primaryForeground: saved.primaryForeground,
+      });
       toast.success('School profile updated');
       setEditing(false);
       setPendingFiles({});
