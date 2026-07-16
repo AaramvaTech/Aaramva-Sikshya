@@ -5,7 +5,8 @@ Created in Phase 0. Status values: `OPEN` → `FIXED (phase N)` → `VERIFIED (p
 
 | ID | Summary | Status | Fix phase |
 |---|---|---|---|
-| ERR-1-BUG-1 | Wrong login credentials do not show "Invalid email or password"; interceptor runs its refresh flow on the login-401 and surfaces an internal outcome (mobile: literal "No refresh token available"; web: silent page reload). | OPEN | Phase 2 |
+| ERR-1-BUG-1 | Wrong login credentials do not show "Invalid email or password"; interceptor runs its refresh flow on the login-401 and surfaces an internal outcome (mobile: literal "No refresh token available"; web: silent page reload). | OPEN (server envelope landed Phase 1) | Phase 2 (client) |
+| ERR-1-CONTRACT-1 | Validation responses changed **400 + `message[]` → 422 + `details.fields`** — a client-facing contract change (Checkpoint-0 amendment 2). | OPEN | Phase 3 (web) / Phase 4 (mobile) |
 
 ---
 
@@ -77,5 +78,43 @@ Refresh flow **never** triggers for `/auth/login`, `/auth/refresh`, `/auth/forgo
 
 ---
 
+## Contract amendments (Checkpoint 0 → Phase 1)
+
+### Envelope decision (Checkpoint-0 amendment 1) — nested shape KEPT, not flattened
+The API error envelope is **not** flattened. The existing nested shape is retained and
+extended in place:
+```json
+{ "success": false, "error": { "code": "AUTH_INVALID_CREDENTIALS", "message": "…", "details": null, "requestId": "…" } }
+```
+- `code` now carries a **semantic catalog** value (e.g. `AUTH_INVALID_CREDENTIALS`) instead of
+  the HTTP status name — the only change to that field's meaning.
+- `requestId` is **added inside `error`** (reused from the existing `X-Request-Id` correlation id).
+- Prisma `P2002`→`CONFLICT_DUPLICATE` / `P2025`→`RESOURCE_NOT_FOUND` mapping, class-validator →
+  `VALIDATION_FAILED` (422) with `details.fields`, and the prod/dev leak rules are all in place (§1.1).
+
+Clients keep reading `error.code` / `error.message` — **no structural break**. The spec's flat
+`{ statusCode, errorCode, … }` example in §1.1 is **superseded** by this amendment. Catalog source
+of truth: `apps/api/src/modules/common/errors/error-codes.ts` (note: under `modules/common/` to
+match the repo layout, vs the spec's `src/common/` path).
+
+### ERR-1-CONTRACT-1 — validation now 400 → 422 (CLIENT-FACING; Phase 3/4)
+class-validator failures previously returned **HTTP 400** with `error.message` as a **`string[]`**
+of field messages. As of Phase 1 they return **HTTP 422**, code `VALIDATION_FAILED`, with per-field
+messages under **`error.details.fields`** (`{ field: message }`) and `error.message` a single summary.
+
+**Impact — must be handled in the client sweeps:**
+- Web `apps/web/lib/api-errors.ts::extractApiErrors` reads `error.message` as a `string[]`; it must
+  switch to `error.details.fields` for `VALIDATION_FAILED` (the array path stays as a filter backstop
+  but no longer fires for DTO validation).
+- Any client keying validation off HTTP **400** must also accept **422**.
+- Forms should render `details.fields[field]` inline (no toast), per §1.4.
+
+Status: **OPEN** — client consumers updated in Phase 3 (web) / Phase 4 (mobile).
+
+---
+
 ## Out-of-scope items encountered
 - `fee-structures` `dueDate` cast bug — stays on the **PAY-1 backlog** (spec §3), not touched by ERR-1.
+- Payment-gateway (`esewa`/`khalti`) throws are **default-mapped** in Phase 1 (502 → `PAYMENT_GATEWAY_UNAVAILABLE`,
+  business 400 → `BAD_REQUEST`); explicit `PAYMENT_VERIFICATION_FAILED` codes at those sites are a small
+  follow-up touch (tracked in `ERR-1-INVENTORY.md §E`), not required by any Phase 1 proof.

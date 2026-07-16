@@ -1,4 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
@@ -61,7 +62,7 @@ export class TimetableService {
         callerId,
         sectionId,
       );
-      if (!enrollment[0]) throw new ForbiddenException('Access denied');
+      if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
     }
     const rows = await this.tenantPrisma.query<
       TimetableSlotRow & {

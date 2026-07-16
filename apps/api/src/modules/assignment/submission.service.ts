@@ -10,6 +10,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { Role } from '../common/enums/role.enum';
+import { errorBody } from '../common/errors/error-codes';
 import type { AuthUser } from '../auth/auth.types';
 import {
   AssignmentRow,
@@ -80,7 +81,9 @@ export class SubmissionService {
       student.class_id === a.class_id &&
       (a.section_id === null || student.section_id === a.section_id);
     if (!targeted) {
-      throw new ForbiddenException('This assignment is not for your class.');
+      throw new ForbiddenException(
+        errorBody('FORBIDDEN_SCOPE', 'This assignment is not for your class.'),
+      );
     }
     return a;
   }

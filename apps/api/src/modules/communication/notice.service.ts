@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -123,7 +124,7 @@ export class NoticeService {
 
     const isPrincipalOrAbove = ['PLATFORM_ADMIN', 'SCHOOL_OWNER', 'PRINCIPAL'].includes(userRole);
     if (!isPrincipalOrAbove && existing[0].created_by !== userId) {
-      throw new ForbiddenException('You can only edit your own notices');
+      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'You can only edit your own notices'));
     }
 
     const sets: string[] = ['updated_at = NOW()'];

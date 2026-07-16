@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -164,7 +165,7 @@ export class StudentAttendanceService {
         callerId,
       );
       if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException('Access denied');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
       }
     }
     return this.getByQuery({ ...query, studentId });
@@ -182,7 +183,7 @@ export class StudentAttendanceService {
         callerId,
       );
       if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException('Access denied');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
       }
     }
     const students = await this.tenantPrisma.query<{

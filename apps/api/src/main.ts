@@ -8,6 +8,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './modules/common/filters/http-exception.filter';
 import { ResponseInterceptor } from './modules/common/interceptors/response.interceptor';
 import { LoggingInterceptor } from './modules/common/interceptors/logging.interceptor';
+import { validationExceptionFactory } from './modules/common/errors/validation.util';
 
 async function bootstrap() {
   // Disable default 100 kb body-parser so we can raise the limit for base64 photo uploads.
@@ -31,7 +32,15 @@ async function bootstrap() {
   // /health stays at the root path — monitors should not need the API prefix.
   app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // ERR-1: class-validator failures → VALIDATION_FAILED (422) with per-field
+  // messages under details.fields, instead of the default 400 + string[] message.
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      exceptionFactory: validationExceptionFactory,
+    }),
+  );
   app.useGlobalInterceptors(new LoggingInterceptor(), new ResponseInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 

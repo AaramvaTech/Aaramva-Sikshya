@@ -7,6 +7,7 @@ import {
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { Role } from '../common/enums/role.enum';
+import { errorBody } from '../common/errors/error-codes';
 import type { AuthUser } from '../auth/auth.types';
 import { READ_URL_TTL_SEC, StorageService } from './storage.service';
 import { FileKind, parseStorageKey } from './storage.policy';
@@ -75,7 +76,7 @@ export class FileAccessService {
       case 'principal-signature':
       case 'school-stamp': {
         if (!SETTINGS_VIEWERS.includes(user.role)) {
-          throw new ForbiddenException('Not allowed to view this file.');
+          throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
         }
         const rows = await this.tenantPrisma.query<{ ok: number }>(
           `SELECT 1 AS ok FROM public.tenants
@@ -100,7 +101,7 @@ export class FileAccessService {
         if (STAFF_READERS.includes(user.role)) return;
         if (user.role === Role.STUDENT) {
           if (rows[0].user_id === user.userId) return;
-          throw new ForbiddenException('Not allowed to view this file.');
+          throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
         }
         if (user.role === Role.PARENT) {
           const link = await this.tenantPrisma.query<{ ok: number }>(
@@ -111,12 +112,12 @@ export class FileAccessService {
           );
           if (link.length > 0) return;
         }
-        throw new ForbiddenException('Not allowed to view this file.');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
       }
 
       case 'staff-photo': {
         if (!STAFF_READERS.includes(user.role)) {
-          throw new ForbiddenException('Not allowed to view this file.');
+          throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
         }
         const rows = await this.tenantPrisma.query<{ ok: number }>(
           `SELECT 1 AS ok FROM staff_profiles
@@ -136,7 +137,7 @@ export class FileAccessService {
         if (rows.length === 0) throw new NotFoundException('File not found.');
         if (DOCUMENT_MANAGERS.includes(user.role)) return;
         if (rows[0].user_id === user.userId) return;
-        throw new ForbiddenException('Not allowed to view this file.');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
       }
 
       // EDU-1: teacher homework attachment — staff read freely; students and
@@ -175,7 +176,7 @@ export class FileAccessService {
             if (hit.length > 0) return;
           }
         }
-        throw new ForbiddenException('Not allowed to view this file.');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
       }
 
       // EDU-1: student submission file — staff (reviewers), the owning
@@ -203,7 +204,7 @@ export class FileAccessService {
           );
           if (link.length > 0) return;
         }
-        throw new ForbiddenException('Not allowed to view this file.');
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Not allowed to view this file.'));
       }
     }
   }

@@ -19,6 +19,7 @@ import {
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { Role } from '../common/enums/role.enum';
+import { errorBody } from '../common/errors/error-codes';
 import { AuthUser, JwtPayload } from './auth.types';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { LoginDto } from './dto/login.dto';
@@ -101,11 +102,11 @@ export class AuthService {
     const user = rows[0];
 
     if (!user || !user.is_active) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(errorBody('AUTH_INVALID_CREDENTIALS'));
     }
     const ok = await bcrypt.compare(dto.password, user.password_hash);
     if (!ok) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(errorBody('AUTH_INVALID_CREDENTIALS'));
     }
 
     await this.tenantPrisma.execute(
@@ -141,7 +142,7 @@ export class AuthService {
   async refresh(refreshToken: string | undefined) {
     const ctx = this.tenantContext.getOrThrow();
     if (!refreshToken) {
-      throw new UnauthorizedException('No refresh token provided');
+      throw new UnauthorizedException(errorBody('AUTH_SESSION_EXPIRED'));
     }
 
     const tokenHash = this.hashToken(refreshToken);
@@ -161,7 +162,7 @@ export class AuthService {
     const row = rows[0];
 
     if (!row || new Date(row.expires_at).getTime() < Date.now()) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException(errorBody('AUTH_SESSION_EXPIRED'));
     }
 
     // Rotate: delete the used token, issue a fresh pair.
@@ -209,7 +210,7 @@ export class AuthService {
       user.userId,
     );
     if (!rows[0]) {
-      throw new UnauthorizedException('User no longer exists');
+      throw new UnauthorizedException(errorBody('AUTH_TOKEN_INVALID'));
     }
 
     let tenant: { name: string; slug: string; logoUrl: string | null } | null = null;
@@ -362,7 +363,9 @@ export class AuthService {
       userId,
     );
     if (!rows[0] || !(await bcrypt.compare(currentPassword, rows[0].password_hash))) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException(
+        errorBody('AUTH_INVALID_CREDENTIALS', 'Current password is incorrect.'),
+      );
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
