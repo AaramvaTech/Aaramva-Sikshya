@@ -47,10 +47,18 @@ export function BrandingSync() {
   const slug = useTenantStore((s) => s.slug);
   const primaryColor = useTenantStore((s) => s.primaryColor);
   const primaryForeground = useTenantStore((s) => s.primaryForeground);
-  // next-themes: undefined until mounted; fall back to the ThemeProvider's
-  // own defaultTheme="light" (app/providers.tsx) rather than guessing dark.
-  const { resolvedTheme } = useTheme();
-  const theme: ThemeMode = resolvedTheme === 'dark' ? 'dark' : 'light';
+  // `forcedTheme` MUST win over `resolvedTheme`, and this is not defensive
+  // padding: next-themes computes `resolvedTheme` from the STORED preference and
+  // ignores forcedTheme entirely (`resolvedTheme: c==="system"?T:c`), while it
+  // APPLIES `forcedTheme ?? theme` to <html>. Since dark mode was removed via
+  // forcedTheme="light" (app/providers.tsx), anyone still carrying theme:"dark"
+  // in localStorage from before would report resolvedTheme==='dark' on a page
+  // that is definitively light — and we would paint the dark `--primary` (a
+  // LIGHT fill, step 400) onto a white UI.
+  // Also: resolvedTheme is undefined until mounted, so default to light rather
+  // than guessing dark.
+  const { resolvedTheme, forcedTheme } = useTheme();
+  const theme: ThemeMode = (forcedTheme ?? resolvedTheme) === 'dark' ? 'dark' : 'light';
 
   // The platform console spans every school, so no single school's colour
   // applies. Keep it Aaramva.

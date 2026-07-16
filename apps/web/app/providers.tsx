@@ -54,8 +54,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
+  // DARK MODE REMOVED (2026-07-16). `forcedTheme` makes next-themes never put
+  // `.dark` on <html>, and the header's toggle is gone — so every `dark:`
+  // utility still in the markup is permanently inert. They are dead weight, not
+  // a live code path; stripping them from ~85 files is a mechanical follow-up,
+  // not a prerequisite.
+  //
+  // Why it went: the Tailwind v4 migration dropped tailwind.config.js and never
+  // ported TailAdmin's palette into @theme, so `dark:bg-boxdark` (32 files)
+  // generated no CSS at all. Those cards pair it with `bg-white`, so dark mode
+  // rendered white cards with `dark:text-white` on them — invisible text. Dark
+  // mode has therefore never actually worked in this app.
+  //
+  // To bring it back: delete `forcedTheme`, restore the toggle, and verify
+  // against the restored tokens. Keep this a deliberate decision, not a revert.
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
       <SidebarProvider>
         <QueryClientProvider client={queryClient}>
           <SessionRestorer />

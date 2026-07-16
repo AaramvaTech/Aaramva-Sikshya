@@ -1,15 +1,16 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      // Dark mode removed (2026-07-16). This read `useTheme()`, but next-themes
+      // reports the STORED preference and ignores forcedTheme — so a user still
+      // carrying theme:"dark" in localStorage would get dark toasts on a
+      // permanently light UI. Pinned rather than derived.
+      theme="light"
       className="toaster group"
       position="top-right"
       richColors
