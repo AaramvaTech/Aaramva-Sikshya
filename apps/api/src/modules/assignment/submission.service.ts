@@ -81,9 +81,7 @@ export class SubmissionService {
       student.class_id === a.class_id &&
       (a.section_id === null || student.section_id === a.section_id);
     if (!targeted) {
-      throw new ForbiddenException(
-        errorBody('FORBIDDEN_SCOPE', 'This assignment is not for your class.'),
-      );
+      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
     return a;
   }

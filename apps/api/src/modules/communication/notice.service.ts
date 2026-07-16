@@ -124,7 +124,7 @@ export class NoticeService {
 
     const isPrincipalOrAbove = ['PLATFORM_ADMIN', 'SCHOOL_OWNER', 'PRINCIPAL'].includes(userRole);
     if (!isPrincipalOrAbove && existing[0].created_by !== userId) {
-      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'You can only edit your own notices'));
+      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
 
     const sets: string[] = ['updated_at = NOW()'];

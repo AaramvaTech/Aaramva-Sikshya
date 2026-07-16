@@ -31,9 +31,7 @@ export class LeaveService {
         appliedById,
       );
       if (!linked[0]) {
-        throw new ForbiddenException(
-          errorBody('FORBIDDEN_SCOPE', 'No student record is linked to this account'),
-        );
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
       studentId = linked[0].id;
     } else if (callerRole === Role.PARENT) {
@@ -45,9 +43,7 @@ export class LeaveService {
       );
       const childIds = new Set(children.map((c) => c.student_id));
       if (!childIds.has(dto.studentId)) {
-        throw new ForbiddenException(
-          errorBody('FORBIDDEN_SCOPE', 'You can only file leave for your own children'),
-        );
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
       studentId = dto.studentId;
     } else {

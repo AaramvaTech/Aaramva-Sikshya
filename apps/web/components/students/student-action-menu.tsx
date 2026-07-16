@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { getErrorDisplay } from '@/lib/errors';
 import { MoreHorizontal, Eye, Edit2, XCircle, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -38,7 +39,7 @@ export function StudentActionMenu({ studentId }: StudentActionMenuProps) {
       toast.success('Student deactivated');
       setConfirmOpen(false);
     },
-    onError: () => toast.error('Failed to deactivate student'),
+    onError: (err) => toast.error(getErrorDisplay(err).message),
   });
 
   return (

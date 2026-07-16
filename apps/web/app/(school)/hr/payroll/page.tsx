@@ -5,6 +5,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { getErrorDisplay } from '@/lib/errors';
 import { Plus, Trash2, Pencil, Loader2, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { AmountDisplay } from '@/components/finance/amount-display';
@@ -502,7 +503,7 @@ export default function PayrollPage() {
                           onConfirm={() =>
                             deletePayrollMonth.mutate(pm.id, {
                               onSuccess: () => toast.success('Payroll month deleted'),
-                              onError: () => toast.error('Failed to delete'),
+                              onError: (err) => toast.error(getErrorDisplay(err).message),
                             })
                           }
                           confirmLabel="Delete"

@@ -165,7 +165,7 @@ export class StudentAttendanceService {
         callerId,
       );
       if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
     }
     return this.getByQuery({ ...query, studentId });
@@ -183,7 +183,7 @@ export class StudentAttendanceService {
         callerId,
       );
       if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
     }
     const students = await this.tenantPrisma.query<{

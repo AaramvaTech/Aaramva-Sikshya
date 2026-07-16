@@ -62,7 +62,7 @@ export class TimetableService {
         callerId,
         sectionId,
       );
-      if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE', 'Access denied'));
+      if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
     const rows = await this.tenantPrisma.query<
       TimetableSlotRow & {

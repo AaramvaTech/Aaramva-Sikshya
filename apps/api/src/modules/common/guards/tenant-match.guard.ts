@@ -82,9 +82,7 @@ export class TenantMatchGuard implements CanActivate {
           method: req.method,
         }),
       );
-      throw new ForbiddenException(
-        errorBody('FORBIDDEN_SCOPE', 'Token tenant does not match the requested tenant.'),
-      );
+      throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
 
     return true;

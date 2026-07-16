@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { getErrorDisplay } from '@/lib/errors';
 import {
   Dialog,
   DialogContent,
@@ -146,7 +147,7 @@ export function InvoiceDetailModal({ invoiceId, onClose }: InvoiceDetailModalPro
                               onConfirm={() =>
                                 cancelPayment.mutate(payment.id, {
                                   onSuccess: () => toast.success('Payment cancelled'),
-                                  onError: () => toast.error('Failed to cancel payment'),
+                                  onError: (err) => toast.error(getErrorDisplay(err).message),
                                 })
                               }
                               confirmLabel="Cancel Payment"
@@ -202,7 +203,7 @@ export function InvoiceDetailModal({ invoiceId, onClose }: InvoiceDetailModalPro
                     if (!invoiceId) return;
                     recalcFine.mutate(invoiceId, {
                       onSuccess: () => toast.success('Fine recalculated'),
-                      onError: () => toast.error('Failed to recalculate fine'),
+                      onError: (err) => toast.error(getErrorDisplay(err).message),
                     });
                   }}
                 >
