@@ -18,7 +18,7 @@
       },
       "env": {
         "EXPO_PUBLIC_PROJECT_ID": "54147e05-403e-4185-9d0c-67dd5d1f6a74",
-        "EXPO_PUBLIC_API_URL": "http://192.168.10.74:3001/api/v1"
+        "EXPO_PUBLIC_API_URL": "http://192.168.10.69:3001/api/v1"
       }
     },
     "production": {

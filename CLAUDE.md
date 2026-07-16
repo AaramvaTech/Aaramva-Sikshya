@@ -323,6 +323,12 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
 - DB: PostgreSQL 17 local (password: <DB_PASSWORD — see .env>). Redis not running yet (needed for queues)
 - Super Admin: AppModule.configure() registers TenantMiddleware with exclude for /api/v1/super-admin/(.*) AND /api/v1/tenants/verify/(.*). TenantModule no longer implements NestModule — middleware wired in AppModule only.
+- Bootstrap a platform super-admin (public `platform_admins` — NOT created by `seed`/`seed:demo`;
+  a fresh DB has none): `cd apps/api && npm run seed:admin -- <email> <password> [firstName] [lastName]`
+  (`src/prisma/seed-admin.ts`). Idempotent — re-running an existing email resets that admin's
+  password + re-activates (name left unchanged), so it doubles as a forgotten-password reset.
+  Login at `{WEB_BASE_URL}/super-admin/login`. PowerShell: single-quote the password. Verified
+  live (create → bcrypt `$2b$12$` → idempotent reset → bcrypt.compare true → row cleaned).
 - Run migrations (public schema, Prisma): `cd apps/api && npx prisma migrate dev`
 - Tenant schema migrations (MIG-1): tenant schemas are NOT Prisma-managed. Add SQL to
   `apps/api/migrations/tenant/NNNN_desc.sql` (reference the schema only via `{{schema}}`),

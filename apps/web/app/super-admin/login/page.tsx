@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,10 +13,19 @@ import { superAdminLoginSchema, type SuperAdminLoginValues } from '@/lib/schemas
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
-  const { setAuth } = useAuthStore();
+  const { setAuth, accessToken, user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Skip the login screen only when a LIVE in-memory platform session exists
+  // (token-based, NOT the spoofable `_auth` marker). A stale marker with no token
+  // must NOT redirect — otherwise the user could never reach this page to log in.
+  useEffect(() => {
+    if (accessToken && user?.role === 'PLATFORM_ADMIN') {
+      router.replace('/super-admin/dashboard');
+    }
+  }, [accessToken, user, router]);
 
   const {
     register,

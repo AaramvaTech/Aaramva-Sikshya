@@ -19,6 +19,7 @@
     "prisma:migrate": "prisma migrate dev",
     "seed": "ts-node -r tsconfig-paths/register src/prisma/seed.ts",
     "seed:demo": "ts-node -r tsconfig-paths/register src/prisma/seed-demo.ts",
+    "seed:admin": "ts-node -r tsconfig-paths/register src/prisma/seed-admin.ts",
     "migrate:tenants": "ts-node -r tsconfig-paths/register src/prisma/migrate-tenants.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
