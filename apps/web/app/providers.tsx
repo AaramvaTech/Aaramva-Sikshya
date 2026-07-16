@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { BrandingSync } from '@/components/branding/branding-sync';
 import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
 import { superAdminApi } from '@/lib/api/super-admin.api';
@@ -57,6 +58,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SidebarProvider>
         <QueryClientProvider client={queryClient}>
           <SessionRestorer />
+          <BrandingSync />
           {children}
           <Toaster />
         </QueryClientProvider>
