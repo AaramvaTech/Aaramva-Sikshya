@@ -1323,6 +1323,8 @@ function paint(slug: string, color: string | null, fg: string | null): void {
 
 export function BrandingSync() {
   const pathname = usePathname();
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
   const slug = useTenantStore((s) => s.slug);
   const primaryColor = useTenantStore((s) => s.primaryColor);
   const primaryForeground = useTenantStore((s) => s.primaryForeground);
@@ -1336,8 +1338,28 @@ export function BrandingSync() {
       resetBrandScale();
       return;
     }
+    // Auth state is still unknown (cold-load boot window, before
+    // SessionRestorer's /auth/refresh -> /auth/me round-trip settles):
+    // accessToken reads null here regardless of whether the user is actually
+    // authed, so we cannot yet tell "logged out, use verify" apart from
+    // "authed, verify is off-limits". Do nothing and leave the pre-paint
+    // script's cached branding on screen until isInitialized flips true —
+    // every SessionRestorer path terminates by setting it.
+    if (!isInitialized) {
+      return;
+    }
     if (primaryColor) {
       paint(slug, primaryColor, primaryForeground);
+      return;
+    }
+    // Authed panel, tenant has no custom colour (e.g. `demo`, and 4 of 7
+    // tenants in dev) -> Aaramva locally. A live access token means /auth/me
+    // ALREADY answered the colour question (null == "no branding"), so do not
+    // also ask the throttled verify endpoint. Without this gate every authed
+    // load for an unbranded school hits verify — the exact thing this
+    // component exists to avoid.
+    if (accessToken) {
+      resetBrandScale();
       return;
     }
 
@@ -1357,11 +1379,13 @@ export function BrandingSync() {
     return () => {
       cancelled = true;
     };
-  }, [isPlatform, slug, primaryColor, primaryForeground]);
+  }, [isPlatform, slug, primaryColor, primaryForeground, accessToken, isInitialized]);
 
   return null;
 }
 ```
+
+Import `useAuthStore` from `@/store/auth.store` alongside the tenant store.
 
 - [ ] **Step 3: Mount it**
 
