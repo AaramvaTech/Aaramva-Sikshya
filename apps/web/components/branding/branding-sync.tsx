@@ -13,11 +13,12 @@
  */
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { rawApi } from '@/lib/api';
 import { deriveBrandScale } from '@/lib/branding/scale';
-import { applyBrandScale, resetBrandScale } from '@/lib/branding/apply';
+import { applyBrandScale, resetBrandScale, type ThemeMode } from '@/lib/branding/apply';
 import { writeBrandingCache, BRANDING_CACHE_VERSION } from '@/lib/branding/cache';
 
 interface VerifyData {
@@ -28,14 +29,14 @@ interface VerifyData {
   primaryForeground: string | null;
 }
 
-function paint(slug: string, color: string | null, fg: string | null): void {
+function paint(slug: string, color: string | null, fg: string | null, theme: ThemeMode): void {
   const scale = deriveBrandScale(color);
   if (!scale) {
     // No colour, or one we cannot parse -> Aaramva.
     resetBrandScale();
     return;
   }
-  applyBrandScale(scale, fg);
+  applyBrandScale(scale, fg, theme);
   writeBrandingCache(slug, { v: BRANDING_CACHE_VERSION, source: color!, fg, scale });
 }
 
@@ -46,6 +47,10 @@ export function BrandingSync() {
   const slug = useTenantStore((s) => s.slug);
   const primaryColor = useTenantStore((s) => s.primaryColor);
   const primaryForeground = useTenantStore((s) => s.primaryForeground);
+  // next-themes: undefined until mounted; fall back to the ThemeProvider's
+  // own defaultTheme="light" (app/providers.tsx) rather than guessing dark.
+  const { resolvedTheme } = useTheme();
+  const theme: ThemeMode = resolvedTheme === 'dark' ? 'dark' : 'light';
 
   // The platform console spans every school, so no single school's colour
   // applies. Keep it Aaramva.
@@ -68,7 +73,7 @@ export function BrandingSync() {
       return;
     }
     if (primaryColor) {
-      paint(slug, primaryColor, primaryForeground);
+      paint(slug, primaryColor, primaryForeground, theme);
       return;
     }
     // Authed panel, tenant has no custom colour (e.g. `demo`) -> Aaramva
@@ -88,7 +93,7 @@ export function BrandingSync() {
       .then((res) => {
         if (cancelled) return;
         const d = res.data.data;
-        paint(slug, d.primaryColor, d.primaryForeground);
+        paint(slug, d.primaryColor, d.primaryForeground, theme);
       })
       .catch(() => {
         // 429 (throttled), 404 (unknown school), offline — keep whatever the
@@ -97,7 +102,7 @@ export function BrandingSync() {
     return () => {
       cancelled = true;
     };
-  }, [isPlatform, slug, primaryColor, primaryForeground, accessToken, isInitialized]);
+  }, [isPlatform, slug, primaryColor, primaryForeground, accessToken, isInitialized, theme]);
 
   return null;
 }

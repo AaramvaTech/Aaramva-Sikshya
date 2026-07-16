@@ -11,6 +11,16 @@
  * this component is a server component — so the constants below are evaluated at
  * render time and interpolated in. They are the same values lib/branding uses and
  * cannot drift from them.
+ *
+ * Deliberately does NOT write --primary / --primary-foreground (final review,
+ * BRAND-1 close-out): those two are theme-dependent (lib/branding/apply.ts —
+ * scale[500] in light, scale[400] in dark), and this script runs before React
+ * mounts, so it cannot know whether next-themes is about to land on light or
+ * dark. Writing the light value here would flash the WRONG (dark-illegible)
+ * fill on every dark-mode load. Accepted trade: the ~5 --primary consumers
+ * (checkbox, badge, avatar, auth focus rings) get one frame of the CSS
+ * default before BrandingSync repaints them correctly — everything else
+ * (the 12 --color-brand-* steps, which this script still owns) is unaffected.
  */
 import { BRAND_STEPS } from '@/lib/branding/scale';
 import { BRANDING_CACHE_VERSION, brandingCacheKey } from '@/lib/branding/cache';
@@ -28,8 +38,6 @@ var b=JSON.parse(raw);if(!b||b.v!==${BRANDING_CACHE_VERSION}||!b.scale)return;
 var el=document.documentElement;
 var steps=${JSON.stringify(BRAND_STEPS)};
 for(var i=0;i<steps.length;i++){var v=b.scale[steps[i]];if(v)el.style.setProperty('--color-brand-'+steps[i],v);}
-if(b.scale[500])el.style.setProperty('--primary',b.scale[500]);
-el.style.setProperty('--primary-foreground',b.fg||'#FFFFFF');
 }catch(e){}})();`;
 
 export function BrandingScript() {
