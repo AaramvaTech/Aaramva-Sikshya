@@ -123,20 +123,15 @@ function SessionRestorer() {
               tenantId: null,
               tenantSlug: handoff.tenantSlug,
             });
-            // Best-effort backfill the tenant's branding for the impersonation
-            // session — the handoff payload only carries { slug, name } (no
-            // branding), so without this the tenant store's primaryColor stays
-            // null and BrandingSync (accessToken truthy => no verify fallback)
-            // silently paints Aaramva green for the whole session. Mirror the
-            // ordinary refresh path's /auth/me call below, but through rawApi
-            // with explicit headers: `api`'s response interceptor retries a 401
-            // by calling /auth/refresh, and an impersonation token has NO
-            // refresh cookie — a failed /auth/me here must never cascade into a
-            // failed refresh that logs the impersonator straight out. Session is
-            // already live via setAuth above, so this is purely a branding
-            // nice-to-have. try/catch/finally (not a .then/.catch/.finally
-            // chain) so even a SYNCHRONOUS throw from rawApi.get still reaches
-            // setInitialized().
+            // Backfill the tenant's branding (primaryColor) for the impersonation
+            // session. The handoff carries only slug/name, so without this fetch,
+            // BrandingSync would paint Aaramva green for the whole session.
+            // Use rawApi with explicit headers: api's interceptor retries a 401
+            // via /auth/refresh, which fails for impersonation tokens (no refresh
+            // cookie) and logs out the impersonator. This fetch is a branding
+            // nice-to-have — isInitialized is already true (set by setAuth above).
+            // The finally { setInitialized() } is a defensive no-op. Keep setAuth
+            // before this fetch to prevent the gate from getting stuck.
             (async () => {
               try {
                 const meRes = await rawApi.get<ApiResponse<MeResponse>>('/auth/me', {
