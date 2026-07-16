@@ -11,7 +11,16 @@ export const SESSION_EXPIRED_KEY = 'auth:sessionExpired';
 // ERR-1 §1.3 rule 1 — the refresh flow must NEVER run for these endpoints. A 401
 // from them surfaces the server envelope directly to the caller (e.g. a wrong
 // login shows "Invalid email or password.", not a redirect/refresh side effect).
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password'];
+const AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  // Platform-admin auth: a bad platform login must surface its own envelope, and
+  // the platform refresh must never recurse into the refresh flow.
+  '/super-admin/auth/login',
+  '/super-admin/auth/refresh',
+];
 function isAuthEndpoint(url?: string): boolean {
   return !!url && AUTH_ENDPOINTS.some((p) => url === p || url.startsWith(p));
 }
@@ -106,12 +115,18 @@ api.interceptors.response.use(
     original._retry = true;
     isRefreshing = true;
     try {
+      // A platform-admin session refreshes against the PLATFORM endpoint (public
+      // schema, its own httpOnly cookie, no tenant); everyone else uses the tenant
+      // refresh. Keyed off the live session's role, not the URL.
+      const isPlatform = useAuthStore.getState().user?.role === 'PLATFORM_ADMIN';
       const slug = currentSlug();
-      const { data } = await axios.post(
-        `${API_URL}/auth/refresh`,
-        {},
-        { withCredentials: true, headers: slug ? { 'X-Tenant-Slug': slug } : {} },
-      );
+      const { data } = isPlatform
+        ? await axios.post(`${API_URL}/super-admin/auth/refresh`, {}, { withCredentials: true })
+        : await axios.post(
+            `${API_URL}/auth/refresh`,
+            {},
+            { withCredentials: true, headers: slug ? { 'X-Tenant-Slug': slug } : {} },
+          );
       const token: string = data.data.accessToken;
       useAuthStore.getState().setAccessToken(token);
       flushQueue(null, token);

@@ -172,6 +172,30 @@ describe('AuthService', () => {
       expect(result.user.mustChangePassword).toBe(true);
     });
 
+    // BRAND-1 Task 2: the panel repaints its accent from the login response's
+    // tenant payload — /tenants/verify is throttled 10/min so login must carry these.
+    it('returns the tenant branding colours on login', async () => {
+      const hash = await bcrypt.hash('Secret123', 1);
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockUser, password_hash: hash }])
+        .mockResolvedValueOnce([
+          { ...mockTenant, primaryColor: '#7C1D3F', primaryForeground: '#FFFFFF' },
+        ]);
+      (tenantPrisma.execute as jest.Mock).mockResolvedValue(1);
+
+      const result = await authService.login({
+        email: 'ram@test.edu.np',
+        password: 'Secret123',
+      });
+
+      expect(result.tenant).toEqual(
+        expect.objectContaining({
+          primaryColor: '#7C1D3F',
+          primaryForeground: '#FFFFFF',
+        }),
+      );
+    });
+
     it('throws UnauthorizedException for wrong password', async () => {
       const hash = await bcrypt.hash('Secret123', 1);
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([

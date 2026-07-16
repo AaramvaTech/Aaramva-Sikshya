@@ -58,7 +58,11 @@ model Tenant {
 }
 
 model Plan {
-  id           String   @id @default(uuid())
+  // The LIVE `plans` table came from the raw src/database/public-schema.sql DDL,
+  // which gives id a DB-level `DEFAULT gen_random_uuid()`. plan.service.ts (and
+  // the seed) INSERT without an id and rely on it — declare the real default so
+  // Prisma never generates an `ALTER COLUMN id DROP DEFAULT` that would break them.
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
   name         String // "Basic", "Pro", "Enterprise"
   monthlyPrice Decimal
   annualPrice  Decimal
@@ -121,9 +125,28 @@ model PlatformAdmin {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  auditLogs PlatformAuditLog[]
+  auditLogs     PlatformAuditLog[]
+  refreshTokens PlatformRefreshToken[]
 
   @@map("platform_admins")
+}
+
+/// Platform-admin sessions. Mirrors the per-tenant `refresh_tokens` table, but
+/// lives in the PUBLIC schema because platform admins are not tenant-bound.
+/// Only the SHA-256 hash is stored — the raw UUID exists solely in the
+/// httpOnly `platform_refresh_token` cookie. Rotated (single-use) on every
+/// refresh; revoked on logout and on password change.
+model PlatformRefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId   String   @map("admin_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([adminId])
+  @@map("platform_refresh_tokens")
 }
 
 model PlatformAuditLog {
@@ -141,7 +164,9 @@ model PlatformAuditLog {
 }
 
 model EmailLog {
-  id                String   @id @default(uuid()) @db.Uuid
+  // Created with a DB-level `DEFAULT gen_random_uuid()` (20260711170000_add_email_log);
+  // mail.service.ts INSERTs without an id and relies on it — see the Plan note above.
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId          String?  @map("tenant_id") @db.Uuid
   recipientEmail    String   @map("recipient_email")
   emailType         String   @map("email_type")

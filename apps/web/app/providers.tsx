@@ -6,12 +6,15 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { BrandingSync } from '@/components/branding/branding-sync';
 import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
+import { superAdminApi } from '@/lib/api/super-admin.api';
 import { clearAuthMarker } from '@/lib/auth-marker';
 import { SidebarProvider } from '@/context/sidebar-context';
 import { toast } from 'sonner';
 import { getErrorDisplay } from '@/lib/errors';
+import type { ApiResponse, MeResponse } from '@/types/api.types';
 
 // ERR-1 §1.4 — map an error to a safe toast. Validation is left to forms
 // (inline field errors); session-expiry is already handled by the axios
@@ -51,11 +54,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
+  // DARK MODE REMOVED (2026-07-16). `forcedTheme` makes next-themes never put
+  // `.dark` on <html>, and the header's toggle is gone — so every `dark:`
+  // utility still in the markup is permanently inert. They are dead weight, not
+  // a live code path; stripping them from ~85 files is a mechanical follow-up,
+  // not a prerequisite.
+  //
+  // Why it went: the Tailwind v4 migration dropped tailwind.config.js and never
+  // ported TailAdmin's palette into @theme, so `dark:bg-boxdark` (32 files)
+  // generated no CSS at all. Those cards pair it with `bg-white`, so dark mode
+  // rendered white cards with `dark:text-white` on them — invisible text. Dark
+  // mode has therefore never actually worked in this app.
+  //
+  // To bring it back: delete `forcedTheme`, restore the toggle, and verify
+  // against the restored tokens. Keep this a deliberate decision, not a revert.
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
       <SidebarProvider>
         <QueryClientProvider client={queryClient}>
           <SessionRestorer />
+          <BrandingSync />
           {children}
           <Toaster />
         </QueryClientProvider>
@@ -71,6 +89,30 @@ function SessionRestorer() {
   useEffect(() => {
     if (accessToken) {
       setInitialized();
+      return;
+    }
+
+    // Platform admins hold a DIFFERENT session: public schema, no tenant, its own
+    // httpOnly cookie. Restore it from the platform refresh so a reload no longer
+    // drops the super-admin session (the access token is memory-only). A failure
+    // clears the marker, so a dead session can't bounce the user around.
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/super-admin')) {
+      superAdminApi
+        .refresh()
+        .then((res) => {
+          const { accessToken: token, admin } = res.data.data;
+          setAuth(token, {
+            id: admin.id,
+            email: admin.email,
+            firstName: admin.firstName,
+            lastName: admin.lastName,
+            role: 'PLATFORM_ADMIN',
+            tenantId: null,
+            tenantSlug: null,
+          });
+        })
+        .catch(() => clearAuthMarker())
+        .finally(() => setInitialized());
       return;
     }
 
@@ -95,7 +137,34 @@ function SessionRestorer() {
               tenantId: null,
               tenantSlug: handoff.tenantSlug,
             });
-            setInitialized();
+            // Backfill the tenant's branding (primaryColor) for the impersonation
+            // session. The handoff carries only slug/name, so without this fetch,
+            // BrandingSync would paint Aaramva green for the whole session.
+            // Use rawApi with explicit headers: api's interceptor retries a 401
+            // via /auth/refresh, which fails for impersonation tokens (no refresh
+            // cookie) and logs out the impersonator. This fetch is a branding
+            // nice-to-have — isInitialized is already true (set by setAuth above).
+            // The finally { setInitialized() } is a defensive no-op. Keep setAuth
+            // before this fetch to prevent the gate from getting stuck.
+            (async () => {
+              try {
+                const meRes = await rawApi.get<ApiResponse<MeResponse>>('/auth/me', {
+                  headers: {
+                    Authorization: `Bearer ${handoff.accessToken}`,
+                    'X-Tenant-Slug': handoff.tenantSlug,
+                  },
+                });
+                const meUser = meRes.data.data;
+                if (meUser.tenant) {
+                  setTenant(meUser.tenant);
+                }
+              } catch {
+                // Non-critical — impersonation session still works with just
+                // the token; branding stays at the Aaramva default.
+              } finally {
+                setInitialized();
+              }
+            })();
             return;
           }
         } catch {

@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { toast } from 'sonner';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { superAdminApi } from '@/lib/api/super-admin.api';
+import { getErrorDisplay } from '@/lib/errors';
 import { useAuthStore } from '@/store/auth.store';
 import { superAdminLoginSchema, type SuperAdminLoginValues } from '@/lib/schemas/super-admin.schema';
 
@@ -16,6 +16,7 @@ export default function SuperAdminLoginPage() {
   const { setAuth, accessToken, user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Skip the login screen only when a LIVE in-memory platform session exists
   // (token-based, NOT the spoofable `_auth` marker). A stale marker with no token
@@ -37,6 +38,7 @@ export default function SuperAdminLoginPage() {
 
   async function onSubmit(values: SuperAdminLoginValues) {
     setIsLoading(true);
+    setFormError(null);
     try {
       const { data } = await superAdminApi.login(values);
       const { accessToken, admin } = data.data;
@@ -51,10 +53,11 @@ export default function SuperAdminLoginPage() {
       });
       router.push('/super-admin/dashboard');
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message ?? 'Invalid email or password';
-      toast.error('Login failed', { description: message });
+      // Route through the ONE client contract (§1.4). The old bespoke fallback
+      // (`?? 'Invalid email or password'`) reported ANY failure as bad
+      // credentials — so an unreachable API sent you hunting a password problem.
+      // getErrorDisplay distinguishes network / server / credentials honestly.
+      setFormError(getErrorDisplay(err).message);
     } finally {
       setIsLoading(false);
     }
@@ -114,6 +117,15 @@ export default function SuperAdminLoginPage() {
                 <p className="mt-1 text-theme-xs text-error-500">{errors.password.message}</p>
               )}
             </div>
+
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-lg bg-error-50 px-4 py-3 text-theme-sm text-error-600 dark:bg-error-500/10 dark:text-error-400"
+              >
+                {formError}
+              </p>
+            )}
 
             <button
               type="submit"

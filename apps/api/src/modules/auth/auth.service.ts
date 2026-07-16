@@ -114,8 +114,14 @@ export class AuthService {
       user.id,
     );
 
-    const tenantRows = await this.tenantPrisma.query<{ name: string; logoUrl: string | null }>(
-      `SELECT name, "logoUrl" FROM public.tenants WHERE id = $1`,
+    const tenantRows = await this.tenantPrisma.query<{
+      name: string;
+      logoUrl: string | null;
+      primaryColor: string | null;
+      primaryForeground: string | null;
+    }>(
+      `SELECT name, "logoUrl", "primaryColor", "primaryForeground"
+       FROM public.tenants WHERE id = $1`,
       ctx.tenantId,
     );
 
@@ -126,6 +132,8 @@ export class AuthService {
         name: tenantRows[0]?.name ?? ctx.slug,
         slug: ctx.slug,
         logoUrl: tenantRows[0]?.logoUrl ?? null,
+        primaryColor: tenantRows[0]?.primaryColor ?? null,
+        primaryForeground: tenantRows[0]?.primaryForeground ?? null,
       },
       user: {
         id: user.id,
@@ -213,10 +221,22 @@ export class AuthService {
       throw new UnauthorizedException(errorBody('AUTH_TOKEN_INVALID'));
     }
 
-    let tenant: { name: string; slug: string; logoUrl: string | null } | null = null;
+    let tenant: {
+      name: string;
+      slug: string;
+      logoUrl: string | null;
+      primaryColor: string | null;
+      primaryForeground: string | null;
+    } | null = null;
     if (user.tenantId) {
-      const tenantRows = await this.tenantPrisma.query<{ name: string; logoUrl: string | null }>(
-        `SELECT name, "logoUrl" FROM public.tenants WHERE id = $1`,
+      const tenantRows = await this.tenantPrisma.query<{
+        name: string;
+        logoUrl: string | null;
+        primaryColor: string | null;
+        primaryForeground: string | null;
+      }>(
+        `SELECT name, "logoUrl", "primaryColor", "primaryForeground"
+         FROM public.tenants WHERE id = $1`,
         user.tenantId,
       );
       if (tenantRows[0]) {
@@ -224,6 +244,8 @@ export class AuthService {
           name: tenantRows[0].name,
           slug: user.tenantSlug ?? '',
           logoUrl: tenantRows[0].logoUrl,
+          primaryColor: tenantRows[0].primaryColor,
+          primaryForeground: tenantRows[0].primaryForeground,
         };
       }
     }
