@@ -38,8 +38,16 @@ const MIN_CONTRAST = 4.5;
 /** The dark half is scaled proportionally off step 500, so an anchor at L=0
  *  (a school picking pure black) would collapse steps 600-950 to identical
  *  black and break strict monotonicity — there is simply no room below zero.
- *  Floor the anchor so six darker steps still fit. 950 then lands at ~0.017. */
-const MIN_ANCHOR_L = 0.12;
+ *  This floor exists ONLY to stop that degenerate near-zero collapse, not to
+ *  push ordinary dark colours around. It must stay low: `anchorForWhite`
+ *  already lowers L when a colour actually fails 4.5:1 on white, so anything
+ *  landing above this floor on its own (e.g. dark navy, dark forest green —
+ *  both routinely >14:1 on white) needs no correction at all. A floor as high
+ *  as 0.12 was raising plenty of already-legible dark colours, silently
+ *  replacing the school's exact hex (see scale.test.ts). 0.04 is enough
+ *  headroom for the L=0 case — 950 lands at ~0.006 — without reaching into
+ *  legitimate dark brand colours. */
+const MIN_ANCHOR_L = 0.04;
 
 /** Measured from the Aaramva literals: L per step, and S as a ratio of S(500). */
 const CURVE: Record<BrandStep, { l: number; sRatio: number }> = {

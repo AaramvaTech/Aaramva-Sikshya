@@ -28,6 +28,22 @@ describe('deriveBrandScale', () => {
     expect(deriveBrandScale(MAROON)![500]).toBe(MAROON.toLowerCase());
   });
 
+  // Regression guard for MIN_ANCHOR_L: a floor that's too high (it was 0.12)
+  // raises the anchor even when anchorForWhite never needed to move it — i.e.
+  // when the colour already clears 4.5:1 vs white by a wide margin. Dark navy
+  // and dark forest green are exactly this case, and are common school
+  // colours. This must fail if the floor is ever raised back above ~0.09
+  // (the natural HSL lightness of #001a33).
+  it.each([
+    ['#001a33', 'dark navy'],
+    ['#003318', 'dark forest green'],
+  ])('leaves %s (%s) untouched at step 500 — already legible on white', (hex) => {
+    expect(contrastRatio(hex, '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+    // normaliseHex lowercases; these inputs are already lowercase, but match
+    // the pattern used elsewhere in this file for consistency.
+    expect(deriveBrandScale(hex)![500]).toBe(hex.toLowerCase());
+  });
+
   it('clamps neon yellow, which fails white at 1.40:1', () => {
     expect(contrastRatio(NEON_YELLOW, '#FFFFFF')).toBeLessThan(4.5);
     const step500 = deriveBrandScale(NEON_YELLOW)![500];
@@ -51,7 +67,7 @@ describe('deriveBrandScale', () => {
     },
   );
 
-  it.each([AARAMVA, MAROON, NEON_YELLOW, '#2563EB', '#808080', '#000000', '#FFFFFF'])(
+  it.each([AARAMVA, MAROON, NEON_YELLOW, '#2563EB', '#808080', '#000000', '#050505', '#FFFFFF'])(
     'produces a strictly monotonic lightness ramp for %s',
     (hex) => {
       const scale = deriveBrandScale(hex)!;
