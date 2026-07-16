@@ -208,12 +208,16 @@ export function Sidebar() {
       >
         <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
           {tenant.logoUrl ? (
-            <Image
+            // A school logo is tenant data whose host is not knowable at build time
+            // (MinIO in dev, R2/CDN in prod), so it cannot be allowlisted for next/image.
+            // Matches the five other sites that render this same value.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={tenant.logoUrl}
               alt={tenant.name ?? 'School'}
               width={36}
               height={36}
-              className="rounded-lg object-contain flex-shrink-0"
+              className="h-9 w-9 rounded-lg object-contain flex-shrink-0"
             />
           ) : (
             <Image
