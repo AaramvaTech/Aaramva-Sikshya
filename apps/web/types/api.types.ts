@@ -8,6 +8,10 @@ export interface TenantInfo {
   name: string;
   slug: string;
   logoUrl: string | null;
+  /** BRAND-1: the school's chosen accent; null => Aaramva default. */
+  primaryColor: string | null;
+  /** BRAND-1: server-computed readable ink for primaryColor (#FFFFFF or #0B1220). */
+  primaryForeground: string | null;
 }
 
 /**
@@ -1176,6 +1180,8 @@ export interface SchoolProfile {
   slug: string;
   logoUrl: string | null;
   primaryColor: string;
+  /** BRAND-1: server-computed readable ink for primaryColor. */
+  primaryForeground: string | null;
   description: string | null;
   motto: string | null;
   establishedYear: number | null;
