@@ -5,8 +5,8 @@ Created in Phase 0. Status values: `OPEN` → `FIXED (phase N)` → `VERIFIED (p
 
 | ID | Summary | Status | Fix phase |
 |---|---|---|---|
-| ERR-1-BUG-1 | Wrong login credentials do not show "Invalid email or password"; interceptor runs its refresh flow on the login-401 and surfaces an internal outcome (mobile: literal "No refresh token available"; web: silent page reload). | OPEN (server envelope landed Phase 1) | Phase 2 (client) |
-| ERR-1-CONTRACT-1 | Validation responses changed **400 + `message[]` → 422 + `details.fields`** — a client-facing contract change (Checkpoint-0 amendment 2). | OPEN | Phase 3 (web) / Phase 4 (mobile) |
+| ERR-1-BUG-1 | Wrong login credentials do not show "Invalid email or password"; interceptor runs its refresh flow on the login-401 and surfaces an internal outcome (mobile: literal "No refresh token available"; web: silent page reload). | **VERIFIED (Phase 5)** | Phase 2 (client) |
+| ERR-1-CONTRACT-1 | Validation responses changed **400 + `message[]` → 422 + `details.fields`** — a client-facing contract change (Checkpoint-0 amendment 2). | **VERIFIED (Phase 5)** | Phase 3 (web) / Phase 4 (mobile) |
 
 ---
 
@@ -74,7 +74,9 @@ $ curl -s ... (mobile login above) | grep -c "No refresh token available"
 **Note on method:** server behavior is proven by the live `curl` transcripts above. The rendered client strings are established by deterministic code-trace (the render logic is pure `err.message` / forced redirect) because no browser/RN automation is installed in this repo. A pixel-level browser capture of the web toast-then-reload would require adding Playwright — flagged for Srijan's call; not done in Phase 0.
 
 ### Target behavior (spec §1.3 / §1.4)
-Refresh flow **never** triggers for `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password`; the login-401 surfaces the server envelope directly, mapped by `errorCode` `AUTH_INVALID_CREDENTIALS` → inline **"Invalid email or password."** on the form (web + mobile). Fix lands in **Phase 2**.
+Refresh flow **never** triggers for `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password`; the login-401 surfaces the server envelope directly, mapped by `errorCode` `AUTH_INVALID_CREDENTIALS` → inline **"Invalid email or password."** on the form (web + mobile).
+
+**Resolution — FIXED Phase 2, VERIFIED Phase 5:** both interceptors now exclude the 4 auth endpoints (`apps/web/lib/api.ts` + `apps/mobile/lib/api.ts` `isAuthEndpoint`). Web login shows the message inline; mobile login reads the envelope via `getErrorDisplay`. Live re-probe (Phase 5, final branch): wrong login → `401 {"code":"AUTH_INVALID_CREDENTIALS","message":"Invalid email or password."}`. The literal string "No refresh token available" no longer exists in any render/Alert path (mobile acceptance grep = 0).
 
 ---
 
@@ -109,7 +111,30 @@ messages under **`error.details.fields`** (`{ field: message }`) and `error.mess
 - Any client keying validation off HTTP **400** must also accept **422**.
 - Forms should render `details.fields[field]` inline (no toast), per §1.4.
 
-Status: **OPEN** — client consumers updated in Phase 3 (web) / Phase 4 (mobile).
+Status: **DONE / VERIFIED (Phase 5)** — web `extractApiErrors` surfaces `details.fields` (Phase 3, +test); mobile `getErrorDisplay` maps `VALIDATION_FAILED` → `fields` (Phase 4, +test). No web code branches on `status === 400` (grep clean). Live re-probe: invalid payload → `422 {"code":"VALIDATION_FAILED","details":{"fields":{…}}}`.
+
+---
+
+## Final status — Phase 5 close
+
+**Every inventory item (`ERR-1-INVENTORY.md`) resolved or explicitly parked:**
+
+| Inventory area (§) | Disposition |
+|---|---|
+| §A API error contract (envelope, semantic codes, requestId, Prisma map, 422, prod/dev leak) | ✅ DONE Phase 1 — global filter + `error-codes.ts`; 5 live leak probes re-passed Phase 5 |
+| §B1/B2 web + mobile interceptors (auth-endpoint exclusion, single-flight, session-expiry) | ✅ DONE Phase 2 (ERR-1-BUG-1) |
+| §B3 global query `onError` (both clients) | ✅ DONE — web QueryCache onError (Phase 3); mobile query `retry` classifier + inline `ErrorState` (Phase 4, no toast lib) |
+| §C web display sites (extractApiErrors, hardcoded onError, bespoke extractors) | ✅ Phase 3 — `getErrorDisplay` + extractApiErrors 422; 5 hardcoded onError fixed; raw `err.message` render hits = 0. Bespoke envelope extractors left safe (documented incremental) |
+| §D mobile display sites (login/change-password/assignment-detail/marks + inventory) | ✅ Phase 4 — all routed through `getErrorDisplay`; raw `err.message` render/Alert hits = 0 |
+| §E errorCode catalog | ✅ DONE Phase 1 (`error-codes.ts`, single source of truth) |
+| §F item 8 `FORBIDDEN_SCOPE` message alignment (server) | ✅ DONE Phase 3 — all sites use the catalog default |
+| Network/offline class (first-class on mobile) | ✅ code-level proven (web vitest + mobile jest matrices); on-device airplane-mode = Srijan-verification item |
+
+**Regression suite (Phase 5, final branch):** API **640** · Web **27** · Mobile **129** — 796 tests, 0 failures. Baseline (api 621 pre-ERR-1) never dropped.
+
+**Srijan-verification (manual, no browser/device automation available here):**
+1. Web offline: stop API → load a page → offline `ErrorState` + working "Try again".
+2. Mobile airplane-mode (EAS preview APK): login + a data screen → offline message + retry.
 
 ---
 
