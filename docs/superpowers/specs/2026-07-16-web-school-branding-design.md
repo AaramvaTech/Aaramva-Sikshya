@@ -334,12 +334,18 @@ can be tested against a fake `style` object.
 `components/layout/sidebar.tsx`, `app/(school)/settings/page.tsx`,
 `components/onboarding/branding-step.tsx`, `types/api.types.ts`,
 `apps/api/src/modules/auth/auth.service.ts`
-**Edited during planning (2, discovered late):**
-- `apps/api/src/modules/settings/settings.service.ts` — `PROFILE_SELECT` selects
-  `"primaryColor"` but **never** `"primaryForeground"`, and `toProfileResponse` doesn't map
-  it. §5's repaint-on-save has no foreground to work with until it does.
-- `types/api.types.ts` `SchoolProfile` — same field, plus note its `primaryColor` is
-  non-nullable here while `TenantInfo`'s is nullable.
+**Edited during planning (1, discovered late):**
+- `types/api.types.ts` `SchoolProfile` — needs `primaryForeground: string | null` for §5's
+  repaint-on-save. Note its `primaryColor` is non-nullable here while `TenantInfo`'s is
+  nullable.
+
+**Correction (this doc was wrong, fixed during Task 2):** an earlier revision claimed
+`settings.service.ts`'s `PROFILE_SELECT` never selects `"primaryForeground"` and
+`toProfileResponse` never maps it, and listed the service as needing an edit. **That was
+false.** Commit `575f092` added both, and they are present at `settings.service.ts:60` (mapper)
+and `:78` (select). The claim came from reading truncated line-windows that happened to stop
+short of both lines. Only the web-side `SchoolProfile` **type** was actually missing the
+field — the API has always returned it.
 
 **Docs:** `CLAUDE.md` — replace the "(Web's `#1a8055` reconciliation is out of scope.)" note.
 

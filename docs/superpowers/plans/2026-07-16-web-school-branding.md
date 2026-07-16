@@ -293,32 +293,22 @@ cd apps/api && npm test
 ```
 Expected: the whole suite passes. Any existing test asserting the exact shape of `tenant` with `toEqual` (not `objectContaining`) will now fail on the two new keys — update those assertions to include them rather than loosening the matcher.
 
-- [ ] **Step 8: Expose `primaryForeground` on `GET /settings/profile`**
+- [ ] **Step 8: ~~Expose `primaryForeground` on `GET /settings/profile`~~ — NO-OP, already shipped**
 
-`PROFILE_SELECT` selects `"primaryColor"` but **not** `"primaryForeground"`, and
-`toProfileResponse` does not map it — so today the settings page has no foreground to work
-with. Task 8 needs it to repaint on save without waiting for the next `/auth/me`.
+**This step was written on a false premise and requires no code.** It claimed `PROFILE_SELECT`
+never selects `"primaryForeground"` and `toProfileResponse` never maps it. Both are in fact
+present — `settings.service.ts:60` (mapper) and `:78` (select) — added by commit `575f092`.
+The plan author read truncated line-windows that stopped short of both lines and concluded
+absence from a partial view.
 
-In `apps/api/src/modules/settings/settings.service.ts`, in `PROFILE_SELECT`, replace:
+Verify and move on:
 
-```ts
-  "logoUrl" AS logo_url, "primaryColor" AS primary_color,
+```bash
+cd apps/api && grep -n "primaryForeground\|primary_foreground" src/modules/settings/settings.service.ts
 ```
-
-with:
-
-```ts
-  "logoUrl" AS logo_url, "primaryColor" AS primary_color,
-  "primaryForeground" AS primary_foreground,
-```
-
-Add the field to the `TenantProfileRow` type (`primary_foreground: string | null;`), and in
-`toProfileResponse`, after the `primaryColor` line:
-
-```ts
-    primaryColor: row.primary_color,
-    primaryForeground: row.primary_foreground,
-```
+Expected: hits at the `TenantProfileRow` type, the mapper, and `PROFILE_SELECT`. If so, make
+**no change** to this file. Only the web-side `SchoolProfile` type is genuinely missing the
+field — that is Step 9.
 
 - [ ] **Step 9: Update the web types**
 
