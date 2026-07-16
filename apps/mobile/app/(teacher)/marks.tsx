@@ -229,10 +229,12 @@ export default function TeacherMarks() {
     for (const studentId of touchedRef.current) {
       const state = marksMap[studentId];
       if (!state) continue;
-      const err = validateMarks(studentId, state, selectedSchedule, isSplit);
-      if (err) {
+      // Local field validation — a plain message string (NOT an error object);
+      // renamed from `err` so it is clearly not a raw error being rendered.
+      const validationError = validateMarks(studentId, state, selectedSchedule, isSplit);
+      if (validationError) {
         const student = studentsResult.data.find((s) => s.id === studentId);
-        Alert.alert(t('marks.alertValidationTitle'), `${student ? `${student.firstName} ${student.lastName}` : studentId}: ${err}`);
+        Alert.alert(t('marks.alertValidationTitle'), `${student ? `${student.firstName} ${student.lastName}` : studentId}: ${validationError}`);
         return;
       }
     }

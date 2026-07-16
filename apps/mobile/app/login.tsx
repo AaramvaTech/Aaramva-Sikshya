@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
+import { getErrorDisplay } from '../lib/errors';
 import { persistLoginSession } from '../lib/session';
 import { registerPushToken } from '../lib/notifications';
 import { deleteSecureItem } from '../lib/secureStore';
@@ -104,19 +105,9 @@ export default function LoginScreen() {
       });
       void registerPushToken(); // fire-and-forget (lib/notifications, PUSH-1)
     } catch (err: unknown) {
-      // ERR-1 §1.3 / BUG-1: the login 401 now surfaces the server envelope directly
-      // (the interceptor no longer runs its refresh flow on /auth/login). Show the
-      // safe server message ("Invalid email or password."), never a raw axios or
-      // interceptor-internal string like "No refresh token available".
-      const envMsg = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      let msg = t('login.errorGeneric');
-      if (typeof envMsg === 'string' && envMsg) {
-        msg = envMsg;
-      } else if (err instanceof Error && err.message && !err.message.startsWith('Request failed')) {
-        msg = err.message.includes(': ') ? err.message.split(': ').slice(1).join(': ') : err.message;
-      }
-      setError(msg);
+      // ERR-1 §1.4 / BUG-1: map through the ONE client contract — the login 401
+      // surfaces "Invalid email or password.", never a raw axios/interceptor string.
+      setError(getErrorDisplay(err).message);
     } finally {
       setLoading(false);
     }

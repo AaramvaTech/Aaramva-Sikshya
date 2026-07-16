@@ -67,7 +67,9 @@ export async function pickSubmissionFile(): Promise<PickedFile | null> {
 
   const asset = result.assets[0];
   const problem = validatePickedFile({ size: asset.size, mimeType: asset.mimeType });
-  if (problem) throw new Error(problem);
+  // ERR-1 §1.4: our controlled, user-facing message — `userMessage` lets
+  // getErrorDisplay surface it safely (screens never read err.message directly).
+  if (problem) throw Object.assign(new Error(problem), { userMessage: problem });
 
   return {
     uri: asset.uri,
@@ -108,7 +110,8 @@ export async function uploadSubmissionFile(
     uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
   });
   if (putRes.status !== 200) {
-    throw new Error(`The file upload was rejected by storage (HTTP ${putRes.status}) — try again.`);
+    const msg = `The file upload was rejected by storage (HTTP ${putRes.status}) — try again.`;
+    throw Object.assign(new Error(msg), { userMessage: msg });
   }
 
   return presign.key;
