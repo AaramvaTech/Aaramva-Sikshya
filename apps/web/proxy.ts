@@ -39,9 +39,13 @@ export function proxy(request: NextRequest) {
     if (!hasMarker && !isSuperLogin) {
       return NextResponse.redirect(new URL('/super-admin/login', request.url));
     }
-    if (hasMarker && isSuperLogin) {
-      return NextResponse.redirect(new URL('/super-admin/dashboard', request.url));
-    }
+    // Deliberately NO "marker → dashboard" bounce here. A super-admin session is
+    // access-token-only (in-memory; no refresh token — see superAdminApi.login),
+    // so it CANNOT survive a reload while the spoofable `_auth` marker lives 7 days.
+    // Bouncing off /super-admin/login on a stale marker traps the user on the
+    // empty dashboard shell (super-admin-shell returns null with no PLATFORM_ADMIN
+    // session). The login page itself skips to the dashboard when a LIVE in-memory
+    // session exists (token-based, not marker-based).
   } else {
     // School portal + root.
     const isLogin = pathname === '/login';
