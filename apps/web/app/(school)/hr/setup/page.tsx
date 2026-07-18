@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Edit2, Plus, Trash2, Check, X, Users, Settings, Calendar } from 'lucide-react';
+import { Edit2, Plus, Trash2, Check, X, Users, Settings, Briefcase, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,19 +17,24 @@ import {
   useCreateDesignation,
   useUpdateDesignation,
   useDeleteDesignation,
+  useEmploymentTypes,
+  useCreateEmploymentType,
+  useUpdateEmploymentType,
+  useDeleteEmploymentType,
   useLeaveTypes,
   useCreateLeaveType,
   useUpdateLeaveType,
   useDeleteLeaveType,
 } from '@/lib/hooks/use-hr';
-import type { Department, Designation, LeaveType } from '@/types/api.types';
+import type { Department, Designation, EmploymentType, LeaveType } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 
-type Tab = 'departments' | 'designations' | 'leave-types';
+type Tab = 'departments' | 'designations' | 'employment-types' | 'leave-types';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'departments', label: 'Departments', icon: <Users className="h-4 w-4" /> },
   { key: 'designations', label: 'Designations', icon: <Settings className="h-4 w-4" /> },
+  { key: 'employment-types', label: 'Employment Types', icon: <Briefcase className="h-4 w-4" /> },
   { key: 'leave-types', label: 'Leave Types', icon: <Calendar className="h-4 w-4" /> },
 ];
 
@@ -64,6 +69,7 @@ export default function HrSetupPage() {
 
       {activeTab === 'departments' && <DepartmentsTab />}
       {activeTab === 'designations' && <DesignationsTab />}
+      {activeTab === 'employment-types' && <EmploymentTypesTab />}
       {activeTab === 'leave-types' && <LeaveTypesTab />}
     </div>
   );
@@ -267,6 +273,99 @@ function DesignationsTab() {
               <Badge variant="outline" className="ml-2 text-xs">{d.departmentName}</Badge>
             )}
           </div>
+        </ConfigRow>
+      ))}
+    </ConfigSection>
+  );
+}
+
+// ── Employment Types Tab ──────────────────────────────────────────────────────
+
+function EmploymentTypesTab() {
+  const { data: employmentTypes, isLoading } = useEmploymentTypes();
+  const create = useCreateEmploymentType();
+  const update = useUpdateEmploymentType();
+  const remove = useDeleteEmploymentType();
+
+  const [newName, setNewName] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  async function handleCreate() {
+    const name = newName.trim();
+    if (!name) return;
+    try {
+      await create.mutateAsync({ name });
+      setNewName('');
+      toast.success('Employment type created');
+    } catch {
+      toast.error('Failed to create employment type');
+    }
+  }
+
+  async function handleUpdate(id: string) {
+    const name = editName.trim();
+    if (!name) return;
+    try {
+      await update.mutateAsync({ id, data: { name } });
+      setEditId(null);
+      toast.success('Employment type updated');
+    } catch {
+      toast.error('Failed to update employment type');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await remove.mutateAsync(id);
+      toast.success('Employment type deleted');
+    } catch {
+      toast.error('Failed to delete employment type');
+    }
+  }
+
+  return (
+    <ConfigSection
+      title="Employment Types"
+      description="Categories of staff employment (e.g. Permanent, Part Time, Visiting Faculty)"
+      isLoading={isLoading}
+      addSlot={
+        <div className="flex gap-2">
+          <Input
+            placeholder="Employment type name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+            className="max-w-xs"
+          />
+          <Button
+            size="sm"
+            className="bg-brand-500 hover:bg-brand-600 text-white"
+            onClick={handleCreate}
+            disabled={!newName.trim() || create.isPending}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add
+          </Button>
+        </div>
+      }
+    >
+      {employmentTypes && employmentTypes.length === 0 && (
+        <EmptyState message="No employment types yet. Add one above." />
+      )}
+      {employmentTypes?.map((et: EmploymentType) => (
+        <ConfigRow
+          key={et.id}
+          isEditing={editId === et.id}
+          editValue={editName}
+          onEditChange={setEditName}
+          onStartEdit={() => { setEditId(et.id); setEditName(et.name); }}
+          onSave={() => handleUpdate(et.id)}
+          onCancel={() => setEditId(null)}
+          onDelete={() => handleDelete(et.id)}
+          isSaving={update.isPending}
+        >
+          <span className="font-medium text-sm text-gray-800 dark:text-white">{et.name}</span>
         </ConfigRow>
       ))}
     </ConfigSection>
