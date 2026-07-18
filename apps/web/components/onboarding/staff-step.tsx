@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { useCreateStaff, useEmploymentTypes } from '@/lib/hooks/use-hr';
+import { useCreateStaff, useEmploymentTypes, useRoleLabels } from '@/lib/hooks/use-hr';
+import { roleLabelLookup } from '@/lib/role-labels';
 import type { CreateStaffData } from '@/types/api.types';
 
 // Staff-creatable roles (the school owner already exists — not offered here).
@@ -39,6 +40,7 @@ interface CreatedStaff {
 export function StaffStep({ onChanged }: { onChanged?: () => void }) {
   const createStaff = useCreateStaff();
   const { data: employmentTypes } = useEmploymentTypes();
+  const { data: roleLabels } = useRoleLabels();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -56,7 +58,7 @@ export function StaffStep({ onChanged }: { onChanged?: () => void }) {
     }
   }, [employmentTypes, employmentTypeId]);
 
-  const roleLabel = ROLES.find((r) => r.value === role)?.label ?? role;
+  const roleLabel = roleLabelLookup(roleLabels, role);
 
   function reset() {
     setFirstName('');

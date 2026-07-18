@@ -13,7 +13,9 @@ import {
   useResendStaffCredentials,
   useLeaveBalance,
   useStaffDocuments,
+  useRoleLabels,
 } from '@/lib/hooks/use-hr';
+import { roleLabelLookup } from '@/lib/role-labels';
 import { hrApi } from '@/lib/api/hr.api';
 import { extractApiErrors } from '@/lib/api-errors';
 import { uploadFile } from '@/lib/upload';
@@ -81,6 +83,7 @@ export default function StaffProfilePage() {
   const { data: staff, isLoading } = useStaffDetail(id);
   const updateStaff = useUpdateStaff(id);
   const resendCreds = useResendStaffCredentials(id);
+  const { data: roleLabels } = useRoleLabels();
 
   const { data: documents, isLoading: docsLoading } = useStaffDocuments(id);
 
@@ -398,7 +401,7 @@ export default function StaffProfilePage() {
               <div className="p-5 space-y-3">
                 <InfoRow
                   label="Role"
-                  value={staff.role.replace(/_/g, ' ')}
+                  value={roleLabelLookup(roleLabels, staff.role)}
                 />
                 <InfoRow label="Department" value={staff.departmentName} />
                 <InfoRow

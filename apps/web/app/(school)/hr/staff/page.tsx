@@ -35,7 +35,9 @@ import {
   useDepartments,
   useDesignations,
   useEmploymentTypes,
+  useRoleLabels,
 } from '@/lib/hooks/use-hr';
+import { roleLabelLookup } from '@/lib/role-labels';
 import type { StaffSummary } from '@/types/api.types';
 
 function initials(name: string) {
@@ -73,6 +75,7 @@ export default function StaffListPage() {
   const { data: departments } = useDepartments();
   const { data: designations } = useDesignations();
   const { data: employmentTypes } = useEmploymentTypes();
+  const { data: roleLabels } = useRoleLabels();
   const createStaff = useCreateStaff();
 
   const allStaff = response?.data ?? [];
@@ -231,13 +234,13 @@ export default function StaffListPage() {
       <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v ?? ''); setPage(1); }}>
         <SelectTrigger className="h-9 w-44 text-sm">
           <span className="truncate">
-            {roleFilter ? roleFilter.replace(/_/g, ' ') : 'All Roles'}
+            {roleFilter ? roleLabelLookup(roleLabels, roleFilter) : 'All Roles'}
           </span>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="">All Roles</SelectItem>
           {ROLES.map((r) => (
-            <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
+            <SelectItem key={r} value={r}>{roleLabelLookup(roleLabels, r)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -289,7 +292,7 @@ export default function StaffListPage() {
               'Full Name': s.fullName,
               Department: s.departmentName ?? '',
               Designation: s.designationTitle ?? '',
-              Role: s.role.replace(/_/g, ' '),
+              Role: roleLabelLookup(roleLabels, s.role),
               'Join Date': typeof s.joinDate === 'string' ? s.joinDate : (s.joinDate?.bs ?? ''),
               Status: s.isActive ? 'Active' : 'Inactive',
             })),
@@ -326,11 +329,11 @@ export default function StaffListPage() {
               <Label>Role *</Label>
               <Select value={form.role} onValueChange={(v) => setField('role', v ?? '')}>
                 <SelectTrigger>
-                  <span className="truncate">{form.role ? form.role.replace(/_/g, ' ') : 'Select role'}</span>
+                  <span className="truncate">{form.role ? roleLabelLookup(roleLabels, form.role) : 'Select role'}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
+                    <SelectItem key={r} value={r}>{roleLabelLookup(roleLabels, r)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
