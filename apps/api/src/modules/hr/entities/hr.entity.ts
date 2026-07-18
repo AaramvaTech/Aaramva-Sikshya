@@ -191,6 +191,18 @@ export interface EmploymentTypeResponseDto {
   createdAt: string;
 }
 
+export interface RoleLabelRow {
+  role: string;
+  label: string;
+  updated_at: Date | string;
+}
+
+export interface RoleLabelResponseDto {
+  role: string;
+  label: string;
+  isOverridden: boolean;
+}
+
 export interface StaffResponseDto {
   id: string;
   userId: string;

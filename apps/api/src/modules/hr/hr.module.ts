@@ -6,6 +6,7 @@ import { HrController } from './hr.controller';
 import { DepartmentService } from './department.service';
 import { DesignationService } from './designation.service';
 import { EmploymentTypeService } from './employment-type.service';
+import { RoleLabelService } from './role-label.service';
 import { StaffService } from './staff.service';
 import { LeaveService } from './leave.service';
 import { PayrollService } from './payroll.service';
@@ -17,6 +18,7 @@ import { PayrollService } from './payroll.service';
     DepartmentService,
     DesignationService,
     EmploymentTypeService,
+    RoleLabelService,
     StaffService,
     LeaveService,
     PayrollService,

@@ -1,6 +1,6 @@
 import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
-  Patch, Post, Query, UseGuards,
+  Patch, Post, Put, Query, UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -11,12 +11,14 @@ import { Role } from '../common/enums/role.enum';
 import { DepartmentService } from './department.service';
 import { DesignationService } from './designation.service';
 import { EmploymentTypeService } from './employment-type.service';
+import { RoleLabelService } from './role-label.service';
 import { StaffService } from './staff.service';
 import { LeaveService } from './leave.service';
 import { PayrollService } from './payroll.service';
 import { CreateDepartmentDto, UpdateDepartmentDto, DepartmentQueryDto } from './dto/department.dto';
 import { CreateDesignationDto, UpdateDesignationDto, DesignationQueryDto } from './dto/designation.dto';
 import { CreateEmploymentTypeDto, UpdateEmploymentTypeDto, EmploymentTypeQueryDto } from './dto/employment-type.dto';
+import { UpsertRoleLabelDto } from './dto/role-label.dto';
 import { CreateStaffDto, UpdateStaffDto, StaffQueryDto, AddStaffDocumentDto } from './dto/staff.dto';
 import { CreateLeaveTypeDto, UpdateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
 import { OpenPayrollMonthDto, GeneratePayrollDto, AdjustSlipDto, PayrollMonthQueryDto } from './dto/payroll.dto';
@@ -41,6 +43,7 @@ export class HrController {
     private readonly departmentService: DepartmentService,
     private readonly designationService: DesignationService,
     private readonly employmentTypeService: EmploymentTypeService,
+    private readonly roleLabelService: RoleLabelService,
     private readonly staffService: StaffService,
     private readonly leaveService: LeaveService,
     private readonly payrollService: PayrollService,
@@ -134,6 +137,26 @@ export class HrController {
   @Roles(...OWNER_ONLY)
   deleteEmploymentType(@Param('id', ParseUUIDPipe) id: string) {
     return this.employmentTypeService.softDelete(id);
+  }
+
+  // ─── Role Labels ───────────────────────────────────────────────────────────
+
+  @Get('role-labels')
+  @Roles(...TEACHER_AND_ABOVE)
+  listRoleLabels() {
+    return this.roleLabelService.findAll();
+  }
+
+  @Put('role-labels/:role')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  upsertRoleLabel(@Param('role') role: string, @Body() dto: UpsertRoleLabelDto) {
+    return this.roleLabelService.upsert(role, dto.label);
+  }
+
+  @Delete('role-labels/:role')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  resetRoleLabel(@Param('role') role: string) {
+    return this.roleLabelService.reset(role);
   }
 
   // ─── Staff Profiles ────────────────────────────────────────────────────────
