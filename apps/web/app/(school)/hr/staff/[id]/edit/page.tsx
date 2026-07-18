@@ -15,6 +15,7 @@ import {
   useUpdateStaff,
   useDepartments,
   useDesignations,
+  useEmploymentTypes,
 } from '@/lib/hooks/use-hr';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -37,8 +38,6 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 
-const EMPLOYMENT_TYPES = ['PERMANENT', 'TEMPORARY', 'PART_TIME', 'CONTRACT'];
-
 export default function EditStaffPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -47,6 +46,7 @@ export default function EditStaffPage() {
   const update = useUpdateStaff(id);
   const { data: departments } = useDepartments();
   const { data: designations } = useDesignations();
+  const { data: employmentTypes } = useEmploymentTypes();
 
   const form = useForm<EditStaffFormValues>({
     resolver: zodResolver(editStaffSchema),
@@ -54,7 +54,7 @@ export default function EditStaffPage() {
       departmentId: '',
       designationId: '',
       phone: '',
-      employmentType: undefined,
+      employmentTypeId: undefined,
       baseSalary: undefined,
       panNumber: '',
       bankName: '',
@@ -73,7 +73,7 @@ export default function EditStaffPage() {
       departmentId: staff.departmentId ?? '',
       designationId: staff.designationId ?? '',
       phone: staff.phone ?? '',
-      employmentType: staff.employmentType as EditStaffFormValues['employmentType'],
+      employmentTypeId: staff.employmentTypeId,
       baseSalary: staff.baseSalary,
       panNumber: staff.panNumber ?? '',
       bankName: staff.bankName ?? '',
@@ -91,7 +91,7 @@ export default function EditStaffPage() {
         departmentId: values.departmentId || undefined,
         designationId: values.designationId || undefined,
         phone: values.phone || undefined,
-        employmentType: values.employmentType,
+        employmentTypeId: values.employmentTypeId,
         baseSalary: values.baseSalary,
         panNumber: values.panNumber || undefined,
         bankName: values.bankName || undefined,
@@ -231,7 +231,7 @@ export default function EditStaffPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="employmentType"
+                  name="employmentTypeId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Employment Type</FormLabel>
@@ -242,16 +242,14 @@ export default function EditStaffPage() {
                         <FormControl>
                           <SelectTrigger>
                             <span className="truncate">
-                              {field.value
-                                ? field.value.replace(/_/g, ' ')
-                                : 'Select type'}
+                              {employmentTypes?.find((t) => t.id === field.value)?.name ?? 'Select type'}
                             </span>
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {EMPLOYMENT_TYPES.map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {t.replace(/_/g, ' ')}
+                          {employmentTypes?.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

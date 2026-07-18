@@ -349,7 +349,7 @@ export default function StaffProfilePage() {
                 </span>
                 <span className="text-gray-400 mt-1">Employment</span>
                 <span className="font-medium">
-                  {staff.employmentType.replace(/_/g, ' ')}
+                  {staff.employmentTypeName ?? '—'}
                 </span>
               </div>
             </div>
@@ -407,7 +407,7 @@ export default function StaffProfilePage() {
                 />
                 <InfoRow
                   label="Employment Type"
-                  value={staff.employmentType.replace(/_/g, ' ')}
+                  value={staff.employmentTypeName ?? '—'}
                 />
                 <InfoRow
                   label="Join Date"
