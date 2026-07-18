@@ -741,6 +741,35 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   try/catch, and the getter itself throws `SecurityError` under Chrome "Block all cookies" and in
   sandboxed iframes.
 
+- [x] HR lookup CRUD — Employment Types + Role Labels (`docs/superpowers/plans/2026-07-18-hr-lookup-crud-plan.md`,
+  `docs/superpowers/specs/2026-07-18-hr-lookup-crud-design.md`) — two independent lookup-table
+  promotions, both following the departments/designations admin-manageable pattern. **Employment
+  Type** (`0016_employment_types.sql`): `staff_profiles.employment_type` promoted from a hardcoded
+  4-value VARCHAR to a real per-school `employment_types` table (soft-deletable, `id`/`name`/
+  `deleted_at`) — one forward-only transaction seeds the 4 legacy values (Permanent/Temporary/Part
+  Time/Contract), adds `staff_profiles.employment_type_id` FK, backfills every existing row, then
+  drops the old column (same complete-before-drop guarantee as `0002_drop_students_guardians.sql`).
+  `EmploymentTypeService` + `/hr/employment-types` CRUD (`apps/api/src/modules/hr/
+  employment-type.service.ts`; create/update PRINCIPAL_AND_ABOVE, delete OWNER_ONLY, read
+  TEACHER_AND_ABOVE) wired through `StaffService`, the staff create/edit/list/detail pages, and
+  onboarding's staff step — all now read/write `employmentTypeId`, never the retired string.
+  **Role Labels** (`0017_role_labels.sql`): a pure display-layer override table (`role` PK,
+  `label`) — an absent row means "use the default" (Title Case of the enum value, computed in
+  `RoleLabelService`, not stored); the underlying `Role` enum, `@Roles()` guards, and `RolesGuard`
+  are completely untouched. `EDITABLE_ROLES` allowlists exactly 6 of the 9 roles (SCHOOL_OWNER,
+  PRINCIPAL, ACADEMIC_COORDINATOR, ACCOUNTANT, LIBRARIAN, TEACHER — platform/student/parent roles
+  are not relabelable). `/hr/role-labels` is rename + reset only, deliberately no add/delete (the
+  role set itself is fixed by the enum). Both features get a new **HR Setup** tab
+  (`apps/web/app/(school)/hr/setup/page.tsx`) and `lib/role-labels.ts` fans the override into every
+  role-display site in the HR staff UI (staff list DataTable's Role column, staff detail, edit
+  page, onboarding trigger, CSV export) — found via grep sweep in the final task after the brief's
+  own enumeration missed the staff-list DataTable, the most visible site on the page. **Rollout:**
+  both migrations canary-applied to `demo` first (independently verified before fleet rollout),
+  then `npm run migrate:tenants` rolled them to the remaining 7 tenants in one pass (14 applied, 0
+  skipped, 0 pending); `--status` confirms all 8 tenants now on `0017_role_labels`. 665 api tests
+  passing (82 suites; unchanged since the last backend task in this plan — Tasks 7-14 were
+  frontend-only), web `tsc --noEmit` clean.
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
