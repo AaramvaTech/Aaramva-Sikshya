@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Edit2, Plus, Trash2, Check, X, Users, Settings, Briefcase, Calendar } from 'lucide-react';
+import { Edit2, Plus, Trash2, Check, X, Users, Settings, Briefcase, Calendar, Tag, RotateCcw } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,20 +21,24 @@ import {
   useCreateEmploymentType,
   useUpdateEmploymentType,
   useDeleteEmploymentType,
+  useRoleLabels,
+  useUpdateRoleLabel,
+  useResetRoleLabel,
   useLeaveTypes,
   useCreateLeaveType,
   useUpdateLeaveType,
   useDeleteLeaveType,
 } from '@/lib/hooks/use-hr';
-import type { Department, Designation, EmploymentType, LeaveType } from '@/types/api.types';
+import type { Department, Designation, EmploymentType, RoleLabel, LeaveType } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 
-type Tab = 'departments' | 'designations' | 'employment-types' | 'leave-types';
+type Tab = 'departments' | 'designations' | 'employment-types' | 'role-labels' | 'leave-types';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'departments', label: 'Departments', icon: <Users className="h-4 w-4" /> },
   { key: 'designations', label: 'Designations', icon: <Settings className="h-4 w-4" /> },
   { key: 'employment-types', label: 'Employment Types', icon: <Briefcase className="h-4 w-4" /> },
+  { key: 'role-labels', label: 'Role Labels', icon: <Tag className="h-4 w-4" /> },
   { key: 'leave-types', label: 'Leave Types', icon: <Calendar className="h-4 w-4" /> },
 ];
 
@@ -70,6 +74,7 @@ export default function HrSetupPage() {
       {activeTab === 'departments' && <DepartmentsTab />}
       {activeTab === 'designations' && <DesignationsTab />}
       {activeTab === 'employment-types' && <EmploymentTypesTab />}
+      {activeTab === 'role-labels' && <RoleLabelsTab />}
       {activeTab === 'leave-types' && <LeaveTypesTab />}
     </div>
   );
@@ -367,6 +372,104 @@ function EmploymentTypesTab() {
         >
           <span className="font-medium text-sm text-gray-800 dark:text-white">{et.name}</span>
         </ConfigRow>
+      ))}
+    </ConfigSection>
+  );
+}
+
+// ── Role Labels Tab ───────────────────────────────────────────────────────────
+
+function RoleLabelsTab() {
+  const { data: roleLabels, isLoading } = useRoleLabels();
+  const update = useUpdateRoleLabel();
+  const reset = useResetRoleLabel();
+
+  const [editRole, setEditRole] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+
+  async function handleUpdate(role: string) {
+    const label = editLabel.trim();
+    if (!label) return;
+    try {
+      await update.mutateAsync({ role, label });
+      setEditRole(null);
+      toast.success('Role label updated');
+    } catch {
+      toast.error('Failed to update role label');
+    }
+  }
+
+  async function handleReset(role: string) {
+    try {
+      await reset.mutateAsync(role);
+      toast.success('Role label reset to default');
+    } catch {
+      toast.error('Failed to reset role label');
+    }
+  }
+
+  return (
+    <ConfigSection
+      title="Role Labels"
+      description="Rename how staff roles are displayed for your school (e.g. Academic Coordinator -> Vice Principal). The underlying permissions never change."
+      isLoading={isLoading}
+      addSlot={
+        <p className="text-xs text-gray-500">
+          Renaming a role only changes its display text — it does not add a new role or change what that role can access.
+        </p>
+      }
+    >
+      {roleLabels?.map((rl: RoleLabel) => (
+        <div
+          key={rl.role}
+          className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-800 last:border-0"
+        >
+          {editRole === rl.role ? (
+            <div className="flex items-center gap-2 flex-1">
+              <Input
+                value={editLabel}
+                onChange={(e) => setEditLabel(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleUpdate(rl.role); if (e.key === 'Escape') setEditRole(null); }}
+                className="max-w-xs h-8 text-sm"
+                autoFocus
+              />
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdate(rl.role)} disabled={update.isPending}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400" onClick={() => setEditRole(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-sm text-gray-800 dark:text-white">{rl.label}</span>
+                {rl.isOverridden && <Badge variant="outline" className="text-xs">Customized</Badge>}
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                  onClick={() => { setEditRole(rl.role); setEditLabel(rl.label); }}
+                >
+                  <Edit2 className="h-3.5 w-3.5" />
+                </Button>
+                {rl.isOverridden && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                    onClick={() => handleReset(rl.role)}
+                    title="Reset to default"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       ))}
     </ConfigSection>
   );
