@@ -34,6 +34,7 @@ import {
   useCreateStaff,
   useDepartments,
   useDesignations,
+  useEmploymentTypes,
 } from '@/lib/hooks/use-hr';
 import type { StaffSummary } from '@/types/api.types';
 
@@ -42,7 +43,6 @@ function initials(name: string) {
 }
 
 const ROLES = ['TEACHER', 'ACCOUNTANT', 'LIBRARIAN', 'PRINCIPAL', 'ACADEMIC_COORDINATOR'];
-const EMPLOYMENT_TYPES = ['PERMANENT', 'TEMPORARY', 'PART_TIME', 'CONTRACT'];
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
 
 export default function StaffListPage() {
@@ -59,7 +59,7 @@ export default function StaffListPage() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', role: '',
     departmentId: '', designationId: '',
-    joinDate: '', baseSalary: '', employmentType: '',
+    joinDate: '', baseSalary: '', employmentTypeId: '',
     phone: '', gender: '', dateOfBirth: '',
   });
   const [phoneError, setPhoneError] = useState('');
@@ -72,6 +72,7 @@ export default function StaffListPage() {
   });
   const { data: departments } = useDepartments();
   const { data: designations } = useDesignations();
+  const { data: employmentTypes } = useEmploymentTypes();
   const createStaff = useCreateStaff();
 
   const allStaff = response?.data ?? [];
@@ -109,7 +110,7 @@ export default function StaffListPage() {
 
   async function handleAddStaff() {
     setPhoneError('');
-    if (!form.firstName || !form.lastName || !form.email || !form.role || !form.joinDate || !form.baseSalary) {
+    if (!form.firstName || !form.lastName || !form.email || !form.role || !form.joinDate || !form.baseSalary || !form.employmentTypeId) {
       toast.error('Please fill all required fields');
       return;
     }
@@ -131,14 +132,14 @@ export default function StaffListPage() {
         designationId: form.designationId || undefined,
         joinDate: form.joinDate,
         baseSalary: Number(form.baseSalary),
-        employmentType: form.employmentType || undefined,
+        employmentTypeId: form.employmentTypeId,
         phone: form.phone || undefined,
         gender: form.gender || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
       });
       toast.success('Staff added — login credentials are being emailed');
       setAddOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', role: '', departmentId: '', designationId: '', joinDate: '', baseSalary: '', employmentType: '', phone: '', gender: '', dateOfBirth: '' });
+      setForm({ firstName: '', lastName: '', email: '', role: '', departmentId: '', designationId: '', joinDate: '', baseSalary: '', employmentTypeId: '', phone: '', gender: '', dateOfBirth: '' });
     } catch (err) {
       toast.error(extractApiErrors(err, 'Failed to add staff').join(' • '));
     }
@@ -375,15 +376,16 @@ export default function StaffListPage() {
               <Input id="s-salary" type="number" value={form.baseSalary} onChange={(e) => setField('baseSalary', e.target.value)} placeholder="e.g. 25000" />
             </div>
             <div className="space-y-1.5">
-              <Label>Employment Type</Label>
-              <Select value={form.employmentType || 'NONE'} onValueChange={(v) => setField('employmentType', (v ?? '') === 'NONE' ? '' : (v ?? ''))}>
+              <Label>Employment Type *</Label>
+              <Select value={form.employmentTypeId} onValueChange={(v) => setField('employmentTypeId', v ?? '')}>
                 <SelectTrigger>
-                  <span className="truncate">{form.employmentType ? form.employmentType.replace(/_/g, ' ') : 'Select type'}</span>
+                  <span className="truncate">
+                    {employmentTypes?.find((t) => t.id === form.employmentTypeId)?.name ?? 'Select type'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NONE">None</SelectItem>
-                  {EMPLOYMENT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>
+                  {employmentTypes?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
