@@ -126,7 +126,7 @@ export function StaffStep({ onChanged }: { onChanged?: () => void }) {
               </SelectTrigger>
               <SelectContent>
                 {ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  <SelectItem key={r.value} value={r.value}>{roleLabelLookup(roleLabels, r.value)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -226,6 +226,11 @@ async function seedDemo(): Promise<void> {
     if (teacherRows[0]) {
       teacherUserId = teacherRows[0].id;
     } else {
+      // employment_type_id is a required FK (HR lookup CRUD) — createStaff has
+      // no default, so resolve the seeded 'Permanent' employment_types row.
+      const [permanentType] = await tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM employment_types WHERE name = 'Permanent' AND deleted_at IS NULL`,
+      );
       const staff = await staffSvc.createStaff({
         firstName:  'Roshan',
         lastName:   'Sharma',
@@ -234,6 +239,7 @@ async function seedDemo(): Promise<void> {
         role:       'TEACHER',
         joinDate:   '2023-09-01',
         baseSalary: 35000,
+        employmentTypeId: permanentType.id,
       });
       teacherUserId = staff.userId;
     }

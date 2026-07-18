@@ -13,6 +13,8 @@ import {
   useMarkAsRead,
   useMarkAllRead,
 } from '@/lib/hooks/use-communication';
+import { useRoleLabels } from '@/lib/hooks/use-hr';
+import { roleLabelLookup } from '@/lib/role-labels';
 import type { AppNotification } from '@/types/api.types';
 import { Search } from 'lucide-react';
 
@@ -120,6 +122,7 @@ function UserMenu() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const clearTenant = useTenantStore((s) => s.clear);
+  const { data: roleLabels } = useRoleLabels();
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -176,7 +179,7 @@ function UserMenu() {
               {displayName}
             </span>
             <span className="block text-theme-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {user?.role?.replace(/_/g, ' ')}
+              {user?.role ? roleLabelLookup(roleLabels, user.role) : ''}
             </span>
           </div>
           <div className="border-t border-gray-200 dark:border-gray-800 pt-3">
