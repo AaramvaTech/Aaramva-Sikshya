@@ -191,7 +191,7 @@ export default function StaffListPage() {
       accessorKey: 'role',
       header: 'Role',
       cell: ({ getValue }) => (
-        <span className="text-xs">{getValue<string>().replace(/_/g, ' ')}</span>
+        <span className="text-xs">{roleLabelLookup(roleLabels, getValue<string>())}</span>
       ),
     },
     {
