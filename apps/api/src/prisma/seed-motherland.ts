@@ -92,6 +92,9 @@ async function main(): Promise<void> {
         desigIds[title] = row.id;
       }
       log.push(`departments: ${Object.keys(deptIds).length}, designations: ${Object.keys(desigIds).length}`);
+      const [permanentType] = await q<{ id: string }>(
+        `SELECT id FROM employment_types WHERE name = 'Permanent' AND deleted_at IS NULL`,
+      );
 
       // ── 3. CLASSES + SECTIONS ─────────────────────────────────────────────
       const CLASS_NAMES = ['Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'];
@@ -158,9 +161,9 @@ async function main(): Promise<void> {
         );
         const empId = `EMP-${BS_YEAR}-${String(Number(seqRow.value)).padStart(4, '0')}`;
         await e(
-          `INSERT INTO staff_profiles (user_id, employee_id, department_id, designation_id, gender, join_date, employment_type, base_salary)
-           VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6::date, 'PERMANENT', $7)`,
-          u.id, empId, deptIds[t.dept], desigIds[t.desig], t.gender, iso(today), t.salary,
+          `INSERT INTO staff_profiles (user_id, employee_id, department_id, designation_id, gender, join_date, employment_type_id, base_salary)
+           VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6::date, $7::uuid, $8)`,
+          u.id, empId, deptIds[t.dept], desigIds[t.desig], t.gender, iso(today), permanentType.id, t.salary,
         );
         teacherPool.push(u.id);
       }
