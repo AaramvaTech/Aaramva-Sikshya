@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Copy, UserPlus, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { useCreateStaff } from '@/lib/hooks/use-hr';
+import { useCreateStaff, useEmploymentTypes } from '@/lib/hooks/use-hr';
 import type { CreateStaffData } from '@/types/api.types';
 
 // Staff-creatable roles (the school owner already exists — not offered here).
@@ -38,14 +38,23 @@ interface CreatedStaff {
 
 export function StaffStep({ onChanged }: { onChanged?: () => void }) {
   const createStaff = useCreateStaff();
+  const { data: employmentTypes } = useEmploymentTypes();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('TEACHER');
+  const [employmentTypeId, setEmploymentTypeId] = useState('');
   const [phone, setPhone] = useState('');
   const [joinDate, setJoinDate] = useState(today());
   const [baseSalary, setBaseSalary] = useState('0');
   const [created, setCreated] = useState<CreatedStaff[]>([]);
+
+  useEffect(() => {
+    if (!employmentTypeId && employmentTypes?.length) {
+      const permanent = employmentTypes.find((t) => t.name === 'Permanent');
+      setEmploymentTypeId(permanent?.id ?? employmentTypes[0].id);
+    }
+  }, [employmentTypes, employmentTypeId]);
 
   const roleLabel = ROLES.find((r) => r.value === role)?.label ?? role;
 
@@ -57,11 +66,12 @@ export function StaffStep({ onChanged }: { onChanged?: () => void }) {
     setRole('TEACHER');
     setJoinDate(today());
     setBaseSalary('0');
+    setEmploymentTypeId(employmentTypes?.find((t) => t.name === 'Permanent')?.id ?? '');
   }
 
   async function add() {
-    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
-      toast.error('First name, last name and email are required');
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !employmentTypeId) {
+      toast.error('First name, last name, email, and employment type are required');
       return;
     }
     const tempPassword = genTempPassword();
@@ -73,6 +83,7 @@ export function StaffStep({ onChanged }: { onChanged?: () => void }) {
       role,
       joinDate,
       baseSalary: Number(baseSalary) || 0,
+      employmentTypeId,
       phone: phone.trim() || undefined,
     };
     try {
@@ -114,6 +125,18 @@ export function StaffStep({ onChanged }: { onChanged?: () => void }) {
               <SelectContent>
                 {ROLES.map((r) => (
                   <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Employment Type">
+            <Select value={employmentTypeId} onValueChange={(v) => v && setEmploymentTypeId(v)}>
+              <SelectTrigger className="w-full">
+                <span>{employmentTypes?.find((t) => t.id === employmentTypeId)?.name ?? 'Select type'}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {employmentTypes?.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
