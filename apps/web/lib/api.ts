@@ -38,7 +38,10 @@ api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   const slug = currentSlug();
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (slug) config.headers['X-Tenant-Slug'] = slug;
+  // Don't clobber an explicit per-request override (e.g. the super-admin
+  // school-logo presign, which names the TARGET school, not the globally
+  // active tenant).
+  if (slug && !config.headers['X-Tenant-Slug']) config.headers['X-Tenant-Slug'] = slug;
   return config;
 });
 
