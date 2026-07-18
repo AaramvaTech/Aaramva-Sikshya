@@ -9,6 +9,7 @@ import type {
   Department,
   Designation,
   EmploymentType,
+  RoleLabel,
   LeaveType,
   LeaveRequest,
   LeaveBalance,
@@ -60,6 +61,11 @@ export const hrApi = {
   updateEmploymentType: (id: string, data: { name: string }) =>
     api.patch<ApiResponse<EmploymentType>>(`/hr/employment-types/${id}`, data),
   deleteEmploymentType: (id: string) => api.delete(`/hr/employment-types/${id}`),
+
+  listRoleLabels: () => api.get<ApiResponse<RoleLabel[]>>('/hr/role-labels'),
+  updateRoleLabel: (role: string, data: { label: string }) =>
+    api.put<ApiResponse<RoleLabel>>(`/hr/role-labels/${role}`, data),
+  resetRoleLabel: (role: string) => api.delete<ApiResponse<RoleLabel>>(`/hr/role-labels/${role}`),
 
   listLeaveTypes: () => api.get<ApiResponse<LeaveType[]>>('/hr/leave-types'),
   createLeaveType: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>

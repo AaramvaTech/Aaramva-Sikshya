@@ -172,6 +172,32 @@ export function useDeleteEmploymentType() {
   });
 }
 
+export function useRoleLabels() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'role-labels'],
+    queryFn: () => hrApi.listRoleLabels().then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useUpdateRoleLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ role, label }: { role: string; label: string }) =>
+      hrApi.updateRoleLabel(role, { label }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'role-labels'] }); },
+  });
+}
+
+export function useResetRoleLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (role: string) => hrApi.resetRoleLabel(role),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'role-labels'] }); },
+  });
+}
+
 export function useLeaveTypes() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

@@ -30,6 +30,8 @@ export type Role =
   | 'STUDENT'
   | 'PARENT';
 
+export interface RoleLabel { role: Role; label: string; isOverridden: boolean; }
+
 export interface AuthUser {
   id: string;
   email: string;
