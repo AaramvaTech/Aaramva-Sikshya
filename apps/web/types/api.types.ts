@@ -828,7 +828,8 @@ export interface StaffSummary {
   role: string;
   departmentName: string | null;
   designationTitle: string | null;
-  employmentType: string;
+  employmentTypeId: string;
+  employmentTypeName: string | null;
   joinDate: { ad: string; bs: string };
   isActive: boolean;
   photoUrl: string | null;
@@ -858,6 +859,7 @@ export interface ResendStaffCredentialsResult {
 
 export interface Department { id: string; name: string; }
 export interface Designation { id: string; title: string; departmentId: string | null; departmentName?: string | null; }
+export interface EmploymentType { id: string; name: string; }
 export interface LeaveType { id: string; name: string; daysPerYear: number; isPaid: boolean; }
 
 export interface LeaveRequest {
@@ -925,7 +927,7 @@ export interface CreateStaffData {
   firstName: string; lastName: string; role: string;
   departmentId?: string; designationId?: string;
   dateOfBirth?: string; gender?: string; phone?: string;
-  joinDate: string; employmentType?: string;
+  joinDate: string; employmentTypeId: string;
   baseSalary: number; panNumber?: string;
   bankName?: string; bankAccount?: string;
   permanentAddress?: string; temporaryAddress?: string;

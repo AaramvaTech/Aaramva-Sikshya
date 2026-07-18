@@ -138,6 +138,40 @@ export function useDeleteDesignation() {
   });
 }
 
+export function useEmploymentTypes() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'employment-types'],
+    queryFn: () => hrApi.listEmploymentTypes().then((r) => r.data.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useCreateEmploymentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) => hrApi.createEmploymentType(data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'employment-types'] }); },
+  });
+}
+
+export function useUpdateEmploymentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string } }) =>
+      hrApi.updateEmploymentType(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'employment-types'] }); },
+  });
+}
+
+export function useDeleteEmploymentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.deleteEmploymentType(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hr', 'employment-types'] }); },
+  });
+}
+
 export function useLeaveTypes() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

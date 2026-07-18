@@ -8,6 +8,7 @@ import type {
   ResendStaffCredentialsResult,
   Department,
   Designation,
+  EmploymentType,
   LeaveType,
   LeaveRequest,
   LeaveBalance,
@@ -52,6 +53,13 @@ export const hrApi = {
   updateDesignation: (id: string, data: { title: string; departmentId?: string }) =>
     api.patch<ApiResponse<Designation>>(`/hr/designations/${id}`, data),
   deleteDesignation: (id: string) => api.delete(`/hr/designations/${id}`),
+
+  listEmploymentTypes: () => api.get<ApiResponse<PaginatedResponse<EmploymentType>>>('/hr/employment-types'),
+  createEmploymentType: (data: { name: string }) =>
+    api.post<ApiResponse<EmploymentType>>('/hr/employment-types', data),
+  updateEmploymentType: (id: string, data: { name: string }) =>
+    api.patch<ApiResponse<EmploymentType>>(`/hr/employment-types/${id}`, data),
+  deleteEmploymentType: (id: string) => api.delete(`/hr/employment-types/${id}`),
 
   listLeaveTypes: () => api.get<ApiResponse<LeaveType[]>>('/hr/leave-types'),
   createLeaveType: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>
