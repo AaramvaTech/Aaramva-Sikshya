@@ -10,11 +10,13 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import { DepartmentService } from './department.service';
 import { DesignationService } from './designation.service';
+import { EmploymentTypeService } from './employment-type.service';
 import { StaffService } from './staff.service';
 import { LeaveService } from './leave.service';
 import { PayrollService } from './payroll.service';
 import { CreateDepartmentDto, UpdateDepartmentDto, DepartmentQueryDto } from './dto/department.dto';
 import { CreateDesignationDto, UpdateDesignationDto, DesignationQueryDto } from './dto/designation.dto';
+import { CreateEmploymentTypeDto, UpdateEmploymentTypeDto, EmploymentTypeQueryDto } from './dto/employment-type.dto';
 import { CreateStaffDto, UpdateStaffDto, StaffQueryDto, AddStaffDocumentDto } from './dto/staff.dto';
 import { CreateLeaveTypeDto, UpdateLeaveTypeDto, ApplyLeaveDto, ReviewLeaveDto, LeaveQueryDto } from './dto/leave.dto';
 import { OpenPayrollMonthDto, GeneratePayrollDto, AdjustSlipDto, PayrollMonthQueryDto } from './dto/payroll.dto';
@@ -38,6 +40,7 @@ export class HrController {
   constructor(
     private readonly departmentService: DepartmentService,
     private readonly designationService: DesignationService,
+    private readonly employmentTypeService: EmploymentTypeService,
     private readonly staffService: StaffService,
     private readonly leaveService: LeaveService,
     private readonly payrollService: PayrollService,
@@ -101,6 +104,36 @@ export class HrController {
   @Roles(...OWNER_ONLY)
   deleteDesignation(@Param('id', ParseUUIDPipe) id: string) {
     return this.designationService.softDelete(id);
+  }
+
+  // ─── Employment Types ──────────────────────────────────────────────────────
+
+  @Post('employment-types')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  createEmploymentType(@Body() dto: CreateEmploymentTypeDto) {
+    return this.employmentTypeService.create(dto);
+  }
+
+  @Get('employment-types')
+  @Roles(...TEACHER_AND_ABOVE)
+  listEmploymentTypes(@Query() query: EmploymentTypeQueryDto) {
+    return this.employmentTypeService.findAll(query);
+  }
+
+  @Patch('employment-types/:id')
+  @Roles(...PRINCIPAL_AND_ABOVE)
+  updateEmploymentType(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEmploymentTypeDto,
+  ) {
+    return this.employmentTypeService.update(id, dto);
+  }
+
+  @Delete('employment-types/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(...OWNER_ONLY)
+  deleteEmploymentType(@Param('id', ParseUUIDPipe) id: string) {
+    return this.employmentTypeService.softDelete(id);
   }
 
   // ─── Staff Profiles ────────────────────────────────────────────────────────

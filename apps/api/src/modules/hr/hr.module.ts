@@ -5,6 +5,7 @@ import { CredentialDeliveryModule } from '../credential-delivery/credential-deli
 import { HrController } from './hr.controller';
 import { DepartmentService } from './department.service';
 import { DesignationService } from './designation.service';
+import { EmploymentTypeService } from './employment-type.service';
 import { StaffService } from './staff.service';
 import { LeaveService } from './leave.service';
 import { PayrollService } from './payroll.service';
@@ -15,6 +16,7 @@ import { PayrollService } from './payroll.service';
   providers: [
     DepartmentService,
     DesignationService,
+    EmploymentTypeService,
     StaffService,
     LeaveService,
     PayrollService,

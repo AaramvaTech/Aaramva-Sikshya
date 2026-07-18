@@ -23,6 +23,16 @@ export interface DesignationRow {
   department_name?: string | null;
 }
 
+export interface EmploymentTypeRow {
+  id: string;
+  name: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+  deleted_at: Date | string | null;
+  total_count?: string;
+  staff_count?: string;
+}
+
 export interface UserRow {
   id: string;
   email: string;
@@ -173,6 +183,13 @@ export interface DesignationResponseDto {
   createdAt: string;
 }
 
+export interface EmploymentTypeResponseDto {
+  id: string;
+  name: string;
+  staffCount: number;
+  createdAt: string;
+}
+
 export interface StaffResponseDto {
   id: string;
   userId: string;
@@ -319,6 +336,15 @@ export function toDesignationResponse(row: DesignationRow): DesignationResponseD
     title: row.title,
     departmentId: row.department_id,
     departmentName: row.department_name ?? null,
+    createdAt: toIsoString(row.created_at),
+  };
+}
+
+export function toEmploymentTypeResponse(row: EmploymentTypeRow): EmploymentTypeResponseDto {
+  return {
+    id: row.id,
+    name: row.name,
+    staffCount: row.staff_count ? parseInt(row.staff_count, 10) : 0,
     createdAt: toIsoString(row.created_at),
   };
 }
