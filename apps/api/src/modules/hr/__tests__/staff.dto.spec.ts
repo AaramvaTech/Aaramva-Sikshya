@@ -11,6 +11,9 @@ const base = {
   role: 'TEACHER',
   joinDate: '2024-01-01',
   baseSalary: 25000,
+  // HR lookup CRUD Task 3: employmentTypeId is mandatory at the HTTP boundary
+  // (no @IsOptional), same as phone — must be present for the happy-path case.
+  employmentTypeId: 'e7f8b3a0-1234-4abc-8def-1234567890ab',
 };
 
 const errorsFor = (payload: Record<string, unknown>) =>

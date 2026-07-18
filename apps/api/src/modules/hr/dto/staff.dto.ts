@@ -1,5 +1,5 @@
 import {
-  IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional,
+  IsEmail, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional,
   IsString, IsUUID, Matches, MaxLength, Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -8,13 +8,6 @@ import { NEPAL_MOBILE_REGEX } from '../../common/utils/phone.util';
 // REG-1 §2: Nepali mobile, validated on input, stored E.164 (+977…) by the service.
 const NEPAL_MOBILE_MESSAGE =
   'phone must be a valid Nepali mobile number (9 followed by 6/7/8 and 8 digits)';
-
-export enum EmploymentType {
-  PERMANENT = 'PERMANENT',
-  TEMPORARY = 'TEMPORARY',
-  PART_TIME = 'PART_TIME',
-  CONTRACT = 'CONTRACT',
-}
 
 const STAFF_ROLES = ['SCHOOL_OWNER', 'PRINCIPAL', 'ACADEMIC_COORDINATOR', 'ACCOUNTANT', 'LIBRARIAN', 'TEACHER'];
 
@@ -71,9 +64,11 @@ export class CreateStaffDto {
   @IsNotEmpty()
   joinDate: string;
 
-  @IsOptional()
-  @IsEnum(EmploymentType)
-  employmentType?: EmploymentType;
+  // Mandatory at the HTTP boundary (no @IsOptional) — same pattern as `phone`
+  // above. TS-optional only so internal callers that bypass the ValidationPipe
+  // (seeds/tests) still compile.
+  @IsUUID()
+  employmentTypeId?: string;
 
   @IsNumber()
   @Min(0)
@@ -118,9 +113,8 @@ export class UpdateStaffDto {
   phone?: string;
 
   @IsOptional()
-  @IsOptional()
-  @IsEnum(EmploymentType)
-  employmentType?: EmploymentType;
+  @IsUUID()
+  employmentTypeId?: string;
 
   @IsOptional()
   @IsNumber()

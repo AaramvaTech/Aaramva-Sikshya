@@ -88,12 +88,12 @@ export class StaffService {
       const [prof] = await tx.$queryRawUnsafe<StaffProfileRow[]>(
         `INSERT INTO staff_profiles
            (user_id, employee_id, department_id, designation_id,
-            date_of_birth, gender, phone, join_date, employment_type,
+            date_of_birth, gender, phone, join_date, employment_type_id,
             base_salary, pan_number, bank_name, bank_account,
             permanent_address, emergency_contact_name, emergency_contact_phone)
          VALUES
            ($1::uuid, $2, $3::uuid, $4::uuid,
-            $5::date, $6, $7, $8::date, $9,
+            $5::date, $6, $7, $8::date, $9::uuid,
             $10, $11, $12, $13,
             $14, $15, $16)
          RETURNING *`,
@@ -105,7 +105,7 @@ export class StaffService {
         dto.gender ?? null,
         phoneE164, // REG-1 §2: E.164 phone on the staff profile
         dto.joinDate,
-        dto.employmentType ?? 'PERMANENT',
+        dto.employmentTypeId,
         dto.baseSalary,
         dto.panNumber ?? null,
         dto.bankName ?? null,
@@ -140,6 +140,7 @@ export class StaffService {
         is_active: true,
         department_name: null,
         designation_title: null,
+        employment_type_name: null,
       };
     });
 
@@ -206,11 +207,13 @@ export class StaffService {
     const rows = await this.tenantPrisma.query<StaffProfileRow & { total_count: string }>(
       `SELECT sp.*, u.email, u.first_name, u.last_name, u.role, u.is_active,
               d.name AS department_name, des.title AS designation_title,
+              et.name AS employment_type_name,
               COUNT(*) OVER() AS total_count
          FROM staff_profiles sp
          JOIN users u ON u.id = sp.user_id
          LEFT JOIN departments d ON d.id = sp.department_id AND d.deleted_at IS NULL
          LEFT JOIN designations des ON des.id = sp.designation_id AND des.deleted_at IS NULL
+         LEFT JOIN employment_types et ON et.id = sp.employment_type_id AND et.deleted_at IS NULL
          ${where}
          ORDER BY u.first_name ASC, u.last_name ASC
          LIMIT $${idx++} OFFSET $${idx}`,
@@ -224,11 +227,13 @@ export class StaffService {
   async getStaffDetail(id: string): Promise<StaffResponseDto> {
     const rows = await this.tenantPrisma.query<StaffProfileRow>(
       `SELECT sp.*, u.email, u.first_name, u.last_name, u.role, u.is_active,
-              d.name AS department_name, des.title AS designation_title
+              d.name AS department_name, des.title AS designation_title,
+              et.name AS employment_type_name
          FROM staff_profiles sp
          JOIN users u ON u.id = sp.user_id
          LEFT JOIN departments d ON d.id = sp.department_id AND d.deleted_at IS NULL
          LEFT JOIN designations des ON des.id = sp.designation_id AND des.deleted_at IS NULL
+         LEFT JOIN employment_types et ON et.id = sp.employment_type_id AND et.deleted_at IS NULL
          WHERE sp.id = $1::uuid AND sp.deleted_at IS NULL`,
       id,
     );
@@ -239,11 +244,13 @@ export class StaffService {
   async getMyProfile(userId: string): Promise<StaffResponseDto> {
     const rows = await this.tenantPrisma.query<StaffProfileRow>(
       `SELECT sp.*, u.email, u.first_name, u.last_name, u.role, u.is_active,
-              d.name AS department_name, des.title AS designation_title
+              d.name AS department_name, des.title AS designation_title,
+              et.name AS employment_type_name
          FROM staff_profiles sp
          JOIN users u ON u.id = sp.user_id
          LEFT JOIN departments d ON d.id = sp.department_id AND d.deleted_at IS NULL
          LEFT JOIN designations des ON des.id = sp.designation_id AND des.deleted_at IS NULL
+         LEFT JOIN employment_types et ON et.id = sp.employment_type_id AND et.deleted_at IS NULL
          WHERE sp.user_id = $1::uuid AND sp.deleted_at IS NULL`,
       userId,
     );
@@ -275,7 +282,7 @@ export class StaffService {
           SET department_id = $1::uuid,
               designation_id = $2::uuid,
               phone = $3,
-              employment_type = $4,
+              employment_type_id = $4::uuid,
               base_salary = $5,
               pan_number = $6,
               bank_name = $7,
@@ -291,7 +298,7 @@ export class StaffService {
       dto.departmentId !== undefined ? dto.departmentId : p.department_id,
       dto.designationId !== undefined ? dto.designationId : p.designation_id,
       dto.phone !== undefined ? dto.phone : p.phone,
-      dto.employmentType ?? p.employment_type,
+      dto.employmentTypeId ?? p.employment_type_id,
       dto.baseSalary !== undefined ? dto.baseSalary : p.base_salary,
       dto.panNumber !== undefined ? dto.panNumber : p.pan_number,
       dto.bankName !== undefined ? dto.bankName : p.bank_name,

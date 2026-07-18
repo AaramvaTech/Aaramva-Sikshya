@@ -41,7 +41,8 @@ const baseProfileRow = {
   temporary_address: null,
   join_date: new Date('2024-01-01'),
   end_date: null,
-  employment_type: 'PERMANENT',
+  employment_type_id: 'et-1',
+  employment_type_name: 'Permanent',
   base_salary: '25000.00',
   pan_number: null,
   bank_name: null,
@@ -237,6 +238,22 @@ describe('StaffService', () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
 
       await expect(service.getMyProfile('not-a-staff-user')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateStaff()', () => {
+    it('updates employment_type_id from the DTO', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([baseProfileRow]) // existing-row lookup
+        .mockResolvedValueOnce([{ ...baseProfileRow, employment_type_id: 'et-2' }]) // UPDATE ... RETURNING
+        .mockResolvedValueOnce([{ ...baseProfileRow, employment_type_id: 'et-2', employment_type_name: 'Contract' }]); // getStaffDetail refetch
+
+      const result = await service.updateStaff('profile-1', { employmentTypeId: 'et-2' } as any);
+
+      const updateCall = (tenantPrisma.query as jest.Mock).mock.calls[1];
+      expect(updateCall[0]).toContain('employment_type_id = $4');
+      expect(updateCall).toContain('et-2');
+      expect(result.employmentTypeName).toBe('Contract');
     });
   });
 

@@ -62,7 +62,7 @@ export interface StaffProfileRow {
   temporary_address: string | null;
   join_date: Date | string;
   end_date: Date | string | null;
-  employment_type: string;
+  employment_type_id: string;
   base_salary: string | number;
   pan_number: string | null;
   bank_name: string | null;
@@ -82,6 +82,7 @@ export interface StaffProfileRow {
   is_active?: boolean;
   department_name?: string | null;
   designation_title?: string | null;
+  employment_type_name?: string | null;
 }
 
 export interface LeaveTypeRow {
@@ -207,7 +208,8 @@ export interface StaffResponseDto {
   phone: string | null;
   joinDate: BsAdDate;
   endDate: BsAdDate | null;
-  employmentType: string;
+  employmentTypeId: string;
+  employmentTypeName: string | null;
   baseSalary: number;
   panNumber: string | null;
   bankName: string | null;
@@ -367,7 +369,8 @@ export function toStaffResponse(row: StaffProfileRow): StaffResponseDto {
     phone: row.phone,
     joinDate: toDateField(row.join_date),
     endDate: row.end_date ? toDateField(row.end_date) : null,
-    employmentType: row.employment_type,
+    employmentTypeId: row.employment_type_id,
+    employmentTypeName: row.employment_type_name ?? null,
     baseSalary: toNum(row.base_salary),
     panNumber: row.pan_number,
     bankName: row.bank_name,
