@@ -57,10 +57,37 @@ rawApi.defaults.headers.common['X-Client-Type'] = 'mobile';
 
 const api = axios.create({ baseURL: API_BASE_URL });
 
+/**
+ * RootLayout mounts the navigator (and whatever screen the current route
+ * resolves to) unconditionally — the boot spinner is only a visual overlay
+ * (see app/_layout.tsx `showLoader`). On web, a page reload re-mounts
+ * whatever route was in the address bar immediately, so a screen's queries
+ * can fire before useBootSession() finishes restoring the session from
+ * SecureStore. Wait for that restore to settle (status leaves 'booting')
+ * before letting a request read auth state, so it always goes out with the
+ * right headers instead of racing hydration.
+ *
+ * NOT applied to rawApi: useBootSession()'s own /auth/refresh call runs
+ * during 'booting' — gating rawApi the same way would deadlock it.
+ */
+function waitForBoot(): Promise<void> {
+  if (useAuthStore.getState().status !== 'booting') return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = useAuthStore.subscribe((state) => {
+      if (state.status !== 'booting') {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Request interceptor — inject X-Client-Type, Authorization, X-Tenant-Slug
 // ---------------------------------------------------------------------------
 api.interceptors.request.use(async (config) => {
+  await waitForBoot();
+
   const { accessToken, slug } = useAuthStore.getState();
   // Fall back to SecureStore during boot when the Zustand store isn't populated yet.
   const storedSlug = slug ?? (await getSecureItem('tenantSlug'));
