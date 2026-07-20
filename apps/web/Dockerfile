@@ -19,6 +19,12 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules node_modules
 COPY . .
+# NEXT_PUBLIC_* vars are inlined into the client JS bundle at `next build` time,
+# not read at container runtime — env_file: in docker-compose only reaches the
+# runtime stage, and .dockerignore excludes .env* from the build context
+# entirely, so this must come in as an explicit build ARG.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
