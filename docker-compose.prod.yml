@@ -7,8 +7,6 @@ networks:
 volumes:
   postgres_data:
   minio_data:
-  caddy_data:
-  caddy_config:
 
 services:
   postgres:
@@ -38,7 +36,11 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    # Console (9001) intentionally not published — access via SSH tunnel only.
+    ports:
+      - "127.0.0.1:8012:9000"
+    # API port (9000) proxied to the host's existing nginx via 127.0.0.1:8012 — see
+    # /etc/nginx/conf.d/aaramva-files.conf. Console (9001) intentionally not published
+    # — access via SSH tunnel only.
 
   api:
     build:
@@ -48,6 +50,12 @@ services:
     networks: [aaramva_net]
     env_file: ./apps/api/.env.production
     depends_on: [postgres, redis, minio]
+    ports:
+      - "127.0.0.1:8010:3000"
+    # Proxied to the host's existing nginx via 127.0.0.1:8010 — see
+    # /etc/nginx/conf.d/aaramva-api.conf. This VPS also hosts golden_park (:4000),
+    # birat_college (:3000) and birat_college's /docs (:5000) + /api (:8001) sub-services
+    # — no Caddy here; nginx already owns 80/443 for the existing sites.
 
   web:
     build:
@@ -57,16 +65,7 @@ services:
     networks: [aaramva_net]
     env_file: ./apps/web/.env.production
     depends_on: [api]
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    networks: [aaramva_net]
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on: [api, web]
+      - "127.0.0.1:8011:3000"
+    # Proxied to the host's existing nginx via 127.0.0.1:8011 — see
+    # /etc/nginx/conf.d/aaramva-app.conf.
