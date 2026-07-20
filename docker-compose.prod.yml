@@ -1,0 +1,71 @@
+version: '3.9'
+
+networks:
+  aaramva_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [aaramva_net]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No ports: exposed — internal to aaramva_net only.
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [aaramva_net]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    networks: [aaramva_net]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:8012:9000"
+    # API port (9000) proxied to the host's existing nginx via 127.0.0.1:8012 — see
+    # /etc/nginx/conf.d/aaramva-files.conf. Console (9001) intentionally not published
+    # — access via SSH tunnel only.
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    networks: [aaramva_net]
+    env_file: ./apps/api/.env.production
+    depends_on: [postgres, redis, minio]
+    ports:
+      - "127.0.0.1:8010:3000"
+    # Proxied to the host's existing nginx via 127.0.0.1:8010 — see
+    # /etc/nginx/conf.d/aaramva-api.conf. This VPS also hosts golden_park (:4000),
+    # birat_college (:3000) and birat_college's /docs (:5000) + /api (:8001) sub-services
+    # — no Caddy here; nginx already owns 80/443 for the existing sites.
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [aaramva_net]
+    env_file: ./apps/web/.env.production
+    depends_on: [api]
+    ports:
+      - "127.0.0.1:8011:3000"
+    # Proxied to the host's existing nginx via 127.0.0.1:8011 — see
+    # /etc/nginx/conf.d/aaramva-app.conf.

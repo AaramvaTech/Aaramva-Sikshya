@@ -1,0 +1,372 @@
+# DEPLOY-1 — VPS Production Deployment (Hostinger KVM VPS)
+
+**Status:** Draft — ready for Claude Code execution
+**Prerequisite gate:** OPS-1 — CONFIRMED CLOSED (super-admin password rotated, Postgres password
+rotated, `git filter-repo` scrub done, pre-scrub backup mirror deleted). No manual gate work
+required before Phase 1.
+
+**Source of truth for this spec:** live repo inspection on 2026-07-19 (see DEPLOY-1-recon notes).
+
+**Domain:** No domain is registered yet. This spec uses **sslip.io** — a free wildcard DNS
+service where `<anything>.<ip-with-dashes>.sslip.io` automatically resolves back to that IP,
+with no registrar or DNS zone setup required. Caddy can issue real Let's Encrypt certs against
+these hostnames exactly as it would for a normal domain, since they're genuinely resolvable.
+Once the VPS is provisioned and its IP is known (Phase 1), replace `<VPS_IP_DASHED>` below with
+that IP written with dashes instead of dots (e.g. `203.0.113.45` → `203-0-113-45`):
+
+```
+api.<VPS_IP_DASHED>.sslip.io
+app.<VPS_IP_DASHED>.sslip.io
+files.<VPS_IP_DASHED>.sslip.io
+```
+
+Before this goes in front of real students/parents (vs. testing), swap these for a real
+registered domain — it's a same-day Caddyfile + env-var change, not a re-architecture.
+
+Key facts this spec relies on:
+- API + web already have production-ready multi-stage Dockerfiles (`apps/api/Dockerfile`,
+  `apps/web/Dockerfile`). Do not rewrite these — they correctly solve the `bs-calendar`
+  build-before-compile ordering problem already.
+- Root `docker-compose.yml` is dev-only (Postgres 16-alpine + Redis only, no MinIO, no
+  api/web services). This spec replaces it for prod with `docker-compose.prod.yml` — the
+  dev compose file is left untouched.
+- Postgres version mismatch found in recon: compose pins 16-alpine, actual dev DB is 17.
+  **Decision: pin Postgres 17-alpine for production**, to match dev parity and avoid a
+  hidden version-behavior surprise on first production migration run.
+- No `.env.example` exists for `apps/web` or `apps/mobile` — Phase 0 creates both.
+- MinIO currently runs as a standalone local `.exe` in dev — this spec containerizes it
+  properly for prod with a persistent volume.
+- No reverse proxy config exists anywhere in the repo — this spec introduces Caddy.
+- Node 24 everywhere, npm (not yarn/pnpm), no monorepo tool (turborepo/nx) — each
+  package has its own lockfile and is `npm ci`'d independently. Deployment steps must
+  respect this (no workspace-wide install).
+
+---
+
+## Architecture
+
+```
+Hostinger KVM VPS (Ubuntu 24.04)
+│
+├── Caddy (reverse proxy, auto HTTPS via Let's Encrypt)
+│     api.<VPS_IP_DASHED>.sslip.io    → api container :3000
+│     app.<VPS_IP_DASHED>.sslip.io    → web container :3000
+│     files.<VPS_IP_DASHED>.sslip.io  → minio container :9000 (REQUIRED, not optional —
+│                                    see Phase 0 note on presigned URLs)
+│
+├── Docker network: aaramva_net (internal, no public ports except Caddy's 80/443)
+│     ├── postgres   (17-alpine)   — internal only, not exposed to host
+│     ├── redis      (7-alpine)    — internal only
+│     ├── minio      (latest)      — API port proxied publicly via Caddy (see above);
+│     │                                console (9001) stays internal, SSH-tunnel only
+│     ├── api         (built from apps/api/Dockerfile)
+│     └── web         (built from apps/web/Dockerfile)
+│
+└── Host-level cron: nightly pg_dump → pushed to MinIO bucket (or off-server via rclone)
+```
+
+Mobile app is not deployed to the VPS — it's an EAS build pointed at `https://api.<VPS_IP_DASHED>.sslip.io`
+(Phase 6 covers this).
+
+---
+
+## Phase 0 — Repo prep (local machine, before touching the VPS)
+
+**Goal:** close the env-file and compose gaps found in recon so the deploy has something
+correct to work from.
+
+1. Create `apps/web/.env.example` (confirmed via grep of `apps/web/lib/api.ts:5` — the code
+   does not append a path, so the full `/api/v1` suffix must be in the var itself):
+   ```
+   NEXT_PUBLIC_API_URL="https://api.<VPS_IP_DASHED>.sslip.io/api/v1"
+   NODE_ENV="production"
+   ```
+
+2. Create `apps/mobile/.env.example` (confirmed via grep of `apps/mobile/lib/api.ts:31` and
+   `apps/mobile/lib/notifications.ts` — two vars in use, not one; `EXPO_PUBLIC_PROJECT_ID`
+   is required for push registration and is read from `.env` for local dev-client builds,
+   even though `eas.json` hardcodes it per-profile for cloud builds):
+   ```
+   EXPO_PUBLIC_API_URL="https://api.<VPS_IP_DASHED>.sslip.io/api/v1"
+   EXPO_PUBLIC_PROJECT_ID="54147e05-403e-4185-9d0c-67dd5d1f6a74"
+   ```
+
+3. Update `apps/api/.env.example` to stop being stale — recon found it's missing
+   `SENTRY_DSN`, all `SMTP_*`/`MAIL_*` vars, `S3_*` vars (currently only has old `AWS_*`
+   placeholders), `KHALTI_BASE_URL`, `ESEWA_PRODUCT_CODE`/`ESEWA_FORM_URL`/`ESEWA_STATUS_URL`,
+   `API_PUBLIC_URL`, `WEB_BASE_URL`. Regenerate it directly from
+   `apps/api/src/config/env.validation.ts` so it can't drift again.
+
+4. **MinIO public access is REQUIRED, not a later decision** — confirmed via Claude Code's
+   read of `storage.service.ts`/`storage.policy.ts`: every upload and download (student/staff
+   photos, staff documents, assignment attachments, submissions, plus the one `publicRead`
+   case, school-logo) is a direct client-to-storage PUT/GET against a presigned URL, and that
+   URL's host is whatever `S3_ENDPOINT` is set to. An internal-only `S3_ENDPOINT=http://minio:9000`
+   would be unresolvable from any browser or phone outside the VPS and would break every file
+   feature in the app, not just the public-logo case. So `files.<VPS_IP_DASHED>.sslip.io` proxied
+   through Caddy to the MinIO container is mandatory:
+   ```
+   S3_ENDPOINT="https://files.<VPS_IP_DASHED>.sslip.io"
+   S3_PUBLIC_URL="https://files.<VPS_IP_DASHED>.sslip.io"
+   S3_FORCE_PATH_STYLE=true
+   ```
+   The existing MinIO bucket policy already scopes anonymous read to `tenant_*/school-logo/*`
+   only, so reusing one public endpoint for both public and presigned-private objects is safe
+   — no separate CDN host is needed.
+
+5. Write `docker-compose.prod.yml` at repo root (new file, does not touch the existing
+   dev `docker-compose.yml`):
+   ```yaml
+   version: '3.9'
+
+   networks:
+     aaramva_net:
+       driver: bridge
+
+   volumes:
+     postgres_data:
+     minio_data:
+     caddy_data:
+     caddy_config:
+
+   services:
+     postgres:
+       image: postgres:17-alpine
+       restart: unless-stopped
+       networks: [aaramva_net]
+       environment:
+         POSTGRES_USER: ${POSTGRES_USER}
+         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+         POSTGRES_DB: ${POSTGRES_DB}
+       volumes:
+         - postgres_data:/var/lib/postgresql/data
+       # No ports: exposed — internal to aaramva_net only.
+
+     redis:
+       image: redis:7-alpine
+       restart: unless-stopped
+       networks: [aaramva_net]
+
+     minio:
+       image: minio/minio:latest
+       restart: unless-stopped
+       command: server /data --console-address ":9001"
+       networks: [aaramva_net]
+       environment:
+         MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+         MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+       volumes:
+         - minio_data:/data
+       # Console (9001) intentionally not published — access via SSH tunnel only.
+
+     api:
+       build:
+         context: .
+         dockerfile: apps/api/Dockerfile
+       restart: unless-stopped
+       networks: [aaramva_net]
+       env_file: ./apps/api/.env.production
+       depends_on: [postgres, redis, minio]
+
+     web:
+       build:
+         context: apps/web
+         dockerfile: Dockerfile
+       restart: unless-stopped
+       networks: [aaramva_net]
+       env_file: ./apps/web/.env.production
+       depends_on: [api]
+
+     caddy:
+       image: caddy:2-alpine
+       restart: unless-stopped
+       networks: [aaramva_net]
+       ports:
+         - "80:80"
+         - "443:443"
+       volumes:
+         - ./Caddyfile:/etc/caddy/Caddyfile
+         - caddy_data:/data
+         - caddy_config:/config
+       depends_on: [api, web]
+   ```
+
+6. Write `Caddyfile` at repo root:
+   ```
+   api.<VPS_IP_DASHED>.sslip.io {
+       reverse_proxy api:3000
+   }
+
+   app.<VPS_IP_DASHED>.sslip.io {
+       reverse_proxy web:3000
+   }
+
+   files.<VPS_IP_DASHED>.sslip.io {
+       reverse_proxy minio:9000
+   }
+   ```
+
+7. Commit all of the above (`.env.production` files themselves are NOT committed —
+   only `.env.example` and the compose/Caddy files are).
+
+**Checkpoint 0:** Srijan reviews the compose file and Caddyfile before anything touches
+the VPS. All hostnames in this spec are placeholders using `<VPS_IP_DASHED>` — Claude Code
+must find-and-replace every instance with the real VPS IP (dashed form) once Phase 1
+provisioning gives you that IP, before writing the final Caddyfile and env files.
+
+---
+
+## Phase 1 — VPS provisioning & hardening
+
+1. Provision Ubuntu 24.04 on the Hostinger **KVM 1 plan (1 vCPU / 4GB RAM)** — confirmed
+   sizing. This is tight for 5 concurrent containers (Postgres, Redis, MinIO, API, web,
+   Caddy) with no headroom, so step 2 below is not optional for this plan size.
+2. **Add a 2GB swap file** (`fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap
+   /swapfile && swapon /swapfile`, then persist via `/etc/fstab`). This won't fix genuine
+   memory pressure but prevents the OOM killer from silently killing a container the
+   moment usage spikes — critical insurance on a 4GB box running this many services.
+3. No DNS setup needed — sslip.io resolves automatically once you have the VPS's public IP
+   (`api.<ip-dashed>.sslip.io` just works, no registrar step). Note the IP once assigned;
+   it's needed for the find-and-replace in Checkpoint 0.
+4. SSH hardening: key-only auth, disable password login and root login in `sshd_config`.
+5. `ufw`: allow only 22 (SSH), 80, 443. Deny everything else by default.
+6. `fail2ban` for SSH brute-force protection.
+7. `unattended-upgrades` for OS security patches.
+8. Install Docker Engine + Docker Compose plugin (official Docker apt repo, not the
+   Ubuntu-bundled version).
+
+**Checkpoint 1:** Srijan confirms SSH access works with keys only, `ufw status` shows only
+22/80/443 open, `free -h` shows the swap file active, and
+`dig api.<VPS_IP_DASHED>.sslip.io` resolves to the VPS IP before proceeding.
+
+**Watch for once live:** if containers start unexpectedly restarting under real usage
+(`docker compose ps` showing restarts, or `dmesg | grep -i oom`), that's the signal this
+plan is undersized — upgrade to KVM 2 rather than trying to squeeze further.
+
+---
+
+## Phase 2 — Deploy secrets & build
+
+1. On the VPS, clone the repo (already-scrubbed history, safe to clone).
+2. Create `apps/api/.env.production` and `apps/web/.env.production` directly on the VPS
+   (never committed, never passed through chat) — filled from the `.env.example` templates
+   from Phase 0, with real production values:
+   - New strong `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` (fresh values,
+     not reused from local dev)
+   - Fresh `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` (`openssl rand -hex 32` each — do not
+     reuse local dev secrets)
+   - `S3_ENDPOINT="https://files.<VPS_IP_DASHED>.sslip.io"`, `S3_PUBLIC_URL` same value,
+     `S3_FORCE_PATH_STYLE=true`, plus bucket name and access/secret keys matching the
+     `minio` container's `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`
+   - `SMTP_*` — real Brevo credentials (already rotated per MAIL-2-INC-1) — and update
+     Brevo's IP allowlist to include the new static VPS IP (this permanently fixes
+     MAIL-2-OBS-1, since the VPS IP won't change like your residential IP did)
+   - `SPARROW_SMS_TOKEN` — leave disabled (`SPARROW_SMS_ENABLED=false`) until Sparrow demo
+     account access is unblocked, unless Srijan has since gotten real credentials
+   - `ESEWA_SECRET_KEY`, `KHALTI_SECRET_KEY` — sandbox keys for now (PAY-1/PAY-2 are still
+     sandbox-proof pending)
+   - `APP_DOMAIN`, `API_PUBLIC_URL=https://api.<VPS_IP_DASHED>.sslip.io`,
+     `WEB_BASE_URL=https://app.<VPS_IP_DASHED>.sslip.io`, `ALLOWED_ORIGINS` including the web domain
+3. `docker compose -f docker-compose.prod.yml build` — this correctly builds `bs-calendar`
+   inside the API Dockerfile's build stage (already handled, per recon — no changes needed
+   to that logic).
+4. `docker compose -f docker-compose.prod.yml up -d postgres redis minio` — bring up infra
+   first, confirm all three are healthy before starting api/web.
+
+**Checkpoint 2:** Srijan confirms `.env.production` files are correctly filled (values not
+shared in chat) and that `files.<VPS_IP_DASHED>.sslip.io` DNS/Caddy is live before api/web start
+(the API's presigned-URL generation depends on `S3_ENDPOINT` resolving publicly from the
+first request onward).
+
+---
+
+## Phase 3 — Migrations & seed
+
+1. Run Prisma public-schema migrations against the new prod DB:
+   `docker compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy`
+   (latest migration per recon: `20260716110412_platform_refresh_tokens`)
+2. Run the tenant migration runner in `--dry-run` first, then for real:
+   `docker compose -f docker-compose.prod.yml run --rm api node dist/prisma/migrate-tenants.js --dry-run`
+   `docker compose -f docker-compose.prod.yml run --rm api node dist/prisma/migrate-tenants.js`
+   (latest tenant migration per recon: `0017_role_labels.sql`, ledger table
+   `tenant_<slug>._tenant_migrations`)
+3. Seed at least one demo tenant + super-admin using the existing seed command (per your
+   `seed-demo`/`seed-parameterized-school` history) — with a **new** super-admin password,
+   not `Admin@12345` and not whatever your local dev super-admin password is.
+4. Start `api` and `web` containers, then `caddy`.
+
+**Checkpoint 3:** Live proof, per your standing rule — real terminal output, not a summary:
+- `docker compose -f docker-compose.prod.yml ps` showing all 5 services healthy
+- Raw `curl -i https://api.<VPS_IP_DASHED>.sslip.io/health` (or whatever your actual health
+  endpoint path is) output
+- Raw `psql` `SELECT` read-back confirming the seeded tenant + super-admin row exist
+- Confirm HTTPS certs issued correctly (Caddy logs, or browser padlock)
+
+---
+
+## Phase 4 — Live proof: full verification pass
+
+Run against the live public URL, raw output pasted back, per your ERR-1/PAY-2 precedent:
+
+1. Login flow end-to-end (web) against the real domain
+2. Tenant isolation probe: confirm a request with tenant A's token against tenant B's
+   `X-Tenant-Slug` is rejected (BUG-4 / `TenantMatchGuard` regression check — non-negotiable
+   per your security invariants)
+3. BS/AD date round-trip on a real record — confirm no UTC+05:45 off-by-one under the
+   container's `TZ=Asia/Kathmandu` (already set in the API Dockerfile)
+4. Email delivery test (real Brevo send from the VPS, confirm the new allowlist entry works)
+5. File upload/download round-trip through MinIO via the app (not raw MinIO console)
+
+---
+
+## Phase 5 — Mobile pointing (EAS)
+
+1. Set `EXPO_PUBLIC_API_URL=https://api.<VPS_IP_DASHED>.sslip.io` in the EAS build profile
+   (`eas.json`) for a `preview` profile build.
+2. Run `eas build --profile preview --platform android` (the existing
+   `eas-build-pre-install` hook already builds `bs-calendar` first, per recon — no changes
+   needed there).
+3. Install the preview APK on a real device, confirm auth against the live API.
+4. This is the natural point to run the pending 25-step manual QA-1 checklist
+   (`QA-1-REPORT.md §6`) against real infrastructure instead of local dev.
+
+---
+
+## Phase 6 — Backups & ongoing ops
+
+1. **Nightly `pg_dump` to local disk** (simplest workable option — no second server exists
+   yet, so off-server replication is deferred, not skipped):
+   - Cron job (host-level, not in a container) running `docker compose -f
+     docker-compose.prod.yml exec -T postgres pg_dump -U ${POSTGRES_USER} ${POSTGRES_DB} |
+     gzip > /root/backups/aaramva_$(date +%Y%m%d).sql.gz`
+   - Retain 7 days locally (`find /root/backups -mtime +7 -delete` in the same cron entry)
+   - **Manually pull a copy periodically** via `scp` from your Windows machine to keep at
+     least one backup off the VPS — this is the one honest gap in this plan: if the VPS
+     itself fails, the DB and its only backups fail together until you've pulled one down.
+   - Revisit before this holds real student/parent data long-term — an off-server target
+     (a second small VPS, or an object storage bucket via `rclone`) closes this gap and is
+     worth adding once the testing phase proves the platform out.
+2. Confirm Sentry `SENTRY_DSN` is live and catching errors from the prod containers.
+3. Basic uptime monitoring (even a free tier of UptimeRobot or similar) against
+   `api.<VPS_IP_DASHED>.sslip.io/health`.
+4. Document the rollback procedure: `docker compose -f docker-compose.prod.yml down`,
+   restore `postgres_data` volume from the latest local `pg_dump`, redeploy previous image tag.
+
+---
+
+## Open decisions for Srijan before Claude Code starts Phase 1
+
+All three original open items are now resolved:
+- **Domain:** using sslip.io off the VPS's own IP (no registered domain needed for testing;
+  swap to a real domain later — see the Domain note near the top of this spec).
+- **VPS sizing:** confirmed KVM 1 (1 vCPU/4GB). Tight for 5 containers with zero headroom —
+  Phase 1 adds a swap file as insurance. Watch for containers restarting under load as the
+  signal to upgrade to KVM 2.
+- **Backup destination:** confirmed same-VPS local disk (see Phase 6) — simplest workable
+  option given no second server exists yet. Revisit before this holds real student data
+  long-term, since a VPS failure would take both the DB and its backups down together.
+
+(MinIO public-access strategy is also resolved, not open — Claude Code's read of
+`storage.service.ts`/`storage.policy.ts` confirmed every file operation is a direct
+client-to-storage presigned URL, making the `files.` subdomain proxied through Caddy
+mandatory rather than a choice. See Phase 0 step 4.)
