@@ -4,8 +4,8 @@
 /build
 
 # environment / secrets
-.env
-.env.*.local
+.env*
+!.env.local
 
 # logs
 logs
