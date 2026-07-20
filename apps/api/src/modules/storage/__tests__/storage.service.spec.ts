@@ -173,7 +173,14 @@ describe('StorageService', () => {
       expect(result.publicUrl).toBe(`http://127.0.0.1:9000/aaramva-test/${result.key}`);
     });
 
-    it('honors S3_PUBLIC_URL for the public base when set', async () => {
+    it('honors S3_PUBLIC_URL for the public HOST, but still requires the bucket segment (path-style)', async () => {
+      // Regression test: S3_PUBLIC_URL overrides the host (e.g. our nginx
+      // reverse-proxy in front of MinIO's raw S3 API), not the path — the
+      // object is only reachable at /{bucket}/{key} under S3_FORCE_PATH_STYLE.
+      // This was previously wrong: the S3_PUBLIC_URL branch skipped the bucket
+      // segment entirely, so the returned publicUrl 400'd with MinIO's
+      // "InvalidBucketName" the moment anything actually fetched it — dormant
+      // until a real deployment set S3_PUBLIC_URL (local dev never does).
       const service = await makeService({
         ...ENABLED_ENV,
         S3_PUBLIC_URL: 'https://cdn.aaramvashikshya.com',
@@ -185,7 +192,9 @@ describe('StorageService', () => {
         'demo',
         Role.SCHOOL_OWNER,
       );
-      expect(result.publicUrl).toBe(`https://cdn.aaramvashikshya.com/${result.key}`);
+      expect(result.publicUrl).toBe(
+        `https://cdn.aaramvashikshya.com/aaramva-test/${result.key}`,
+      );
     });
   });
 

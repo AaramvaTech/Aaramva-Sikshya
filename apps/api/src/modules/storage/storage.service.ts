@@ -88,10 +88,15 @@ export class StorageService implements OnModuleInit {
       requestChecksumCalculation: 'WHEN_REQUIRED',
       responseChecksumValidation: 'WHEN_REQUIRED',
     });
-    this.publicBase = (
-      this.config.get<string>('S3_PUBLIC_URL') ||
-      `${endpoint.replace(/\/+$/, '')}/${this.bucket}`
-    ).replace(/\/+$/, '');
+    // Both branches must land on the same shape: {root}/{bucket}/{key}. Whether
+    // root comes from an explicit S3_PUBLIC_URL (e.g. our nginx reverse-proxy in
+    // front of MinIO) or is derived from S3_ENDPOINT, the object is still only
+    // reachable at the bucket-qualified path under S3_FORCE_PATH_STYLE — S3_PUBLIC_URL
+    // overrides the HOST, not the path. (A bucket-rooted CDN/custom-domain public
+    // base — e.g. an R2 public bucket domain — is a different shape and is not
+    // supported by this single env var; that would need its own config knob.)
+    const publicRoot = this.config.get<string>('S3_PUBLIC_URL') || endpoint;
+    this.publicBase = `${publicRoot.replace(/\/+$/, '')}/${this.bucket}`;
     this.logger.log(`File storage enabled — bucket "${this.bucket}" at ${endpoint}`);
     // BUG-1: enabled means the S3_* env is present, NOT that the backend is
     // reachable. Probe once at startup (fire-and-forget) so a down/misconfigured
