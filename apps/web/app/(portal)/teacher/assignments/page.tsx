@@ -2,14 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ClipboardList, Paperclip, Plus } from 'lucide-react';
+import { ClipboardList, Loader2, Paperclip, Plus, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { todayBs } from 'bs-calendar';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { QueryErrorState } from '@/components/shared/query-error-state';
 import { BsDate } from '@/components/shared/bs-date';
+import { BsDateInput } from '@/components/shared/bs-date-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -17,8 +30,9 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { useClasses, useClassSubjects } from '@/lib/hooks/use-academic';
-import { useAssignments } from '@/lib/hooks/use-assignments';
+import { useAssignments, useCreateAssignment } from '@/lib/hooks/use-assignments';
 import { useMySections } from '@/lib/hooks/use-timetable';
+import { uploadFile } from '@/lib/upload';
 import type { AssignmentStatus } from '@/types/api.types';
 
 /**
@@ -75,6 +89,7 @@ export default function TeacherAssignmentsPage() {
   const [subjectId, setSubjectId] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Guards the "auto-pick my first class" effect so it fires once per scope
   // — reset when the teacher deliberately toggles back from "All classes" to
@@ -152,9 +167,7 @@ export default function TeacherAssignmentsPage() {
       title="Assignments"
       description="Homework and assignments — publish, collect and review submissions"
       action={
-        // TODO(WEB-P Phase 2 Task 5): wire up assignment creation here.
-        // Left visible-but-inert per the Task 4 brief — creation is Task 5's.
-        <Button disabled title="Coming soon">
+        <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-1.5 h-4 w-4" /> New Assignment
         </Button>
       }
@@ -177,6 +190,7 @@ export default function TeacherAssignmentsPage() {
             <Skeleton key={i} className="h-16 rounded-lg" />
           ))}
         </div>
+        <CreateAssignmentDialog open={createOpen} onOpenChange={setCreateOpen} />
       </div>
     );
   }
@@ -336,6 +350,270 @@ export default function TeacherAssignmentsPage() {
           )}
         </div>
       )}
+
+      <CreateAssignmentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
+  );
+}
+
+// ── Create dialog ────────────────────────────────────────────────────────────
+//
+// WEB-P Phase 2 Task 5 — net-new: mobile is view/review-only for teachers, so
+// admin's own `/assignments` create dialog (apps/web/app/(school)/assignments/
+// page.tsx ~197-360) is the only existing reference. Same fields, same
+// backend contract (POST /assignments always creates a DRAFT — there is no
+// "publish immediately" option; publishing is Task 4's separate detail-page
+// action), same FILE-1 upload flow (`uploadFile(file, 'assignment-attachment')`,
+// no base64 fallback — attachments are a new feature, storage must be
+// configured, matching admin's own comment on this exact point).
+//
+// One deliberate difference: the Class/Section pickers default toward the
+// teacher's own sections (`useMySections`, Task 1) instead of admin's
+// school-wide `useClasses()` cascade — same reasoning as Tasks 2-4's "my
+// scope first, never hard-blocked" resolution. A "Browse all classes" link
+// (mirroring the list page one component up) swaps to the full cascade, and
+// a teacher with zero owned sections falls into that mode automatically
+// (nothing to narrow to).
+//
+// Race-guard note (the same bug class Tasks 3 and 4 each found and fixed):
+// `myClasses` is derived from the async `useMySections()` call, and on a
+// fresh mount (or the first render after the teacher opens the dialog before
+// that query has resolved) an unguarded `myClasses.length === 0` check would
+// be indistinguishable from "the teacher genuinely has no sections" — which
+// would flash the FULL school-wide class list into the Class select for one
+// render before flipping back to "my classes" once the real data arrives.
+// Unlike Task 3/4's bug, this never reaches a network call with a wrong
+// filter (there is no query keyed on this dialog's `classId` besides
+// `useClassSubjects`, which is already internally gated on `!!classId`) —
+// but it is the identical "async lookup feeds a render decision with no gate
+// tied to its own loading state" shape, so it's closed the same way:
+// `effectiveScopeAll` only falls back to the all-classes list once
+// `mySectionsLoading` is false, and the Class select shows a "Loading…"
+// placeholder (empty options) rather than any class list at all while it
+// settles.
+function CreateAssignmentDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const createAssignment = useCreateAssignment();
+  const { data: mySections, isLoading: mySectionsLoading } = useMySections();
+  const { data: allClasses } = useClasses();
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [scopeAll, setScopeAll] = useState(false);
+  const [classId, setClassId] = useState('');
+  const [sectionId, setSectionId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [attachments, setAttachments] = useState<{ key: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const autoSelectedRef = useRef(false);
+
+  const { data: classSubjects } = useClassSubjects(classId);
+  const bsYear = useMemo(() => todayBs().year, []);
+
+  const myClasses = useMemo(() => {
+    const map = new Map<string, string>();
+    (mySections ?? []).forEach((s) => map.set(s.classId, s.className));
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [mySections]);
+
+  // See the race-guard note above the component: only treat "zero owned
+  // sections" as real once useMySections has actually settled.
+  const effectiveScopeAll = scopeAll || (!mySectionsLoading && myClasses.length === 0);
+
+  const classOptions = effectiveScopeAll
+    ? (allClasses ?? []).map((c) => ({ id: c.id, name: c.name }))
+    : myClasses;
+
+  const sections = effectiveScopeAll
+    ? (allClasses?.find((c) => c.id === classId)?.sections ?? [])
+    : (mySections ?? [])
+        .filter((s) => s.classId === classId)
+        .map((s) => ({ id: s.sectionId, name: s.sectionName }));
+
+  const selectedClassName = classOptions.find((c) => c.id === classId)?.name;
+  const showBrowseAllLink = !scopeAll && !mySectionsLoading && myClasses.length > 0;
+
+  // Auto-pick the teacher's first own class — same "auto-pick" convention
+  // Task 2's attendance picker and this page's own list-filter established.
+  // Guarded to fire once, and only while still in "my classes" mode.
+  useEffect(() => {
+    if (autoSelectedRef.current || effectiveScopeAll || classId) return;
+    if (myClasses.length > 0) {
+      autoSelectedRef.current = true;
+      setClassId(myClasses[0].id);
+    }
+  }, [effectiveScopeAll, classId, myClasses]);
+
+  async function handleAttachment(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (attachments.length >= 5) return toast.error('Maximum 5 attachments');
+    if (file.size > 10 * 1024 * 1024) return toast.error('File must be less than 10 MB');
+    setUploading(true);
+    try {
+      // FILE-1 presign flow (kind assignment-attachment). No base64 fallback
+      // here — attachments are a new feature, storage must be configured.
+      const uploaded = await uploadFile(file, 'assignment-attachment');
+      if (uploaded.mode !== 'key') {
+        toast.error('File storage is not configured on the server');
+        return;
+      }
+      setAttachments((prev) => [...prev, { key: uploaded.key, name: file.name }]);
+    } catch {
+      toast.error('Attachment upload failed');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  function reset() {
+    setTitle(''); setDescription(''); setScopeAll(false); setClassId(''); setSectionId('');
+    setSubjectId(''); setDueDate(''); setAttachments([]);
+    autoSelectedRef.current = false;
+  }
+
+  async function handleCreate() {
+    if (!title.trim()) return toast.error('Title is required');
+    if (!classId) return toast.error('Select a class');
+    if (!subjectId) return toast.error('Select a subject');
+    if (!dueDate) return toast.error('Pick a due date');
+    try {
+      await createAssignment.mutateAsync({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        classId,
+        sectionId: sectionId || undefined,
+        subjectId,
+        dueDate,
+        attachmentKeys: attachments.map((a) => a.key),
+      });
+      toast.success('Assignment created as DRAFT — publish it to notify the class');
+      reset();
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message ?? 'Failed to create assignment';
+      toast.error(msg);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New Assignment</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Essay: Rivers of Nepal" maxLength={200} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Description (optional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Instructions for students…" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Class</Label>
+              <Select
+                value={classId}
+                onValueChange={(v) => { setClassId(v ?? ''); setSectionId(''); setSubjectId(''); }}
+              >
+                <SelectTrigger>
+                  <span>
+                    {selectedClassName ?? (mySectionsLoading && !scopeAll ? 'Loading…' : 'Select class')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {classOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Section</Label>
+              <Select value={sectionId || 'whole'} onValueChange={(v) => setSectionId(!v || v === 'whole' ? '' : v)}>
+                <SelectTrigger>
+                  <span>{sections.find((s) => s.id === sectionId)?.name ?? 'Whole class'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whole">Whole class</SelectItem>
+                  {sections.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {showBrowseAllLink ? (
+            <button
+              type="button"
+              onClick={() => setScopeAll(true)}
+              className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              Browse all classes →
+            </button>
+          ) : scopeAll && myClasses.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => { setScopeAll(false); setClassId(''); setSectionId(''); setSubjectId(''); autoSelectedRef.current = false; }}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              ← Back to my classes
+            </button>
+          ) : null}
+
+          <div className="space-y-1.5">
+            <Label>Subject</Label>
+            <Select value={subjectId} onValueChange={(v) => setSubjectId(v ?? '')}>
+              <SelectTrigger>
+                <span>{classSubjects?.find((cs) => cs.subjectId === subjectId)?.subjectName ?? (classId ? 'Select subject' : 'Select a class first')}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {classSubjects?.map((cs) => (
+                  <SelectItem key={cs.subjectId} value={cs.subjectId}>{cs.subjectName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <BsDateInput label="Due date (BS)" value={dueDate} onChange={setDueDate} minYear={bsYear} maxYear={bsYear + 1} />
+          <div className="space-y-1.5">
+            <Label>Attachments (optional, max 5 × 10 MB)</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {attachments.map((a) => (
+                <span key={a.key} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs dark:bg-gray-800">
+                  <Paperclip className="h-3 w-3" /> {a.name}
+                  <button type="button" onClick={() => setAttachments((prev) => prev.filter((x) => x.key !== a.key))}>
+                    <X className="h-3 w-3 text-red-500" />
+                  </button>
+                </span>
+              ))}
+              <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx" className="hidden" onChange={handleAttachment} />
+              <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Paperclip className="mr-1 h-3.5 w-3.5" />}
+                Add file
+              </Button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+          <Button onClick={handleCreate} disabled={createAssignment.isPending || uploading}>
+            {createAssignment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create draft
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
