@@ -100,6 +100,15 @@ export const hrApi = {
   getLeaveBalance: (userId: string) =>
     api.get<ApiResponse<LeaveBalance[]>>(`/hr/leave/balance/${userId}`),
 
+  // WEB-P Phase 3 Task 4 — GET /hr/payroll/staff/:userId/history
+  // (TEACHER_AND_ABOVE). Route accepts an arbitrary :userId path param, but
+  // payroll.service.ts's getStaffSalaryHistory calls assertSelfOrHrAdmin
+  // before querying — only the caller's own id (or an HR-admin caller) is
+  // allowed through; see docs/web/phase-3-ownership-findings.md. The web
+  // page always passes the logged-in user's own id.
+  getMyPayrollHistory: (userId: string) =>
+    api.get<ApiResponse<SalarySlip[]>>(`/hr/payroll/staff/${userId}/history`),
+
   listPayrollMonths: () =>
     api.get<ApiResponse<{ data: PayrollMonth[]; meta: { page: number; limit: number; total: number } }>>('/hr/payroll/months'),
   getPayrollSlips: (monthId: string) =>

@@ -304,6 +304,21 @@ export function useCancelLeave() {
   });
 }
 
+// WEB-P Phase 3 Task 4 — teacher's own payroll slip history
+// (GET /hr/payroll/staff/:userId/history). Distinct query key
+// ('payroll-history') from the admin usePayrollSlips's ('payroll-slips',
+// monthId) key — different route, different shape (all months for one
+// staff member vs. one month for all staff), never invalidate one from
+// the other.
+export function useMyPayrollHistory(userId: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'payroll-history', userId],
+    queryFn: () => hrApi.getMyPayrollHistory(userId).then((r) => r.data.data),
+    enabled: !!slug && !!userId,
+  });
+}
+
 export function usePayrollMonths() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

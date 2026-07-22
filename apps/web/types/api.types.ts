@@ -953,6 +953,12 @@ export interface SalarySlip {
   notes: string | null;
   paymentDate: { ad: string; bs: string } | null;
   paymentMethod: string | null;
+  // WEB-P Phase 3 Task 4: always populated (when the slip was generated) —
+  // the DTO in apps/api's hr.entity.ts already returns it, this type was
+  // just missing it. Used as the per-slip visible date on the teacher's own
+  // payroll history screen, since there is no reliable month/year label
+  // field (see docs/web/phase-3-ownership-findings.md).
+  createdAt: string;
 }
 
 export interface CreateStaffData {
