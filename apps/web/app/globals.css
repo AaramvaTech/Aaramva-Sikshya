@@ -11,9 +11,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit);
+  /* WEB-P Phase 1 Task 3 — Devanagari fallback appended to the base font
+     stack. The browser natively falls back per-glyph: Latin text keeps
+     rendering in Outfit, and any Devanagari (Nepali) text anywhere in the
+     app automatically renders in Noto Sans Devanagari, with zero
+     per-component wiring (unlike mobile's discrete-font NpText wrapper,
+     which RN needs because it has no font-family fallback-by-Unicode-range). */
+  --font-sans: var(--font-outfit), var(--font-noto-devanagari);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-outfit);
+  --font-heading: var(--font-outfit), var(--font-noto-devanagari);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

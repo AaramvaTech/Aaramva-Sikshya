@@ -5,8 +5,10 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
+import { useLocaleStore } from '@/store/locale.store';
 import { authApi } from '@/lib/api/auth.api';
 import { canAccess, homeRoute } from '@/lib/route-access';
 import { AccessDenied } from './access-denied';
@@ -30,8 +32,10 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const { accessToken, isInitialized, user, logout } = useAuthStore();
   const { name: tenantName, clear: clearTenant } = useTenantStore();
+  const { locale, setLocale } = useLocaleStore();
 
   useEffect(() => {
     if (isInitialized && !accessToken) {
@@ -89,11 +93,35 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
               href={homeRoute(user?.role)}
               className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
-              Home
+              {t('nav.home')}
             </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center rounded-full border border-gray-200 p-0.5 text-xs font-medium dark:border-gray-700">
+            <button
+              onClick={() => setLocale('en')}
+              aria-pressed={locale === 'en'}
+              className={
+                locale === 'en'
+                  ? 'rounded-full bg-brand-50 px-2 py-1 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                  : 'rounded-full px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+              }
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLocale('np')}
+              aria-pressed={locale === 'np'}
+              className={
+                locale === 'np'
+                  ? 'rounded-full bg-brand-50 px-2 py-1 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                  : 'rounded-full px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+              }
+            >
+              नेपाली
+            </button>
+          </div>
           <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
             {roleLabel}
           </span>
@@ -101,7 +129,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
             onClick={handleLogout}
             className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
           >
-            Sign out
+            {t('actions.signOut')}
           </button>
         </div>
       </header>

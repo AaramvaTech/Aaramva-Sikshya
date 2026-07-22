@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
+import { I18nextProvider } from 'react-i18next';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { BrandingSync } from '@/components/branding/branding-sync';
+import { i18n } from '@/lib/i18n';
 import { rawApi } from '@/lib/api';
 import { authApi } from '@/lib/api/auth.api';
 import { superAdminApi } from '@/lib/api/super-admin.api';
@@ -69,16 +71,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // To bring it back: delete `forcedTheme`, restore the toggle, and verify
   // against the restored tokens. Keep this a deliberate decision, not a revert.
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
-      <SidebarProvider>
-        <QueryClientProvider client={queryClient}>
-          <SessionRestorer />
-          <BrandingSync />
-          {children}
-          <Toaster />
-        </QueryClientProvider>
-      </SidebarProvider>
-    </ThemeProvider>
+    <I18nextProvider i18n={i18n}>
+      <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
+        <SidebarProvider>
+          <QueryClientProvider client={queryClient}>
+            <SessionRestorer />
+            <BrandingSync />
+            {children}
+            <Toaster />
+          </QueryClientProvider>
+        </SidebarProvider>
+      </ThemeProvider>
+    </I18nextProvider>
   );
 }
 
