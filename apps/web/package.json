@@ -6,7 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "preinstall": "node ../../scripts/vendor-bs-calendar.mjs",
+    "preinstall": "node scripts/preinstall.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
