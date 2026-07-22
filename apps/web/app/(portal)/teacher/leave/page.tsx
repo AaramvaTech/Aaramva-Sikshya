@@ -191,8 +191,14 @@ export default function TeacherLeavePage() {
     <div className="space-y-5">
       <PageHeader title="My Leave" description="Your leave balance, past requests, and applications" />
 
-      {/* Leave balance summary */}
-      {balancesLoading ? (
+      {/* Leave balance summary. Guard on `!userId` too, not just
+          `balancesLoading` — useLeaveBalance is `enabled: !!userId`, and
+          TanStack Query keeps `isLoading` false while a query is merely
+          disabled, so without this a not-yet-hydrated userId would
+          misrender as "No leave types configured yet." for one frame
+          instead of loading (mirrors the same guard on the Payroll
+          screen, apps/web/app/(portal)/teacher/payroll/page.tsx). */}
+      {!userId || balancesLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-2xl" />
