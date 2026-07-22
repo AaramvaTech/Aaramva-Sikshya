@@ -22,13 +22,31 @@
 //   1. Re-run this script (`npm run vendor:bs-calendar` from the repo root,
 //      or `node scripts/vendor-bs-calendar.mjs`) to rebuild the package and
 //      regenerate apps/web/vendor/bs-calendar.tgz with the new contents.
-//   2. Run `npm install` (NOT `npm ci`) inside apps/web to refresh
-//      apps/web/package-lock.json's integrity hash against the new tarball.
-// Skipping step 2 means the next clean install (`npm ci` inside apps/web,
-// including the one Docker's `deps` stage runs) will fail with an npm
-// integrity-mismatch error. The tarball filename itself never changes
-// (always `bs-calendar.tgz`), so apps/web/package.json's dependency string
-// never needs editing when packages/bs-calendar's version bumps — only the
+//   2. Run `npm install bs-calendar@file:./vendor/bs-calendar.tgz` inside
+//      apps/web — NOT plain `npm install` and NOT `npm ci`.
+// CONFIRMED THE HARD WAY (2026-07-22, merging the BS-2083 calendar hotfix
+// into a branch that already had this vendoring in place): plain
+// `npm install` does NOT refresh anything here. Because the tarball's
+// package NAME, VERSION, and PATH are all unchanged, npm considers the
+// dependency already satisfied and skips re-hashing/re-extracting it —
+// even after deleting node_modules/bs-calendar and reinstalling from
+// scratch. The lockfile's integrity hash silently keeps pointing at the
+// OLD tarball's content, node_modules/bs-calendar keeps serving the OLD
+// compiled output, and nothing errors — it just quietly runs stale code.
+// Only an EXPLICIT re-resolution (`npm install bs-calendar@file:...`,
+// naming the exact spec) forces npm to re-hash the current tarball
+// contents and update both node_modules and the lockfile. Verify you
+// actually got the new content after step 2 — don't just trust the
+// command succeeded: `node -e "console.log(require('bs-calendar').todayBs())"`
+// from inside apps/web and confirm it matches a value you independently
+// expect, not the pre-change one.
+// Skipping step 2 (or doing it wrong) means the next clean install
+// (`npm ci` inside apps/web, including the one Docker's `deps` stage runs)
+// will either fail with an integrity-mismatch error, or — worse — silently
+// succeed while serving stale data, if the stale hash still happens to
+// match what's on disk. The tarball filename itself never changes (always
+// `bs-calendar.tgz`), so apps/web/package.json's dependency string never
+// needs editing when packages/bs-calendar's version bumps — only the
 // lockfile's integrity hash does, via step 2.
 
 import { execSync } from 'node:child_process';

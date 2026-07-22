@@ -820,7 +820,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   scripts that flag would have silently skipped. GOTCHA carried into the new vendor script's own
   comments: because the dependency is a packed **tarball** (not a directory), `package-lock.json`
   pins an integrity hash of its contents — changing `packages/bs-calendar` requires re-running
-  the vendor script AND `npm install` (not `npm ci`) in `apps/web`, or the lockfile goes stale.
+  the vendor script AND (per a correction confirmed 2026-07-22 while syncing the BS-2083 hotfix
+  into this branch) `npm install bs-calendar@file:./vendor/bs-calendar.tgz` — an EXPLICIT
+  re-resolution, not plain `npm install`, which does NOT detect a tarball content change at the
+  same name/version/path and silently keeps serving stale data even after a full `node_modules`
+  wipe — in `apps/web`, or the lockfile (and node_modules) stays stale.
   91/91 web vitest + 26/26 bs-calendar jest passing (unchanged baseline), web `tsc --noEmit` clean.
   **Unplanned but load-bearing finding from the required BS-date live-verification step (not
   caused by this task — the fork and the real package were logically identical):** the FIX-3 note
@@ -867,8 +871,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   student" escape link) but broke the phase's own stated goal for its target users on every normal
   return visit. Fixed with one `useEffect` in `school-shell.tsx` mirroring the existing
   `PLATFORM_ADMIN` pattern; **TEACHER deliberately excluded** (still correctly renders the real
-  admin `/dashboard` — that's the intended state until a separate later cutover phase). Live-
-  reproduced via Playwright both before (confirmed broken) and after (confirmed fixed) the patch.
+  admin `/dashboard` — that's the intended state until a separate later cutover phase). The bug's
+  existence was established by directly reading `proxy.ts` + the pre-fix `school-shell.tsx`, not
+  a live "before" repro; only the fix itself was live-reproduced via Playwright (both STUDENT and
+  PARENT correctly landing on their portal home after a simulated return visit — a full
+  `page.goto('/')`, which resets in-memory state while the marker cookie persists).
   **Live proof (Playwright against the running dev stack, not curl):** existing demo-tenant shim
   accounts (`student@demo.school`/`parent@demo.school`/`teacher@demo.school`) had passwords
   temporarily overridden to a known value, verified, then restored with a 401 read-back — same
@@ -889,6 +896,38 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   roles) before landing T4's fix. Not pushed; no PR opened — awaiting the human's go-ahead before
   Phase 2 (Teacher core: attendance-marking grid, marks-entry grid, assignment view/review + net-
   new creation flow, the 4 pre-existing TEACHER 403 bugs).
+
+- [x] WEB-P branch synced with the BS-2083 calendar hotfix (merged `main` into
+  `feat/web-p-phase-1-auth-shell`, 2026-07-22) — the standalone
+  `hotfix/bs-2083-ashadh-days` PR (see FIX-3 above) landed on `main` first; merged (not rebased,
+  per instruction, to preserve this branch's already-reviewed history) rather than cherry-picked,
+  so future syncs stay simple. **Two real conflicts, both resolved correctly:** (1) `CLAUDE.md`'s
+  FIX-3 note — both branches had edited it independently (WEB-P documented the *discovery*, the
+  hotfix documented the *fix*) — resolved by keeping the hotfix's fuller, accurate version
+  entire, since it's a strict superset of the story. (2) `apps/web/lib/bs-calendar/data.ts` —
+  modify/delete: WEB-P's Phase 0.5 had already deleted this file (de-forked to depend on the real
+  `packages/bs-calendar` package instead); `main`'s hotfix had modified it in place (since `main`
+  never had the de-fork). Resolved by keeping the **deletion** — the file is superseded by the
+  now-fixed real package, which this branch already depends on via the vendored tarball;
+  resurrecting it would have reintroduced the exact fork Phase 0.5 removed. **Found and fixed a
+  second, more severe form of the tarball-vendoring gotcha while verifying the merge actually took
+  effect:** plain `npm install` (as the vendor script's own comment previously — incorrectly —
+  recommended) does **not** refresh `apps/web`'s consumption of `packages/bs-calendar` when the
+  tarball's *content* changes at the same package name/version/path — confirmed by deleting
+  `node_modules/bs-calendar` entirely and reinstalling from scratch, which still served the stale,
+  pre-hotfix date. Only an **explicit re-resolution**,
+  `npm install bs-calendar@file:./vendor/bs-calendar.tgz`, forces npm to re-hash and re-extract.
+  `scripts/vendor-bs-calendar.mjs`'s top comment, `docs/api-contracts/DEPLOY-1-vps-deployment.md`,
+  and the Phase 0.5 entry above were all corrected to the verified remedy — this matters for the
+  next real deploy, since Docker's `deps` stage runs the equivalent of a fresh install every
+  build and a silently-stale tarball there would ship wrong dates to production with no error.
+  Live-verified end-to-end after the fix: logged into the admin portal as an existing demo-tenant
+  account (temporarily shimmed password, restored + 401-proven after) and confirmed
+  `/students/new`'s Admission Date (BS) defaults to **2083 / Shrawan / 6** (today, post-hotfix) —
+  screenshot-confirmed, not just asserted. `apps/web` 299/299 tests passing, `tsc --noEmit` clean,
+  unchanged from pre-merge baseline.
+
+**PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
   invoice.overdue cover finance meanwhile.

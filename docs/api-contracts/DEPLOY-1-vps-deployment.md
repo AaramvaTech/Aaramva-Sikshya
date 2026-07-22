@@ -38,7 +38,10 @@ Key facts this spec relies on:
   `docker build`/`docker compose build web`** — the Docker build itself has no access to
   `packages/bs-calendar` and cannot regenerate the tarball. See that script's top-of-file
   comment for the npm-integrity gotcha (changing `packages/bs-calendar` requires re-running
-  the script AND `npm install`, not `npm ci`, inside `apps/web` to refresh the lockfile).
+  the script, then `npm install bs-calendar@file:./vendor/bs-calendar.tgz` — an EXPLICIT
+  re-resolution — inside `apps/web` to refresh the lockfile; plain `npm install` does not
+  detect a tarball content change at the same name/version/path and will silently keep
+  serving stale data, confirmed 2026-07-22 while syncing the BS-2083 calendar hotfix).
 - Root `docker-compose.yml` is dev-only (Postgres 16-alpine + Redis only, no MinIO, no
   api/web services). This spec replaces it for prod with `docker-compose.prod.yml` — the
   dev compose file is left untouched.
