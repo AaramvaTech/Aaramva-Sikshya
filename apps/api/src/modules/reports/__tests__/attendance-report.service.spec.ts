@@ -19,8 +19,10 @@ describe('AttendanceReportService', () => {
 
   describe('getTrends — BS-month folding of SQL day rows', () => {
     it('folds days across a BS month boundary into exact buckets (hand-computed)', async () => {
-      // 1 Shrawan 2083 = 2026-07-16 (Step-0-verified). Two Ashadh days + two
-      // Shrawan days with known counts:
+      // 1 Shrawan 2083 = 2026-07-17 (bs-calendar hotfix: Ashadh 2083 has 32
+      // days, not 31, and Shrawan has 31, not 32 — a transposed pair in
+      // BS_MONTH_DATA's 2083 row). That means 2026-07-16 is 32 Ashadh, still
+      // the SAME BS month as 07-14/07-15 — three Ashadh days + one Shrawan day:
       queryMock.mockResolvedValueOnce([
         { date: new Date('2026-07-14T00:00:00Z'), present: '8', absent: '2', late: '0', leave: '0' },
         { date: new Date('2026-07-15T00:00:00Z'), present: '7', absent: '1', late: '1', leave: '1' },
@@ -34,13 +36,13 @@ describe('AttendanceReportService', () => {
       expect(result.buckets).toEqual([
         {
           bucket: '2083-03', label: 'Ashadh 2083',
-          // 8+7 present, 2+1 absent, 0+1 late, 0+1 leave → total 20, rate (15+1)/20 = 80
-          present: 15, absent: 3, late: 1, leave: 1, total: 20, attendanceRate: 80,
+          // 8+7+9 present, 2+1+1 absent, 0+1+0 late, 0+1+0 leave → total 30, rate (24+1)/30 = 83.3
+          present: 24, absent: 4, late: 1, leave: 1, total: 30, attendanceRate: 83.3,
         },
         {
           bucket: '2083-04', label: 'Shrawan 2083',
-          // 9+6, 1+3, 0+1, 0 → total 20, rate (15+1)/20 = 80
-          present: 15, absent: 4, late: 1, leave: 0, total: 20, attendanceRate: 80,
+          // 6, 3, 1, 0 → total 10, rate (6+1)/10 = 70
+          present: 6, absent: 3, late: 1, leave: 0, total: 10, attendanceRate: 70,
         },
       ]);
     });
