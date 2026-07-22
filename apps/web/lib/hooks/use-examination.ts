@@ -26,6 +26,20 @@ export function useExamSchedules(params: {
   });
 }
 
+// WEB-P Phase 2 Task 3 — teacher-portal marks picker. Unlike useExamSchedules
+// (admin's school-wide cascade), this is already scoped server-side to the
+// calling teacher's own (class, subject) timetable pairs — no classId param
+// needed or accepted by the backend endpoint.
+export function useMySchedules(examTypeId?: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['exam-schedules', 'my', examTypeId],
+    queryFn: () =>
+      examinationApi.getMySchedules(examTypeId ? { examTypeId } : undefined).then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
 export function useMarksForSchedule(scheduleId: string) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

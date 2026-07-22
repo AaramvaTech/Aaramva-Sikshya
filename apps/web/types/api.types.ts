@@ -714,6 +714,16 @@ export interface ExamSchedule {
   room: string | null;
 }
 
+// WEB-P Phase 2 Task 3 — GET /exams/schedules/my response row. Unlike
+// ExamSchedule (whose className/subjectName are optional, admin resolves
+// them client-side via classSubjects), the backend joins these directly for
+// this endpoint (see toMyExamScheduleResponse), so they're always present.
+export interface MyExamSchedule extends ExamSchedule {
+  examTypeName: string;
+  subjectName: string;
+  className: string;
+}
+
 export interface MarkRecord {
   id?: string;
   studentId: string;
