@@ -29,7 +29,7 @@ import {
 } from '@/lib/hooks/use-hr';
 import { useAuthStore } from '@/store/auth.store';
 import { getErrorDisplay } from '@/lib/errors';
-import type { LeaveRequest } from '@/types/api.types';
+import type { LeaveBalance, LeaveRequest } from '@/types/api.types';
 
 /**
  * WEB-P Phase 3 Task 2 — teacher's own leave: balance, own past requests,
@@ -43,6 +43,73 @@ import type { LeaveRequest } from '@/types/api.types';
  * the caller's own. Reuses useLeaveTypes/useApplyLeave/useLeaveBalance as-is;
  * useMyLeave/useCancelLeave are new (added alongside this page).
  */
+
+/**
+ * Extracted (not inlined) so the userId-hydration guard can be pinned with a
+ * render test in isolation from the rest of the page's Tabs/DataTable/Select
+ * tree — see __tests__/leave-balance-summary.test.tsx. Guard on `!userId`,
+ * not just `isLoading` — useLeaveBalance is `enabled: !!userId`, and
+ * TanStack Query keeps `isLoading` false while a query is merely disabled,
+ * so without this a not-yet-hydrated userId would misrender as "No leave
+ * types configured yet." for one frame instead of loading (mirrors the same
+ * guard on the Payroll screen, apps/web/app/(portal)/teacher/payroll/page.tsx).
+ */
+export function LeaveBalanceSummary({
+  userId,
+  isLoading,
+  isError,
+  balances,
+  onRetry,
+}: {
+  userId: string | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  balances: LeaveBalance[] | undefined;
+  onRetry: () => void;
+}) {
+  if (!userId || isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return <QueryErrorState onRetry={onRetry} message="Couldn't load your leave balance." />;
+  }
+
+  if (!balances || balances.length === 0) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-400 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500">
+        No leave types configured yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {balances.map((b) => (
+        <div
+          key={b.leaveTypeId}
+          className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900"
+        >
+          <p className="text-sm font-semibold text-gray-800 dark:text-white mb-2">
+            {b.leaveTypeName}
+          </p>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">{b.balance}</span>
+            <span className="text-xs text-gray-400">/ {b.entitlement} days left</span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{b.used} used</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function TeacherLeavePage() {
   const userId = useAuthStore((s) => s.user?.id);
   const queryClient = useQueryClient();
@@ -191,44 +258,13 @@ export default function TeacherLeavePage() {
     <div className="space-y-5">
       <PageHeader title="My Leave" description="Your leave balance, past requests, and applications" />
 
-      {/* Leave balance summary. Guard on `!userId` too, not just
-          `balancesLoading` — useLeaveBalance is `enabled: !!userId`, and
-          TanStack Query keeps `isLoading` false while a query is merely
-          disabled, so without this a not-yet-hydrated userId would
-          misrender as "No leave types configured yet." for one frame
-          instead of loading (mirrors the same guard on the Payroll
-          screen, apps/web/app/(portal)/teacher/payroll/page.tsx). */}
-      {!userId || balancesLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
-          ))}
-        </div>
-      ) : balancesError ? (
-        <QueryErrorState onRetry={() => refetchBalances()} message="Couldn't load your leave balance." />
-      ) : !balances || balances.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-400 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500">
-          No leave types configured yet.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {balances.map((b) => (
-            <div
-              key={b.leaveTypeId}
-              className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900"
-            >
-              <p className="text-sm font-semibold text-gray-800 dark:text-white mb-2">
-                {b.leaveTypeName}
-              </p>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">{b.balance}</span>
-                <span className="text-xs text-gray-400">/ {b.entitlement} days left</span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{b.used} used</p>
-            </div>
-          ))}
-        </div>
-      )}
+      <LeaveBalanceSummary
+        userId={userId}
+        isLoading={balancesLoading}
+        isError={balancesError}
+        balances={balances}
+        onRetry={() => refetchBalances()}
+      />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
