@@ -43,6 +43,20 @@ import type { MarkRecord } from '@/types/api.types';
  * marks for any schedule (accountability lives in entered_by, not a
  * permissions gate — see CLAUDE.md). Scoping the picker to useMySchedules()
  * is a UX convenience only; no extra check is added on top of it.
+ *
+ * Post-review fix: `selectedSchedule` (and the `className` roster filter
+ * derived from it) resolves asynchronously via useMySchedules(), same as
+ * `scheduleId` from the URL — a fresh load of /teacher/marks?scheduleId=X
+ * (bookmark, shared link, or plain refresh, not just tampering) starts both
+ * queries cold. useStudents is gated with `enabled: !!selectedSchedule` so it
+ * cannot fire against an unresolved (undefined) className before the schedule
+ * lookup settles — closing a race where MarksGrid could otherwise mount once
+ * against a wrong, unfiltered roster and never reconcile (MarksGrid's `rows`
+ * Map is seeded once from its `students` prop; it only ever re-reconciles
+ * against a later `existingMarks` prop, not a later `students` prop). A
+ * distinct "schedule not found" state now covers a resolved-but-missing
+ * scheduleId instead of silently falling through with a fake fullMarks
+ * default.
  */
 export default function TeacherMarksPage() {
   const router = useRouter();
@@ -75,11 +89,28 @@ export default function TeacherMarksPage() {
   // Filter by class name (not UUID), same quirk as admin's /exams/marks page
   // — exam schedules are class-wide, and this is the field useStudents
   // matches reliably even for students whose class_id is NULL.
-  const { data: studentsRes, isLoading: studentsLoading } = useStudents({
-    className: selectedSchedule ? selectedSchedule.className : undefined,
-    status: 'ACTIVE',
-    limit: 100,
-  });
+  //
+  // GOTCHA (fixed post-review): `className` here depends on `selectedSchedule`,
+  // which itself depends on the async `useMySchedules()` lookup above. On a
+  // fresh load of /teacher/marks?scheduleId=X (a bookmark, a shared link, or
+  // a plain refresh — not just URL tampering), useStudents and useMySchedules
+  // both start cold. Without a gate, useStudents could fire once with
+  // className: undefined before schedules resolves, pulling an unrelated,
+  // unfiltered roster — and MarksGrid's internal `rows` Map (seeded once on
+  // mount from its `students` prop) would stay keyed off that wrong list even
+  // after the real roster arrives, since MarksGrid only re-reconciles `rows`
+  // against a later `existingMarks` prop, never against a later `students`
+  // prop. `enabled: !!selectedSchedule` keeps this query off entirely until
+  // the schedule is actually resolved, so MarksGrid never mounts against a
+  // stale/wrong roster in the first place.
+  const { data: studentsRes, isLoading: studentsLoading } = useStudents(
+    {
+      className: selectedSchedule?.className,
+      status: 'ACTIVE',
+      limit: 100,
+    },
+    { enabled: !!selectedSchedule },
+  );
   const enrolledStudents = studentsRes?.data?.data ?? [];
 
   // Existing marks for pre-population only (studentId + marks fields, no student info)
@@ -205,16 +236,69 @@ export default function TeacherMarksPage() {
   }
 
   // ── Step 2: schedule chosen → marks grid ────────────────────────────────────
+  const changeScheduleButton = (
+    <Button variant="ghost" size="sm" onClick={() => router.push('/teacher/marks')}>
+      <ArrowLeft className="mr-1 h-4 w-4" />
+      Change Schedule
+    </Button>
+  );
+
+  // The schedule list (useMySchedules) is itself still resolving — hold off
+  // on rendering anything that depends on `selectedSchedule` (including the
+  // toolbar and the useStudents-fed grid below) until it settles. Prevents
+  // the stale-roster race the fix above is closing at the query level too.
+  if (schedulesLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Enter Marks" description="Record exam marks for students" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (schedulesError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <PageHeader title="Enter Marks" description="Record exam marks for students" />
+          {changeScheduleButton}
+        </div>
+        <QueryErrorState onRetry={() => refetchSchedules()} />
+      </div>
+    );
+  }
+
+  // Schedules finished loading and this scheduleId isn't in the list — a
+  // stale, foreign, or mistyped id (e.g. an old bookmark to a since-deleted
+  // schedule). Show this explicitly rather than falling through to the grid
+  // with `selectedSchedule` undefined and a fake default fullMarks of 100.
+  if (!selectedSchedule) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <PageHeader title="Enter Marks" description="Record exam marks for students" />
+          {changeScheduleButton}
+        </div>
+        <EmptyState
+          message="This exam schedule wasn't found. The link may be out of date, or the schedule may no longer be assigned to you."
+          icon={ClipboardList}
+        />
+      </div>
+    );
+  }
+
+  // Below this point `selectedSchedule` is guaranteed resolved, so
+  // useStudents (gated on `enabled: !!selectedSchedule` above) is now safe
+  // to have fired with the correct className.
   const isGridLoading = studentsLoading || marksLoading;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader title="Enter Marks" description="Record exam marks for students" />
-        <Button variant="ghost" size="sm" onClick={() => router.push('/teacher/marks')}>
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Change Schedule
-        </Button>
+        {changeScheduleButton}
       </div>
 
       {/* Context toolbar: which schedule is being marked */}
@@ -226,15 +310,9 @@ export default function TeacherMarksPage() {
             </span>
             <div>
               <div className="text-base font-semibold text-gray-800 dark:text-white">
-                {selectedSchedule ? (
-                  <>
-                    {selectedSchedule.subjectName}
-                    <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
-                    {selectedSchedule.className}
-                  </>
-                ) : (
-                  'Schedule'
-                )}
+                {selectedSchedule.subjectName}
+                <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+                {selectedSchedule.className}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
                 {enrolledStudents.length} active {enrolledStudents.length === 1 ? 'student' : 'students'}
@@ -242,14 +320,12 @@ export default function TeacherMarksPage() {
             </div>
           </div>
 
-          {selectedSchedule && (
-            <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
-              <span className="font-semibold text-brand-500">{selectedSchedule.examTypeName}</span>
-              <span><BsDate date={selectedSchedule.examDate} showAd /></span>
-              <span>Full Marks: <strong>{selectedSchedule.fullMarks}</strong></span>
-              <span>Pass Marks: <strong>{selectedSchedule.passMarks}</strong></span>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
+            <span className="font-semibold text-brand-500">{selectedSchedule.examTypeName}</span>
+            <span><BsDate date={selectedSchedule.examDate} showAd /></span>
+            <span>Full Marks: <strong>{selectedSchedule.fullMarks}</strong></span>
+            <span>Pass Marks: <strong>{selectedSchedule.passMarks}</strong></span>
+          </div>
         </div>
       </div>
 
@@ -265,14 +341,13 @@ export default function TeacherMarksPage() {
             key={scheduleId}
             ref={gridRef}
             students={gridStudents}
-            fullMarks={selectedSchedule?.fullMarks ?? 100}
+            fullMarks={selectedSchedule.fullMarks}
             existingMarks={existingMarks}
           />
 
           <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/95 px-4 py-3 shadow-theme-sm backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Review the marks above, then save for{' '}
-              {selectedSchedule ? `${selectedSchedule.subjectName} · ${selectedSchedule.className}` : 'this schedule'}.
+              Review the marks above, then save for {selectedSchedule.subjectName} · {selectedSchedule.className}.
             </p>
             <Button
               className="min-w-[150px] bg-brand-500 text-white hover:bg-brand-600"
