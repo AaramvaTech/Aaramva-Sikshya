@@ -7,9 +7,15 @@ describe('bsMonthBucket (the Step-0-verified AD→BS fold)', () => {
     expect(bsMonthBucket('2026-07-11')).toEqual({ key: '2083-03', label: 'Ashadh 2083' });
   });
 
-  it('splits cleanly at the BS month boundary (1 Shrawan 2083 = 2026-07-16)', () => {
+  it('splits cleanly at the BS month boundary (1 Shrawan 2083 = 2026-07-17)', () => {
+    // Ashadh 2083 has 32 days (not 31) and Shrawan has 31 (not 32) — the
+    // bs-calendar hotfix that corrected a transposed pair in BS_MONTH_DATA's
+    // 2083 row. 2026-07-16 is 32 Ashadh (still the SAME BS month as
+    // 2026-07-15's 31 Ashadh), and 1 Shrawan lands one day later than the
+    // pre-hotfix table computed.
     expect(bsMonthBucket('2026-07-15').key).toBe('2083-03'); // 31 Ashadh
-    expect(bsMonthBucket('2026-07-16').key).toBe('2083-04'); // 1 Shrawan
+    expect(bsMonthBucket('2026-07-16').key).toBe('2083-03'); // 32 Ashadh
+    expect(bsMonthBucket('2026-07-17').key).toBe('2083-04'); // 1 Shrawan
   });
 
   it('crosses the BS YEAR boundary correctly (Chaitra 2082 → Baishakh 2083)', () => {
