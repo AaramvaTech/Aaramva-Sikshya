@@ -356,14 +356,23 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   Known remainder (deliberate, separate pass if wanted): ~11 sites compute "today" as UTC-today
   (`new Date().toISOString().split('T')[0]`) — TZ-stable but Nepal-semantically early by 5h45m
   each night (dashboard/report/invoice/staff/issue/attendance).
-- **FIX-3 (open):** the bs-calendar `BS_MONTH_DATA` table is **one day off in the 2070 era**
-  (authoritative: 1 Baisakh 2070 = 2013-04-14, 15 Bhadra 2070 = 2013-08-31; table yields one
-  day earlier — verified vs nepalicalendar.rat32.com 2026-07-11). Modern era is CORRECT
-  (27 Ashadh 2083 = 2026-07-11 confirmed). Epoch constant (`new Date(1943, 3, 12)`) also
-  contradicts the package's own "13 April 1943" docstring. Fix = audit the table between 2000
-  and ~2080 against authoritative anchors; affects historical dates (student dobs!) platform-wide.
-  The 2070-era vectors in `date.util.spec.ts` deliberately key to the current table and must be
-  updated with the table fix.
+- **FIX-3 (open, scope widened 2026-07-22):** the bs-calendar `BS_MONTH_DATA` table is **one day
+  off in the 2070 era** (authoritative: 1 Baisakh 2070 = 2013-04-14, 15 Bhadra 2070 = 2013-08-31;
+  table yields one day earlier — verified vs nepalicalendar.rat32.com 2026-07-11). Epoch constant
+  (`new Date(1943, 3, 12)`) also contradicts the package's own "13 April 1943" docstring.
+  **"Modern era is CORRECT" (the previous note here) is WRONG — re-verified 2026-07-22 during
+  WEB-P Phase 0.5's bs-calendar de-fork.** `packages/bs-calendar`'s `2083` row currently has
+  Ashadh = 31 days, giving `1 Shrawan 2083 = 2026-07-16`; three independent live sources
+  (nepalicalendar.rat32.com's day-by-day tithi table, nepalicalendar.online, and a search-engine
+  snippet, all cross-checked the same day) agree `1 Shrawan 2083 = 2026-07-17` and that
+  **Ashadh 2083 has 32 days, not 31**. The `27 Ashadh 2083 = 2026-07-11` anchor still holds (27 <
+  31, unaffected either way) — only the tail end of Ashadh and everything from Shrawan onward in
+  2083 is suspect. Not caused by the de-fork (the web fork and the real package were byte-
+  identical in logic; this bug was equally present in both). Fix = audit the table between 2000
+  and ~2080 against authoritative anchors, now confirmed necessary even in the current year, not
+  just historical ones; affects historical dates (student dobs!) AND current-year dates
+  (attendance, fee due dates, everything using `todayBs()`) platform-wide. The 2070-era vectors in
+  `date.util.spec.ts` deliberately key to the current table and must be updated with the table fix.
 - Run tests: `cd apps/api && npm test`
 - OPS-1 (operations hardening): `GET /health` at ROOT path (no api/v1 prefix, no tenant, no
   throttle) — `ok|degraded|error`, 503 only when db down; redis down = degraded (app runs
@@ -770,7 +779,36 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   passing (82 suites; unchanged since the last backend task in this plan — Tasks 7-14 were
   frontend-only), web `tsc --noEmit` clean.
 
-**PUSH-1 backlog (deliberate descopes):**
+- [x] WEB-P Phase 0.5 — bs-calendar de-fork (`docs/web/WEB-P-PORTAL.md`, branch
+  `feat/web-p-phase-1-auth-shell`) — `apps/web` now depends on the real `packages/bs-calendar`
+  instead of its own vendored copy at the now-deleted `apps/web/lib/bs-calendar/` (confirmed
+  byte-identical logic pre-de-fork; the fork only lacked one explanatory comment). **The real
+  obstacle wasn't the swap itself, it was `apps/web/Dockerfile`'s production build context**
+  (`context: apps/web`, not repo root, per `docs/api-contracts/DEPLOY-1-vps-deployment.md`) —
+  a plain `file:../../packages/bs-calendar` dependency would have broken the deployed Docker
+  build, which DEPLOY-1 explicitly said not to rewrite. Fix: `scripts/vendor-bs-calendar.mjs`
+  (repo root) builds `packages/bs-calendar` and packs it into a gitignored
+  `apps/web/vendor/bs-calendar.tgz`; `apps/web/package.json` depends on that tarball via
+  `file:./vendor/bs-calendar.tgz`. **Caught mid-build, not guessed around:** the first preinstall
+  wiring (`node ../../scripts/vendor-bs-calendar.mjs`) would have crashed the Docker `deps` stage
+  with `MODULE_NOT_FOUND` — that relative path only resolves when `apps/web` sits under a real
+  repo root, which the scoped Docker context isn't. Reproduced deterministically outside Docker,
+  then fixed with `apps/web/scripts/preinstall.mjs`, a shim that always ships inside `apps/web`
+  itself (Dockerfile now `COPY scripts/ scripts/` alongside `COPY vendor/ vendor/`) and gracefully
+  no-ops when the real repo-root script isn't reachable. **`--ignore-scripts` was considered and
+  rejected** — `apps/web` depends on `sharp`/`msw`/`unrs-resolver`, which have real install-time
+  scripts that flag would have silently skipped. GOTCHA carried into the new vendor script's own
+  comments: because the dependency is a packed **tarball** (not a directory), `package-lock.json`
+  pins an integrity hash of its contents — changing `packages/bs-calendar` requires re-running
+  the vendor script AND `npm install` (not `npm ci`) in `apps/web`, or the lockfile goes stale.
+  91/91 web vitest + 26/26 bs-calendar jest passing (unchanged baseline), web `tsc --noEmit` clean.
+  **Unplanned but load-bearing finding from the required BS-date live-verification step (not
+  caused by this task — the fork and the real package were logically identical):** the FIX-3 note
+  above claiming "modern era is CORRECT" is wrong. `packages/bs-calendar`'s `2083` row has
+  Ashadh = 31 days; three independent live sources agree Ashadh 2083 actually has 32 days and
+  `1 Shrawan 2083 = 2026-07-17`, not the `2026-07-16` the table currently produces. FIX-3's scope
+  and status were updated in place above to reflect this — no code fix attempted (out of scope for
+  this task; needs its own audit pass, tracked as a widened FIX-3).
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
   invoice.overdue cover finance meanwhile.
