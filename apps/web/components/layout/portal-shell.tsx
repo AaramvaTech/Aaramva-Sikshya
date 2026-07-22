@@ -32,18 +32,21 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
 /**
  * WEB-P Phase 2 Task 1 — role-keyed nav items. STUDENT/PARENT keep the single
  * "Home" link (rendered via the t('nav.home') fallback below, unchanged from
- * Phase 1); TEACHER gets a real nav bar. /teacher/attendance, /teacher/marks
- * and /teacher/assignments don't have pages yet — later tasks in this same
- * phase build them in this order, so the links resolve by the end of the
- * phase. English-only labels for now: 'nav.home' is the only nav i18n key
- * today, and inventing unreviewed Nepali translations for four new labels is
- * a separate, later i18n-content pass.
+ * Phase 1); TEACHER gets a real nav bar. English-only labels for now:
+ * 'nav.home' is the only nav i18n key today, and inventing unreviewed Nepali
+ * translations for these labels is a separate, later i18n-content pass.
+ * WEB-P Phase 3 added the last four entries (Profile/Leave/Timetable/
+ * Payroll — HR self-service) once their screens landed.
  */
 const TEACHER_NAV_ITEMS: { href: string; label: string }[] = [
   { href: '/teacher', label: 'Dashboard' },
   { href: '/teacher/attendance', label: 'Attendance' },
   { href: '/teacher/marks', label: 'Marks' },
   { href: '/teacher/assignments', label: 'Assignments' },
+  { href: '/teacher/profile', label: 'Profile' },
+  { href: '/teacher/leave', label: 'Leave' },
+  { href: '/teacher/timetable', label: 'Timetable' },
+  { href: '/teacher/payroll', label: 'Payroll' },
 ];
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
@@ -105,7 +108,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-semibold text-gray-900 dark:text-white">
             {tenantName ?? 'Aaramva Shikshya'}
           </span>
-          <nav className="flex items-center gap-4">
+          <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {user?.role === 'TEACHER' ? (
               TEACHER_NAV_ITEMS.map((item) => {
                 const active =
