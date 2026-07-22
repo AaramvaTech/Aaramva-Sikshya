@@ -809,6 +809,66 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `1 Shrawan 2083 = 2026-07-17`, not the `2026-07-16` the table currently produces. FIX-3's scope
   and status were updated in place above to reflect this — no code fix attempted (out of scope for
   this task; needs its own audit pass, tracked as a widened FIX-3).
+
+- [x] WEB-P Phase 1 — auth/shell/routing scaffold (`docs/web/WEB-P-PORTAL.md`, branch
+  `feat/web-p-phase-1-auth-shell`) — STUDENT, PARENT, and TEACHER can now log in via the existing
+  httpOnly-cookie web flow and land on a role-appropriate portal shell (no feature screens yet —
+  skeleton only). Four tasks, each independently implemented and reviewed, plus a whole-branch
+  review before merge-readiness. **T1 route access:** three new `ROUTE_ACCESS` rows
+  (`apps/web/lib/route-access.ts`) — `/student`→STUDENT, `/parent`→PARENT, `/teacher`→TEACHER —
+  and `homeRoute()` updated so those three roles land there post-login. **STUDENT/PARENT
+  deliberately NOT added to `WEB_STAFF_ROLES`** (the unmapped-admin-route fallback list) — doing
+  so would have silently granted them default access to every current/future unmapped admin
+  route; TEACHER was already there (unrelated, pre-existing admin access, untouched). New
+  `apps/web/lib/__tests__/route-access.test.ts` (first test file for this module) parametrizes
+  over the live `ROUTE_ACCESS` array × all 9 roles for zero-regression coverage, plus a
+  separately-hardcoded (non-tautological) assertion guarding the one security-relevant invariant.
+  **T2 portal shell:** new `apps/web/components/layout/portal-shell.tsx` — mirrors `SchoolShell`'s
+  session-hydration gate + `canAccess`/`AccessDenied` pattern (without its collapsible-sidebar
+  machinery), a `(portal)` route group, 3 placeholder pages (`Portal home — {role} — {tenantName}`).
+  Deliberately does NOT use `useRoleLabels()` for the role indicator — that hook hits a
+  TEACHER_AND_ABOVE-gated HR endpoint that would 403 for STUDENT/PARENT. **T3 i18n + font:**
+  `i18next`/`react-i18next` (not `next-intl` — no locale-routing/RSC-message-resolution need
+  existed to justify it; a plain runtime client-provider toggle fits this app's existing
+  `providers.tsx` pattern instead), English default + Nepali toggle, two seed keys (`nav.home`,
+  `actions.signOut`). `actions.signOut`'s Nepali value is copied verbatim from mobile's already
+  human-reviewed I18N-1 string (`साइन आउट`) — codepoint-identical, confirmed. `nav.home`'s
+  Nepali value (`गृह`) has **no existing reviewed source** and is flagged as an unreviewed
+  placeholder pending the same native-speaker pass I18N-1's mobile strings went through — do not
+  treat it as equivalent in provenance to `actions.signOut`. Devanagari via `next/font/google`
+  (`Noto_Sans_Devanagari`) wired as a **CSS `font-family` fallback** after `Outfit` in the actually-
+  consumed `--font-sans`/`--font-heading` tokens (`globals.css`) — not a per-component switcher
+  like mobile's `NpText`; the web platform's native fallback-by-Unicode-range makes that
+  unnecessary. **T4 (found by the final whole-branch review, fixed same-day):** a *returning*
+  STUDENT/PARENT (has the 7-day `_auth` marker cookie but no live in-memory session — e.g. tab
+  closed and reopened) was bounced by the deliberately role-blind `apps/web/proxy.ts` to
+  `/dashboard`, where `SchoolShell` had no redirect for these two roles (only for `PLATFORM_ADMIN`)
+  and showed `AccessDenied` instead of sending them home — safe (no data exposure, working "Go to
+  student" escape link) but broke the phase's own stated goal for its target users on every normal
+  return visit. Fixed with one `useEffect` in `school-shell.tsx` mirroring the existing
+  `PLATFORM_ADMIN` pattern; **TEACHER deliberately excluded** (still correctly renders the real
+  admin `/dashboard` — that's the intended state until a separate later cutover phase). Live-
+  reproduced via Playwright both before (confirmed broken) and after (confirmed fixed) the patch.
+  **Live proof (Playwright against the running dev stack, not curl):** existing demo-tenant shim
+  accounts (`student@demo.school`/`parent@demo.school`/`teacher@demo.school`) had passwords
+  temporarily overridden to a known value, verified, then restored with a 401 read-back — same
+  established convention as prior sessions' password shims. The demo tenant's `primaryColor` was
+  also temporarily shimmed to a distinctive non-default color (its real value is the literal
+  default, which would have made a branding check trivially pass either way) and restored after.
+  All three roles: logged in via the real UI → landed on correct portal home → denied on a
+  cross-role/admin path (TEACHER's case is nuanced by design: denied at `/finance` content while
+  still legitimately seeing the admin shell chrome) → branding color visibly reflected the shim →
+  logged out cleanly (session cleared, portal path required re-login). Nepali toggle + Devanagari
+  font confirmed via screenshot (crisp glyphs, no tofu) and computed `font-family` inspection.
+  **299 web tests passing (was 91 at Phase-0.5 baseline; +205 route-access, +3 locale-store), web
+  `tsc --noEmit` clean.** Each of the 4 tasks individually reviewed and approved before the next
+  began; a final whole-branch review (opus) additionally checked cross-task integration (route-
+  access ↔ shell wiring, i18n not disturbing the auth-gating order, `WEB_STAFF_ROLES`'s final
+  state, `providers.tsx` init ordering, no stale `@/lib/bs-calendar` imports survived Phase 0.5,
+  and no staff-role assumption in the login/session-restore path for the two brand-new web-portal
+  roles) before landing T4's fix. Not pushed; no PR opened — awaiting the human's go-ahead before
+  Phase 2 (Teacher core: attendance-marking grid, marks-entry grid, assignment view/review + net-
+  new creation flow, the 4 pre-existing TEACHER 403 bugs).
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
   invoice.overdue cover finance meanwhile.
