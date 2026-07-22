@@ -44,6 +44,15 @@ import type { MarkRecord } from '@/types/api.types';
  * permissions gate — see CLAUDE.md). Scoping the picker to useMySchedules()
  * is a UX convenience only; no extra check is added on top of it.
  *
+ * NO "browse all schedules" escape hatch here, unlike the attendance and
+ * assignments teacher screens (deliberate, not an oversight — flagged and
+ * confirmed during the Phase 2 whole-branch review): there is no
+ * teacher-scoped "all schedules" endpoint to back one, and re-adding admin's
+ * full Exam Type -> Class -> Schedule cascade would defeat the point of this
+ * purpose-built picker. A teacher covering another teacher's exam (an
+ * intentionally-permitted soft-scope case) still reaches the write endpoint
+ * via the admin `/exams/marks` page, which TEACHER can already access.
+ *
  * Post-review fix: `selectedSchedule` (and the `className` roster filter
  * derived from it) resolves asynchronously via useMySchedules(), same as
  * `scheduleId` from the URL — a fresh load of /teacher/marks?scheduleId=X

@@ -88,7 +88,7 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // later phases add real screens.
   { prefix: '/student', roles: ['STUDENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
   { prefix: '/parent', roles: ['PARENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
-  { prefix: '/teacher', roles: ['TEACHER'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
+  { prefix: '/teacher', roles: ['TEACHER'], endpoint: 'GET /dashboard/weekly-attendance (WEB-P Phase 2 — real screens now live under this prefix: dashboard, attendance, marks, assignments)' },
 ];
 
 /** Longest-prefix match for a pathname. */
