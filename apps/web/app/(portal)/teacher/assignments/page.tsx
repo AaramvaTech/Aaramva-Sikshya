@@ -45,6 +45,21 @@ import type { AssignmentStatus } from '@/types/api.types';
  * only, so seeing every class is never blocked. The Subject/Status filters
  * are unrestricted in both modes (subjects are a per-class lookup, not an
  * ownership boundary), matching admin exactly.
+ *
+ * Post-review fix (same bug class as Task 3's marks-page race): `classId`
+ * resolves asynchronously via the auto-select effect below, which itself
+ * depends on the async useMySections() call. On a fresh load of (or deep
+ * link into) /teacher/assignments, useMySections and useAssignments both
+ * start cold — without a gate, useAssignments would fire once with
+ * classId: undefined before mySections resolves (an unfiltered,
+ * whole-school list) and render it for at least one paint before the
+ * auto-select effect's setClassId triggers a second, correctly-scoped
+ * fetch. `scopeReady` (computed below) keeps the query disabled — and a
+ * render-level guard keeps the filter bar/table off-screen — until either
+ * the teacher explicitly chose "Browse all classes", or useMySections has
+ * resolved AND classId has actually been set, or useMySections resolved
+ * with zero owned sections (nothing to narrow to, so the unscoped fallback
+ * is legitimate, not a race).
  */
 
 const STATUS_STYLE: Record<AssignmentStatus, string> = {
@@ -66,7 +81,7 @@ export default function TeacherAssignmentsPage() {
   // "My classes", so the default re-narrows instead of staying blank.
   const autoSelectedRef = useRef(false);
 
-  const { data: mySections } = useMySections();
+  const { data: mySections, isLoading: mySectionsLoading } = useMySections();
   const { data: allClasses } = useClasses();
   const { data: classSubjects } = useClassSubjects(classId);
 
@@ -99,14 +114,26 @@ export default function TeacherAssignmentsPage() {
   // mode, or in "My classes" mode if the teacher has no sections to narrow to.
   const showAllClassesItem = scopeAll || myClasses.length === 0;
 
-  const { data, isLoading, isError, refetch } = useAssignments({
-    page,
-    limit: 20,
-    classId: classId || undefined,
-    sectionId: sectionId || undefined,
-    subjectId: subjectId || undefined,
-    status: status || undefined,
-  });
+  // Closes the race described in the doc comment above: true once it's safe
+  // to fetch/show an assignments list — either the teacher opted into
+  // unrestricted browsing, or useMySections has settled AND either produced
+  // a resolved classId (the auto-select effect ran) or genuinely has nothing
+  // to narrow to. False while useMySections is still loading, and false for
+  // the one transitional render where it just resolved but classId hasn't
+  // been set yet (the effect fires after this render commits).
+  const scopeReady = scopeAll || (!mySectionsLoading && (myClasses.length === 0 || !!classId));
+
+  const { data, isLoading, isError, refetch } = useAssignments(
+    {
+      page,
+      limit: 20,
+      classId: classId || undefined,
+      sectionId: sectionId || undefined,
+      subjectId: subjectId || undefined,
+      status: status || undefined,
+    },
+    { enabled: scopeReady },
+  );
 
   function switchScope(all: boolean) {
     setScopeAll(all);
@@ -120,19 +147,43 @@ export default function TeacherAssignmentsPage() {
   const selectedClassName = classOptions.find((c) => c.id === classId)?.name;
   const selectedSectionName = sectionOptions.find((s) => s.id === sectionId)?.name;
 
+  const pageHeader = (
+    <PageHeader
+      title="Assignments"
+      description="Homework and assignments — publish, collect and review submissions"
+      action={
+        // TODO(WEB-P Phase 2 Task 5): wire up assignment creation here.
+        // Left visible-but-inert per the Task 4 brief — creation is Task 5's.
+        <Button disabled title="Coming soon">
+          <Plus className="mr-1.5 h-4 w-4" /> New Assignment
+        </Button>
+      }
+    />
+  );
+
+  // Render-level guard (belt-and-suspenders alongside the query-level
+  // `enabled: scopeReady` gate above, mirroring Task 3's
+  // `if (schedulesLoading) return skeleton`): never show the filter bar or
+  // a table while the teacher's own scope is still resolving, so the race
+  // is closed even for the one render where a disabled-and-never-fetched
+  // TanStack Query's `isLoading` doesn't yet reflect that state.
+  if (!scopeReady) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+        <Skeleton className="h-10 w-full max-w-2xl" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Assignments"
-        description="Homework and assignments — publish, collect and review submissions"
-        action={
-          // TODO(WEB-P Phase 2 Task 5): wire up assignment creation here.
-          // Left visible-but-inert per the Task 4 brief — creation is Task 5's.
-          <Button disabled title="Coming soon">
-            <Plus className="mr-1.5 h-4 w-4" /> New Assignment
-          </Button>
-        }
-      />
+      {pageHeader}
 
       <div className="flex flex-wrap items-center gap-3">
         <Select

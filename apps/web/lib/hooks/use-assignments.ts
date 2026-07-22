@@ -8,7 +8,7 @@ import type {
   UpdateAssignmentData,
 } from '@/types/api.types';
 
-export function useAssignments(params: AssignmentListParams) {
+export function useAssignments(params: AssignmentListParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['assignments', params],
     // Paginated list → .data.data.data (ResponseInterceptor wraps {data, meta}).
@@ -19,6 +19,7 @@ export function useAssignments(params: AssignmentListParams) {
         meta: res.data.data.meta as { page: number; limit: number; total: number },
       };
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
