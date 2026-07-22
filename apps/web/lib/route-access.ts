@@ -9,12 +9,16 @@ import type { Role } from '@/types/api.types';
  * in ROUTE_ACCESS.endpoint). Never grant a role here that the backend denies; if
  * the backend permits a role on a section, mirror it. Where a section is
  * management-oriented we mirror the backend WRITE guard; where it is view-oriented
- * we mirror the backend READ guard. STUDENT and PARENT are mobile-only and never
- * authenticate on this web portal, so they are excluded from every entry.
+ * we mirror the backend READ guard. STUDENT and PARENT now authenticate on this
+ * web portal too (WEB-P), via their own dedicated portal routes (/student, /parent)
+ * — but they are deliberately excluded from the WEB_STAFF_ROLES fallback below, so
+ * they don't gain default access to unmapped admin routes.
  */
 
-/** The six roles that actually use the school web portal. PLATFORM_ADMIN lives in
- *  the super-admin portal; STUDENT/PARENT are mobile-only. */
+/** The six roles that use the *admin* school web portal (default fallback for any
+ *  unmapped route). PLATFORM_ADMIN lives in the super-admin portal; STUDENT/PARENT
+ *  have their own dedicated portal routes (/student, /parent) and are deliberately
+ *  excluded from this fallback list — see the architectural note above. */
 export const WEB_STAFF_ROLES: Role[] = [
   'SCHOOL_OWNER',
   'PRINCIPAL',
@@ -78,6 +82,13 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   { prefix: '/library', roles: LIBRARIAN_AND_ABOVE, endpoint: 'POST /library/books' },
   { prefix: '/settings', roles: SETTINGS_VIEWERS, endpoint: 'GET /settings/profile' },
   { prefix: '/onboarding', roles: COORDINATOR_AND_ABOVE, endpoint: 'onboarding (setup wizard)' },
+
+  // WEB-P Phase 1 — dedicated student/parent/teacher portal landing routes.
+  // No backend calls yet from these routes; update the endpoint citation as
+  // later phases add real screens.
+  { prefix: '/student', roles: ['STUDENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
+  { prefix: '/parent', roles: ['PARENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
+  { prefix: '/teacher', roles: ['TEACHER'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
 ];
 
 /** Longest-prefix match for a pathname. */
@@ -92,11 +103,14 @@ function matchRoute(pathname: string): RouteAccess | null {
 }
 
 /**
- * Can `role` access `pathname`? A mapped route is gated by its row. An unmapped
+ * Can `role` access `pathname`? A mapped route is gated by its row — this is how
+ * STUDENT/PARENT get access to their own dedicated portal routes (/student,
+ * /parent) without being added to the WEB_STAFF_ROLES fallback. An unmapped
  * school route is allowed for any web-staff role (the backend still enforces the
- * real boundary) but denied for mobile-only roles (STUDENT/PARENT) who should
- * never be on this portal. PLATFORM_ADMIN is handled separately by the shell
- * (redirected to the super-admin portal), so it is not granted school access here.
+ * real boundary) but denied for STUDENT/PARENT, who should never get default
+ * access to an unmapped admin route. PLATFORM_ADMIN is handled separately by the
+ * shell (redirected to the super-admin portal), so it is not granted school
+ * access here.
  */
 export function canAccess(role: Role | null | undefined, pathname: string): boolean {
   if (!role) return false;
@@ -109,10 +123,16 @@ export function canAccess(role: Role | null | undefined, pathname: string): bool
  * The landing route for a role after login and the "go home" target on the 403
  * screen. Accountant/librarian are excluded from /dashboard (backend denies them),
  * so they get their own home instead of a dashboard whose API calls would 403.
+ * STUDENT/PARENT/TEACHER land on their own dedicated portal routes (WEB-P) — note
+ * TEACHER's admin access (/dashboard, /attendance, /assignments, etc.) is untouched
+ * and still reachable by direct navigation; only the post-login landing changes.
  */
 export function homeRoute(role: Role | null | undefined): string {
   if (role === 'ACCOUNTANT') return '/finance';
   if (role === 'LIBRARIAN') return '/library';
+  if (role === 'STUDENT') return '/student';
+  if (role === 'PARENT') return '/parent';
+  if (role === 'TEACHER') return '/teacher';
   return '/dashboard';
 }
 
