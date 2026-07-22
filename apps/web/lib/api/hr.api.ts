@@ -84,6 +84,19 @@ export const hrApi = {
     api.post<ApiResponse<LeaveRequest>>('/hr/leave', data),
   reviewLeave: (id: string, data: { status: 'APPROVED' | 'REJECTED'; reviewerNote?: string }) =>
     api.patch<ApiResponse<LeaveRequest>>(`/hr/leave/${id}/review`, data),
+  // WEB-P Phase 3 Task 2 — GET /hr/leave/my (TEACHER_AND_ABOVE, self-scoped:
+  // the controller passes the caller's own user.userId into
+  // getMyLeaveRequests, which overwrites any client-supplied userId — a
+  // DIFFERENT route from listLeave/GET /hr/leave above, which returns
+  // everyone's requests and is admin-only). Do not reuse useLeaveRequests
+  // for a teacher's own-leave screen.
+  getMyLeave: (params?: { page?: number; limit?: number; status?: string }) =>
+    api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>('/hr/leave/my', { params }),
+  // PATCH /hr/leave/:id/cancel — 204 No Content. Real ownership check in
+  // leave.service.ts (404 if missing, 403 if rows[0].user_id !== caller,
+  // 400 if not PENDING) — a teacher can only cancel their own still-pending
+  // request.
+  cancelLeave: (id: string) => api.patch<void>(`/hr/leave/${id}/cancel`),
   getLeaveBalance: (userId: string) =>
     api.get<ApiResponse<LeaveBalance[]>>(`/hr/leave/balance/${userId}`),
 

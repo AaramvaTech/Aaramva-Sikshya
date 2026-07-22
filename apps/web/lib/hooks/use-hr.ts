@@ -282,6 +282,28 @@ export function useLeaveBalance(userId: string) {
   });
 }
 
+// WEB-P Phase 3 Task 2 — teacher's own leave requests (GET /hr/leave/my).
+// Distinct query key ('leave-my') from the admin useLeaveRequests's 'leave'
+// key so the two never collide or invalidate each other.
+export function useMyLeave(params?: { page?: number; limit?: number; status?: string }) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'leave-my', params],
+    queryFn: () => hrApi.getMyLeave(params).then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useCancelLeave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.cancelLeave(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'leave-my'] });
+    },
+  });
+}
+
 export function usePayrollMonths() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
