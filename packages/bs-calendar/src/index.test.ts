@@ -92,4 +92,44 @@ describe('BsCalendar', () => {
     expect(isValidBsDate(today)).toBe(true);
     expect(today.year).toBeGreaterThanOrEqual(2080);
   });
+
+  // Regression test: BS 2083's Ashadh (3rd month) and Shrawan (4th month) had
+  // their day-counts transposed — Ashadh was recorded as 31 (should be 32) and
+  // Shrawan as 32 (should be 31). The Ashadh error alone made 1 Shrawan 2083
+  // compute one day early (2026-07-16 instead of 2026-07-17); because the two
+  // errors summed to the same total, dates from 1 Bhadra 2083 onward landed on
+  // the right AD date "by accident" despite the wrong individual month
+  // lengths — so fixing only Ashadh (without also fixing Shrawan) would have
+  // introduced a NEW one-day gap starting at the Shrawan/Bhadra boundary.
+  // Verified against nepalicalendar.rat32.com's day-by-day calendar pages
+  // (direct page fetches, not search-result summaries, since summaries proved
+  // unreliable) at five separate month boundaries across 2083 (Shrawan,
+  // Bhadra, Kartik, Magh, Chaitra), including an independent weekday
+  // cross-check via Date itself: 2026-10-18 (1 Kartik) is a real Sunday, and
+  // 2027-01-15 (1 Magh) is a real Friday — the latter catching the source
+  // page's own weekday label as wrong while the date itself still checked out.
+  it('converts AD 2026-07-17 to BS 2083-04-01 (1 Shrawan, post Ashadh/Shrawan swap fix)', () => {
+    const result = adToBs(new Date(2026, 6, 17)); // July 17, 2026, read via local components
+    expect(result).toEqual({ year: 2083, month: 4, day: 1 });
+  });
+
+  it('converts BS 2083-04-01 back to AD 2026-07-17 (round trip)', () => {
+    const result = bsToAd({ year: 2083, month: 4, day: 1 });
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(6); // July (0-indexed)
+    expect(result.getDate()).toBe(17);
+  });
+
+  it('converts AD 2026-08-17 to BS 2083-05-01 (1 Bhadra — the boundary the Ashadh-only fix got wrong)', () => {
+    const result = adToBs(new Date(2026, 7, 17)); // August 17, 2026, read via local components
+    expect(result).toEqual({ year: 2083, month: 5, day: 1 });
+  });
+
+  it('returns correct days in month for BS 2083 Ashadh (32, not 31)', () => {
+    expect(daysInBsMonth(2083, 3)).toBe(32);
+  });
+
+  it('returns correct days in month for BS 2083 Shrawan (31, not 32)', () => {
+    expect(daysInBsMonth(2083, 4)).toBe(31);
+  });
 });
