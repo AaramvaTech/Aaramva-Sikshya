@@ -2,7 +2,7 @@
 
 import { Printer, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { adToBs } from '@/lib/bs-calendar';
+import { adToBs } from 'bs-calendar';
 import { Button } from '@/components/ui/button';
 import type { SectionAttendanceReport } from '@/types/api.types';
 

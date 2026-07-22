@@ -6,6 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "preinstall": "node ../../scripts/vendor-bs-calendar.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -18,6 +19,7 @@
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.17.0",
+    "bs-calendar": "file:./vendor/bs-calendar.tgz",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",

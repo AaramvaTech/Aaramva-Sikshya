@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# bs-calendar vendored tarball (scripts/vendor-bs-calendar.mjs, repo root) —
+# regenerated on demand, never committed. The generated filename is always
+# bs-calendar.tgz, but *.tgz is ignored broadly in case that ever changes.
+/vendor/
+*.tgz

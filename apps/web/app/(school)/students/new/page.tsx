@@ -15,7 +15,7 @@ import { useCreateStudent, useClasses, useCurrentAcademicYear } from '@/lib/hook
 import { extractApiErrors } from '@/lib/api-errors';
 import { uploadFile } from '@/lib/upload';
 import { BsDateInput } from '@/components/shared/bs-date-input';
-import { todayBs } from '@/lib/bs-calendar';
+import { todayBs } from 'bs-calendar';
 import { BsDate } from '@/components/shared/bs-date';
 import { PageHeader } from '@/components/shared/page-header';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

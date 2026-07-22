@@ -39,7 +39,7 @@ import {
 } from '@/lib/hooks/use-reports';
 import { exportToCsv } from '@/lib/export';
 import { useAuthStore } from '@/store/auth.store';
-import { todayBs } from '@/lib/bs-calendar';
+import { todayBs } from 'bs-calendar';
 
 // Semantic report colours (attendance STATUS_CONFIG convention — not brand).
 const COLOR = { present: '#16A34A', absent: '#DC2626', late: '#D97706', leave: '#2563EB' };

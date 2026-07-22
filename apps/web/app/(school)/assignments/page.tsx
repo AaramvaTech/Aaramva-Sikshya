@@ -31,7 +31,7 @@ import {
 import { useClasses, useClassSubjects } from '@/lib/hooks/use-academic';
 import { useAssignments, useCreateAssignment } from '@/lib/hooks/use-assignments';
 import { uploadFile } from '@/lib/upload';
-import { todayBs } from '@/lib/bs-calendar';
+import { todayBs } from 'bs-calendar';
 import type { AssignmentStatus } from '@/types/api.types';
 
 const STATUS_STYLE: Record<AssignmentStatus, string> = {

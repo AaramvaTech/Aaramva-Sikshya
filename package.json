@@ -4,7 +4,8 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "setup:db": "node scripts/setup-db.mjs",
-    "minio": "powershell -ExecutionPolicy Bypass -File scripts/start-minio.ps1"
+    "minio": "powershell -ExecutionPolicy Bypass -File scripts/start-minio.ps1",
+    "vendor:bs-calendar": "node scripts/vendor-bs-calendar.mjs"
   },
   "devDependencies": {
     "prisma": "^6.19.3"
