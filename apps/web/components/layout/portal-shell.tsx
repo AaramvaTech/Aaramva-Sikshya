@@ -29,6 +29,23 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
   TEACHER: 'Teacher',
 };
 
+/**
+ * WEB-P Phase 2 Task 1 — role-keyed nav items. STUDENT/PARENT keep the single
+ * "Home" link (rendered via the t('nav.home') fallback below, unchanged from
+ * Phase 1); TEACHER gets a real nav bar. /teacher/attendance, /teacher/marks
+ * and /teacher/assignments don't have pages yet — later tasks in this same
+ * phase build them in this order, so the links resolve by the end of the
+ * phase. English-only labels for now: 'nav.home' is the only nav i18n key
+ * today, and inventing unreviewed Nepali translations for four new labels is
+ * a separate, later i18n-content pass.
+ */
+const TEACHER_NAV_ITEMS: { href: string; label: string }[] = [
+  { href: '/teacher', label: 'Dashboard' },
+  { href: '/teacher/attendance', label: 'Attendance' },
+  { href: '/teacher/marks', label: 'Marks' },
+  { href: '/teacher/assignments', label: 'Assignments' },
+];
+
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -88,13 +105,34 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-semibold text-gray-900 dark:text-white">
             {tenantName ?? 'Aaramva Shikshya'}
           </span>
-          <nav>
-            <Link
-              href={homeRoute(user?.role)}
-              className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              {t('nav.home')}
-            </Link>
+          <nav className="flex items-center gap-4">
+            {user?.role === 'TEACHER' ? (
+              TEACHER_NAV_ITEMS.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== '/teacher' && pathname.startsWith(item.href + '/'));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={
+                      active
+                        ? 'text-sm font-semibold text-brand-600 dark:text-brand-400'
+                        : 'text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                    }
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })
+            ) : (
+              <Link
+                href={homeRoute(user?.role)}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                {t('nav.home')}
+              </Link>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-3">

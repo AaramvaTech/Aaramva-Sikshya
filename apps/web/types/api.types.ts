@@ -350,6 +350,21 @@ export interface SectionAttendanceReport {
   }[];
 }
 
+// WEB-P Phase 2 Task 1 — GET /attendance/staff/my/summary (self-scoped;
+// mirrors backend StaffSummaryDto). year/month are AD (Postgres EXTRACT on
+// the stored date), not BS — the caller supplies the current AD month.
+export interface StaffAttendanceSummary {
+  userId: string;
+  month: number;
+  year: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  holiday: number;
+  total: number;
+}
+
 export interface SchoolAttendanceSummary {
   date: { ad: string; bs: string };
   totalStudents: number;
@@ -647,6 +662,15 @@ export interface TeacherTimetable {
   teacherId: string;
   teacherName: string;
   schedule: Record<string, TeacherSlotItem[]>;
+}
+
+// WEB-P Phase 2 Task 1 — GET /timetable/my/sections (every section where the
+// caller is either the class teacher or has a timetable slot).
+export interface TeacherSection {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  classId: string;
 }
 
 export interface TimetableSlotData {

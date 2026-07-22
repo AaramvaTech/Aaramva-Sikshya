@@ -21,6 +21,16 @@ export function useStaffDetail(id: string) {
   });
 }
 
+// WEB-P Phase 2 Task 1 — teacher's own staff/HR profile (GET /hr/staff/me).
+export function useMyStaffProfile() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'staff-me'],
+    queryFn: () => hrApi.getMyProfile().then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
 export function useCreateStaff() {
   const queryClient = useQueryClient();
   return useMutation({
