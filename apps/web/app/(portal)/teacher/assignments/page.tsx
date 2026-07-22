@@ -32,6 +32,7 @@ import {
 import { useClasses, useClassSubjects } from '@/lib/hooks/use-academic';
 import { useAssignments, useCreateAssignment } from '@/lib/hooks/use-assignments';
 import { useMySections } from '@/lib/hooks/use-timetable';
+import { resolveScopeReady } from '@/lib/teacher-scope';
 import { uploadFile } from '@/lib/upload';
 import type { AssignmentStatus } from '@/types/api.types';
 
@@ -424,8 +425,10 @@ function CreateAssignmentDialog({
   }, [mySections]);
 
   // See the race-guard note above the component: only treat "zero owned
-  // sections" as real once useMySections has actually settled.
-  const effectiveScopeAll = scopeAll || (!mySectionsLoading && myClasses.length === 0);
+  // sections" as real once useMySections has actually settled. Extracted to
+  // `resolveScopeReady` (lib/teacher-scope.ts) so this contract is pinned by
+  // a plain unit test — see lib/__tests__/teacher-scope.test.ts.
+  const effectiveScopeAll = resolveScopeReady(scopeAll, mySectionsLoading, myClasses.length);
 
   const classOptions = effectiveScopeAll
     ? (allClasses ?? []).map((c) => ({ id: c.id, name: c.name }))
