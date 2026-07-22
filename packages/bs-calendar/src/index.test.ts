@@ -92,4 +92,25 @@ describe('BsCalendar', () => {
     expect(isValidBsDate(today)).toBe(true);
     expect(today.year).toBeGreaterThanOrEqual(2080);
   });
+
+  // Regression test: BS 2083's Ashadh (3rd month) was previously recorded as
+  // 31 days instead of the correct 32, which made 1 Shrawan 2083 compute one
+  // day early (2026-07-16 instead of 2026-07-17). Verified against three
+  // independent authoritative sources (nepalicalendar.rat32.com,
+  // nepalicalendar.online, hamropatro.com).
+  it('converts AD 2026-07-17 to BS 2083-04-01 (1 Shrawan, post Ashadh-32-day fix)', () => {
+    const result = adToBs(new Date(2026, 6, 17)); // July 17, 2026, read via local components
+    expect(result).toEqual({ year: 2083, month: 4, day: 1 });
+  });
+
+  it('converts BS 2083-04-01 back to AD 2026-07-17 (round trip)', () => {
+    const result = bsToAd({ year: 2083, month: 4, day: 1 });
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(6); // July (0-indexed)
+    expect(result.getDate()).toBe(17);
+  });
+
+  it('returns correct days in month for BS 2083 Ashadh (32, not 31)', () => {
+    expect(daysInBsMonth(2083, 3)).toBe(32);
+  });
 });
