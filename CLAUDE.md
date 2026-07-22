@@ -356,14 +356,40 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   Known remainder (deliberate, separate pass if wanted): ~11 sites compute "today" as UTC-today
   (`new Date().toISOString().split('T')[0]`) — TZ-stable but Nepal-semantically early by 5h45m
   each night (dashboard/report/invoice/staff/issue/attendance).
-- **FIX-3 (open):** the bs-calendar `BS_MONTH_DATA` table is **one day off in the 2070 era**
-  (authoritative: 1 Baisakh 2070 = 2013-04-14, 15 Bhadra 2070 = 2013-08-31; table yields one
-  day earlier — verified vs nepalicalendar.rat32.com 2026-07-11). Modern era is CORRECT
-  (27 Ashadh 2083 = 2026-07-11 confirmed). Epoch constant (`new Date(1943, 3, 12)`) also
-  contradicts the package's own "13 April 1943" docstring. Fix = audit the table between 2000
-  and ~2080 against authoritative anchors; affects historical dates (student dobs!) platform-wide.
-  The 2070-era vectors in `date.util.spec.ts` deliberately key to the current table and must be
-  updated with the table fix.
+- **FIX-3 (open, 2083 instance HOTFIXED 2026-07-22, broader 2000-2080 audit still queued):** the
+  bs-calendar `BS_MONTH_DATA` table is **one day off in the 2070 era** (authoritative: 1 Baisakh
+  2070 = 2013-04-14, 15 Bhadra 2070 = 2013-08-31; table yields one day earlier — verified vs
+  nepalicalendar.rat32.com 2026-07-11). Epoch constant (`new Date(1943, 3, 12)`) also contradicts
+  the package's own "13 April 1943" docstring. **"Modern era is CORRECT" (the previous claim here)
+  was WRONG** — the current year was not actually safe either. Found during WEB-P Phase 0.5's
+  bs-calendar de-fork (separate branch) via live cross-check against three sources
+  (nepalicalendar.rat32.com, nepalicalendar.online, hamropatro.com): `2083`'s row had **Ashadh and
+  Shrawan transposed** (table had Ashadh=31/Shrawan=32; correct is Ashadh=32/Shrawan=31 — their sum,
+  63, was already right in the buggy table, only the distribution between the two months was
+  wrong, which is exactly why a first attempt fixing only Ashadh got Bhadra-onward newly wrong and
+  needed a second round of live verification — five month-boundaries checked, including a
+  Node-`Date`-computed weekday cross-check to catch an AI-fetch source-mislabeling artifact — before
+  the full picture was confirmed). **This specific 2083 value is now fixed** (hotfix branch
+  `hotfix/bs-2083-ashadh-days`, off `main`, independent of WEB-P): `packages/bs-calendar/src/data.ts`
+  and `apps/web/lib/bs-calendar/data.ts` (still a separate file on `main` — WEB-P's de-fork hasn't
+  merged) both corrected in lockstep, `apps/mobile` picks it up via its existing
+  `file:../../packages/bs-calendar` dependency once rebuilt. **Two independent instances of a
+  second, previously-invisible bug were found and fixed in the same pass:** neither
+  `packages/bs-calendar/jest.config.js` nor `apps/api/package.json`'s jest config overrode
+  `moduleFileExtensions`, so Jest's `.js`-before-`.ts` default meant both packages' test suites were
+  silently resolving `data.ts`'s already-committed, stale, uncorrected `.js` build artifact instead
+  of the real TypeScript source — invisible for the package's entire history because no prior test
+  touched a value where the two ever diverged; this fix was the first one that did. Both reordered
+  to prefer `.ts` (stale `.js` files themselves left untouched — a separate, still-open cleanup
+  item). `apps/api`'s 3 tests hardcoding the old boundary were individually recomputed from actual
+  source logic (not a uniform day-shift assumption — the affected AD window turned out to be
+  narrowly `2026-07-16` through `2026-08-16` only; a `date.util.spec.ts` Poush-17 assertion that
+  looked like it should change was verified to NOT need changing, since Poush's cumulative offset is
+  identical under both the buggy and corrected tables). Full apps/api suite (665/665) and
+  bs-calendar suite (36/36) both green. **Broader fix (auditing the rest of 2000-2080) remains
+  open** — this hotfix deliberately did not attempt it; the 2070-era vectors in `date.util.spec.ts`
+  still deliberately key to the current (still-unaudited-elsewhere) table and must be updated
+  whenever that fuller audit lands.
 - Run tests: `cd apps/api && npm test`
 - OPS-1 (operations hardening): `GET /health` at ROOT path (no api/v1 prefix, no tenant, no
   throttle) — `ok|degraded|error`, 503 only when db down; redis down = degraded (app runs
