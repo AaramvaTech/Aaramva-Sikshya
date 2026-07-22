@@ -1016,6 +1016,76 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   go-ahead before Phase 3 (HR self-service: own leave, own profile, own timetable, own payroll
   slips — backend already exists, pure frontend).
 
+- [x] WEB-P Phase 3 — Teacher HR self-service (`docs/web/WEB-P-PORTAL.md`, branch
+  `feat/web-p-phase-3-hr-self-service`, off Phase 2) — four new screens under
+  `apps/web/app/(portal)/teacher/`, all endpoints pre-existing on the backend and never surfaced in
+  any UI (admin or mobile) before this phase; **zero backend files touched anywhere in the diff.**
+  **Two ownership questions were investigated and written to
+  `docs/web/phase-3-ownership-findings.md` BEFORE any screen was built**, per the phase's own
+  explicit instruction (both later independently re-verified against real source by the final
+  whole-branch review and confirmed to hold): (1) `GET /timetable/my` — SAFE despite internally
+  reusing `getTeacherTimetable`'s query logic (the same function backing the unchecked, still-
+  unfixed `GET /timetable/teacher/:teacherId` from §7) — the id comes exclusively from
+  `@CurrentUser()` in the controller, never a path param, so no caller can ever supply anyone's id
+  but their own; the *id's origin*, not the shared query, is what makes a route safe or not. (2)
+  `GET /hr/payroll/staff/:userId/history` — the route DOES accept an arbitrary `:userId` path
+  param, but `payroll.service.ts`'s `getStaffSalaryHistory` calls the same `assertSelfOrHrAdmin`
+  utility already relied on for leave-balance, before any query runs — a teacher passing a peer's
+  id gets a real 403, confirmed live. **T1 own profile (view-only):** confirmed there is no
+  self-edit endpoint at all (`PATCH /hr/staff/:id` is `PRINCIPAL_AND_ABOVE`-only, no `PATCH
+  /hr/staff/me` exists) — built as pure display, mirroring the admin staff-detail page's field
+  grouping/conditionals exactly minus the edit affordance and photo-upload overlay it correctly
+  stripped. **T2 own leave (full write flow):** the phase's biggest task — reused
+  `useLeaveTypes`/`useApplyLeave`/`useLeaveBalance` unchanged, added two new hook+endpoint pairs
+  (`GET /hr/leave/my` self-scoped list, `PATCH /hr/leave/:id/cancel`). **Found and fixed a real
+  integration bug during live-proofing:** the shared `useApplyLeave` hook only invalidates the
+  admin's `['hr','leave']` query key, never this screen's new `['hr','leave-my']` key, so a
+  successful apply wrote to Postgres correctly but silently didn't refresh the table — fixed at the
+  **page** level (explicit `queryClient.invalidateQueries`), deliberately leaving the shared hook
+  untouched to avoid any blast radius into the admin leave page's own apply flow. Full live proof:
+  applied a real leave request as the demo teacher → PENDING in Postgres → cancelled via the UI →
+  CANCELLED in Postgres (204) → cross-user IDOR probes on both `leave/balance/:userId` and
+  `leave/:id/cancel` 403'd live against a real other-user row, with a Postgres control-check
+  proving the forbidden cancel had zero effect. **T3 own timetable (weekly grid):** almost pure UI —
+  `useMyTimetable()` already existed from Phase 2, no new hook needed. Explicitly built as a NEW
+  small read-only component rather than reusing the admin's per-section `TimetableGrid` (structurally
+  different slot shape — `section`/`className` per slot vs. admin's `teacher: {fullName}` — and the
+  admin one ships add/delete-slot mutations that would violate this screen's read-only requirement);
+  copied its visual conventions (DAYS array, table styling) instead. Grid rows are genuinely derived
+  from the data (no hardcoded period count); Saturday (`"6"`) correctly never rendered as a column.
+  **T4 own payroll history:** one new hook+endpoint pair
+  (`GET /hr/payroll/staff/:userId/history`). **Real, accepted data-shape limitation, designed around
+  rather than fixed:** `SalarySlipResponseDto` has no `monthBs`/`yearBs` field (the SQL joins
+  `payroll_months` only for its `ORDER BY`, never selects its columns), and `GET /hr/payroll/months`
+  — the only endpoint that could resolve a label — is `ACCOUNTANT_AND_ABOVE`-only, so a teacher can't
+  call it either; `paymentDate`/`paymentMethod` are effectively always null (never written anywhere
+  in `payroll.service.ts`). The screen shows slips in the backend's guaranteed order (most-recent
+  fiscal month first) using `createdAt` (added to the `SalarySlip` frontend type, which was missing
+  it despite the backend DTO already returning it) via `<BsDate>` instead of a fabricated month
+  label. Added a `!userId || isLoading` hydration guard since `useMyPayrollHistory` is
+  `enabled: !!userId` and TanStack Query keeps `isLoading` false while a query is merely disabled.
+  IDOR probe: own id → 200 (empty array — demo tenant has zero `salary_slips` rows tenant-wide, a
+  genuine data limitation, not a shortcut); cross-user id (school owner) → 403, verified the rejection
+  fires **before** any query runs (`assertSelfOrHrAdmin` at the top of the function). **T5 nav
+  wiring:** added all 4 screens to `PortalShell`'s existing role-aware `TEACHER_NAV_ITEMS` (done
+  directly, not dispatched — a 4-line, single-file, no-new-logic change); also made the nav
+  `flex-wrap` since it now holds 8 items, confirmed via live Playwright screenshot that all 8 fit on
+  one line at desktop width with no overflow and the STUDENT/PARENT single-link path is completely
+  unaffected (a lone item can't wrap). **Final whole-branch review (opus)** independently
+  re-derived both ownership rulings from the real backend source (not just trusting the findings
+  doc) and confirmed both hold; caught one Minor cross-task consistency gap — the Leave screen's
+  balance section gated only on `balancesLoading`, missing the same `!userId` guard the Payroll
+  screen added for the identical `useLeaveBalance(userId)` async-hydration shape (not reachable
+  today, since `PortalShell` only mounts page children once `user.role` is truthy, but flagged as
+  the same structurally-fragile async-gate pattern this project has been bitten by multiple times
+  before) — fixed directly for consistency. Confirmed throughout: no client-side ownership/role
+  check was invented anywhere in the 4 screens that could disagree with the backend's real check;
+  `useApplyLeave` and the admin leave page are provably untouched; `route-access.ts` needed no
+  change (the `/teacher` prefix from Phase 1 already covers every new sub-route). **312/312 tests
+  unchanged throughout (pure-frontend phase — live HTTP+Postgres proof was the verification method,
+  not new unit tests), `tsc --noEmit` clean.** Not pushed; no PR opened — awaiting the human's
+  go-ahead before Phase 4 (Student module).
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
