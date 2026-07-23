@@ -3,7 +3,9 @@ import { assignmentsApi, type AssignmentListParams } from '@/lib/api/assignments
 import type {
   Assignment,
   AssignmentSubmissionsView,
+  AssignmentSubmission,
   CreateAssignmentData,
+  MyAssignment,
   ReviewSubmissionData,
   UpdateAssignmentData,
 } from '@/types/api.types';
@@ -95,6 +97,41 @@ export function useReviewSubmission(assignmentId: string) {
       assignmentsApi.review(assignmentId, submissionId, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['assignments', 'submissions', assignmentId] });
+    },
+  });
+}
+
+export function useMyAssignments(params: { page?: number; limit?: number }, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['assignments', 'me', params],
+    queryFn: async () => {
+      const res = await assignmentsApi.listMine(params);
+      return {
+        data: res.data.data.data as MyAssignment[],
+        meta: res.data.data.meta as { page: number; limit: number; total: number },
+      };
+    },
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useMySubmission(assignmentId: string) {
+  return useQuery({
+    queryKey: ['assignments', 'me', 'submission', assignmentId],
+    queryFn: async () =>
+      (await assignmentsApi.mySubmission(assignmentId)).data.data as AssignmentSubmission | null,
+    enabled: !!assignmentId,
+  });
+}
+
+export function useSubmitAssignment(assignmentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { textAnswer?: string; fileKey?: string }) =>
+      assignmentsApi.submitMine(assignmentId, data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['assignments', 'me'] });
+      void qc.invalidateQueries({ queryKey: ['assignments', 'me', 'submission', assignmentId] });
     },
   });
 }

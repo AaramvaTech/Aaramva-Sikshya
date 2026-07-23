@@ -26,4 +26,15 @@ export const assignmentsApi = {
   submissions: (id: string) => api.get(`/assignments/${id}/submissions`),
   review: (id: string, submissionId: string, data: ReviewSubmissionData) =>
     api.patch(`/assignments/${id}/submissions/${submissionId}/review`, data),
+
+  // WEB-P Phase 4 — student-side. listMine hits the /me route (hard-scoped
+  // server-side to the caller's own class/section), NOT `list` above (which
+  // is the teacher/admin-facing /assignments route with different query
+  // semantics and would 403 for STUDENT).
+  listMine: (params: { page?: number; limit?: number }) => api.get('/assignments/me', { params }),
+  mySubmission: (id: string) => api.get(`/assignments/${id}/submissions/me`),
+  presignSubmissionUpload: (id: string, body: { filename: string; contentType: string; size: number }) =>
+    api.post(`/assignments/${id}/submissions/presign-upload`, body),
+  submitMine: (id: string, data: { textAnswer?: string; fileKey?: string }) =>
+    api.post(`/assignments/${id}/submissions`, data),
 };
