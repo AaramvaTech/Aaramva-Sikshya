@@ -1186,6 +1186,65 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   HTTP+Postgres+Playwright was the verification method for the screens themselves), `tsc --noEmit`
   clean.** Not pushed; no PR opened — awaiting the human's go-ahead before Phase 5 (Parent module).
 
+- [x] WEB-P Phase 5 — Parent module (`docs/web/WEB-P-PORTAL.md`, `docs/web/phase-5-findings.md`,
+  branch `feat/web-p-phase-5-parent`, off Phase 4 @ `28bb49a`) — 7 new screens under
+  `apps/web/app/(portal)/parent/` (Dashboard, Attendance+leave-request, Timetable, Notices,
+  Results+PDF, Assignments, Fees) plus a shared child-switcher, replacing Phase 1's placeholder.
+  **Step-0 IDOR audit** (`docs/web/phase-5-idor-audit.md`, predates the plan) verified every
+  child-scoped endpoint already has a real `guardians`-table ownership check — **zero apps/api
+  files touched anywhere in this branch** (api stays at 667, unchanged), and no new backend gap
+  was found mid-build (unlike Phase 4, which found a real STUDENT-timetable oversight). **Locked
+  spec, per §3:** no submission affordance for PARENT anywhere (Assignments view-only, confirmed
+  `POST /assignments/:id/submissions` is `@Roles(Role.STUDENT)`-only), Fees is view-only rendering
+  of `useStudentLedger`'s existing response (no invoice-detail-by-id endpoint exists, none
+  invented), and a **hard exclusion** — no screen may call
+  `GET /finance/payments/{esewa|khalti}/status/:transactionUuid` (side-effecting despite being a
+  GET; can finalize/credit a stuck transaction) or `GET /finance/payment-gateways` — checkout stays
+  fully out of scope for v1. **`useSelectedChild()`** (Task 2) centralizes "which child is
+  currently selected + is one selected yet" in one hook every per-child screen (4-9) reads from,
+  never re-deriving — the single biggest async-gate surface of any phase so far (5 screens all
+  depend on it). **Task 10 escalation:** adding a shell-level global `<ChildSwitcher>` per the
+  plan's own explicit instruction ("visible on every parent screen, not just per-page") created
+  real, independently-verified duplication with 5 screens' pre-existing page-level instances — a
+  genuine plan-text-vs-UI-practice conflict, escalated to the human rather than resolved
+  unilaterally; decision was shell-wins, the 5 redundant instances removed in a reviewed follow-up
+  fix. **Whole-branch review (opus) found one Important, zero-security-impact finding:** a new
+  `parent.store`'s `selectedChildId` was never cleared on logout and `useSelectedChild()` only
+  auto-picked a default when the selection was empty, never re-validating an *existing* selection
+  against a newly-logged-in different parent's own roster — a same-tab account switch left every
+  per-child screen stuck on a permanent skeleton (no data-leak risk, since every downstream query
+  is still backend-guardian-scoped and 403s on a foreign id; purely a stranded-UI bug). Fixed:
+  the hook's effect now re-picks whenever the current selection doesn't match any child in the
+  fetched roster (not only when empty), plus a `parent.store.clear()` on logout for hygiene; a new
+  `use-selected-child.test.tsx` pins the self-healing behavior (this hook is the one place 5
+  screens' worth of blast radius lives, unlike prior phases' narrow single-call-site `{enabled}`
+  fixes which stayed untested by design). **Live-proof method note:** no browser-automation tool
+  was available this session (unlike Phases 1-4's real Playwright sessions) — verification was raw
+  HTTP + Postgres against the running dev stack instead, disclosed explicitly rather than
+  glossed over; a real second family (guardian + parent account) was provisioned via the actual
+  admin API (`POST /students/:studentId/guardians`, `ProvisionGuardianDto`) for IDOR probing since
+  none pre-existed, then fully deleted after. Confirmed live: all 7 screens' underlying endpoints
+  200 for family 1's own children; a real `POST /attendance/leave` filed and Postgres-confirmed
+  (`student_id`/`applied_by` matching); **9 cross-family IDOR probes, all correctly rejected**
+  (attendance summary/history, results, report-card json+PDF, fee assignments/ledger, the leave
+  write-path with 0 rows created, and an out-of-scope timetable section) — the timetable ownership
+  check is confirmed **section-based** (`getSectionTimetable`'s PARENT branch: any child enrolled
+  in that section satisfies it), so the real negative probe used a section neither family has a
+  child in, not a same-section cross-family request (which is legitimately authorized under this
+  model). Report-card PDF: Binod's only result was genuinely unpublished in demo data (`409` —
+  a true privacy-gate hit), so the exam type was briefly published to get a full proof (own-child
+  `200` + `%PDF-1.3` magic bytes; cross-family `403` even while published), then unpublished again
+  and the 3 resulting `notifications` rows deleted. **Environment gotcha (worktree-specific, not a
+  code regression):** this worktree's `node_modules/@prisma/client` was stale (121 TS errors on
+  `nest start --watch`, all pre-existing `$queryRawUnsafe<T>()` files this phase never touched) —
+  fixed with `npx prisma generate`; future fresh worktrees may need the same. All crafted rows
+  (leave application, guardian, parent user, notifications) deleted with read-backs; 3 shimmed
+  passwords restored, 401-proven. **667 api tests (unchanged, zero apps/api diff), 320 web tests
+  (was 317, +3 from the whole-branch-review fix), `tsc --noEmit` clean.** Per the locked ruling in
+  `docs/web/WEB-P-PORTAL.md` §7, this phase's clean suite does **not** authorize Phase 6 (teacher
+  login cutover) — that needs the human's manual parity sign-off. Not pushed; no PR opened —
+  awaiting the human's go-ahead before any further phase.
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +
