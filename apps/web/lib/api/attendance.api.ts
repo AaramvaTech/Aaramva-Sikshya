@@ -10,6 +10,7 @@ import type {
   StaffAttendanceSummary,
   StudentLeaveRequest,
   ReviewLeaveData,
+  ApplyChildLeaveData,
 } from '@/types/api.types';
 
 export const attendanceApi = {
@@ -59,4 +60,18 @@ export const attendanceApi = {
 
   reviewLeave: (id: string, data: ReviewLeaveData) =>
     api.patch<ApiResponse<StudentLeaveRequest>>(`/attendance/leave/${id}/review`, data),
+
+  getStudentHistory: (
+    studentId: string,
+    params: { fromDate?: string; toDate?: string; page?: number; limit?: number },
+  ) =>
+    api.get<ApiResponse<PaginatedResponse<AttendanceRecord>>>(
+      `/attendance/students/${studentId}/history`,
+      { params },
+    ),
+
+  // WEB-P Phase 5 — POST /attendance/leave, PARENT filing leave for a child.
+  // Distinct from /hr/leave (staff leave) — unrelated endpoint, unrelated shape.
+  applyLeave: (data: ApplyChildLeaveData) =>
+    api.post<ApiResponse<StudentLeaveRequest>>('/attendance/leave', data),
 };

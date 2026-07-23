@@ -182,3 +182,12 @@ export function useImportCommit() {
     },
   });
 }
+
+export function useMyChildren() {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['students', 'my-children'],
+    queryFn: () => studentsApi.getMyChildren().then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}

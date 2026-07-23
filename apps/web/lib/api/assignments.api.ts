@@ -37,4 +37,8 @@ export const assignmentsApi = {
     api.post(`/assignments/${id}/submissions/presign-upload`, body),
   submitMine: (id: string, data: { textAnswer?: string; fileKey?: string }) =>
     api.post(`/assignments/${id}/submissions`, data),
+
+  // WEB-P Phase 5 — GET /assignments/my-children (PARENT, no id param —
+  // returns EVERY child's assignments in one call, already guardian-scoped).
+  myChildren: () => api.get('/assignments/my-children'),
 };

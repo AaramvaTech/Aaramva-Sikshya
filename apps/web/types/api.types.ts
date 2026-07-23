@@ -377,6 +377,24 @@ export interface StudentLeaveRequest {
   reviewedByName: string | null;
 }
 
+// WEB-P Phase 5 — GET /students/my-children response shape (array elements).
+export interface MyChild {
+  id: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  photoUrl: string | null;
+  relation: string;
+  currentEnrollment: {
+    className: string;
+    sectionName: string;
+    rollNumber: number | null;
+    sectionId: string;
+    academicYearId: string;
+    academicYearName: string;
+  } | null;
+}
+
 export interface ReviewLeaveData {
   status: 'APPROVED' | 'REJECTED';
   remarks?: string;
@@ -1039,6 +1057,16 @@ export interface ApplyLeaveData {
   leaveTypeId: string; fromDate: string; toDate: string; reason?: string;
 }
 
+// WEB-P Phase 5 — POST /attendance/leave payload (parent filing leave for a child).
+// Distinct from ApplyLeaveData above (which is /hr/leave, staff leave).
+export interface ApplyChildLeaveData {
+  studentId: string;
+  academicYearId: string;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+}
+
 export interface PayrollOverride {
   userId: string; customBaseSalary?: number;
   additionalAllowances?: { name: string; amount: number }[];
@@ -1478,6 +1506,17 @@ export interface Assignment {
 // ExamSchedule pattern above for /exams/schedules/my).
 export interface MyAssignment extends Assignment {
   mySubmission: { status: SubmissionStatus; submittedAt: string; marks: number | null } | null;
+}
+
+// WEB-P Phase 5 — GET /assignments/my-children response shape (array
+// elements, one per child; NOT one call per child — the backend returns
+// every child's assignments in a single request, already guardian-scoped).
+export interface MyChildAssignments {
+  studentId: string;
+  studentName: string;
+  assignments: (Assignment & {
+    submission: { status: SubmissionStatus; marks: number | null; feedback: string | null } | null;
+  })[];
 }
 
 export interface AssignmentSubmission {
