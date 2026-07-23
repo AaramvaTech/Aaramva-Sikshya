@@ -1086,6 +1086,106 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   not new unit tests), `tsc --noEmit` clean.** Not pushed; no PR opened — awaiting the human's
   go-ahead before Phase 4 (Student module).
 
+- [x] WEB-P Phase 4 — Student module (`docs/web/WEB-P-PORTAL.md`, `docs/web/phase-4-findings.md`,
+  branch `feat/web-p-phase-4-student`, off Phase 3) — six new screens under
+  `apps/web/app/(portal)/student/`, replacing Phase 1's placeholder. Per the locked spec: no fee
+  screen (STUDENT has zero finance API access) and no leave-request screen (parent files leave on
+  the student's behalf) — neither built. **Real security fix, found during research before any
+  screen was built:** `GET /timetable/section/:sectionId` lists `Role.STUDENT` in its `@Roles()`
+  but `TimetableService.getSectionTimetable` only had an ownership check for `Role.PARENT` — any
+  authenticated student could read any OTHER section's full timetable by passing an arbitrary
+  sectionId, with no error and no scoping. Not the same as the already-known `GET /timetable/
+  teacher/:teacherId` gap (that route is TEACHER_AND_ABOVE-only, not STUDENT-reachable), and not
+  an instance of "staff have broad school-structure read access by design" (TEACHER's own
+  unrestricted access there is correct, tested, and untouched by this fix) — STUDENT is a
+  different trust tier and the missing branch was a genuine oversight, confirmed by the existing
+  unit test itself using `Role.TEACHER`, never asserting anything about STUDENT. Fixed with a
+  STUDENT branch mirroring the PARENT one (direct `students.user_id` match, no `guardians` JOIN
+  needed) — purely additive, TEACHER behavior unchanged. **T1 dashboard:** composes attendance
+  summary, today's timetable, upcoming assignments (client-filtered `mySubmission === null &&
+  status === 'PUBLISHED'`, sorted by due date, capped at 5), and recent notices — pure
+  composition, zero new data-fetching logic. **T2 attendance calendar:** desktop BS-month grid
+  (not a mobile port); year-to-date percent sourced directly from the backend's official
+  `attendancePercent` (never recomputed client-side — a second, differently-scoped formula would
+  risk disagreeing with the official figure); the visible month's summary strip shows raw
+  present/absent/late/leave counts only. **Found and avoided propagating a second real, pre-
+  existing bug while building this:** `BsDateInput`'s existing `fireChange()` converts
+  `bsToAd(...)` to an AD string via `.toISOString().split('T')[0]` — confirmed LIVE on this
+  Asia/Kathmandu (UTC+5:45) dev machine that this shifts the date backward by one day (the exact
+  FIX-2 bug class, but never caught on the web frontend). `BsDateInput` itself was left alone
+  (broad blast radius across the admin app, out of scope) but the new screen uses its own local
+  `formatLocalDateAd()` (direct component extraction, no `toISOString()`) instead of copying the
+  buggy pattern. Also corrected mid-task: Saturday's tint was initially built to always override a
+  recorded status; checked against mobile's actual shipped `AttendanceCalendar` precedence
+  (`cfg ? cfg.bg : isSat ? SATURDAY_HIGHLIGHT.bg : ...` — a real status always wins, the Saturday
+  tint is only the fallback) and corrected to match. **T3 timetable:** `GET /timetable/section/
+  :sectionId` (already existed, STUDENT-allowed; academic.api.ts already had a
+  `getSectionTimetable` wrapper and use-academic.ts already had a hook with the exact
+  `enabled: !!sectionId` gate needed — reused as-is via the established `sectionId ?? ''`
+  pattern, no new hook). Read-only period-rows × day-columns table (verified against and matching
+  the teacher portal's `MyTimetableGrid` convention, not the plan's own unverified first-draft
+  layout, which assumed day-columns with stacked cards — the plan's draft was wrong, the shipped
+  screen follows the real established pattern). Review caught a real gap: `useStudentMeProfile()`'s
+  own error state wasn't originally surfaced, so a genuine `GET /students/me` outage would have
+  misrendered as a false "not enrolled" message — fixed before merge. **T4 notices:** reuses the
+  existing `useNotices` hook verbatim (already correctly audience-filtered for STUDENT server-side)
+  — zero new hooks, zero new API methods. **T5 results + PDF:** reuses the existing, already-
+  shipped `ReportCardView` component (`components/exams/report-card.tsx`, shared with the admin
+  results page) for on-page rendering instead of building per-exam-type cards from scratch — a
+  shortcut found during planning that avoided duplicating already-reviewed rendering logic. The
+  report-card PDF is generated on-the-fly per request (`buildReportCardPdf`), NOT a stored FILE-1
+  object — no presigned-URL step exists anywhere for it (confirmed: no web page downloaded a PDF
+  before this task); the download button is a direct authenticated blob fetch
+  (`responseType: 'blob'`) + a new small `downloadBlob()` primitive, shown only once
+  `examResults.length > 0` so the backend's "not published yet" 409 can never be reached from
+  this UI. **T6 assignments (list + detail + submission — the phase's headline feature):** list
+  splits "To submit" / "Submitted"; detail derives the assignment from the `GET /assignments/me`
+  list-query cache by id (confirmed live: no student-scoped single-assignment GET exists,
+  `GET /assignments/:id` is staff-only and 403s STUDENT) — never a fallback fetch, so a foreign id
+  in the URL just shows "not found," nothing to leak. Submission reuses the assignment-scoped
+  presign → raw PUT → confirm flow (`POST /assignments/:id/submissions/presign-upload`, NOT the
+  generic `/files/presign-upload`, which explicitly rejects `submission-file` uploads regardless
+  of role since it's `scopedOnly`); client "at least one of text/file" validation matches the
+  server's exact rule; a 409 (reviewed/closed) renders as a distinct "Submission locked" message,
+  never a generic error toast; a `REVIEWED` submission renders fully read-only. **Full live
+  round-trip proof, real Playwright browser session (not curl), both demo accounts shimmed/
+  verified/restored (401-proven after):** logged in as the demo student → submitted a real text
+  answer to a crafted PUBLISHED assignment through the actual submit form → Postgres read-back
+  confirmed the row → logged in as the demo teacher → the **existing, unmodified Phase 2**
+  `/teacher/assignments/:id` review screen showed the Phase-4-submitted content → reviewed it
+  (marks 9, feedback) through that real UI → Postgres read-back confirmed `REVIEWED`/marks/
+  feedback/`reviewed_by`, plus two `notifications` rows (student + guardian) confirming PUSH-1's
+  event pipeline fired correctly for this new write path → logged back in as the student → the
+  assignment now rendered fully read-only with marks and feedback visible. This closes the loop
+  Phase 2 could previously only test by having a demo student submit via a raw API call — this
+  time both sides of the portal round-tripped through real UI. **IDOR probes (raw HTTP,
+  deliberately outside the UI):** a second crafted assignment scoped to a different section
+  (Grade 9 B, the demo student is in Grade 9 A) was confirmed absent from the student's own
+  `/assignments/me` list; a direct submit attempt against it returned `403 FORBIDDEN_SCOPE` with
+  zero rows created (Postgres-confirmed); a direct `GET /assignments/:id` against it returned
+  `403 FORBIDDEN_ROLE`. The timetable IDOR fix was independently re-probed live post-fix:
+  cross-section request → `403 FORBIDDEN_SCOPE`, own section → 200 with real data. Attendance and
+  results endpoints are structurally IDOR-proof by construction (student always resolved from
+  `token.userId → students.user_id`, never a param) — confirmed by direct source reading, nothing
+  to probe beyond that. **Two lower-severity gaps found during research, deliberately NOT fixed
+  (out of the explicit IDOR-probe scope named for this phase):** `GET /communication/notices/:id`
+  has no audience/publish filtering at all (any role can fetch any single notice by UUID guess) —
+  not exercised by the new notices screen, which never calls it (the list already returns full
+  `body` text per row); a `warning-700` Tailwind class is used with no defined CSS variable behind
+  it (`app/globals.css`'s warning scale stops at `-600`) — but this is a widespread, pre-existing
+  gap already present in `status-badge.tsx` itself and several admin pages, correctly followed as
+  established convention rather than deviated from. **Async-gate bug class (4 prior occurrences
+  across Phases 2-3, watched for explicitly this phase):** the two real async-dependency points
+  built this phase (T3's `sectionId` from `useStudentMeProfile()`, T1's dashboard greeting) were
+  built with the correct `!value || isLoading` guard shape from the start rather than shipped
+  broken and fixed later, so there was no regression test to add — per the standing instruction
+  from the Phase 3 follow-up, no shared test helper was built either, for the same reason as
+  before. Full details, including the exact live-proof transcript, in `docs/web/
+  phase-4-findings.md`. **667 api tests (was 665, +2 for the timetable IDOR fix's regression
+  tests), 317 web tests (unchanged — pure-frontend screens plus one backend fix; live
+  HTTP+Postgres+Playwright was the verification method for the screens themselves), `tsc --noEmit`
+  clean.** Not pushed; no PR opened — awaiting the human's go-ahead before Phase 5 (Parent module).
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +

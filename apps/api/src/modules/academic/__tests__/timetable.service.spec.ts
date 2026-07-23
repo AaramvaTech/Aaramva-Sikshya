@@ -230,7 +230,7 @@ describe('TimetableService', () => {
     });
   });
 
-  describe('IDOR protection — PARENT role', () => {
+  describe('IDOR protection — PARENT and STUDENT roles', () => {
     it('getSectionTimetable throws ForbiddenException when no child of parent is enrolled in the section', async () => {
       // enrollment check returns no matching student
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
@@ -256,7 +256,31 @@ describe('TimetableService', () => {
       expect(result.schedule[1]).toHaveLength(1);
     });
 
-    it('getSectionTimetable skips IDOR check for non-PARENT roles', async () => {
+    it('getSectionTimetable throws ForbiddenException when a student is not enrolled in the section', async () => {
+      // enrollment check returns no matching student
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await expect(
+        service.getSectionTimetable('other-section', 'student-uuid', Role.STUDENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getSectionTimetable proceeds when the student is enrolled in the section', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-uuid' }])   // IDOR enrollment check passes
+        .mockResolvedValueOnce([{                           // timetable slots query
+          ...mockSlotRow,
+          subject_name: 'Math', subject_code: 'MTH',
+          teacher_full_name: 'Ram Sharma',
+          section_name: 'A', class_name: 'Grade 10',
+        }]);
+
+      const result = await service.getSectionTimetable('sec-1', 'student-uuid', Role.STUDENT);
+
+      expect(result.schedule[1]).toHaveLength(1);
+    });
+
+    it('getSectionTimetable skips IDOR check for staff roles (e.g. TEACHER)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // only the slots query
 
       const result = await service.getSectionTimetable('sec-1', 'teacher-uuid', Role.TEACHER);

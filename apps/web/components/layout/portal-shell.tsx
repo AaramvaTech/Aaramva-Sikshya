@@ -49,6 +49,19 @@ const TEACHER_NAV_ITEMS: { href: string; label: string }[] = [
   { href: '/teacher/payroll', label: 'Payroll' },
 ];
 
+/**
+ * WEB-P Phase 4 Task 10 — student nav items. Six screens built and now wired
+ * into the portal nav.
+ */
+const STUDENT_NAV_ITEMS: { href: string; label: string }[] = [
+  { href: '/student', label: 'Dashboard' },
+  { href: '/student/attendance', label: 'Attendance' },
+  { href: '/student/timetable', label: 'Timetable' },
+  { href: '/student/notices', label: 'Notices' },
+  { href: '/student/results', label: 'Results' },
+  { href: '/student/assignments', label: 'Assignments' },
+];
+
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -114,6 +127,25 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 const active =
                   pathname === item.href ||
                   (item.href !== '/teacher' && pathname.startsWith(item.href + '/'));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={
+                      active
+                        ? 'text-sm font-semibold text-brand-600 dark:text-brand-400'
+                        : 'text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                    }
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })
+            ) : user?.role === 'STUDENT' ? (
+              STUDENT_NAV_ITEMS.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== '/student' && pathname.startsWith(item.href + '/'));
                 return (
                   <Link
                     key={item.href}

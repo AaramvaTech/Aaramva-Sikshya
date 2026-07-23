@@ -64,6 +64,20 @@ export class TimetableService {
       );
       if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
+    // WEB-P Phase 4 — STUDENT was in this route's @Roles() allowlist but had
+    // no ownership check at all (only PARENT was scoped above), so any
+    // authenticated student could read any OTHER section's timetable by
+    // passing an arbitrary sectionId. Mirrors the PARENT check: a student
+    // may only ever view their own section's timetable.
+    if (callerRole === Role.STUDENT && callerId) {
+      const enrollment = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT s.id FROM students s
+         WHERE s.user_id = $1::uuid AND s.section_id = $2::uuid AND s.deleted_at IS NULL`,
+        callerId,
+        sectionId,
+      );
+      if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
+    }
     const rows = await this.tenantPrisma.query<
       TimetableSlotRow & {
         subject_name: string;

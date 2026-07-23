@@ -86,7 +86,7 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // WEB-P Phase 1 — dedicated student/parent/teacher portal landing routes.
   // No backend calls yet from these routes; update the endpoint citation as
   // later phases add real screens.
-  { prefix: '/student', roles: ['STUDENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
+  { prefix: '/student', roles: ['STUDENT'], endpoint: 'GET /students/me (WEB-P Phase 4)' },
   { prefix: '/parent', roles: ['PARENT'], endpoint: 'WEB-P placeholder (no backend call yet — update as later phases add real screens)' },
   { prefix: '/teacher', roles: ['TEACHER'], endpoint: 'GET /dashboard/weekly-attendance (WEB-P Phase 2 — real screens now live under this prefix: dashboard, attendance, marks, assignments)' },
 ];
