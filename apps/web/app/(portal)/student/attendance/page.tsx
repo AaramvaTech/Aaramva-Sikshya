@@ -314,18 +314,21 @@ export default function StudentAttendancePage() {
                         title={cell.dateAd}
                         className={cn(
                           'flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-lg text-sm font-semibold',
-                          // Saturday is a non-school day — its amber/muted background
-                          // wins regardless of any attendance status on that cell.
-                          cell.isSaturday
-                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/[0.08] dark:text-amber-400'
-                            : style
-                              ? cn(style.bg, style.text)
+                          // A real recorded status always wins. Saturday's amber/muted
+                          // background is only the fallback for a Saturday cell with no
+                          // recorded status (the common case, since Saturday is normally
+                          // a non-school day) — mirrors mobile's AttendanceCalendar
+                          // precedence (`cfg ? cfg.bg : isSat ? SATURDAY_HIGHLIGHT.bg : ...`).
+                          style
+                            ? cn(style.bg, style.text)
+                            : cell.isSaturday
+                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/[0.08] dark:text-amber-400'
                               : 'bg-gray-50 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400',
                           cell.isToday && 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-gray-900',
                         )}
                       >
                         <span>{cell.day}</span>
-                        {!cell.isSaturday && style && <span className={cn('h-1 w-1 rounded-full', style.dot)} />}
+                        {style && <span className={cn('h-1 w-1 rounded-full', style.dot)} />}
                       </div>
                     );
                   })}
