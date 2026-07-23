@@ -65,8 +65,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          # No npm cache here (unlike api/mobile) — apps/web's bs-calendar
+          # dependency is a freshly-regenerated LOCAL tarball on every
+          # install (see the "Vendor bs-calendar" step below), never
+          # actually fetched from the registry, so there's nothing worth
+          # caching for it — and an npm-cache restore from a prior run has
+          # been observed to serve a stale/corrupted blob for that exact
+          # tarball path ("seems to be corrupted, trying again" → ENOENT),
+          # which a warm cache then perpetuates on every subsequent run.
+      # Explicit step (matches the api/mobile jobs' pattern of building
+      # their bs-calendar dependency as its own named step) rather than
+      # relying on apps/web's `preinstall` npm lifecycle hook to produce
+      # the tarball in time — that implicit ordering is what raced and
+      # failed here.
+      - name: Vendor bs-calendar (produces apps/web/vendor/bs-calendar.tgz)
+        working-directory: .
+        run: node scripts/vendor-bs-calendar.mjs
       - name: Install
         run: npm ci
       - name: Typecheck
