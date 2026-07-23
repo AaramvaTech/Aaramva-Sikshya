@@ -27,6 +27,15 @@
 # deliberately NOT using `--ignore-scripts` here: sharp/msw/unrs-resolver in
 # this dependency tree have real install/postinstall scripts that need to run.)
 #
+# `npm install` below, NOT `npm ci`: `npm pack` (how the vendor script packs
+# bs-calendar) does not produce byte-reproducible tarballs across separate
+# builds (confirmed empirically — file mtimes embedded in the tarball differ
+# build to build even from identical, LF-normalized source). `npm ci` enforces
+# package-lock.json's pinned sha512 byte-for-byte and fails (EINTEGRITY) the
+# moment whoever last ran the vendor script produced different bytes than
+# THIS build does — unavoidable for a dependency that's rebuilt fresh on
+# every install by design, never actually fetched from the registry.
+#
 # Uses `output: 'standalone'` (next.config.ts): the runtime stage carries only
 # the traced server bundle + static assets, no node_modules install.
 # Runtime env: PORT (default 3000) / HOSTNAME per Next standalone docs.
@@ -37,7 +46,7 @@ WORKDIR /app
 COPY vendor/ vendor/
 COPY scripts/ scripts/
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # ── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:24-alpine AS build
