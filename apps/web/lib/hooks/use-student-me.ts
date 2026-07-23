@@ -41,15 +41,6 @@ export function useMyAttendanceHistory(params: { fromDate: string; toDate: strin
   });
 }
 
-export function useMyResults() {
-  const slug = useTenantStore((s) => s.slug);
-  return useQuery({
-    queryKey: ['students', 'me', 'results'],
-    queryFn: () => studentApi.getMyResults().then((r) => r.data.data),
-    enabled: !!slug,
-  });
-}
-
 export function useMyReportCard() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({

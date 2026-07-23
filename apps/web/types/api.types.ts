@@ -354,26 +354,6 @@ export interface StudentMeProfile {
   } | null;
 }
 
-// GET /students/me/results response shape (array elements).
-export interface MyResultRow {
-  id: string;
-  studentId: string;
-  examTypeId: string;
-  academicYearId: string;
-  totalMarks: number;
-  obtainedMarks: number;
-  percentage: number;
-  gpa: number | null;
-  grade: string;
-  division: string;
-  rankInSection: number;
-  rankInClass: number;
-  isPassed: boolean;
-  status: 'PASS' | 'FAIL' | 'ABSENT';
-  computedAt: { ad: string; bs: string } | null;
-  examTypeName: string;
-}
-
 // Student leave application (attendance-leave, distinct from HR staff leave).
 // Returned enriched by GET /attendance/leave for the review screen.
 export interface StudentLeaveRequest {

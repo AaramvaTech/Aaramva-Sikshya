@@ -115,6 +115,9 @@ export function useMyAssignments(params: { page?: number; limit?: number }, opti
   });
 }
 
+// Verified live against the real API (WEB-P Phase 4 Task 2 Step 0): a
+// not-yet-submitted assignment returns 200 with `data: null`, never 404 —
+// so this deliberately has no try/catch treating a 404 as "not submitted".
 export function useMySubmission(assignmentId: string) {
   return useQuery({
     queryKey: ['assignments', 'me', 'submission', assignmentId],

@@ -6,7 +6,6 @@ import type {
   MyAttendanceHistoryItem,
   MyTodayTimetable,
   StudentMeProfile,
-  MyResultRow,
   ReportCard,
 } from '@/types/api.types';
 
@@ -21,7 +20,6 @@ export const studentApi = {
     api.get<ApiResponse<MyAttendanceSummary>>('/students/me/attendance/summary', { params }),
   getMyAttendanceHistory: (params: { fromDate?: string; toDate?: string; page?: number; limit?: number }) =>
     api.get<ApiResponse<PaginatedResponse<MyAttendanceHistoryItem>>>('/students/me/attendance/history', { params }),
-  getMyResults: () => api.get<ApiResponse<MyResultRow[]>>('/students/me/results'),
   getMyReportCard: () => api.get<ApiResponse<ReportCard>>('/students/me/report-card'),
   // Generated on the fly per-request (buildReportCardPdf) — NOT a FILE-1
   // stored object, so there is no presigned-URL step here; this is a direct
