@@ -1,1 +1,13 @@
 apps/api/migrations/tenant/*.sql text eol=lf
+
+# packages/bs-calendar is vendored into apps/web as a packed, hash-pinned
+# npm tarball (see scripts/vendor-bs-calendar.mjs) — apps/web/package-lock.json
+# pins a sha512 integrity hash of that tarball's exact bytes. Without this,
+# a Windows checkout (core.autocrlf converts these .ts files to CRLF) and a
+# Linux checkout (LF, as committed) compile to byte-different output,
+# producing a byte-different tarball with a DIFFERENT hash — `npm ci`'s
+# strict integrity check then fails with EINTEGRITY on whichever platform
+# didn't generate the hash pinned in the lockfile. Pinning LF here makes
+# every checkout byte-identical regardless of platform, matching the same
+# fix already applied above for the tenant migration files.
+packages/bs-calendar/**/*.ts text eol=lf
