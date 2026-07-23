@@ -282,6 +282,43 @@ export function useLeaveBalance(userId: string) {
   });
 }
 
+// WEB-P Phase 3 Task 2 — teacher's own leave requests (GET /hr/leave/my).
+// Distinct query key ('leave-my') from the admin useLeaveRequests's 'leave'
+// key so the two never collide or invalidate each other.
+export function useMyLeave(params?: { page?: number; limit?: number; status?: string }) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'leave-my', params],
+    queryFn: () => hrApi.getMyLeave(params).then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
+export function useCancelLeave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hrApi.cancelLeave(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hr', 'leave-my'] });
+    },
+  });
+}
+
+// WEB-P Phase 3 Task 4 — teacher's own payroll slip history
+// (GET /hr/payroll/staff/:userId/history). Distinct query key
+// ('payroll-history') from the admin usePayrollSlips's ('payroll-slips',
+// monthId) key — different route, different shape (all months for one
+// staff member vs. one month for all staff), never invalidate one from
+// the other.
+export function useMyPayrollHistory(userId: string) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['hr', 'payroll-history', userId],
+    queryFn: () => hrApi.getMyPayrollHistory(userId).then((r) => r.data.data),
+    enabled: !!slug && !!userId,
+  });
+}
+
 export function usePayrollMonths() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
