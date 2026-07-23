@@ -15,7 +15,12 @@ export function useSelectedChild() {
   const setSelectedChildId = useParentStore((s) => s.setSelectedChildId);
 
   useEffect(() => {
-    if (!selectedChildId && children && children.length > 0) {
+    // Re-picks a default whenever there's no selection yet, OR the current
+    // selection no longer belongs to this roster — the latter case being a
+    // same-tab logout+login as a different parent, whose stale
+    // selectedChildId otherwise survives in the (unpersisted, in-memory)
+    // parent.store untouched, since it doesn't match any child.id here.
+    if (children && children.length > 0 && !children.some((c) => c.id === selectedChildId)) {
       setSelectedChildId(children[0].id);
     }
   }, [selectedChildId, children, setSelectedChildId]);

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/auth.store';
 import { useTenantStore } from '@/store/tenant.store';
 import { useLocaleStore } from '@/store/locale.store';
+import { useParentStore } from '@/store/parent.store';
 import { authApi } from '@/lib/api/auth.api';
 import { canAccess, homeRoute } from '@/lib/route-access';
 import { AccessDenied } from './access-denied';
@@ -85,6 +86,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   const { accessToken, isInitialized, user, logout } = useAuthStore();
   const { name: tenantName, clear: clearTenant } = useTenantStore();
   const { locale, setLocale } = useLocaleStore();
+  const clearSelectedChild = useParentStore((s) => s.clear);
 
   useEffect(() => {
     if (isInitialized && !accessToken) {
@@ -108,6 +110,11 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
     } finally {
       logout();
       clearTenant();
+      // WEB-P Phase 5 stale-selected-child fix: a same-tab login as a
+      // different parent must not inherit the prior parent's selection —
+      // useSelectedChild() self-heals too, but resetting here is belt-and-
+      // suspenders hygiene (parent.store is in-memory only, never persisted).
+      clearSelectedChild();
       router.push('/login');
     }
   }
