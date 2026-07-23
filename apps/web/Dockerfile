@@ -27,14 +27,20 @@
 # deliberately NOT using `--ignore-scripts` here: sharp/msw/unrs-resolver in
 # this dependency tree have real install/postinstall scripts that need to run.)
 #
-# `npm install` below, NOT `npm ci`: `npm pack` (how the vendor script packs
-# bs-calendar) does not produce byte-reproducible tarballs across separate
-# builds (confirmed empirically — file mtimes embedded in the tarball differ
-# build to build even from identical, LF-normalized source). `npm ci` enforces
-# package-lock.json's pinned sha512 byte-for-byte and fails (EINTEGRITY) the
-# moment whoever last ran the vendor script produced different bytes than
-# THIS build does — unavoidable for a dependency that's rebuilt fresh on
-# every install by design, never actually fetched from the registry.
+# The install below names the exact bs-calendar spec (`bs-calendar@file:...`)
+# rather than a plain `npm ci`/`npm install`. Neither of those is sufficient:
+# both enforce package-lock.json's EXISTING pinned integrity hash for this
+# `file:` dependency and fail (EINTEGRITY) rather than re-hashing it — and
+# `npm pack` (how the vendor script above packs bs-calendar) does not produce
+# byte-reproducible tarballs across platforms (confirmed empirically: this
+# repo reliably produces one sha512 on Windows dev machines and a different,
+# but internally consistent, sha512 on Linux — npm/tar embeds platform-
+# specific metadata such as file-mode bits). Naming the exact spec forces npm
+# to re-hash against what THIS build just produced instead of trusting
+# whichever platform's hash happens to be pinned in the lockfile — the exact
+# remedy scripts/vendor-bs-calendar.mjs's own header comment documents as
+# required after any packages/bs-calendar change. This one command installs
+# the full dependency tree, not just bs-calendar.
 #
 # Uses `output: 'standalone'` (next.config.ts): the runtime stage carries only
 # the traced server bundle + static assets, no node_modules install.
@@ -46,7 +52,7 @@ WORKDIR /app
 COPY vendor/ vendor/
 COPY scripts/ scripts/
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm install bs-calendar@file:./vendor/bs-calendar.tgz
 
 # ── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:24-alpine AS build
