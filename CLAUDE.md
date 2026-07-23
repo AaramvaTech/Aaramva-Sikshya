@@ -927,6 +927,95 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   screenshot-confirmed, not just asserted. `apps/web` 299/299 tests passing, `tsc --noEmit` clean,
   unchanged from pre-merge baseline.
 
+- [x] WEB-P Phase 2 — Teacher core (`docs/web/WEB-P-PORTAL.md`, branch
+  `feat/web-p-phase-2-teacher-core`, off Phase 1) — three real, desktop-optimized teacher screens
+  plus a from-scratch dashboard, replacing Phase 1's placeholder teacher home. Five tasks, each
+  independently implemented and reviewed (three needed one fix round), plus a whole-branch review.
+  **T1 dashboard:** `/teacher` rebuilt from scratch — today's classes, my sections, my attendance
+  this month, plus the existing weekly-attendance/upcoming-exams widgets — calling ONLY
+  `TEACHER_AND_ABOVE` endpoints, never `PRINCIPAL_AND_ABOVE`-only `overview`/`activity`. **Fixes 2 of
+  the 4 pre-existing TEACHER 403 bugs by construction**, not by changing backend roles. Four
+  teacher-scoped backend endpoints that existed but had zero frontend callers before this phase
+  (`GET /timetable/my`, `/timetable/my/sections`, `/hr/staff/me`, `/attendance/staff/my/summary`)
+  got their first hooks/API-client methods here (`lib/api/timetable.api.ts` new; `hr.api.ts`/
+  `attendance.api.ts` extended). `PortalShell` gained a role-aware nav (STUDENT/PARENT completely
+  unaffected — still exactly one "Home" link; TEACHER gets Dashboard/Attendance/Marks/Assignments).
+  **T2 attendance grid:** `/teacher/attendance` reuses the existing `AttendanceGrid` component
+  (already had "Mark All Present" built in) and admin's hooks UNCHANGED — only a new page
+  composition. Picker defaults to the teacher's own sections (`useMySections`, auto-selects if
+  exactly one) with a collapsed "Browse all classes" fallback, since `POST /attendance/students/bulk`
+  intentionally allows any teacher to mark any section (accountability via `marked_by`, not a
+  permissions gate) — the soft-scope is never hard-blocked. **T3 marks grid:** `/teacher/marks`
+  reuses the existing `MarksGrid` component unchanged; picker uses a NEW, purpose-built
+  `GET /exams/schedules/my` (backend-ready, previously unwired) instead of admin's school-wide
+  3-step cascade — simpler and correctly scoped, no browse-all here by design (no teacher-scoped
+  "all schedules" endpoint exists; a teacher covering another's exam still reaches the write
+  endpoint via admin's `/exams/marks`, confirmed reachable). **Found via review, not before shipping:
+  a real stale-roster race** — an async-resolved `selectedSchedule` fed a dependent roster query
+  with no `enabled` gate, so a fresh page load/deep link could briefly fetch an unrelated,
+  unfiltered roster that `MarksGrid`'s mount-once internal state would never self-correct from.
+  Fixed: `useStudents` gained an optional `{enabled}` param (backward-compatible — every other
+  caller unaffected, confirmed by grep), gated on `!!selectedSchedule`, plus a real 4-state render
+  machine (loading/error/not-found/ready) replacing a silent `?? 100` fullMarks fallback. **T4
+  assignments view/review:** `/teacher/assignments` + `/teacher/assignments/[id]` reuse ALL existing
+  assignment hooks unchanged (`useAssignments`, `useAssignment`, `useAssignmentSubmissions`,
+  `usePublishAssignment`, `useCloseAssignment`, `useReviewSubmission`) — zero new hooks needed.
+  **The identical race-condition bug class recurred**, milder, on the list page (`classId` from
+  async `useMySections()` feeding `useAssignments()` unguarded — self-corrects, no permanent stale
+  state, no security exposure since the backend already permits broad viewing, but the same
+  unguarded-dependent-query shape, and it contradicted the implementer's own report). Fixed the same
+  way: `useAssignments` gained the same `{enabled}` param; a `scopeReady` flag (handling explicit
+  browse-all, own-scope-resolved-with-a-class-picked, AND own-scope-resolved-with-zero-sections as
+  three legitimately-ready cases) gates both the query and a render-level skeleton — closing even
+  the one-render transitional gap a naive `!loading`-only guard would've missed. **T5 assignment
+  creation (net-new — mobile has no creation UI to reference; admin's create dialog is the only
+  reference):** wires up T4's previously-inert "New Assignment" button. Reuses `useCreateAssignment`
+  and `uploadFile(file, 'assignment-attachment')` unchanged; always creates DRAFT (no publish-now
+  toggle — publishing stays T4's separate detail-page action, matching admin's already-shipped
+  behavior). **Explicitly told about the two prior race-condition findings and asked to proactively
+  self-check before submitting** — found and fixed one instance in its own new code (a class picker
+  that could read as "genuinely empty" before `useMySections()` settled) *before* review, using the
+  same gating pattern; the review independently traced every render path and confirmed the fix is
+  complete. **Investigated but deliberately NOT built (per explicit ruling):** whether TEACHER
+  should approve/reject student leave requests — confirmed this is correct backend behavior
+  (`PATCH /attendance/leave/:id/review` rightly excludes TEACHER) with a leftover *admin-portal* UI
+  affordance (buttons render, click 403s — same "UI leak" pattern as student-edit), not a gap. The
+  new portal builds no approve/reject affordance; the old admin page's dead buttons are left alone
+  as a known, documented issue (`docs/web/WEB-P-PORTAL.md` §6) — moot once Phase 6 removes teacher
+  admin access entirely. **Live-proof discipline held throughout:** every workflow-touching task used
+  a real demo-tenant teacher account (`teacher@demo.school`, shim/verify/restore, real Playwright
+  browser automation against the actual UI, 401-read-back-proven restoration) and confirmed the
+  relevant accountability field (`marked_by`, `entered_by`, `reviewed_by`, `created_by`) via a live
+  Postgres SELECT. T4's round trip additionally had a demo STUDENT submit via a direct API call (no
+  student submission UI exists yet — correctly not faked as UI) before the teacher reviewed it
+  through the real built UI. T5's attachment path was honestly reported as not fully exercised
+  (storage configured, presign succeeded, but MinIO wasn't running in this dev environment so the
+  PUT correctly failed — no bogus key was recorded). **Final whole-branch review** additionally
+  re-examined T1/T2 (approved before the race-condition bug class was even identified) with fresh
+  eyes and confirmed neither is vulnerable to it, confirmed all 4 teacher nav links resolve with no
+  remaining 404s, confirmed `route-access.ts` was never touched (the `/teacher` prefix from Phase 1
+  already covers every new sub-route via longest-prefix matching), and confirmed no client-side
+  check anywhere could be mistaken for a real security boundary. Flagged the marks-screen
+  browse-all gap for a decision (ruled intentional, documented in place) and a stale
+  `route-access.ts` citation (refreshed). **T6 (post-report addition, human-requested):** the
+  recurring async-gate race fix (T3/T4/T5) had been verified only live, never pinned with a test —
+  correctly called out as a real gap, since "verified live once" gives zero protection against a
+  future unrelated edit silently reintroducing a bug that had *already* recurred twice by accident
+  within this same phase. Added this codebase's **first hook-level/DOM tests** (everything before
+  this was a pure Node-environment logic test): `@testing-library/react` + `jsdom`, scoped via
+  PER-FILE `// @vitest-environment jsdom` directives (global `vitest.config.ts` environment
+  untouched) — `useStudents`'s and `useAssignments`'s new `{enabled}` options each get `renderHook`
+  tests proving the gated query never fires (call-count assertion, not just a timing-fragile
+  `fetchStatus` check) AND a cross-gate-isolation case (real tenant slug present + `enabled: false`
+  → still idle, proving the new gate isn't hiding behind the pre-existing `!!slug` gate). T5's
+  inline expression was extracted to a named `resolveScopeReady()` pure function (verified
+  behavior-identical) and pinned with plain logic tests, no new framework needed for that one.
+  Review specifically mental-reverted each fix against the new tests to confirm they'd actually
+  fail, not just pass trivially — they do. **312/312 tests (was 299 — 13 new), `tsc --noEmit`
+  clean.** Not pushed; no PR opened — awaiting the human's
+  go-ahead before Phase 3 (HR self-service: own leave, own profile, own timetable, own payroll
+  slips — backend already exists, pure frontend).
+
 **PUSH-1 backlog (deliberate descopes):**
 - `invoice.created` event: skipped — bulk invoice generation needs a spam-vs-signal decision
   (one push per invoice vs digest) before emitting per-invoice events. payment.received +

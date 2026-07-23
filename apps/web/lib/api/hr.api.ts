@@ -27,6 +27,10 @@ export const hrApi = {
     api.get<ApiResponse<PaginatedResponse<StaffSummary>>>('/hr/staff', { params }),
   getStaff: (id: string) =>
     api.get<ApiResponse<StaffDetail>>(`/hr/staff/${id}`),
+  // WEB-P Phase 2 Task 1 — self-scoped (GET /hr/staff/me, TEACHER_AND_ABOVE);
+  // resolves from the caller's own token, no id param.
+  getMyProfile: () =>
+    api.get<ApiResponse<StaffDetail>>('/hr/staff/me'),
   createStaff: (data: CreateStaffData) =>
     api.post<ApiResponse<StaffDetail>>('/hr/staff', data),
   updateStaff: (id: string, data: Partial<CreateStaffData>) =>

@@ -7,6 +7,7 @@ import type {
   StudentAttendanceSummary,
   SectionAttendanceReport,
   SchoolAttendanceSummary,
+  StaffAttendanceSummary,
   StudentLeaveRequest,
   ReviewLeaveData,
 } from '@/types/api.types';
@@ -41,6 +42,14 @@ export const attendanceApi = {
 
   getSchoolSummary: () =>
     api.get<ApiResponse<SchoolAttendanceSummary>>('/attendance/students/school/summary'),
+
+  // WEB-P Phase 2 Task 1 — self-scoped (GET /attendance/staff/my/summary,
+  // TEACHER_AND_ABOVE); year/month are AD and required by the backend
+  // (Postgres EXTRACT on the stored date, no default).
+  getMyStaffSummary: (params: { year: number; month: number }) =>
+    api.get<ApiResponse<StaffAttendanceSummary>>('/attendance/staff/my/summary', {
+      params,
+    }),
 
   // ── Student leave requests (review loop) ──────────────────────────────────
   listLeaveRequests: (params: { status?: string; page?: number; limit?: number }) =>

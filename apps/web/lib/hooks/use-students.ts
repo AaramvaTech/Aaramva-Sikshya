@@ -27,12 +27,19 @@ export function useStudentStats() {
   });
 }
 
-export function useStudents(params: StudentListParams) {
+export function useStudents(params: StudentListParams, options?: { enabled?: boolean }) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['students', params],
     queryFn: () => studentsApi.list(params).then((r) => r.data),
-    enabled: !!slug,
+    // WEB-P Phase 2 Task 3 fix: optional caller-supplied gate, ANDed with the
+    // usual tenant check. Lets a page whose filter key resolves asynchronously
+    // (e.g. a className derived from a still-loading schedule lookup) hold
+    // this query off entirely rather than firing once, unfiltered, against
+    // whatever key happens to be undefined on the first render. Every existing
+    // caller omits `options`, so `options?.enabled ?? true` preserves their
+    // behavior exactly.
+    enabled: !!slug && (options?.enabled ?? true),
   });
 }
 

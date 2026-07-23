@@ -350,6 +350,21 @@ export interface SectionAttendanceReport {
   }[];
 }
 
+// WEB-P Phase 2 Task 1 — GET /attendance/staff/my/summary (self-scoped;
+// mirrors backend StaffSummaryDto). year/month are AD (Postgres EXTRACT on
+// the stored date), not BS — the caller supplies the current AD month.
+export interface StaffAttendanceSummary {
+  userId: string;
+  month: number;
+  year: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  holiday: number;
+  total: number;
+}
+
 export interface SchoolAttendanceSummary {
   date: { ad: string; bs: string };
   totalStudents: number;
@@ -649,6 +664,15 @@ export interface TeacherTimetable {
   schedule: Record<string, TeacherSlotItem[]>;
 }
 
+// WEB-P Phase 2 Task 1 — GET /timetable/my/sections (every section where the
+// caller is either the class teacher or has a timetable slot).
+export interface TeacherSection {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  classId: string;
+}
+
 export interface TimetableSlotData {
   sectionId: string;
   subjectId: string;
@@ -688,6 +712,16 @@ export interface ExamSchedule {
   fullMarks: number;
   passMarks: number;
   room: string | null;
+}
+
+// WEB-P Phase 2 Task 3 — GET /exams/schedules/my response row. Unlike
+// ExamSchedule (whose className/subjectName are optional, admin resolves
+// them client-side via classSubjects), the backend joins these directly for
+// this endpoint (see toMyExamScheduleResponse), so they're always present.
+export interface MyExamSchedule extends ExamSchedule {
+  examTypeName: string;
+  subjectName: string;
+  className: string;
 }
 
 export interface MarkRecord {

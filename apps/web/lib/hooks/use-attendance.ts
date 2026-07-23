@@ -58,6 +58,19 @@ export function useStudentAttendanceSummary(
   });
 }
 
+// WEB-P Phase 2 Task 1 — teacher's own staff-attendance summary for a given
+// AD year/month (backend requires both, no default — caller passes the
+// current AD month for "this month").
+export function useMyStaffAttendanceSummary(year: number, month: number) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'staff-my-summary', year, month],
+    queryFn: () =>
+      attendanceApi.getMyStaffSummary({ year, month }).then((r) => r.data.data),
+    enabled: !!slug,
+  });
+}
+
 export function useSectionAttendanceReport(
   sectionId: string | null,
   params: { fromDate: string; toDate: string; academicYearId?: string } | null,

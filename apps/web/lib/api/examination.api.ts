@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   ExamType,
   ExamSchedule,
+  MyExamSchedule,
   MarkRecord,
   ClassResultRow,
   ReportCard,
@@ -30,6 +31,10 @@ export const examinationApi = {
   // Schedules
   listSchedules: (params: { examTypeId?: string; classId?: string }) =>
     api.get<ApiResponse<ExamSchedule[]>>('/exams/schedules', { params }),
+  // WEB-P Phase 2 Task 3 — teacher-portal picker: server-side scoped to the
+  // caller's own (class, subject) timetable pairs (TEACHER_AND_ABOVE).
+  getMySchedules: (params?: { examTypeId?: string }) =>
+    api.get<ApiResponse<MyExamSchedule[]>>('/exams/schedules/my', { params }),
   bulkCreateSchedules: (data: BulkCreateScheduleData) =>
     api.post<ApiResponse<ExamSchedule[]>>('/exams/schedules/bulk', data),
   updateSchedule: (
