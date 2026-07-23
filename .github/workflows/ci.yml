@@ -81,8 +81,23 @@ jobs:
       - name: Vendor bs-calendar (produces apps/web/vendor/bs-calendar.tgz)
         working-directory: .
         run: node scripts/vendor-bs-calendar.mjs
+      # `npm install`, NOT `npm ci`: `npm pack` (inside the vendor script
+      # above) does not produce byte-reproducible tarballs — confirmed
+      # empirically, THREE separate builds of byte-identical LF-normalized
+      # TypeScript source (packages/bs-calendar/**/*.ts is eol=lf-pinned in
+      # .gitattributes specifically to rule out line-ending drift, see that
+      # file) each produced a DIFFERENT sha512 for apps/web/vendor/
+      # bs-calendar.tgz — almost certainly npm/tar embedding each build's
+      # own file mtimes. `npm ci` enforces package-lock.json's pinned
+      # integrity hash byte-for-byte and fails (EINTEGRITY) the moment any
+      # rebuild produces different bytes than whatever machine last
+      # committed that hash — which is unavoidable here, since the tarball
+      # is deliberately rebuilt fresh on every single install, never
+      # actually fetched from the registry. `npm install` accepts the
+      # freshly-built tarball instead of demanding it match a hash that was
+      # never going to be reproducible in the first place.
       - name: Install
-        run: npm ci
+        run: npm install
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Test placeholder
