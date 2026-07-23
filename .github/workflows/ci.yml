@@ -65,10 +65,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          # No npm cache here (unlike api/mobile) — apps/web's bs-calendar
+          # dependency is a freshly-regenerated LOCAL tarball on every
+          # install (see the "Vendor bs-calendar" step below), never
+          # actually fetched from the registry, so there's nothing worth
+          # caching for it — and an npm-cache restore from a prior run has
+          # been observed to serve a stale/corrupted blob for that exact
+          # tarball path ("seems to be corrupted, trying again" → ENOENT),
+          # which a warm cache then perpetuates on every subsequent run.
+      # Explicit step (matches the api/mobile jobs' pattern of building
+      # their bs-calendar dependency as its own named step) rather than
+      # relying on apps/web's `preinstall` npm lifecycle hook to produce
+      # the tarball in time — that implicit ordering is what raced and
+      # failed here.
+      - name: Vendor bs-calendar (produces apps/web/vendor/bs-calendar.tgz)
+        working-directory: .
+        run: node scripts/vendor-bs-calendar.mjs
+      # NEITHER `npm ci` NOR plain `npm install` is sufficient here — both
+      # enforce package-lock.json's EXISTING pinned integrity hash for an
+      # already-declared `file:` dependency and fail (EINTEGRITY) rather
+      # than silently re-hashing it. Confirmed empirically this is a genuine
+      # PLATFORM difference, not run-to-run randomness: this exact repo
+      # reliably produces one sha512 for apps/web/vendor/bs-calendar.tgz on
+      # Windows and a different, but ALSO internally consistent, sha512 on
+      # Linux CI runners (npm/tar embeds platform-specific metadata such as
+      # file-mode bits) — so whichever platform's hash happens to be pinned
+      # in the lockfile, the OTHER platform's fresh build will never match
+      # it. The only thing that works is the EXPLICIT named re-resolution
+      # `scripts/vendor-bs-calendar.mjs`'s own header comment already
+      # documents as required after any packages/bs-calendar change — naming
+      # the exact spec forces npm to re-hash against what THIS build just
+      # produced instead of trusting the lockfile's stale pin. This single
+      # command installs the full dependency tree, not just bs-calendar
+      # (confirmed: same package count as a plain install).
       - name: Install
-        run: npm ci
+        run: npm install bs-calendar@file:./vendor/bs-calendar.tgz
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Test placeholder

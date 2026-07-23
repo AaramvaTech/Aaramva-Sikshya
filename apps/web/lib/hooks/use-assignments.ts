@@ -3,12 +3,14 @@ import { assignmentsApi, type AssignmentListParams } from '@/lib/api/assignments
 import type {
   Assignment,
   AssignmentSubmissionsView,
+  AssignmentSubmission,
   CreateAssignmentData,
+  MyAssignment,
   ReviewSubmissionData,
   UpdateAssignmentData,
 } from '@/types/api.types';
 
-export function useAssignments(params: AssignmentListParams) {
+export function useAssignments(params: AssignmentListParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['assignments', params],
     // Paginated list → .data.data.data (ResponseInterceptor wraps {data, meta}).
@@ -19,6 +21,7 @@ export function useAssignments(params: AssignmentListParams) {
         meta: res.data.data.meta as { page: number; limit: number; total: number },
       };
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -94,6 +97,44 @@ export function useReviewSubmission(assignmentId: string) {
       assignmentsApi.review(assignmentId, submissionId, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['assignments', 'submissions', assignmentId] });
+    },
+  });
+}
+
+export function useMyAssignments(params: { page?: number; limit?: number }, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['assignments', 'me', params],
+    queryFn: async () => {
+      const res = await assignmentsApi.listMine(params);
+      return {
+        data: res.data.data.data as MyAssignment[],
+        meta: res.data.data.meta as { page: number; limit: number; total: number },
+      };
+    },
+    enabled: options?.enabled ?? true,
+  });
+}
+
+// Verified live against the real API (WEB-P Phase 4 Task 2 Step 0): a
+// not-yet-submitted assignment returns 200 with `data: null`, never 404 —
+// so this deliberately has no try/catch treating a 404 as "not submitted".
+export function useMySubmission(assignmentId: string) {
+  return useQuery({
+    queryKey: ['assignments', 'me', 'submission', assignmentId],
+    queryFn: async () =>
+      (await assignmentsApi.mySubmission(assignmentId)).data.data as AssignmentSubmission | null,
+    enabled: !!assignmentId,
+  });
+}
+
+export function useSubmitAssignment(assignmentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { textAnswer?: string; fileKey?: string }) =>
+      assignmentsApi.submitMine(assignmentId, data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['assignments', 'me'] });
+      void qc.invalidateQueries({ queryKey: ['assignments', 'me', 'submission', assignmentId] });
     },
   });
 }

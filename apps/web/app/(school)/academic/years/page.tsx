@@ -22,7 +22,7 @@ import {
   useCreateAcademicYear,
   useSetCurrentAcademicYear,
 } from '@/lib/hooks/use-students';
-import { todayBs } from '@/lib/bs-calendar';
+import { todayBs } from 'bs-calendar';
 
 export default function AcademicYearsPage() {
   const { data: years, isLoading } = useAcademicYears();

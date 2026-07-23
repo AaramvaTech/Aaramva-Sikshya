@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Search, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { todayBs } from '@/lib/bs-calendar';
+import { todayBs } from 'bs-calendar';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';

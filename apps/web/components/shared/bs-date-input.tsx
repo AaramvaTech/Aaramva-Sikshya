@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { adToBs, bsToAd, daysInBsMonth, todayBs, BS_MONTH_NAMES_EN } from '@/lib/bs-calendar';
+import { adToBs, bsToAd, daysInBsMonth, todayBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import {
   Select,
   SelectContent,

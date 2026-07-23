@@ -298,6 +298,62 @@ export interface StudentAttendanceSummary {
   recentHistory: { ad: string; bs: string; status: string }[];
 }
 
+// WEB-P Phase 4 — GET /students/me/attendance/summary response shape.
+// Distinct from StudentAttendanceSummary above (that's the admin/PARENT-
+// facing GET /attendance/students/:studentId/summary — different route,
+// different fields: no studentId/studentName here since it's always the
+// caller's own; recentHistory uses {dateAd,status} not {ad,bs,status}).
+export interface MyAttendanceSummary {
+  academicYearId: string;
+  academicYearName: string;
+  totalWorkingDays: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  attendancePercent: number;
+  recentHistory: { dateAd: string; status: string }[];
+}
+
+export interface MyAttendanceHistoryItem {
+  dateAd: string;
+  status: string;
+  remarks: string | null;
+}
+
+// GET /students/me/timetable/today response shape.
+export interface MyTodayTimetable {
+  dayOfWeek: number;
+  dateAd: string;
+  isSchoolDay: boolean;
+  periods: {
+    slotId: string;
+    periodNumber: number;
+    startTime: string;
+    endTime: string;
+    subject: { id: string; name: string; code: string | null };
+    teacher: { id: string; fullName: string };
+    room: string | null;
+  }[];
+}
+
+// GET /students/me response shape.
+export interface StudentMeProfile {
+  id: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  photoUrl: string | null;
+  currentEnrollment: {
+    className: string;
+    sectionName: string;
+    rollNumber: number | null;
+    sectionId: string;
+    academicYearId: string;
+    academicYearName: string;
+  } | null;
+}
+
 // Student leave application (attendance-leave, distinct from HR staff leave).
 // Returned enriched by GET /attendance/leave for the review screen.
 export interface StudentLeaveRequest {
@@ -348,6 +404,21 @@ export interface SectionAttendanceReport {
       percent: number;
     };
   }[];
+}
+
+// WEB-P Phase 2 Task 1 — GET /attendance/staff/my/summary (self-scoped;
+// mirrors backend StaffSummaryDto). year/month are AD (Postgres EXTRACT on
+// the stored date), not BS — the caller supplies the current AD month.
+export interface StaffAttendanceSummary {
+  userId: string;
+  month: number;
+  year: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  holiday: number;
+  total: number;
 }
 
 export interface SchoolAttendanceSummary {
@@ -649,6 +720,15 @@ export interface TeacherTimetable {
   schedule: Record<string, TeacherSlotItem[]>;
 }
 
+// WEB-P Phase 2 Task 1 — GET /timetable/my/sections (every section where the
+// caller is either the class teacher or has a timetable slot).
+export interface TeacherSection {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  classId: string;
+}
+
 export interface TimetableSlotData {
   sectionId: string;
   subjectId: string;
@@ -688,6 +768,16 @@ export interface ExamSchedule {
   fullMarks: number;
   passMarks: number;
   room: string | null;
+}
+
+// WEB-P Phase 2 Task 3 — GET /exams/schedules/my response row. Unlike
+// ExamSchedule (whose className/subjectName are optional, admin resolves
+// them client-side via classSubjects), the backend joins these directly for
+// this endpoint (see toMyExamScheduleResponse), so they're always present.
+export interface MyExamSchedule extends ExamSchedule {
+  examTypeName: string;
+  subjectName: string;
+  className: string;
 }
 
 export interface MarkRecord {
@@ -919,6 +1009,12 @@ export interface SalarySlip {
   notes: string | null;
   paymentDate: { ad: string; bs: string } | null;
   paymentMethod: string | null;
+  // WEB-P Phase 3 Task 4: always populated (when the slip was generated) —
+  // the DTO in apps/api's hr.entity.ts already returns it, this type was
+  // just missing it. Used as the per-slip visible date on the teacher's own
+  // payroll history screen, since there is no reliable month/year label
+  // field (see docs/web/phase-3-ownership-findings.md).
+  createdAt: string;
 }
 
 export interface CreateStaffData {
@@ -1375,6 +1471,13 @@ export interface Assignment {
   subjectName?: string;
   teacherName?: string;
   submissionCount?: number;
+}
+
+// WEB-P Phase 4 — GET /assignments/me response row. Extends Assignment with
+// the caller's own submission summary (mirrors the MyExamSchedule extends
+// ExamSchedule pattern above for /exams/schedules/my).
+export interface MyAssignment extends Assignment {
+  mySubmission: { status: SubmissionStatus; submittedAt: string; marks: number | null } | null;
 }
 
 export interface AssignmentSubmission {

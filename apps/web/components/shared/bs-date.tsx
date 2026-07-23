@@ -1,4 +1,4 @@
-import { adToBs, formatBs } from '@/lib/bs-calendar';
+import { adToBs, formatBs } from 'bs-calendar';
 
 interface BsDateProps {
   date: string | { ad: string; bs: string } | null | undefined;

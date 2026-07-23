@@ -10,7 +10,7 @@ import { AccessDenied } from './access-denied';
 import { useAuthStore } from '@/store/auth.store';
 import { useSidebar } from '@/context/sidebar-context';
 import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
-import { canAccess } from '@/lib/route-access';
+import { canAccess, homeRoute } from '@/lib/route-access';
 
 function Backdrop() {
   const { isMobileOpen, toggleMobileSidebar } = useSidebar();
@@ -42,6 +42,17 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isInitialized && accessToken && user?.role === 'PLATFORM_ADMIN') {
       router.replace('/super-admin/dashboard');
+    }
+  }, [isInitialized, accessToken, user?.role, router]);
+
+  // Task 4 — a returning STUDENT/PARENT (marker cookie but no live session yet)
+  // lands here via the role-blind proxy redirect to /dashboard. They don't
+  // belong in the school shell at all (no /dashboard access), so bounce them
+  // to their own portal instead of showing a 403. TEACHER is deliberately
+  // excluded — it still legitimately renders the admin dashboard.
+  useEffect(() => {
+    if (isInitialized && accessToken && (user?.role === 'STUDENT' || user?.role === 'PARENT')) {
+      router.replace(homeRoute(user.role));
     }
   }, [isInitialized, accessToken, user?.role, router]);
 
