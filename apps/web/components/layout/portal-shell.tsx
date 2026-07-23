@@ -12,6 +12,7 @@ import { useLocaleStore } from '@/store/locale.store';
 import { authApi } from '@/lib/api/auth.api';
 import { canAccess, homeRoute } from '@/lib/route-access';
 import { AccessDenied } from './access-denied';
+import { ChildSwitcher } from '@/components/parent/child-switcher';
 import type { Role } from '@/types/api.types';
 
 /**
@@ -30,13 +31,14 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
 };
 
 /**
- * WEB-P Phase 2 Task 1 — role-keyed nav items. STUDENT/PARENT keep the single
- * "Home" link (rendered via the t('nav.home') fallback below, unchanged from
- * Phase 1); TEACHER gets a real nav bar. English-only labels for now:
- * 'nav.home' is the only nav i18n key today, and inventing unreviewed Nepali
- * translations for these labels is a separate, later i18n-content pass.
- * WEB-P Phase 3 added the last four entries (Profile/Leave/Timetable/
- * Payroll — HR self-service) once their screens landed.
+ * WEB-P Phase 2 Task 1 — role-keyed nav items. TEACHER gets a real nav bar
+ * here first (STUDENT and PARENT got their own arrays in Phases 4 and 5
+ * respectively — see below; the t('nav.home') fallback further down now
+ * only applies to roles with no dedicated portal nav array). English-only
+ * labels for now: 'nav.home' is the only nav i18n key today, and inventing
+ * unreviewed Nepali translations for these labels is a separate, later
+ * i18n-content pass. WEB-P Phase 3 added the last four entries (Profile/
+ * Leave/Timetable/Payroll — HR self-service) once their screens landed.
  */
 const TEACHER_NAV_ITEMS: { href: string; label: string }[] = [
   { href: '/teacher', label: 'Dashboard' },
@@ -60,6 +62,20 @@ const STUDENT_NAV_ITEMS: { href: string; label: string }[] = [
   { href: '/student/notices', label: 'Notices' },
   { href: '/student/results', label: 'Results' },
   { href: '/student/assignments', label: 'Assignments' },
+];
+
+/**
+ * WEB-P Phase 5 Task 10 — parent nav items. Seven screens built and now
+ * wired into the portal nav.
+ */
+const PARENT_NAV_ITEMS: { href: string; label: string }[] = [
+  { href: '/parent', label: 'Dashboard' },
+  { href: '/parent/attendance', label: 'Attendance' },
+  { href: '/parent/timetable', label: 'Timetable' },
+  { href: '/parent/notices', label: 'Notices' },
+  { href: '/parent/results', label: 'Results' },
+  { href: '/parent/assignments', label: 'Assignments' },
+  { href: '/parent/fees', label: 'Fees' },
 ];
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
@@ -160,6 +176,25 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })
+            ) : user?.role === 'PARENT' ? (
+              PARENT_NAV_ITEMS.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== '/parent' && pathname.startsWith(item.href + '/'));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={
+                      active
+                        ? 'text-sm font-semibold text-brand-600 dark:text-brand-400'
+                        : 'text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                    }
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })
             ) : (
               <Link
                 href={homeRoute(user?.role)}
@@ -171,6 +206,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          {user?.role === 'PARENT' && <ChildSwitcher />}
           <div className="flex items-center rounded-full border border-gray-200 p-0.5 text-xs font-medium dark:border-gray-700">
             <button
               onClick={() => setLocale('en')}
