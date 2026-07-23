@@ -42,7 +42,12 @@ const DAYS = [
 ];
 
 export default function StudentTimetablePage() {
-  const { data: profile, isLoading: profileLoading } = useStudentMeProfile();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useStudentMeProfile();
   const sectionId = profile?.currentEnrollment?.sectionId;
   const {
     data: timetable,
@@ -91,6 +96,8 @@ export default function StudentTimetablePage() {
             ))}
           </div>
         </div>
+      ) : profileError ? (
+        <QueryErrorState onRetry={() => refetchProfile()} message="Couldn't load your profile." />
       ) : isError ? (
         <QueryErrorState onRetry={() => refetch()} message="Couldn't load your timetable." />
       ) : notEnrolled || periods.length === 0 ? (
