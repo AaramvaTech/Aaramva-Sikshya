@@ -7,7 +7,6 @@ import { QueryErrorState } from '@/components/shared/query-error-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BsDate } from '@/components/shared/bs-date';
-import { ChildSwitcher } from '@/components/parent/child-switcher';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useMyChildrenAssignments } from '@/lib/hooks/use-assignments';
 import type { MyChildAssignments } from '@/types/api.types';
@@ -134,7 +133,7 @@ export default function ParentAssignmentsPage() {
     refetch: refetchAssignments,
   } = useMyChildrenAssignments();
 
-  const header = <PageHeader title="Assignments" description="Your child's homework and submission status" action={<ChildSwitcher />} />;
+  const header = <PageHeader title="Assignments" description="Your child's homework and submission status" />;
 
   // Guards: never let the assignment list render with an empty/undefined
   // studentId. Children still loading, a real fetch error, a genuinely

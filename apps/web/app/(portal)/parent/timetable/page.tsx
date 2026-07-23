@@ -5,7 +5,6 @@ import { PageHeader } from '@/components/shared/page-header';
 import { QueryErrorState } from '@/components/shared/query-error-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChildSwitcher } from '@/components/parent/child-switcher';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useSectionTimetable } from '@/lib/hooks/use-academic';
 
@@ -82,7 +81,6 @@ export default function ParentTimetablePage() {
       description={
         timetable ? `${timetable.className} · ${timetable.sectionName}` : "Your child's weekly class schedule"
       }
-      action={<ChildSwitcher />}
     />
   );
 

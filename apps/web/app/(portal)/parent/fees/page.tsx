@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { AmountDisplay } from '@/components/finance/amount-display';
-import { ChildSwitcher } from '@/components/parent/child-switcher';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useStudentLedger, useStudentAssignments } from '@/lib/hooks/use-finance';
@@ -208,7 +207,6 @@ export default function ParentFeesPage() {
     <PageHeader
       title="Fees"
       description="Your child's fee invoices and payment history"
-      action={<ChildSwitcher />}
     />
   );
 

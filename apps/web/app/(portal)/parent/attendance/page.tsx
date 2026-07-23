@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { ChildSwitcher } from '@/components/parent/child-switcher';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import {
   useStudentAttendanceSummary,
@@ -357,7 +356,7 @@ export default function ParentAttendancePage() {
   const isCurrentMonth = view.year === today.year && view.month === today.month;
   const monthLabel = `${BS_MONTH_NAMES_EN[view.month - 1]} ${view.year}`;
 
-  const header = <PageHeader title="Attendance" description="Your child's attendance record, by Bikram Sambat month" action={<ChildSwitcher />} />;
+  const header = <PageHeader title="Attendance" description="Your child's attendance record, by Bikram Sambat month" />;
 
   // ── Guards: never let the calendar/leave form render with an empty or
   //    undefined studentId. Children still loading, a real fetch error, a

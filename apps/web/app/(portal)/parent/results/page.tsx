@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ReportCardView } from '@/components/exams/report-card';
-import { ChildSwitcher } from '@/components/parent/child-switcher';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useReportCard } from '@/lib/hooks/use-examination';
 import { examinationApi } from '@/lib/api/examination.api';
@@ -23,10 +22,11 @@ import { getErrorDisplay } from '@/lib/errors';
  * Reuses `ReportCardView` (components/exams/report-card.tsx) — the exact
  * component already shared with the admin results page and Phase 4's
  * student results screen — for all on-page rendering, with no
- * filterExamTypeId (render everything). This page only owns: the
- * ChildSwitcher header, the loading/error/empty states for the selected
- * child (same pattern as Tasks 4/5's per-child screens), and a "Download
- * report card (PDF)" button.
+ * filterExamTypeId (render everything). This page only owns: the page
+ * header, the loading/error/empty states for the selected child (same
+ * pattern as Tasks 4/5's per-child screens), and a "Download report card
+ * (PDF)" button. Child selection itself is the shell-level `ChildSwitcher`
+ * (`components/layout/portal-shell.tsx`), not a page-level instance.
  *
  * PDF download hits GET /exams/results/report-card/:studentId/pdf —
  * confirmed (examination.controller.ts) to be a DIFFERENT route from
@@ -55,7 +55,7 @@ export default function ParentResultsPage() {
 
   const [downloading, setDownloading] = useState(false);
 
-  const header = <PageHeader title="Results" description="Your child's published exam results and annual report card" action={<ChildSwitcher />} />;
+  const header = <PageHeader title="Results" description="Your child's published exam results and annual report card" />;
 
   // Guards: never let the report card render or the download fire with an
   // empty/undefined studentId. Children still loading, a real fetch error,
@@ -123,19 +123,16 @@ export default function ParentResultsPage() {
         title="Results"
         description="Your child's published exam results and annual report card"
         action={
-          <div className="flex items-center gap-3">
-            <ChildSwitcher />
-            {!reportLoading && !reportError && !isEmpty && (
-              <Button size="sm" onClick={handleDownload} disabled={downloading}>
-                {downloading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                Download report card (PDF)
-              </Button>
-            )}
-          </div>
+          !reportLoading && !reportError && !isEmpty && (
+            <Button size="sm" onClick={handleDownload} disabled={downloading}>
+              {downloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Download report card (PDF)
+            </Button>
+          )
         }
       />
 
