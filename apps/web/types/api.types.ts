@@ -508,7 +508,6 @@ export interface FeeStructureDetail extends FeeStructureSummary {
 }
 
 export interface FeeAssignment {
-  id: string;
   feeStructureItemId: string;
   feeCategoryName: string;
   originalAmount: number;

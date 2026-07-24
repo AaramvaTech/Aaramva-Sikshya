@@ -115,7 +115,7 @@ function InvoiceCard({ invoice: inv }: { invoice: InvoiceDetail }) {
 // ─── Optional secondary section: fee STRUCTURE assignment (not homework
 // assignments — see module docblock). Read-only, own query/error/empty
 // states, distinct from the invoice list above. ─────────────────────────────
-function FeeStructureSection({
+export function FeeStructureSection({
   studentId,
   academicYearId,
 }: {
@@ -150,7 +150,7 @@ function FeeStructureSection({
       ) : (
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {assignments.map((a: FeeAssignment) => (
-            <div key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+            <div key={a.feeStructureItemId} className="flex items-center justify-between gap-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm text-gray-700 dark:text-gray-200">{a.feeCategoryName}</p>
                 {(a.isWaived || a.discountPercent > 0) && (
