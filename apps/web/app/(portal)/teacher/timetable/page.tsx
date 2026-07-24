@@ -1,22 +1,25 @@
 'use client';
 
+import { useMemo } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { QueryErrorState } from '@/components/shared/query-error-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MyTimetableGrid } from '@/components/timetable/my-timetable-grid';
+import { TimetableGrid, type NormalizedTimetableSlot } from '@/components/timetable/timetable-grid';
 import { useMyTimetable } from '@/lib/hooks/use-timetable';
 
 /**
  * WEB-P Phase 3 Task 3 — teacher's own weekly timetable, VIEW-ONLY.
  *
- * Desktop-optimized weekly grid (not a mobile-style day selector) built
- * around `TeacherTimetable` (one teacher, many sections) via
- * `MyTimetableGrid` — see that file's header comment for why it's a new
- * component rather than a reuse of the admin's per-section editable grid.
- * Data comes entirely from the already-existing `useMyTimetable()` hook
- * (Phase 2 Task 1) — no new API method or hook needed.
+ * Desktop-optimized weekly grid built around `TeacherTimetable` (one
+ * teacher, many sections). WEB-P timetable UX pass (2026-07-24): now
+ * renders via the shared `TimetableGrid` (subject colors, today/now
+ * highlighting) instead of the retired per-role `MyTimetableGrid` — the
+ * only page-specific work left here is normalizing `TeacherSlotItem` into
+ * the grid's common slot shape (subtitle = "{className} {section}").
+ * Data still comes entirely from the already-existing `useMyTimetable()`
+ * hook (Phase 2 Task 1) — no new API method or hook needed.
  */
 export default function TeacherTimetablePage() {
   const {
@@ -33,6 +36,24 @@ export default function TeacherTimetablePage() {
         ([key, slots]) => key !== '6' && slots.length > 0,
       )
     : false;
+
+  const normalizedSchedule = useMemo<Record<string, NormalizedTimetableSlot[]>>(() => {
+    if (!timetable) return {};
+    const result: Record<string, NormalizedTimetableSlot[]> = {};
+    for (const [dayKey, slots] of Object.entries(timetable.schedule)) {
+      result[dayKey] = slots.map((slot) => ({
+        slotId: slot.slotId,
+        periodNumber: slot.periodNumber,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        subjectId: slot.subject.id,
+        subjectName: slot.subject.name,
+        subtitle: `${slot.className} ${slot.section}`,
+        room: slot.room,
+      }));
+    }
+    return result;
+  }, [timetable]);
 
   return (
     <div>
@@ -57,7 +78,7 @@ export default function TeacherTimetablePage() {
           icon={CalendarClock}
         />
       ) : (
-        <MyTimetableGrid timetable={timetable} />
+        <TimetableGrid schedule={normalizedSchedule} />
       )}
     </div>
   );
