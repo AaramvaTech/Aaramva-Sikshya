@@ -6,6 +6,7 @@ import type {
   AssignmentSubmission,
   CreateAssignmentData,
   MyAssignment,
+  MyChildAssignments,
   ReviewSubmissionData,
   UpdateAssignmentData,
 } from '@/types/api.types';
@@ -136,5 +137,13 @@ export function useSubmitAssignment(assignmentId: string) {
       void qc.invalidateQueries({ queryKey: ['assignments', 'me'] });
       void qc.invalidateQueries({ queryKey: ['assignments', 'me', 'submission', assignmentId] });
     },
+  });
+}
+
+export function useMyChildrenAssignments() {
+  return useQuery({
+    queryKey: ['assignments', 'my-children'],
+    queryFn: async () =>
+      (await assignmentsApi.myChildren()).data.data as MyChildAssignments[],
   });
 }

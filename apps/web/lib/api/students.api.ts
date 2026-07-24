@@ -11,6 +11,7 @@ import type {
   EnrollStudentData,
   ImportPreviewResult,
   ImportCommitResult,
+  MyChild,
 } from '@/types/api.types';
 
 export const studentsApi = {
@@ -94,4 +95,8 @@ export const studentsApi = {
     api.post<ApiResponse<{ userId: string; deliveryIds: string[] }>>(
       `/students/${studentId}/guardians/${guardianId}/account/resend`,
     ),
+
+  // WEB-P Phase 5 — GET /students/my-children (PARENT role only, no id param
+  // — scoped server-side via the guardians table on the caller's own token).
+  getMyChildren: () => api.get<ApiResponse<MyChild[]>>('/students/my-children'),
 };

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from '@/lib/api/attendance.api';
 import { useTenantStore } from '@/store/tenant.store';
-import type { BulkAttendanceData, ReviewLeaveData } from '@/types/api.types';
+import type { BulkAttendanceData, ReviewLeaveData, ApplyChildLeaveData } from '@/types/api.types';
 
 export function useSectionAttendance(
   sectionId: string,
@@ -105,6 +105,31 @@ export function useReviewLeaveRequest() {
       queryClient.invalidateQueries({ queryKey: ['attendance', 'leave-requests'] });
       // an approval writes LEAVE rows → refresh attendance summaries too
       queryClient.invalidateQueries({ queryKey: ['attendance', 'school-summary'] });
+    },
+  });
+}
+
+export function useStudentAttendanceHistory(
+  studentId: string,
+  params: { fromDate: string; toDate: string },
+) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['attendance', 'student-history', studentId, params],
+    queryFn: () =>
+      attendanceApi
+        .getStudentHistory(studentId, { ...params, limit: 100 })
+        .then((r) => r.data.data.data),
+    enabled: !!slug && !!studentId && !!params.fromDate && !!params.toDate,
+  });
+}
+
+export function useApplyChildLeave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ApplyChildLeaveData) => attendanceApi.applyLeave(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'student-history'] });
     },
   });
 }

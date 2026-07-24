@@ -73,6 +73,14 @@ export const examinationApi = {
     api.get<ApiResponse<ReportCard>>(
       `/exams/results/report-card/${studentId}`,
     ),
+  // WEB-P Phase 5 Task 7 — PARENT-scoped equivalent of studentApi's
+  // downloadMyReportCardPdf(), but hitting the :studentId route
+  // (GET /exams/results/report-card/:studentId/pdf), NOT the /me family.
+  // Generated on the fly per-request (buildReportCardPdf) — NOT a FILE-1
+  // stored object, so this is a direct authenticated blob fetch, same
+  // pattern as student.api.ts's equivalent.
+  downloadReportCardPdf: (studentId: string) =>
+    api.get(`/exams/results/report-card/${studentId}/pdf`, { responseType: 'blob' }),
 
   // Grading scales (POL-1 T6)
   listGradingScales: () =>
