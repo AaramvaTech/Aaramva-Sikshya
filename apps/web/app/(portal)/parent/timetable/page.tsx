@@ -1,10 +1,12 @@
 'use client';
 
-import { CalendarClock, Clock, GraduationCap, Users } from 'lucide-react';
+import { useMemo } from 'react';
+import { CalendarClock, GraduationCap, Users } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { QueryErrorState } from '@/components/shared/query-error-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimetableGrid, type NormalizedTimetableSlot } from '@/components/timetable/timetable-grid';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useSectionTimetable } from '@/lib/hooks/use-academic';
 
@@ -38,23 +40,17 @@ import { useSectionTimetable } from '@/lib/hooks/use-academic';
  * the UI must not undermine that by offering any way to request a
  * different one.
  *
- * Table structure (period-rows x day-columns) ported verbatim in shape from
- * Phase 4's `app/(portal)/student/timetable/page.tsx` — the established,
- * review-confirmed convention — and made per-child via `ChildSwitcher`/
- * `useSelectedChild()` the same way Task 4's attendance screen already is.
+ * WEB-P timetable UX pass (2026-07-24): renders via the shared
+ * `TimetableGrid` (subject colors, today/now highlighting) instead of an
+ * inline `<table>` — the only page-specific work left here is normalizing
+ * `TimetableSlot` into the grid's common slot shape (subtitle =
+ * teacher.fullName), identical to the student page's normalization.
  */
 
 // Sunday-Friday only. Saturday ("6") is never rendered as a column — no
 // school that day, so an always-empty column would be pure noise. Matches
 // the student timetable page's convention exactly.
-const DAYS = [
-  { key: '0', label: 'SUN' },
-  { key: '1', label: 'MON' },
-  { key: '2', label: 'TUE' },
-  { key: '3', label: 'WED' },
-  { key: '4', label: 'THU' },
-  { key: '5', label: 'FRI' },
-];
+const DAY_KEYS = ['0', '1', '2', '3', '4', '5'];
 
 export default function ParentTimetablePage() {
   const {
@@ -74,6 +70,24 @@ export default function ParentTimetablePage() {
     isError: timetableError,
     refetch: refetchTimetable,
   } = useSectionTimetable(sectionId);
+
+  const normalizedSchedule = useMemo<Record<string, NormalizedTimetableSlot[]>>(() => {
+    if (!timetable) return {};
+    const result: Record<string, NormalizedTimetableSlot[]> = {};
+    for (const [dayKey, slots] of Object.entries(timetable.schedule)) {
+      result[dayKey] = slots.map((slot) => ({
+        slotId: slot.slotId,
+        periodNumber: slot.periodNumber,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        subjectId: slot.subject.id,
+        subjectName: slot.subject.name,
+        subtitle: slot.teacher.fullName,
+        room: slot.room,
+      }));
+    }
+    return result;
+  }, [timetable]);
 
   const header = (
     <PageHeader
@@ -155,21 +169,7 @@ export default function ParentTimetablePage() {
   }
 
   const loading = !notEnrolled && timetableLoading;
-
-  // Collect the distinct period numbers actually present across Sun–Fri —
-  // there's no fixed period count, so only rows that exist in the data render.
-  const periodSet = new Set<number>();
-  DAYS.forEach(({ key }) => {
-    (timetable?.schedule[key] ?? []).forEach((slot) => periodSet.add(slot.periodNumber));
-  });
-  const periods = Array.from(periodSet).sort((a, b) => a - b);
-
-  const slotMap = new Map<string, NonNullable<typeof timetable>['schedule'][string][number]>();
-  DAYS.forEach(({ key }) => {
-    (timetable?.schedule[key] ?? []).forEach((slot) => {
-      slotMap.set(`${slot.periodNumber}-${key}`, slot);
-    });
-  });
+  const hasAnySlots = timetable ? DAY_KEYS.some((key) => (timetable.schedule[key] ?? []).length > 0) : false;
 
   return (
     <div className="space-y-5">
@@ -189,7 +189,7 @@ export default function ParentTimetablePage() {
           message={`${selectedChild.firstName} is not enrolled in a section yet.`}
           icon={GraduationCap}
         />
-      ) : periods.length === 0 ? (
+      ) : !hasAnySlots ? (
         // ── State (c): enrolled, but zero timetable slots — a DIFFERENT
         //    empty state from (b), never the same copy. ────────────────
         <EmptyState
@@ -197,58 +197,7 @@ export default function ParentTimetablePage() {
           icon={CalendarClock}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/50">
-                <th className="w-20 border-r border-gray-200 px-3 py-2.5 text-left text-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                  Period
-                </th>
-                {DAYS.map((day) => (
-                  <th
-                    key={day.key}
-                    className="min-w-[150px] px-3 py-2.5 text-center text-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {day.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {periods.map((period) => (
-                <tr key={period} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
-                  <td className="border-r border-gray-200 px-3 py-2.5 text-center text-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                    P{period}
-                  </td>
-                  {DAYS.map((day) => {
-                    const slot = slotMap.get(`${period}-${day.key}`);
-                    return (
-                      <td key={day.key} className="px-2 py-2 text-center align-top">
-                        {slot ? (
-                          <div className="w-full rounded-md border border-brand-200 bg-brand-50 px-2 py-1.5 text-left dark:border-brand-500/20 dark:bg-brand-500/[0.08]">
-                            <p className="truncate text-xs font-semibold text-brand-600 dark:text-brand-400">
-                              {slot.subject.name}
-                            </p>
-                            <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                              {slot.teacher.fullName}
-                              {slot.room ? ` · ${slot.room}` : ''}
-                            </p>
-                            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
-                              <Clock className="h-3 w-3" />
-                              {slot.startTime} – {slot.endTime}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="h-12 w-full rounded-md border border-dashed border-gray-200 dark:border-gray-800" />
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TimetableGrid schedule={normalizedSchedule} />
       )}
     </div>
   );
