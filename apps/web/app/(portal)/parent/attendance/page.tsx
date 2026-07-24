@@ -416,7 +416,8 @@ export default function ParentAttendancePage() {
       {header}
 
       {/* Year-to-date stat card — sourced directly from the backend's official
-          figure, never client-recomputed. */}
+          figure, never client-recomputed. Stays full-width and first: the
+          headline number deserves top billing regardless of viewport. */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
         {summaryError ? (
           <QueryErrorState onRetry={() => refetchSummary()} message="Couldn't load this child's attendance summary." />
@@ -472,140 +473,152 @@ export default function ParentAttendancePage() {
         )}
       </div>
 
-      {/* Month nav */}
-      <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" onClick={() => goToMonth(-1)} aria-label="Previous month">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <p className="w-40 text-center text-base font-semibold text-gray-900 dark:text-white sm:w-48 sm:text-lg">
-            {monthLabel}
-          </p>
-          <Button variant="outline" size="icon-sm" onClick={() => goToMonth(1)} aria-label="Next month">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <Button variant="ghost" size="sm" onClick={goToToday} disabled={isCurrentMonth}>
-          Today
-        </Button>
-      </div>
+      {/* WEB-P UI/UX pass (2026-07-24, see docs/superpowers/specs/2026-07-24-
+          portal-shell-sidebar-design.md §5.1): the calendar + its month nav
+          live in a width-capped left column so day cells never scale with
+          the full page width; the freed space on wide screens holds the
+          monthly summary + leave form instead of sitting empty. Stacks to
+          one column below xl:. */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,560px)_1fr] xl:items-start">
+        <div className="mx-auto w-full max-w-[560px] space-y-5 xl:mx-0">
+          {/* Month nav */}
+          <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon-sm" onClick={() => goToMonth(-1)} aria-label="Previous month">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <p className="w-40 text-center text-base font-semibold text-gray-900 dark:text-white sm:w-48 sm:text-lg">
+                {monthLabel}
+              </p>
+              <Button variant="outline" size="icon-sm" onClick={() => goToMonth(1)} aria-label="Next month">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={goToToday} disabled={isCurrentMonth}>
+              Today
+            </Button>
+          </div>
 
-      {/* Calendar grid */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-        {historyError ? (
-          <QueryErrorState onRetry={() => refetchHistory()} message="Couldn't load this month's attendance." />
-        ) : (
-          <>
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-              {DAY_HEADERS.map((label, i) => (
-                <div
-                  key={label}
-                  className={cn(
-                    'py-1 text-center text-xs font-semibold uppercase tracking-wide',
-                    i === 6 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500',
-                  )}
-                >
-                  {label}
+          {/* Calendar grid */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
+            {historyError ? (
+              <QueryErrorState onRetry={() => refetchHistory()} message="Couldn't load this month's attendance." />
+            ) : (
+              <>
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {DAY_HEADERS.map((label, i) => (
+                    <div
+                      key={label}
+                      className={cn(
+                        'py-1 text-center text-xs font-semibold uppercase tracking-wide',
+                        i === 6 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500',
+                      )}
+                    >
+                      {label}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-1 grid grid-cols-7 gap-1.5 sm:gap-2">
-              {historyLoading
-                ? Array.from({ length: 35 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square w-full rounded-lg" />
-                  ))
-                : cells.map((cell, idx) => {
-                    if (!cell) return <div key={`blank-${idx}`} aria-hidden />;
-                    const status = historyMap.get(cell.dateAd);
-                    const style = status && status in STATUS_CELL_STYLES ? STATUS_CELL_STYLES[status as StatusKey] : undefined;
-                    return (
-                      <div
-                        key={cell.dateAd}
-                        title={cell.dateAd}
-                        className={cn(
-                          'flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-lg text-sm font-semibold',
-                          // A real recorded status always wins. Saturday's amber/muted
-                          // background is only the fallback for a Saturday cell with no
-                          // recorded status (the common case, since Saturday is normally
-                          // a non-school day) — mirrors Phase 4's precedence.
-                          style
-                            ? cn(style.bg, style.text)
-                            : cell.isSaturday
-                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/[0.08] dark:text-amber-400'
-                              : 'bg-gray-50 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400',
-                          cell.isToday && 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-gray-900',
-                        )}
-                      >
-                        <span>{cell.day}</span>
-                        {style && <span className={cn('h-1 w-1 rounded-full', style.dot)} />}
-                      </div>
-                    );
-                  })}
-            </div>
-
-            {/* Legend */}
-            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
-              {LEGEND_ITEMS.map(({ status, label }) => (
-                <div key={status} className="flex items-center gap-1.5">
-                  <span className={cn('h-2.5 w-2.5 rounded-full', STATUS_CELL_STYLES[status].dot)} />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                <div className="mt-1 grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {historyLoading
+                    ? Array.from({ length: 35 }).map((_, i) => (
+                        <Skeleton key={i} className="aspect-square w-full rounded-lg" />
+                      ))
+                    : cells.map((cell, idx) => {
+                        if (!cell) return <div key={`blank-${idx}`} aria-hidden />;
+                        const status = historyMap.get(cell.dateAd);
+                        const style = status && status in STATUS_CELL_STYLES ? STATUS_CELL_STYLES[status as StatusKey] : undefined;
+                        return (
+                          <div
+                            key={cell.dateAd}
+                            title={cell.dateAd}
+                            className={cn(
+                              'flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-lg text-sm font-semibold',
+                              // A real recorded status always wins. Saturday's amber/muted
+                              // background is only the fallback for a Saturday cell with no
+                              // recorded status (the common case, since Saturday is normally
+                              // a non-school day) — mirrors Phase 4's precedence.
+                              style
+                                ? cn(style.bg, style.text)
+                                : cell.isSaturday
+                                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/[0.08] dark:text-amber-400'
+                                  : 'bg-gray-50 text-gray-500 dark:bg-gray-800/40 dark:text-gray-400',
+                              cell.isToday && 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-gray-900',
+                            )}
+                          >
+                            <span>{cell.day}</span>
+                            {style && <span className={cn('h-1 w-1 rounded-full', style.dot)} />}
+                          </div>
+                        );
+                      })}
                 </div>
-              ))}
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400 dark:bg-amber-500/70" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">Saturday (non-school day)</span>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
 
-      {/* Raw-counts summary strip for the visible month — plain tallies from
-          the fetched day rows, no percentage claim here (see design-decision
-          note above). */}
-      {!historyError && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-          <p className="mb-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">{monthLabel} summary</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <CountTile
-              label="Present"
-              value={monthCounts.PRESENT}
-              textClass="text-success-700 dark:text-success-400"
-              isLoading={historyLoading}
-            />
-            <CountTile
-              label="Absent"
-              value={monthCounts.ABSENT}
-              textClass="text-error-700 dark:text-error-400"
-              isLoading={historyLoading}
-            />
-            <CountTile
-              label="Late"
-              value={monthCounts.LATE}
-              textClass="text-warning-700 dark:text-warning-400"
-              isLoading={historyLoading}
-            />
-            <CountTile
-              label="Leave"
-              value={monthCounts.LEAVE}
-              textClass="text-brand-700 dark:text-brand-400"
-              isLoading={historyLoading}
-            />
+                {/* Legend */}
+                <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
+                  {LEGEND_ITEMS.map(({ status, label }) => (
+                    <div key={status} className="flex items-center gap-1.5">
+                      <span className={cn('h-2.5 w-2.5 rounded-full', STATUS_CELL_STYLES[status].dot)} />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400 dark:bg-amber-500/70" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Saturday (non-school day)</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Leave request — `key` forces a remount (and form reset) whenever the
-          selected child changes, so a partially-typed request for one child
-          never bleeds into another child's form. */}
-      <LeaveRequestForm
-        key={selectedChildId}
-        studentId={selectedChildId}
-        studentName={childName}
-        academicYearId={academicYearId}
-        academicYearReady={!yearLoading && !!academicYearId}
-      />
+        <div className="space-y-5">
+          {/* Raw-counts summary strip for the visible month — plain tallies from
+              the fetched day rows, no percentage claim here (see design-decision
+              note above). */}
+          {!historyError && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
+              <p className="mb-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">{monthLabel} summary</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <CountTile
+                  label="Present"
+                  value={monthCounts.PRESENT}
+                  textClass="text-success-700 dark:text-success-400"
+                  isLoading={historyLoading}
+                />
+                <CountTile
+                  label="Absent"
+                  value={monthCounts.ABSENT}
+                  textClass="text-error-700 dark:text-error-400"
+                  isLoading={historyLoading}
+                />
+                <CountTile
+                  label="Late"
+                  value={monthCounts.LATE}
+                  textClass="text-warning-700 dark:text-warning-400"
+                  isLoading={historyLoading}
+                />
+                <CountTile
+                  label="Leave"
+                  value={monthCounts.LEAVE}
+                  textClass="text-brand-700 dark:text-brand-400"
+                  isLoading={historyLoading}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Leave request — `key` forces a remount (and form reset) whenever the
+              selected child changes, so a partially-typed request for one child
+              never bleeds into another child's form. */}
+          <LeaveRequestForm
+            key={selectedChildId}
+            studentId={selectedChildId}
+            studentName={childName}
+            academicYearId={academicYearId}
+            academicYearReady={!yearLoading && !!academicYearId}
+          />
+        </div>
+      </div>
     </div>
   );
 }
