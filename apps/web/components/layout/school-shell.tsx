@@ -7,21 +7,11 @@ import Image from 'next/image';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { AccessDenied } from './access-denied';
+import { SidebarBackdrop } from './sidebar-backdrop';
 import { useAuthStore } from '@/store/auth.store';
 import { useSidebar } from '@/context/sidebar-context';
 import { useOnboardingStatus } from '@/lib/hooks/use-onboarding';
 import { canAccess, homeRoute } from '@/lib/route-access';
-
-function Backdrop() {
-  const { isMobileOpen, toggleMobileSidebar } = useSidebar();
-  if (!isMobileOpen) return null;
-  return (
-    <div
-      className="fixed inset-0 z-40 bg-gray-900/50 lg:hidden"
-      onClick={toggleMobileSidebar}
-    />
-  );
-}
 
 export function SchoolShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -107,7 +97,7 @@ export function SchoolShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <Backdrop />
+      <SidebarBackdrop />
       <div className={`relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out ${mainMargin}`}>
         <Header />
         <main>
