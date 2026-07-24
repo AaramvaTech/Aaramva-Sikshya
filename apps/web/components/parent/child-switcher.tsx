@@ -18,29 +18,36 @@ export function ChildSwitcher() {
   if (children.length === 0) return null;
 
   if (children.length === 1) {
+    const fullName = `${children[0].firstName} ${children[0].lastName}`;
     return (
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-        {children[0].firstName} {children[0].lastName}
+      <span
+        className="block max-w-[180px] truncate text-sm font-medium text-gray-700 dark:text-gray-200"
+        title={fullName}
+      >
+        {fullName}
       </span>
     );
   }
 
+  const selected = children.find((c) => c.id === selectedChildId);
+  const selectedName = selected ? `${selected.firstName} ${selected.lastName}` : 'Select child';
+
   return (
     <Select value={selectedChildId ?? ''} onValueChange={(v) => v && setSelectedChild(v)}>
-      <SelectTrigger className="h-9 w-48">
-        <span>
-          {children.find((c) => c.id === selectedChildId)
-            ? `${children.find((c) => c.id === selectedChildId)!.firstName} ${children.find((c) => c.id === selectedChildId)!.lastName}`
-            : 'Select child'}
-        </span>
+      <SelectTrigger className="h-9 w-56 sm:w-64" title={selectedName}>
+        <span className="block truncate">{selectedName}</span>
       </SelectTrigger>
       <SelectContent>
-        {children.map((c) => (
-          <SelectItem key={c.id} value={c.id}>
-            {c.firstName} {c.lastName}
-            {c.currentEnrollment ? ` — ${c.currentEnrollment.className} ${c.currentEnrollment.sectionName}` : ''}
-          </SelectItem>
-        ))}
+        {children.map((c) => {
+          const label = c.currentEnrollment
+            ? `${c.firstName} ${c.lastName} — ${c.currentEnrollment.className} ${c.currentEnrollment.sectionName}`
+            : `${c.firstName} ${c.lastName}`;
+          return (
+            <SelectItem key={c.id} value={c.id} title={label}>
+              <span className="block max-w-[280px] truncate">{label}</span>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );
