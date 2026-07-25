@@ -22,6 +22,9 @@ import { BulkAssignRunnerService } from './bulk-assign-runner.service';
 import { BulkAssignPoller } from './bulk-assign.poller';
 import { FeePreviewService } from './fee-preview.service';
 import { ConcessionRegisterReportService } from './concession-register-report.service';
+import { LedgerController } from './ledger.controller';
+import { LedgerService } from './ledger.service';
+import { OpeningBalanceImportService } from './opening-balance-import.service';
 import { EsewaService } from './esewa/esewa.service';
 import { EsewaController } from './esewa/esewa.controller';
 import { EsewaPublicController } from './esewa/esewa-public.controller';
@@ -35,6 +38,7 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     FinanceController,
     BillCatalogController,
     BillAssignmentController,
+    LedgerController,
     EsewaController,
     EsewaPublicController,
     KhaltiController,
@@ -62,9 +66,11 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     BulkAssignPoller,
     FeePreviewService,
     ConcessionRegisterReportService,
+    LedgerService,
+    OpeningBalanceImportService,
     EsewaService,
     KhaltiService,
   ],
-  exports: [InvoiceService, PaymentService],
+  exports: [InvoiceService, PaymentService, LedgerService],
 })
 export class FinanceModule {}
