@@ -49,7 +49,7 @@ export class FeeStructureService {
           `INSERT INTO fee_structure_items
              (fee_structure_id, fee_category_id, amount, due_day_of_month, due_date,
               fine_per_day, grace_period_days)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6, $7)`,
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::numeric, $7)`,
           structure.id,
           item.feeCategoryId,
           item.amount,
@@ -169,7 +169,7 @@ export class FeeStructureService {
           `INSERT INTO fee_structure_items
              (fee_structure_id, fee_category_id, amount, due_day_of_month, due_date,
               fine_per_day, grace_period_days)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6, $7)`,
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::numeric, $7)`,
           id,
           item.feeCategoryId,
           item.amount,

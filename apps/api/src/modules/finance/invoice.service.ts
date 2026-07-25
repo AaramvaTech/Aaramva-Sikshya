@@ -425,7 +425,7 @@ export class InvoiceService {
       `INSERT INTO student_fee_assignments
          (student_id, fee_structure_item_id, academic_year_id,
           custom_amount, discount_percent, discount_reason, is_waived)
-       VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, $4::numeric, $5, $6, $7)
        ON CONFLICT (student_id, fee_structure_item_id, academic_year_id)
        DO UPDATE SET
          custom_amount    = EXCLUDED.custom_amount,

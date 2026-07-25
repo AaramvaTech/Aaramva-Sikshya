@@ -44,6 +44,10 @@ model Tenant {
   principalName         String? // Printed on official documents
   principalSignatureUrl String? // Signature image — report cards, certificates
   schoolStampUrl        String? // Official seal / stamp image
+  // BILL-1 R12: bill header fields not already covered above.
+  tagline              String? // Short line printed on bill/invoice headers
+  paymentInstructions  String? // Free text — bank details, "pay by X", etc.
+  qrImageUrl           String? // Payment QR code image (eSewa/bank) for bill printing
   isActive     Boolean   @default(true)
   // Onboarding wizard (OB1): set when the school owner finishes/dismisses guided
   // setup. Null = setup still in progress → owner is routed into the wizard.
