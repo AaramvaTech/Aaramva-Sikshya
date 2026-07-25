@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { Money } from '../../../common/money/money';
 
 /**
  * eSewa ePay v2 signing (verified against developer.esewa.com.np 2026-07-11):
@@ -28,7 +29,7 @@ export function buildSignedMessage(
  * decimals ("1500.50"). Never thousands separators.
  */
 export function formatEsewaAmount(amount: number): string {
-  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  return Number.isInteger(amount) ? String(amount) : Money.fromNumber(amount).toDb();
 }
 
 /**
@@ -38,5 +39,5 @@ export function formatEsewaAmount(amount: number): string {
  */
 export function parseEsewaAmount(value: number | string): number {
   if (typeof value === 'number') return value;
-  return parseFloat(String(value).replace(/,/g, ''));
+  return Money.fromDb(String(value).replace(/,/g, '')).toNumber();
 }

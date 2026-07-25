@@ -15,11 +15,11 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { PaymentService } from '../payment.service';
 import { PaymentMethod } from '../dto/payment.dto';
 import { InitiateKhaltiPaymentDto } from '../dto/khalti.dto';
-import { InvoiceRow, toNum } from '../entities/finance.entity';
+import { InvoiceRow, toMoney } from '../entities/finance.entity';
 import { Role } from '../../common/enums/role.enum';
 import type { AuthUser } from '../../auth/auth.types';
 import type { PaymentTransactionRow } from '../esewa/esewa.service';
-import { toPaisa } from './khalti.util';
+import { toPaisa, parseGatewayPaisa } from './khalti.util';
 
 // ─── Result shapes (same vocabulary as eSewa's — states are gateway-agnostic) ──
 
@@ -151,7 +151,7 @@ export class KhaltiService implements OnModuleInit {
       await this.assertParentOwnsStudent(user.userId, invoice.student_id);
     }
 
-    const outstanding = toNum(invoice.balance);
+    const outstanding = toMoney(invoice.balance).toNumber();
     if (outstanding <= 0) {
       throw new BadRequestException('Invoice has no outstanding balance to pay');
     }
@@ -275,8 +275,8 @@ export class KhaltiService implements OnModuleInit {
     switch (lookup.status) {
       case 'Completed': {
         // Khalti confirms in PAISA; our row stores rupees. Compare integers.
-        const expectedPaisa = toPaisa(toNum(txn.amount));
-        const confirmedPaisa = Math.round(Number(lookup.total_amount));
+        const expectedPaisa = toPaisa(txn.amount);
+        const confirmedPaisa = parseGatewayPaisa(lookup.total_amount);
         if (!Number.isFinite(confirmedPaisa) || expectedPaisa !== confirmedPaisa) {
           const reason = `amount-mismatch: expected ${expectedPaisa} paisa, gateway confirmed ${lookup.total_amount}`;
           this.logger.warn(`Khalti ${transactionUuid}: ${reason} — NOT crediting`);
@@ -331,7 +331,7 @@ export class KhaltiService implements OnModuleInit {
         tx,
         {
           invoiceId: claimed.invoice_id,
-          amount: toNum(claimed.amount),
+          amount: toMoney(claimed.amount).toNumber(),
           method: PaymentMethod.KHALTI,
           reference,
           notes: `Khalti online payment (pidx ${claimed.gateway_ref ?? 'unknown'})`,
@@ -459,7 +459,7 @@ export class KhaltiService implements OnModuleInit {
     return {
       transactionUuid: txn.transaction_uuid,
       status: txn.status,
-      amount: toNum(txn.amount),
+      amount: toMoney(txn.amount).toNumber(),
       gateway: txn.gateway,
       gatewayRef: txn.gateway_ref,
       invoiceNumber: txn.invoice_number,
@@ -559,7 +559,7 @@ export class KhaltiService implements OnModuleInit {
       state,
       transactionUuid: txn.transaction_uuid,
       status: state === 'EXPIRED' ? 'EXPIRED' : txn.status,
-      amount: toNum(txn.amount),
+      amount: toMoney(txn.amount).toNumber(),
       invoiceId: txn.invoice_id,
       gatewayRef: txn.gateway_ref,
       reason,

@@ -2,6 +2,7 @@ import {
   IsArray, IsDateString, IsNumber, IsOptional, IsString,
   IsUUID, Max, Min,
 } from 'class-validator';
+import { IsMoneyString } from '../../../common/money/is-money-string.validator';
 
 export class GenerateInvoiceDto {
   @IsUUID() studentId: string;
@@ -20,7 +21,8 @@ export class GenerateBulkInvoiceDto {
 export class SetStudentFeeAssignmentDto {
   @IsUUID() feeStructureItemId: string;
   @IsUUID() academicYearId: string;
-  @IsOptional() @IsNumber() @Min(0) customAmount?: number;
+  @IsOptional() @IsMoneyString() customAmount?: string;
+  // Percentage, not a money value — stays a plain number (0-100).
   @IsOptional() @IsNumber() @Min(0) @Max(100) discountPercent?: number;
   @IsOptional() @IsString() discountReason?: string;
   @IsOptional() isWaived?: boolean;

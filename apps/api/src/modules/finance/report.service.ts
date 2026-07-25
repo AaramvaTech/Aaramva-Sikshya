@@ -9,8 +9,9 @@ import {
   PaymentRow,
   toDateField,
   toInvoiceResponse,
-  toNum,
+  toMoney,
 } from './entities/finance.entity';
+import { Money } from '../../common/money/money';
 
 @Injectable()
 export class ReportService {
@@ -55,40 +56,44 @@ export class ReportService {
       academicYearId,
     );
 
-    const totalInvoiced = byClassRows.reduce((s, r) => s + toNum(r.invoiced), 0);
-    const totalCollected = byClassRows.reduce((s, r) => s + toNum(r.collected), 0);
-    const totalPending = Math.round((totalInvoiced - totalCollected) * 100) / 100;
-    const collectionRate = totalInvoiced > 0
-      ? Math.round((totalCollected / totalInvoiced) * 10000) / 100
-      : 0;
+    const totalInvoiced = byClassRows.reduce((s, r) => s.add(toMoney(r.invoiced)), Money.zero());
+    const totalCollected = byClassRows.reduce((s, r) => s.add(toMoney(r.collected)), Money.zero());
+    const totalPending = totalInvoiced.sub(totalCollected);
+    const collectionRate = totalInvoiced.isZero()
+      ? 0
+      : totalCollected.div(totalInvoiced.toNumber()).mul(100).toNumber();
 
     return {
       fiscalYear,
       academicYearId,
       asOf: toDateField(today),
-      totalInvoiced: Math.round(totalInvoiced * 100) / 100,
-      totalCollected: Math.round(totalCollected * 100) / 100,
-      totalPending,
+      totalInvoiced: totalInvoiced.toNumber(),
+      totalCollected: totalCollected.toNumber(),
+      totalPending: totalPending.toNumber(),
       collectionRate,
       byClass: byClassRows.map((r) => {
-        const inv = toNum(r.invoiced);
-        const col = toNum(r.collected);
+        const inv = toMoney(r.invoiced);
+        const col = toMoney(r.collected);
         return {
           classId: r.class_id,
           className: r.class_name,
-          invoiced: inv,
-          collected: col,
-          pending: Math.round((inv - col) * 100) / 100,
-          rate: inv > 0 ? Math.round((col / inv) * 10000) / 100 : 0,
+          invoiced: inv.toNumber(),
+          collected: col.toNumber(),
+          pending: inv.sub(col).toNumber(),
+          rate: inv.isZero() ? 0 : col.div(inv.toNumber()).mul(100).toNumber(),
         };
       }),
-      byCategory: byCategoryRows.map((r) => ({
-        categoryId: r.category_id,
-        categoryName: r.category_name,
-        invoiced: toNum(r.invoiced),
-        collected: toNum(r.collected),
-        pending: Math.round((toNum(r.invoiced) - toNum(r.collected)) * 100) / 100,
-      })),
+      byCategory: byCategoryRows.map((r) => {
+        const invoiced = toMoney(r.invoiced);
+        const collected = toMoney(r.collected);
+        return {
+          categoryId: r.category_id,
+          categoryName: r.category_name,
+          invoiced: invoiced.toNumber(),
+          collected: collected.toNumber(),
+          pending: invoiced.sub(collected).toNumber(),
+        };
+      }),
     };
   }
 
@@ -146,12 +151,12 @@ export class ReportService {
       academicYearId,
     );
 
-    const totalOutstanding = rows.reduce((s, r) => s + toNum(r.total_due), 0);
+    const totalOutstanding = rows.reduce((s, r) => s.add(toMoney(r.total_due)), Money.zero());
 
     return {
       asOf: toDateField(today),
       totalDefaulters: rows.length,
-      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+      totalOutstanding: totalOutstanding.toNumber(),
       students: rows.map((r) => ({
         studentId: r.student_id,
         admissionNumber: r.admission_number,
@@ -159,7 +164,7 @@ export class ReportService {
         className: r.class_name,
         sectionName: r.section_name,
         overdueInvoices: parseInt(r.overdue_invoices, 10),
-        totalDue: toNum(r.total_due),
+        totalDue: toMoney(r.total_due).toNumber(),
         oldestDueDate: toDateField(r.oldest_due_date),
         guardianPhone: r.guardian_phone,
       })),
@@ -214,7 +219,8 @@ export class ReportService {
       academicYearId,
     );
 
-    let totalInvoiced = 0, totalPaid = 0;
+    let totalInvoiced = Money.zero();
+    let totalPaid = Money.zero();
     const invoices: import('./entities/finance.entity').InvoiceResponseDto[] = [];
 
     for (const inv of invoiceRows) {
@@ -228,12 +234,12 @@ export class ReportService {
         inv.id,
       );
 
-      totalInvoiced += toNum(inv.total_amount);
-      totalPaid += toNum(inv.paid_amount);
+      totalInvoiced = totalInvoiced.add(toMoney(inv.total_amount));
+      totalPaid = totalPaid.add(toMoney(inv.paid_amount));
       invoices.push(toInvoiceResponse(inv, items, payments));
     }
 
-    const totalBalance = Math.round((totalInvoiced - totalPaid) * 100) / 100;
+    const totalBalance = totalInvoiced.sub(totalPaid);
 
     const rawStudent = studentRows[0];
     return {
@@ -246,9 +252,9 @@ export class ReportService {
       academicYear: yearRows[0],
       invoices,
       summary: {
-        totalInvoiced: Math.round(totalInvoiced * 100) / 100,
-        totalPaid: Math.round(totalPaid * 100) / 100,
-        totalBalance,
+        totalInvoiced: totalInvoiced.toNumber(),
+        totalPaid: totalPaid.toNumber(),
+        totalBalance: totalBalance.toNumber(),
       },
     };
   }

@@ -13,8 +13,9 @@ import {
   InvoiceItemToCreate,
   InvoiceResponseDto,
   toInvoiceResponse,
-  toNum,
+  toMoney,
 } from './entities/finance.entity';
+import { Money } from '../../common/money/money';
 import {
   GenerateInvoiceDto,
   GenerateBulkInvoiceDto,
@@ -35,58 +36,53 @@ export class InvoiceService {
   private calculateItemAmounts(
     items: FeeStructureItemRow[],
     assignmentMap: Map<string, StudentFeeAssignmentRow>,
-  ): { invoiceItems: InvoiceItemToCreate[]; subtotal: number; discountAmount: number } {
-    let subtotal = 0;
-    let discountAmount = 0;
+  ): { invoiceItems: InvoiceItemToCreate[]; subtotal: Money; discountAmount: Money } {
+    let subtotal = Money.zero();
+    let discountAmount = Money.zero();
     const invoiceItems: InvoiceItemToCreate[] = [];
 
     for (const item of items) {
       const assignment = assignmentMap.get(item.id);
-      const baseAmount = toNum(item.amount);
+      const baseAmount = toMoney(item.amount);
 
       if (assignment?.is_waived) {
         invoiceItems.push({
           feeCategoryId: item.fee_category_id,
           feeCategoryName: item.fee_category_name,
-          originalAmount: baseAmount,
+          originalAmount: baseAmount.toNumber(),
           discountPercent: 100,
           discountedAmount: 0,
-          finePerDay: toNum(item.fine_per_day),
+          finePerDay: toMoney(item.fine_per_day).toNumber(),
           gracePeriodDays: item.grace_period_days,
         });
-        subtotal += baseAmount;
-        discountAmount += baseAmount;
+        subtotal = subtotal.add(baseAmount);
+        discountAmount = discountAmount.add(baseAmount);
         continue;
       }
 
-      let originalAmount = baseAmount;
-      if (assignment?.custom_amount != null) {
-        originalAmount = toNum(assignment.custom_amount);
-      }
+      const originalAmount = assignment?.custom_amount != null
+        ? toMoney(assignment.custom_amount)
+        : baseAmount;
 
-      const discountPercent = assignment ? toNum(assignment.discount_percent) : 0;
-      const discounted = Math.round(originalAmount * (1 - discountPercent / 100) * 100) / 100;
-      const discount = Math.round((originalAmount - discounted) * 100) / 100;
+      const discountPercent = assignment ? toMoney(assignment.discount_percent).toNumber() : 0;
+      const discount = originalAmount.percentOf(discountPercent);
+      const discounted = originalAmount.sub(discount);
 
       invoiceItems.push({
         feeCategoryId: item.fee_category_id,
         feeCategoryName: item.fee_category_name,
-        originalAmount,
+        originalAmount: originalAmount.toNumber(),
         discountPercent,
-        discountedAmount: discounted,
-        finePerDay: toNum(item.fine_per_day),
+        discountedAmount: discounted.toNumber(),
+        finePerDay: toMoney(item.fine_per_day).toNumber(),
         gracePeriodDays: item.grace_period_days,
       });
 
-      subtotal += originalAmount;
-      discountAmount += discount;
+      subtotal = subtotal.add(originalAmount);
+      discountAmount = discountAmount.add(discount);
     }
 
-    return {
-      invoiceItems,
-      subtotal: Math.round(subtotal * 100) / 100,
-      discountAmount: Math.round(discountAmount * 100) / 100,
-    };
+    return { invoiceItems, subtotal, discountAmount };
   }
 
   // ─── Generate single invoice ────────────────────────────────────────────────
@@ -140,7 +136,7 @@ export class InvoiceService {
 
     const assignmentMap = new Map(assignments.map((a) => [a.fee_structure_item_id, a]));
     const { invoiceItems, subtotal, discountAmount } = this.calculateItemAmounts(fsiRows, assignmentMap);
-    const totalAmount = Math.round((subtotal - discountAmount) * 100) / 100;
+    const totalAmount = subtotal.sub(discountAmount);
     // QA-1 OBS-E-2: default due date is Nepal-today, not UTC-today.
     const dueDate = dto.dueDate ?? todayAdInNepal();
 
@@ -153,8 +149,7 @@ export class InvoiceService {
          ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
          RETURNING value`,
       );
-      const seq = Number(seqRow.value);
-      const invoiceNumber = `INV-${bsYear}-${String(seq).padStart(6, '0')}`;
+      const invoiceNumber = `INV-${bsYear}-${seqRow.value.toString().padStart(6, '0')}`;
 
       const [invoice] = await tx.$queryRawUnsafe<InvoiceRow[]>(
         `INSERT INTO invoices
@@ -167,9 +162,9 @@ export class InvoiceService {
         dto.studentId,
         dto.academicYearId,
         dueDate,
-        subtotal,
-        discountAmount,
-        totalAmount,
+        subtotal.toNumber(),
+        discountAmount.toNumber(),
+        totalAmount.toNumber(),
         createdById,
       );
 
@@ -281,13 +276,15 @@ export class InvoiceService {
     const daysSinceDue = Math.floor(
       (Date.parse(`${todayAd}T00:00:00Z`) - Date.parse(`${dueAd}T00:00:00Z`)) / 86400000,
     );
-    const daysOverdue = Math.max(0, daysSinceDue - Number(inv.max_grace_period_days));
-    const finePerDay = toNum(inv.total_fine_per_day);
-    const fine = Math.round(daysOverdue * finePerDay * 100) / 100;
+    // inv.max_grace_period_days is a SMALLINT aggregate — Prisma returns it as
+    // a plain JS number already (unlike NUMERIC columns), no conversion needed.
+    const daysOverdue = Math.max(0, daysSinceDue - inv.max_grace_period_days);
+    const finePerDay = toMoney(inv.total_fine_per_day);
+    const fine = finePerDay.mul(daysOverdue);
 
-    const subtotal = toNum(inv.subtotal);
-    const discount = toNum(inv.discount_amount);
-    const totalAmount = Math.round((subtotal - discount + fine) * 100) / 100;
+    const subtotal = toMoney(inv.subtotal);
+    const discount = toMoney(inv.discount_amount);
+    const totalAmount = subtotal.sub(discount).add(fine);
 
     // Determine new status
     let newStatus = inv.status;
@@ -299,8 +296,8 @@ export class InvoiceService {
       `UPDATE invoices
        SET fine_amount = $1, total_amount = $2, status = $3, updated_at = NOW()
        WHERE id = $4::uuid`,
-      fine,
-      totalAmount,
+      fine.toNumber(),
+      totalAmount.toNumber(),
       newStatus,
       id,
     );
@@ -310,7 +307,7 @@ export class InvoiceService {
       const { slug } = this.tenantContext.getOrThrow();
       this.eventEmitter.emit('invoice.overdue', {
         invoiceId: id,
-        balance: totalAmount,
+        balance: totalAmount.toNumber(),
         tenantSlug: slug,
       });
     }
@@ -511,23 +508,23 @@ export class InvoiceService {
       // 4. Merge: every fee item gets its override values (or defaults)
       return fsiRows.map((fsi) => {
         const assignment = assignmentMap.get(fsi.id);
-        const originalAmount = toNum(fsi.amount);
-        const customAmount = assignment?.custom_amount != null ? toNum(assignment.custom_amount) : null;
+        const originalAmount = toMoney(fsi.amount);
+        const customAmount = assignment?.custom_amount != null ? toMoney(assignment.custom_amount) : null;
         const effectiveBase = customAmount ?? originalAmount;
-        const discountPercent = assignment ? toNum(assignment.discount_percent) : 0;
+        const discountPercent = assignment ? toMoney(assignment.discount_percent).toNumber() : 0;
         const isWaived = assignment?.is_waived ?? false;
         const effectiveAmount = isWaived
-          ? 0
-          : Math.round(effectiveBase * (1 - discountPercent / 100) * 100) / 100;
+          ? Money.zero()
+          : effectiveBase.sub(effectiveBase.percentOf(discountPercent));
         return {
           feeStructureItemId: fsi.id,
           feeCategoryName: fsi.fee_category_name,
-          originalAmount,
-          customAmount,
+          originalAmount: originalAmount.toNumber(),
+          customAmount: customAmount ? customAmount.toNumber() : null,
           discountPercent,
           discountReason: assignment?.discount_reason ?? null,
           isWaived,
-          effectiveAmount,
+          effectiveAmount: effectiveAmount.toNumber(),
         };
       });
     }
@@ -554,20 +551,22 @@ export class InvoiceService {
     );
 
     return rows.map((r) => {
-      const originalAmount = toNum(r.original_amount);
-      const customAmount = r.custom_amount != null ? toNum(r.custom_amount) : null;
+      const originalAmount = toMoney(r.original_amount);
+      const customAmount = r.custom_amount != null ? toMoney(r.custom_amount) : null;
       const effectiveBase = customAmount ?? originalAmount;
-      const discountPercent = toNum(r.discount_percent);
-      const effectiveAmount = r.is_waived ? 0 : Math.round(effectiveBase * (1 - discountPercent / 100) * 100) / 100;
+      const discountPercent = toMoney(r.discount_percent).toNumber();
+      const effectiveAmount = r.is_waived
+        ? Money.zero()
+        : effectiveBase.sub(effectiveBase.percentOf(discountPercent));
       return {
         feeStructureItemId: r.fee_structure_item_id,
         feeCategoryName: r.fee_category_name,
-        originalAmount,
-        customAmount,
+        originalAmount: originalAmount.toNumber(),
+        customAmount: customAmount ? customAmount.toNumber() : null,
         discountPercent,
         discountReason: r.discount_reason,
         isWaived: r.is_waived,
-        effectiveAmount,
+        effectiveAmount: effectiveAmount.toNumber(),
       };
     });
   }
