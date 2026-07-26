@@ -76,6 +76,36 @@ describe('LedgerService', () => {
     });
   });
 
+  describe('postEntryInTx', () => {
+    it('inserts the entry and bumps the balance without acquiring its own lock (caller already holds one)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([makeEntryRow()]); // insert RETURNING
+
+      const result = await service.postEntryInTx(mockTx as any, {
+        studentId: 'student-1', academicYearId: 'year-1', entryType: 'INVOICE',
+        debit: '3000.00', credit: '0', createdById: 'user-1',
+      });
+
+      // no pg_advisory_xact_lock call — postEntryInTx trusts the caller's own lock
+      expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
+        expect.stringContaining('pg_advisory_xact_lock'),
+        expect.anything(),
+      );
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO student_ledger_entries'),
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.anything(),
+        'INVOICE', '3000.00', '0', null, null, null, null, 'user-1',
+      );
+      expect(mockTx.$executeRawUnsafe.mock.calls[0][0]).toContain('student_account_balances');
+      expect(result.debit).toBe(500); // makeEntryRow's fixed row value, not asserting on debit param
+    });
+  });
+
+  describe('withStudentLock', () => {
+    it('is exposed publicly so other services can compose a bigger transaction under the same per-student lock', () => {
+      expect(typeof service.withStudentLock).toBe('function');
+    });
+  });
+
   describe('openingBalance', () => {
     it('rejects a second opening balance for the same student/year (duplicate guard under the lock)', async () => {
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'existing-entry' }]); // duplicate check finds one
