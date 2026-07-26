@@ -48,6 +48,10 @@ model Tenant {
   tagline              String? // Short line printed on bill/invoice headers
   paymentInstructions  String? // Free text — bank details, "pay by X", etc.
   qrImageUrl           String? // Payment QR code image (eSewa/bank) for bill printing
+  // BILL-4 R13: invoice-number reset policy. false (default) = CONTINUOUS
+  // (counter never resets, matches every tenant's pre-existing behavior);
+  // true = RESET (counter restarts each Nepali fiscal year, Shrawan-based).
+  invoiceNumberingReset Boolean @default(false)
   isActive     Boolean   @default(true)
   // Onboarding wizard (OB1): set when the school owner finishes/dismisses guided
   // setup. Null = setup still in progress → owner is routed into the wizard.

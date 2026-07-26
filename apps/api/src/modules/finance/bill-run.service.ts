@@ -1,9 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { bsToAd } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { FeePreviewService } from './fee-preview.service';
-import { formatLocalDate, todayAdInNepal } from '../common/utils/date.util';
+import { BillLineResolverService } from './bill-line-resolver.service';
+import { todayAdInNepal } from '../common/utils/date.util';
 import { buildBillRunIdempotencyKey, addDaysToAdString, DEFAULT_DUE_DAYS } from './bill-run.util';
 import { CreateBillRunDto, BillRunScope, BillRunQueryDto, BillRunLineQueryDto } from './dto/bill-run.dto';
 import {
@@ -16,6 +15,7 @@ interface LineOutcome {
   skipReason: string | null;
   gross: number;
   concession: number;
+  tax: number;
   net: number;
 }
 
@@ -24,7 +24,7 @@ export class BillRunService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
-    private readonly feePreviewService: FeePreviewService,
+    private readonly billLineResolverService: BillLineResolverService,
   ) {}
 
   /**
@@ -93,21 +93,15 @@ export class BillRunService {
       throw err;
     }
 
-    // The date used to resolve which fee-structure assignment/override/
-    // concession/transport is active for this billing period — first day
-    // of the target BS month. bsToAd() returns a locally-constructed Date
-    // (FIX-2), so formatLocalDate (not toISOString) is required here.
-    const asOfDate = formatLocalDate(bsToAd({ year: dto.bsYear, month: dto.bsMonth, day: 1 }));
-
     const outcomeCounts: Record<string, number> = {};
     for (const studentId of studentIds) {
-      const line = await this.resolveLine(studentId, dto.academicYearId, dto.bsYear, dto.bsMonth, asOfDate);
+      const line = await this.resolveLine(studentId, dto.academicYearId, dto.bsYear, dto.bsMonth);
       await this.tenantPrisma.execute(
         `INSERT INTO bill_run_lines
            (bill_run_id, student_id, outcome, skip_reason, gross, concession, tax, net)
          VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8)`,
         runRow.id, studentId, line.outcome, line.skipReason,
-        line.gross, line.concession, 0, line.net,
+        line.gross, line.concession, line.tax, line.net,
       );
       outcomeCounts[line.outcome] = (outcomeCounts[line.outcome] ?? 0) + 1;
     }
@@ -248,7 +242,6 @@ export class BillRunService {
     academicYearId: string,
     bsYear: number,
     bsMonth: number,
-    asOfDate: string,
   ): Promise<LineOutcome> {
     const already = await this.tenantPrisma.query<{ id: string }>(
       `SELECT id FROM bill_invoices
@@ -260,18 +253,21 @@ export class BillRunService {
       return {
         outcome: 'SKIPPED_ALREADY_BILLED',
         skipReason: `Already billed (invoice ${already[0].id})`,
-        gross: 0, concession: 0, net: 0,
+        gross: 0, concession: 0, tax: 0, net: 0,
       };
     }
 
     try {
-      const preview = await this.feePreviewService.preview(studentId, { academicYearId, asOfDate });
-      return { outcome: 'DRAFT', skipReason: null, gross: preview.grossTotal, concession: preview.concessionTotal, net: preview.netTotal };
-    } catch (err) {
-      if (err instanceof NotFoundException) {
-        return { outcome: 'SKIPPED_NO_ASSIGNMENT', skipReason: err.message, gross: 0, concession: 0, net: 0 };
+      const resolved = await this.billLineResolverService.resolve(studentId, academicYearId, bsYear, bsMonth);
+      if (resolved.outcome === 'SKIPPED_NO_ASSIGNMENT') {
+        return { outcome: 'SKIPPED_NO_ASSIGNMENT', skipReason: resolved.skipReason, gross: 0, concession: 0, tax: 0, net: 0 };
       }
-      return { outcome: 'FAILED', skipReason: (err as Error).message, gross: 0, concession: 0, net: 0 };
+      return {
+        outcome: 'DRAFT', skipReason: null,
+        gross: resolved.gross, concession: resolved.concession, tax: resolved.taxAmount, net: resolved.net,
+      };
+    } catch (err) {
+      return { outcome: 'FAILED', skipReason: (err as Error).message, gross: 0, concession: 0, tax: 0, net: 0 };
     }
   }
 }

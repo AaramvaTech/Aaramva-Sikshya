@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { BillRunService } from '../bill-run.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
-import { FeePreviewService } from '../fee-preview.service';
+import { BillLineResolverService } from '../bill-line-resolver.service';
 import { BillRunScope } from '../dto/bill-run.dto';
 
 const mockRunRow = {
@@ -43,7 +43,7 @@ function baseDto() {
 describe('BillRunService', () => {
   let service: BillRunService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
-  let feePreviewService: jest.Mocked<FeePreviewService>;
+  let billLineResolverService: jest.Mocked<BillLineResolverService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -51,13 +51,13 @@ describe('BillRunService', () => {
         BillRunService,
         { provide: TenantPrismaService, useValue: { query: jest.fn(), execute: jest.fn() } },
         { provide: TenantContextService, useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo', schemaName: 'tenant_demo' }) } },
-        { provide: FeePreviewService, useValue: { preview: jest.fn() } },
+        { provide: BillLineResolverService, useValue: { resolve: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(BillRunService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
-    feePreviewService = module.get(FeePreviewService) as jest.Mocked<FeePreviewService>;
+    billLineResolverService = module.get(BillLineResolverService) as jest.Mocked<BillLineResolverService>;
     jest.clearAllMocks();
   });
 
@@ -100,7 +100,7 @@ describe('BillRunService', () => {
       const result = await service.generateDraft(baseDto(), 'user-1');
       expect(result.totalStudents).toBe(0);
       expect(result.outcomeSummary).toEqual({});
-      expect(feePreviewService.preview).not.toHaveBeenCalled();
+      expect(billLineResolverService.resolve).not.toHaveBeenCalled();
     });
 
     it('records DRAFT for a student with an active assignment and SKIPPED_NO_ASSIGNMENT for one without', async () => {
@@ -114,17 +114,20 @@ describe('BillRunService', () => {
         .mockResolvedValueOnce([]) // student-2 already-billed check: none
         .mockResolvedValueOnce([{ ...mockRunRow, total_gross: '5000.00', total_net: '4500.00', total_concession: '500.00' }]); // final aggregate UPDATE RETURNING *
 
-      feePreviewService.preview
+      billLineResolverService.resolve
         .mockResolvedValueOnce({
-          studentId: 'student-1', feeStructureId: 'fs-1', feeStructureName: 'Grade 9', academicYearId: 'year-1',
-          asOfDate: '2026-07-16', heads: [], transport: null, wholeBillConcessions: [],
-          grossTotal: 5000, concessionTotal: 500, netTotal: 4500,
-        } as any)
-        .mockRejectedValueOnce(new NotFoundException('No active fee structure assignment for this student in the given academic year'));
+          outcome: 'DRAFT', skipReason: null, gross: 5000, concession: 500,
+          taxableBase: 0, taxRate: null, taxAmount: 0, net: 4500, items: [],
+        })
+        .mockResolvedValueOnce({
+          outcome: 'SKIPPED_NO_ASSIGNMENT',
+          skipReason: 'No active fee structure assignment for this student in the given academic year',
+          gross: 0, concession: 0, taxableBase: 0, taxRate: null, taxAmount: 0, net: 0, items: [],
+        });
 
       const result = await service.generateDraft(baseDto(), 'user-1');
 
-      expect(feePreviewService.preview).toHaveBeenCalledTimes(2);
+      expect(billLineResolverService.resolve).toHaveBeenCalledTimes(2);
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO bill_run_lines'),
         'run-1', 'student-1', 'DRAFT', null, 5000, 500, 0, 4500,
@@ -138,7 +141,7 @@ describe('BillRunService', () => {
       expect(result.totalGross).toBe(5000);
     });
 
-    it('records SKIPPED_ALREADY_BILLED without calling FeePreviewService', async () => {
+    it('records SKIPPED_ALREADY_BILLED without calling BillLineResolverService', async () => {
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([{ id: 'year-1' }])
         .mockResolvedValueOnce([{ id: 'class-1' }])
@@ -150,7 +153,7 @@ describe('BillRunService', () => {
 
       await service.generateDraft(baseDto(), 'user-1');
 
-      expect(feePreviewService.preview).not.toHaveBeenCalled();
+      expect(billLineResolverService.resolve).not.toHaveBeenCalled();
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO bill_run_lines'),
         'run-1', 'student-1', 'SKIPPED_ALREADY_BILLED', expect.stringContaining('existing-invoice-1'),
@@ -158,7 +161,7 @@ describe('BillRunService', () => {
       );
     });
 
-    it('records FAILED (not an abort) when FeePreviewService throws something other than NotFoundException', async () => {
+    it('records FAILED (not an abort) when BillLineResolverService throws unexpectedly', async () => {
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([{ id: 'year-1' }])
         .mockResolvedValueOnce([{ id: 'class-1' }])
@@ -168,7 +171,7 @@ describe('BillRunService', () => {
         .mockResolvedValueOnce([]) // already-billed check
         .mockResolvedValueOnce([mockRunRow]); // final aggregate UPDATE
 
-      feePreviewService.preview.mockRejectedValueOnce(new Error('unexpected DB error'));
+      billLineResolverService.resolve.mockRejectedValueOnce(new Error('unexpected DB error'));
 
       const result = await service.generateDraft(baseDto(), 'user-1');
 

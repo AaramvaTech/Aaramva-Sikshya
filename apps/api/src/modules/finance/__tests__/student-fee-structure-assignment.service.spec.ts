@@ -108,4 +108,22 @@ describe('StudentFeeStructureAssignmentService', () => {
     const result = await service.findActiveAssignment('student-1', 'year-1', '2026-04-20');
     expect(result).toBeNull();
   });
+
+  describe('findAssignmentOverlappingPeriod', () => {
+    it('finds an assignment whose effective_from starts mid-period (BILL-4 proration)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockAssignmentRow]);
+      const result = await service.findAssignmentOverlappingPeriod('student-1', 'year-1', '2026-07-16', '2026-08-15');
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('effective_from <= $4::date'),
+        'student-1', 'year-1', '2026-07-16', '2026-08-15',
+      );
+      expect(result).toEqual(mockAssignmentRow);
+    });
+
+    it('returns null when no assignment overlaps any part of the period', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      const result = await service.findAssignmentOverlappingPeriod('student-1', 'year-1', '2026-07-16', '2026-08-15');
+      expect(result).toBeNull();
+    });
+  });
 });

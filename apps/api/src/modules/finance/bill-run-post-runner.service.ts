@@ -1,29 +1,33 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getBsYear, bsToAd } from 'bs-calendar';
+import { adToBs } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { LedgerService } from './ledger.service';
-import { FeePreviewService } from './fee-preview.service';
+import { BillLineResolverService } from './bill-line-resolver.service';
+import { FinanceSettingsService } from './finance-settings.service';
 import { toMoney } from './entities/finance.entity';
 import { amountInWords } from '../../common/money/amount-in-words';
-import { formatLocalDate, todayAdInNepal } from '../common/utils/date.util';
-import { buildInvoiceSequenceKey, buildInvoiceNumber } from './bill-post.util';
+import { todayAdInNepal } from '../common/utils/date.util';
+import { buildInvoiceSequenceKey, buildInvoiceNumber, fiscalYearBs } from './bill-post.util';
 import { BillRunRow } from './entities/bill-run.entity';
-
-interface FeeHeadMeta {
-  id: string;
-  is_taxable: boolean;
-  recurrence: string;
-}
 
 /**
  * BILL-4-SPEC.md §3 "Post" + §4 (the ledger-posting invariant). For each
  * DRAFT line, in one per-student transaction under the per-student advisory
  * lock (LedgerService.withStudentLock): assign an invoice number (R13
- * sequence), snapshot the previous balance, insert bill_invoice +
- * bill_invoice_items, insert exactly one INVOICE ledger entry (via
- * postEntryInTx, composed into THIS transaction rather than opening a
- * second one), then mark the line POSTED.
+ * sequence, reset-policy-aware as of Checkpoint C), snapshot the previous
+ * balance, insert bill_invoice + bill_invoice_items, insert exactly one
+ * INVOICE ledger entry (via postEntryInTx, composed into THIS transaction
+ * rather than opening a second one), then mark the line POSTED.
+ *
+ * The invoice's HEADER amounts (gross/concession/tax/net) are read from
+ * `bill_run_lines` — frozen at DRAFT time by BillLineResolverService via
+ * BillRunService, so posting reflects exactly what the accountant reviewed
+ * even if catalog/tax data changed since (B4-6). Only the ITEM breakdown
+ * (`bill_invoice_items`, plus the `taxable_base`/`tax_rate` display columns)
+ * is re-derived via a fresh BillLineResolverService.resolve() call — mirrors
+ * Checkpoint B's own split (there: a fresh FeePreviewService call for items
+ * only), since bill_run_lines has no column to freeze per-head detail into.
  *
  * A student who fails does not abort the rest of the run (mirrors
  * BulkAssignRunnerService's per-item tolerance). Re-posting a run re-selects
@@ -34,8 +38,7 @@ interface FeeHeadMeta {
  * Deliberately NOT retried automatically: a line already marked FAILED.
  * "Re-posting the run picks up only non-posted lines" is satisfied for the
  * DRAFT case (this checkpoint's proof); building an explicit FAILED-retry
- * path is Checkpoint C's "failed-line tolerance" scope, not this one's —
- * see BILL-BUGS.md.
+ * path is out of this checkpoint's scope too — see BILL-BUGS.md.
  */
 @Injectable()
 export class BillRunPostRunnerService {
@@ -45,7 +48,8 @@ export class BillRunPostRunnerService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly ledgerService: LedgerService,
-    private readonly feePreviewService: FeePreviewService,
+    private readonly billLineResolverService: BillLineResolverService,
+    private readonly financeSettingsService: FinanceSettingsService,
   ) {}
 
   /** Drains every POSTING run in the CURRENT tenant. Call inside tenantContext.run(). */
@@ -77,11 +81,15 @@ export class BillRunPostRunnerService {
       run.id,
     );
 
+    // Fetched once per run, not per line — a whole-school run could be
+    // thousands of lines and this setting can't change mid-run anyway.
+    const { invoiceNumberingReset } = await this.financeSettingsService.getInvoiceNumberingReset();
+
     let posted = 0;
     let failed = 0;
     for (const line of lines) {
       try {
-        await this.postLine(run, line.id, line.student_id);
+        await this.postLine(run, line.id, line.student_id, invoiceNumberingReset);
         posted++;
       } catch (err) {
         failed++;
@@ -104,7 +112,12 @@ export class BillRunPostRunnerService {
     return { posted, failed };
   }
 
-  private async postLine(run: BillRunRow, lineId: string, studentId: string): Promise<void> {
+  private async postLine(
+    run: BillRunRow,
+    lineId: string,
+    studentId: string,
+    invoiceNumberingReset: boolean,
+  ): Promise<void> {
     const { slug } = this.tenantContext.getOrThrow();
     // Guaranteed by BillRunService.requestPost (posted_by is set in the same
     // write that transitions a run to POSTING) — narrowed defensively so a
@@ -114,25 +127,18 @@ export class BillRunPostRunnerService {
 
     // Read-only work happens BEFORE the per-student lock — it doesn't write
     // anything, so it doesn't need to participate in the locked transaction.
-    // Assumes nothing changed between draft and post (B4-6: catalog edits
-    // only happen at the draft stage, via regenerate).
-    const asOfDate = formatLocalDate(bsToAd({ year: run.bs_year, month: run.bs_month, day: 1 }));
-    const preview = await this.feePreviewService.preview(studentId, {
-      academicYearId: run.academic_year_id,
-      asOfDate,
-    });
-    const feeHeadIds = preview.heads.map((h) => h.feeHeadId);
-    const feeHeadMeta = feeHeadIds.length
-      ? await this.tenantPrisma.query<FeeHeadMeta>(
-          `SELECT id, is_taxable, recurrence FROM fee_heads WHERE id = ANY($1::uuid[])`,
-          feeHeadIds,
-        )
-      : [];
-    const metaMap = new Map(feeHeadMeta.map((m) => [m.id, m]));
+    // Re-derives the ITEM breakdown only; header amounts come from
+    // bill_run_lines below (frozen at draft time).
+    const resolved = await this.billLineResolverService.resolve(
+      studentId, run.academic_year_id, run.bs_year, run.bs_month,
+    );
+
+    const todayBs = adToBs(new Date(todayAdInNepal()));
+    const fiscalYear = fiscalYearBs(todayBs.year, todayBs.month);
 
     await this.ledgerService.withStudentLock(studentId, async (tx) => {
-      const [line] = await tx.$queryRawUnsafe<{ outcome: string; gross: string; concession: string; net: string }[]>(
-        `SELECT outcome, gross, concession, net FROM bill_run_lines WHERE id = $1::uuid`,
+      const [line] = await tx.$queryRawUnsafe<{ outcome: string; gross: string; concession: string; tax: string; net: string }[]>(
+        `SELECT outcome, gross, concession, tax, net FROM bill_run_lines WHERE id = $1::uuid`,
         lineId,
       );
       if (!line || line.outcome !== 'DRAFT') return; // already handled — idempotency safety net
@@ -143,20 +149,21 @@ export class BillRunPostRunnerService {
       );
       const previousBalance = toMoney(sum);
 
-      const seqKey = buildInvoiceSequenceKey(slug);
+      const seqKey = buildInvoiceSequenceKey(slug, invoiceNumberingReset, fiscalYear);
       const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
         `INSERT INTO sequences (key, value) VALUES ($1, 1)
          ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
          RETURNING value`,
         seqKey,
       );
-      const bsYearNow = getBsYear(new Date(todayAdInNepal()));
-      const invoiceNumber = buildInvoiceNumber(bsYearNow, seqRow.value);
+      const invoiceNumber = buildInvoiceNumber(todayBs.year, seqRow.value);
 
+      // Frozen at draft time (bill_run_lines) — includes tax already, since
+      // BillLineResolverService computes net = (gross - concession) + tax.
       const gross = toMoney(line.gross);
       const concession = toMoney(line.concession);
-      const netAmount = toMoney(line.net); // no tax yet — R6 ships zero rates; Checkpoint C's job
-      const taxableBase = gross.sub(concession);
+      const taxAmount = toMoney(line.tax);
+      const netAmount = toMoney(line.net);
       const totalReceivable = netAmount.add(previousBalance);
       const amountEn = amountInWords(netAmount, 'en');
       const amountNe = amountInWords(netAmount, 'ne');
@@ -169,31 +176,29 @@ export class BillRunPostRunnerService {
             amount_in_words_en, amount_in_words_ne, status, created_by)
          VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6,
                  $7::date, $8::date, $9, $10, $11,
-                 NULL, 0, $12, $13, $14,
-                 $15, $16, 'POSTED', $17::uuid)
+                 $12, $13, $14, $15, $16,
+                 $17, $18, 'POSTED', $19::uuid)
          RETURNING id`,
         invoiceNumber, studentId, run.academic_year_id, run.id, run.bs_year, run.bs_month,
-        run.issue_date, run.due_date, gross.toNumber(), concession.toNumber(), taxableBase.toNumber(),
-        netAmount.toNumber(), previousBalance.toNumber(), totalReceivable.toNumber(),
+        run.issue_date, run.due_date, gross.toNumber(), concession.toNumber(), resolved.taxableBase,
+        resolved.taxRate, taxAmount.toNumber(), netAmount.toNumber(), previousBalance.toNumber(), totalReceivable.toNumber(),
         amountEn, amountNe, postedBy,
       );
 
-      for (const head of preview.heads) {
-        const meta = metaMap.get(head.feeHeadId);
-        const headConcession = head.effectiveBase - head.netAmount;
+      for (const item of resolved.items) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_invoice_items
              (bill_invoice_id, fee_head_id, fee_head_name, recurrence, gross_amount,
-              concession_amount, is_taxable, net_amount)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8)`,
-          invoice.id, head.feeHeadId, head.feeHeadName, meta?.recurrence ?? null,
-          head.grossAmount, headConcession, meta?.is_taxable ?? false, head.netAmount,
+              concession_amount, is_taxable, net_amount, proration_note)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
+          invoice.id, item.feeHeadId, item.feeHeadName, item.recurrence,
+          item.grossAmount, item.concessionAmount, item.isTaxable, item.netAmount, item.prorationNote,
         );
       }
-      // preview.transport (if present) has no fee_head_id and is NOT itemized
-      // as a bill_invoice_item — its amount is still correctly folded into
-      // this invoice's aggregate totals via bill_run_lines.net. Documented
-      // gap, see BILL-BUGS.md — the DDL reserves no column for it.
+      // Transport (if present) has no fee_head_id and is NOT itemized as a
+      // bill_invoice_item — its amount is still correctly folded into this
+      // invoice's aggregate totals via bill_run_lines.gross/net. Documented
+      // gap, see BILL-BUGS.md (TRANSPORT-ITEM) — the DDL reserves no column.
 
       const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
         studentId,

@@ -3,7 +3,8 @@ import { BillRunPostRunnerService } from '../bill-run-post-runner.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
-import { FeePreviewService } from '../fee-preview.service';
+import { BillLineResolverService } from '../bill-line-resolver.service';
+import { FinanceSettingsService } from '../finance-settings.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -34,22 +35,21 @@ const mockRun = {
   deleted_at: null,
 };
 
-const mockPreview = {
-  studentId: 'student-1', feeStructureId: 'fs-1', feeStructureName: 'proof structure',
-  academicYearId: 'year-1', asOfDate: '2025-07-01',
-  heads: [{
-    feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 3000,
-    overrideAmount: null, effectiveBase: 3000, concessions: [], netAmount: 3000,
+const mockResolved = {
+  outcome: 'DRAFT' as const, skipReason: null,
+  gross: 3000, concession: 0, taxableBase: 0, taxRate: null, taxAmount: 0, net: 3000,
+  items: [{
+    feeHeadId: 'fh-1', feeHeadName: 'Tuition', recurrence: 'MONTHLY', isTaxable: false,
+    grossAmount: 3000, concessionAmount: 0, netAmount: 3000, prorationNote: null,
   }],
-  transport: null, wholeBillConcessions: [],
-  grossTotal: 3000, concessionTotal: 0, netTotal: 3000,
 };
 
 describe('BillRunPostRunnerService', () => {
   let service: BillRunPostRunnerService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let ledgerService: jest.Mocked<LedgerService>;
-  let feePreviewService: jest.Mocked<FeePreviewService>;
+  let billLineResolverService: jest.Mocked<BillLineResolverService>;
+  let financeSettingsService: jest.Mocked<FinanceSettingsService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -64,15 +64,18 @@ describe('BillRunPostRunnerService', () => {
             postEntryInTx: jest.fn(),
           },
         },
-        { provide: FeePreviewService, useValue: { preview: jest.fn() } },
+        { provide: BillLineResolverService, useValue: { resolve: jest.fn() } },
+        { provide: FinanceSettingsService, useValue: { getInvoiceNumberingReset: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(BillRunPostRunnerService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     ledgerService = module.get(LedgerService) as jest.Mocked<LedgerService>;
-    feePreviewService = module.get(FeePreviewService) as jest.Mocked<FeePreviewService>;
+    billLineResolverService = module.get(BillLineResolverService) as jest.Mocked<BillLineResolverService>;
+    financeSettingsService = module.get(FinanceSettingsService) as jest.Mocked<FinanceSettingsService>;
     jest.clearAllMocks();
+    financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: false });
   });
 
   it('drainCurrentTenant() is a no-op when there are no POSTING runs', async () => {
@@ -84,13 +87,12 @@ describe('BillRunPostRunnerService', () => {
   it('posts a single DRAFT line: invoice + item + ledger entry, one per-student transaction under one lock', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun]) // SELECT bill_runs WHERE status='POSTING'
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]) // SELECT DRAFT lines
-      .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY' }]); // fee_heads metadata
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]); // SELECT DRAFT lines
 
-    feePreviewService.preview.mockResolvedValueOnce(mockPreview as any);
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
 
     mockTx.$queryRawUnsafe
-      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', net: '3000.00' }]) // re-check line
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }]) // re-check line
       .mockResolvedValueOnce([{ sum: '5500.00' }]) // previous balance
       .mockResolvedValueOnce([{ value: BigInt(1) }]) // sequence upsert
       .mockResolvedValueOnce([{ id: 'invoice-1' }]); // bill_invoices insert RETURNING id
@@ -100,6 +102,7 @@ describe('BillRunPostRunnerService', () => {
     const result = await service.drainCurrentTenant();
 
     expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    expect(financeSettingsService.getInvoiceNumberingReset).toHaveBeenCalledTimes(1);
     expect(ledgerService.withStudentLock).toHaveBeenCalledWith('student-1', expect.any(Function));
 
     expect(mockTx.$queryRawUnsafe).toHaveBeenNthCalledWith(
@@ -107,14 +110,14 @@ describe('BillRunPostRunnerService', () => {
       expect.stringContaining('INSERT INTO bill_invoices'),
       expect.stringMatching(/^BINV-\d{4}-\d{6}$/),
       'student-1', 'year-1', 'run-1', 2082, 4,
-      mockRun.issue_date, mockRun.due_date, 3000, 0, 3000,
-      3000, 5500, 8500,
+      mockRun.issue_date, mockRun.due_date, 3000, 0, 0,
+      null, 0, 3000, 5500, 8500,
       expect.any(String), expect.any(String), 'user-1',
     );
 
     expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO bill_invoice_items'),
-      'invoice-1', 'fh-1', 'Tuition', 'MONTHLY', 3000, 0, false, 3000,
+      'invoice-1', 'fh-1', 'Tuition', 'MONTHLY', 3000, 0, false, 3000, null,
     );
 
     expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
@@ -142,7 +145,7 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([mockRun])
       .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
 
-    feePreviewService.preview.mockRejectedValueOnce(new Error('catalog data corrupted'));
+    billLineResolverService.resolve.mockRejectedValueOnce(new Error('catalog data corrupted'));
 
     const result = await service.drainCurrentTenant();
 
@@ -165,15 +168,14 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([
         { id: 'line-1', student_id: 'student-1' },
         { id: 'line-2', student_id: 'student-2' },
-      ])
-      .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY' }]);
+      ]);
 
-    feePreviewService.preview
-      .mockResolvedValueOnce(mockPreview as any)
+    billLineResolverService.resolve
+      .mockResolvedValueOnce(mockResolved as any)
       .mockRejectedValueOnce(new Error('boom'));
 
     mockTx.$queryRawUnsafe
-      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', net: '3000.00' }])
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
       .mockResolvedValueOnce([{ sum: '5500.00' }])
       .mockResolvedValueOnce([{ value: BigInt(1) }])
       .mockResolvedValueOnce([{ id: 'invoice-1' }]);
@@ -187,16 +189,38 @@ describe('BillRunPostRunnerService', () => {
   it('skips a line whose fresh re-check (under the lock) shows it is no longer DRAFT', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
-      .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
 
-    feePreviewService.preview.mockResolvedValueOnce(mockPreview as any);
-    mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ outcome: 'POSTED', gross: '3000.00', concession: '0.00', net: '3000.00' }]);
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+    mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ outcome: 'POSTED', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }]);
 
     const result = await service.drainCurrentTenant();
 
     expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
     expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
     expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1); // only the re-check — nothing else ran
+  });
+
+  it('uses the RESET-mode fiscal-year key when the tenant setting is enabled', async () => {
+    financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: true });
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
+      .mockResolvedValueOnce([{ sum: '5500.00' }])
+      .mockResolvedValueOnce([{ value: BigInt(1) }])
+      .mockResolvedValueOnce([{ id: 'invoice-1' }]);
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-1' } as any);
+
+    await service.drainCurrentTenant();
+
+    expect(mockTx.$queryRawUnsafe).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('INSERT INTO sequences'),
+      expect.stringMatching(/^bill_invoice:demo:\d{4}$/),
+    );
   });
 });
