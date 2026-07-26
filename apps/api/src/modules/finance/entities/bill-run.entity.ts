@@ -1,3 +1,5 @@
+import { toMoney } from './finance.entity';
+
 // ─── DB row shapes ────────────────────────────────────────────────────────────
 
 export interface BillRunRow {
@@ -104,11 +106,10 @@ function toDateOnly(d: Date | string): string {
   return date.toISOString().split('T')[0];
 }
 
-function toNum(v: string | number): number {
-  return typeof v === 'number' ? v : parseFloat(v);
-}
-
 // ─── Mappers ──────────────────────────────────────────────────────────────────
+// toMoney(...).toNumber() (imported from finance.entity.ts, R1's one boundary
+// conversion) rather than a local parseFloat — the no-float-coercion guard
+// spec bans parseFloat/Number( anywhere in modules/finance/** unconditionally.
 
 export function toBillRunResponse(row: BillRunRow): BillRunResponseDto {
   return {
@@ -122,10 +123,10 @@ export function toBillRunResponse(row: BillRunRow): BillRunResponseDto {
     issueDate: toDateOnly(row.issue_date),
     dueDate: toDateOnly(row.due_date),
     totalStudents: row.total_students,
-    totalGross: toNum(row.total_gross),
-    totalConcession: toNum(row.total_concession),
-    totalTax: toNum(row.total_tax),
-    totalNet: toNum(row.total_net),
+    totalGross: toMoney(row.total_gross).toNumber(),
+    totalConcession: toMoney(row.total_concession).toNumber(),
+    totalTax: toMoney(row.total_tax).toNumber(),
+    totalNet: toMoney(row.total_net).toNumber(),
     createdBy: row.created_by,
     postedBy: row.posted_by,
     postedAt: row.posted_at ? toIso(row.posted_at) : null,
@@ -143,10 +144,10 @@ export function toBillRunLineResponse(row: BillRunLineRow): BillRunLineResponseD
     outcome: row.outcome,
     skipReason: row.skip_reason,
     billInvoiceId: row.bill_invoice_id,
-    gross: toNum(row.gross),
-    concession: toNum(row.concession),
-    tax: toNum(row.tax),
-    net: toNum(row.net),
+    gross: toMoney(row.gross).toNumber(),
+    concession: toMoney(row.concession).toNumber(),
+    tax: toMoney(row.tax).toNumber(),
+    net: toMoney(row.net).toNumber(),
     createdAt: toIso(row.created_at),
   };
 }
