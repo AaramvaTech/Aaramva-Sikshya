@@ -4,6 +4,30 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-4 Checkpoint A — draft billing run engine (2026-07-26, `docs/api-contracts/BILL-4-SPEC.md`)
+
+**Tables** (`0022_bill_run.sql`, canary demo → all 8 tenants): `bill_runs`, `bill_run_lines`, `bill_invoices`, `bill_invoice_items` — all four created now per spec §2's full DDL, even though this checkpoint's draft-generation code only ever writes `bill_runs`/`bill_run_lines` (posting is Checkpoint B). `bill_run_lines.bill_invoice_id → bill_invoices(id)` is added as a trailing `ALTER TABLE` (Postgres can't forward-reference a table that doesn't exist yet when the migration follows the spec's own table ordering).
+
+**R8's tenant-configurable due-days setting doesn't exist as infrastructure anywhere in the codebase** — checked: no `due_days`/`dueDays` column on `public.tenants` or any settings table, and neither BILL-0/1/2/3 nor this spec's own DDL adds one. `CreateBillRunDto.dueDate` is an explicit optional per-run override, defaulting to `issueDate + 15 days` (`DEFAULT_DUE_DAYS` in `bill-run.util.ts`) when omitted. Raising for Srijan to decide whether a real per-tenant setting should replace the constant before Checkpoint B/C, rather than inventing one unilaterally.
+
+**`academicYearId` is an explicit required field on `CreateBillRunDto`**, not inferred from an `is_current` lookup. Spec §5's endpoint bullet ("scope + bsYear + bsMonth") doesn't enumerate every DTO field — matches `FeePreviewQueryDto`'s own explicit-param convention (BILL-2), and other phases' DTOs have consistently been richer than their one-line spec bullet.
+
+**`idempotency_key` is a partial unique index (`WHERE deleted_at IS NULL`), not the spec DDL comment's bare `TEXT UNIQUE`.** A bare unique constraint would permanently block re-drafting a period once its run is voided — §3 says voiding a DRAFT run leaves "nothing to unwind," which only makes sense if the period becomes draftable again. Same partial-unique convention as `uq_sfsa_one_active_per_student_year` (0020_bill_assignment.sql).
+
+**`FAILED` is used for any non-`NotFoundException` error during draft resolution, not only during posting.** The outcome enum's CHECK constraint allows it generically (spec's outcome list isn't scoped to Checkpoint B), and this codebase's established convention (bulk-assign, the old bulk-invoice loop) never aborts a whole batch over one student's error — a single unexpected `FeePreviewService` failure marks that line `FAILED` and the run continues.
+
+**Run-level totals (`bill_runs.total_*`) are computed with one SQL `SUM()` aggregate over `bill_run_lines` after all lines are inserted, not a `Money` accumulator in the per-student loop** — per R1 ("aggregation happens in SQL"), since a whole-school run could be thousands of rows.
+
+**The existing `no-float-coercion.spec.ts` guard caught a real violation during this checkpoint**, working exactly as designed: `bill-run.entity.ts`'s first draft used a local `parseFloat`-based `toNum` helper for its response-DTO mappers. Fixed by importing `toMoney(...).toNumber()` from `finance.entity.ts` instead (the same boundary conversion every other mapper in this module uses) — not a spec deviation, just recorded here since it's the guard test doing its job on brand-new code.
+
+**Live proof (`demo` tenant, Grade 9 — the only class in `demo` with active students, 15 of them):** no fee-structure catalog data existed for Grade 9 at all going in, so a fresh `fee_head` + `bill_fee_structure` (+ one item) + one student assignment (Aarav Shrestha only) were created via the real HTTP endpoints to exercise both outcome paths in one run. `POST /finance/bill/runs` (scope CLASS, bsYear 2082, bsMonth 3 — Ashadh, matching the assignment's `effective_from`) returned `totalStudents:15, outcomeSummary:{DRAFT:1, SKIPPED_NO_ASSIGNMENT:14}, totalGross:3000, totalNet:3000`; a re-POST of the identical period+scope correctly 409'd (`CONFLICT_DUPLICATE`) rather than double-billing. Raw `SELECT`s confirmed: `bill_runs`/`bill_run_lines` rows exist with the exact outcome/amount breakdown; `bill_invoices` count unchanged at 0; `student_ledger_entries` count unchanged at 5 (pre-existing BILL-3 proof rows, untouched). All crafted rows (bill run — cascades to its lines, assignment, fee structure — cascades to its item, fee head) deleted with `COUNT(*)` read-backs afterward; the owner password shim used to obtain a token was restored and 401-proven.
+
+**858 api tests passing (106 suites; +20 this checkpoint: 8 in `bill-run.util.spec.ts`, 12 in `bill-run.service.spec.ts`), `tsc -p tsconfig.build.json --noEmit` clean.**
+
+**Not built this checkpoint (Checkpoints B/C, per explicit instruction):** posting, `PATCH .../exclude`, `POST .../regenerate`, `DELETE .../:id` (void), `GET /finance/bill/invoices*`, sequence numbering, ledger writes, tax snapshot, proration.
+
+---
+
 ## BILL-3 (Phase 4) — Complete, Checkpoint 4, the acceptance bar for the whole spec
 
 **Tables** (`0021_bill_ledger.sql`, canary demo → all 8 tenants): `student_ledger_entries` (append-only — no `updated_at`, no `deleted_at`, the three CHECK constraints verbatim from spec) and `student_account_balances` (one row per student, lifetime running balance — `student_id` is the PK, not composite with `academic_year_id`, exactly as spec's literal DDL). **First trigger/function in this migration system** — `enforce_ledger_immutability()` + `trg_ledger_immutable`, `BEFORE UPDATE OR DELETE`, unconditional `RAISE EXCEPTION` reporting `TG_OP` and the blocked row's id. Both proven live at Checkpoint 4 (raw output below).
@@ -45,8 +69,6 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 **Live-data discipline held throughout** (the six-point safeguard from Checkpoint 2): every fixture (fee head, discount reason, bill fee structure, 15 assignment rows, override, concession, the bulk-assign job) was freshly created, never an edit to a pre-existing row. The one exception — a second parent account for a planned cross-family IDOR probe — turned out to be soft-deleted, unrelated leftover state; caught immediately via the read-first step (its hash was read, then shimmed, then login correctly 401'd, at which point the `deleted_at` was noticed), password restored without ever being used, and the probe redirected to the live `parent@demo.school` account previewing a *different* family's child instead (403, confirmed). All crafted rows deleted with a zero-row read-back; both shimmed passwords restored and 401-proven.
 
 ---
-
-## BUGS-4 — bulk-assign route collides with the old `fee_structures` path, same class as BUGS-3 (2026-07-25/26, Phase 3)
 
 **Not blocked on — the correct answer follows directly from a ruling Srijan already made, so this is a record of applying it, not a new open question.** Spec §6 writes the bulk-assign route as bare `POST /finance/fee-structures/:id/bulk-assign`. That `:id` must resolve against `bill_fee_structures` (the Phase 2/3 catalog table this phase's assignment tables FK to) — but `FinanceController` already serves `/finance/fee-structures/...` for the OLD table, live, for every tenant. Same collision BUGS-3 already resolved for the catalog CRUD endpoints themselves (`/finance/bill/fee-structures`), one route level up.
 
