@@ -83,7 +83,7 @@ describe('FeeStructureService', () => {
         {
           classId: 'class-1',
           academicYearId: 'year-1',
-          items: [{ feeCategoryId: 'cat-1', amount: 2000, finePerDay: 5, gracePeriodDays: 3 }],
+          items: [{ feeCategoryId: 'cat-1', amount: '2000', finePerDay: '5', gracePeriodDays: 3 }],
         },
         'user-1',
       );
@@ -94,10 +94,10 @@ describe('FeeStructureService', () => {
         expect.stringContaining('INSERT INTO fee_structure_items'),
         expect.any(String), // fee_structure_id
         'cat-1',            // fee_category_id
-        2000,               // amount
+        '2000',              // amount — decimal string, straight through (BILL-0: @IsMoneyString)
         null,               // due_day_of_month (undefined → null in impl)
         null,               // due_date (undefined → null in impl)
-        5,                  // fine_per_day
+        '5',                 // fine_per_day — decimal string
         3,                  // grace_period_days
       );
     });
@@ -113,7 +113,7 @@ describe('FeeStructureService', () => {
         {
           classId: 'class-1',
           academicYearId: 'year-1',
-          items: [{ feeCategoryId: 'cat-1', amount: 2000, dueDate: '2026-08-15' }],
+          items: [{ feeCategoryId: 'cat-1', amount: '2000', dueDate: '2026-08-15' }],
         },
         'user-1',
       );
@@ -132,7 +132,7 @@ describe('FeeStructureService', () => {
           {
             classId: 'class-1',
             academicYearId: 'year-1',
-            items: [{ feeCategoryId: 'cat-1', amount: 2000 }],
+            items: [{ feeCategoryId: 'cat-1', amount: '2000' }],
           },
           'user-1',
         ),
@@ -149,7 +149,7 @@ describe('FeeStructureService', () => {
       mockTx.$executeRawUnsafe.mockResolvedValue(1);
 
       await service.updateItems('fs-1', {
-        items: [{ feeCategoryId: 'cat-1', amount: 2500, dueDate: '2026-09-01' }],
+        items: [{ feeCategoryId: 'cat-1', amount: '2500', dueDate: '2026-09-01' }],
       });
 
       const insertCall = mockTx.$executeRawUnsafe.mock.calls.find(

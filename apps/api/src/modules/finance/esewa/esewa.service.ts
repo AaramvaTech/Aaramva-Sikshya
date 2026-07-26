@@ -14,7 +14,8 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { PaymentService } from '../payment.service';
 import { PaymentMethod } from '../dto/payment.dto';
 import { InitiateEsewaPaymentDto } from '../dto/esewa.dto';
-import { InvoiceRow, toNum } from '../entities/finance.entity';
+import { InvoiceRow, toMoney } from '../entities/finance.entity';
+import { Money } from '../../../common/money/money';
 import { Role } from '../../common/enums/role.enum';
 import type { AuthUser } from '../../auth/auth.types';
 import {
@@ -174,7 +175,7 @@ export class EsewaService implements OnModuleInit {
       await this.assertParentOwnsStudent(user.userId, invoice.student_id);
     }
 
-    const outstanding = toNum(invoice.balance);
+    const outstanding = toMoney(invoice.balance).toNumber();
     if (outstanding <= 0) {
       throw new BadRequestException('Invoice has no outstanding balance to pay');
     }
@@ -277,10 +278,10 @@ export class EsewaService implements OnModuleInit {
 
     switch (check.status) {
       case 'COMPLETE': {
-        const expectedPaisa = Math.round(toNum(txn.amount) * 100);
-        const confirmedPaisa = Math.round(parseEsewaAmount(check.total_amount) * 100);
+        const expectedPaisa = toMoney(txn.amount).mul(100).toNumber();
+        const confirmedPaisa = Money.fromNumber(parseEsewaAmount(check.total_amount)).mul(100).toNumber();
         if (expectedPaisa !== confirmedPaisa) {
-          const reason = `amount-mismatch: expected ${toNum(txn.amount)}, gateway confirmed ${check.total_amount}`;
+          const reason = `amount-mismatch: expected ${toMoney(txn.amount).toNumber()}, gateway confirmed ${check.total_amount}`;
           this.logger.warn(`eSewa ${transactionUuid}: ${reason} — NOT crediting`);
           return this.failOnce(txn, reason);
         }
@@ -341,7 +342,7 @@ export class EsewaService implements OnModuleInit {
         tx,
         {
           invoiceId: claimed.invoice_id,
-          amount: toNum(claimed.amount),
+          amount: toMoney(claimed.amount).toNumber(),
           method: PaymentMethod.ESEWA,
           reference: check.ref_id ?? claimed.transaction_uuid,
           notes: `eSewa online payment (transaction ${claimed.transaction_uuid})`,
@@ -394,7 +395,7 @@ export class EsewaService implements OnModuleInit {
   ): Promise<EsewaStatusCheckResponse | null> {
     const url =
       `${this.statusUrl}?product_code=${encodeURIComponent(this.productCode)}` +
-      `&total_amount=${encodeURIComponent(formatEsewaAmount(toNum(txn.amount)))}` +
+      `&total_amount=${encodeURIComponent(formatEsewaAmount(toMoney(txn.amount).toNumber()))}` +
       `&transaction_uuid=${encodeURIComponent(txn.transaction_uuid)}`;
     try {
       const resp = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -463,7 +464,7 @@ export class EsewaService implements OnModuleInit {
     if (txn.status !== 'INITIATED') {
       return { redirect: this.resultUrl(slug, txn) };
     }
-    const fields = this.buildFormFields(slug, transactionUuid, toNum(txn.amount));
+    const fields = this.buildFormFields(slug, transactionUuid, toMoney(txn.amount).toNumber());
     const inputs = Object.entries(fields)
       .map(
         ([name, value]) =>
@@ -560,7 +561,7 @@ export class EsewaService implements OnModuleInit {
     return {
       transactionUuid: txn.transaction_uuid,
       status: txn.status,
-      amount: toNum(txn.amount),
+      amount: toMoney(txn.amount).toNumber(),
       gateway: txn.gateway,
       gatewayRef: txn.gateway_ref,
       invoiceNumber: txn.invoice_number,
@@ -626,7 +627,7 @@ export class EsewaService implements OnModuleInit {
       state,
       transactionUuid: txn.transaction_uuid,
       status: state === 'EXPIRED' ? 'EXPIRED' : txn.status,
-      amount: toNum(txn.amount),
+      amount: toMoney(txn.amount).toNumber(),
       invoiceId: txn.invoice_id,
       gatewayRef: txn.gateway_ref,
       reason,

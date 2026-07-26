@@ -1,4 +1,5 @@
 import { adToBs } from 'bs-calendar';
+import { Money } from '../../../common/money/money';
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
 
@@ -206,9 +207,16 @@ export function toDateField(d: Date | string): BsAdDate {
   return { ad: toAdString(d), bs: toBsString(d) };
 }
 
-export function toNum(v: string | number | null | undefined): number {
-  if (v == null) return 0;
-  return typeof v === 'number' ? v : parseFloat(v);
+/**
+ * BILL-0 (R1): the one place a raw NUMERIC DB value (Prisma hands raw-query
+ * NUMERIC columns back as strings) becomes a Money. Replaces the old `toNum`
+ * (parseFloat-based) everywhere in the finance module — call `.toNumber()`
+ * on the result only at a genuine boundary (a response DTO field, a SQL
+ * param), never mid-computation.
+ */
+export function toMoney(v: string | number | null | undefined): Money {
+  if (v == null) return Money.zero();
+  return typeof v === 'number' ? Money.fromNumber(v) : Money.fromDb(v);
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -229,10 +237,10 @@ export function toFeeStructureItemResponse(row: FeeStructureItemRow): FeeStructu
     id: row.id,
     feeCategoryId: row.fee_category_id,
     feeCategoryName: row.fee_category_name,
-    amount: toNum(row.amount),
+    amount: toMoney(row.amount).toNumber(),
     dueDayOfMonth: row.due_day_of_month,
     dueDate: row.due_date ? toDateField(row.due_date) : null,
-    finePerDay: toNum(row.fine_per_day),
+    finePerDay: toMoney(row.fine_per_day).toNumber(),
     gracePeriodDays: row.grace_period_days,
   };
 }
@@ -256,9 +264,9 @@ export function toInvoiceItemResponse(row: InvoiceItemRow): InvoiceItemResponseD
     id: row.id,
     feeCategoryId: row.fee_category_id,
     feeCategoryName: row.fee_category_name,
-    originalAmount: toNum(row.original_amount),
-    discountPercent: toNum(row.discount_percent),
-    discountedAmount: toNum(row.discounted_amount),
+    originalAmount: toMoney(row.original_amount).toNumber(),
+    discountPercent: toMoney(row.discount_percent).toNumber(),
+    discountedAmount: toMoney(row.discounted_amount).toNumber(),
   };
 }
 
@@ -268,7 +276,7 @@ export function toPaymentResponse(row: PaymentRow): PaymentResponseDto {
     paymentNumber: row.payment_number,
     invoiceId: row.invoice_id,
     studentId: row.student_id,
-    amount: toNum(row.amount),
+    amount: toMoney(row.amount).toNumber(),
     method: row.method,
     reference: row.reference,
     notes: row.notes,
@@ -289,12 +297,12 @@ export function toInvoiceResponse(
     academicYearId: row.academic_year_id,
     dueDate: toDateField(row.due_date),
     status: row.status,
-    subtotal: toNum(row.subtotal),
-    discountAmount: toNum(row.discount_amount),
-    fineAmount: toNum(row.fine_amount),
-    totalAmount: toNum(row.total_amount),
-    paidAmount: toNum(row.paid_amount),
-    balance: toNum(row.balance),
+    subtotal: toMoney(row.subtotal).toNumber(),
+    discountAmount: toMoney(row.discount_amount).toNumber(),
+    fineAmount: toMoney(row.fine_amount).toNumber(),
+    totalAmount: toMoney(row.total_amount).toNumber(),
+    paidAmount: toMoney(row.paid_amount).toNumber(),
+    balance: toMoney(row.balance).toNumber(),
     createdBy: row.created_by,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     items: items?.map(toInvoiceItemResponse),

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RecalculateFinesService } from './recalculate-fines.job';
+import { ReconcileLedgerBalancesService } from './reconcile-ledger-balances.job';
 import { JobsController } from './jobs.controller';
 import { FinanceModule } from '../modules/finance/finance.module';
 
@@ -13,6 +14,6 @@ import { FinanceModule } from '../modules/finance/finance.module';
 @Module({
   imports: [ScheduleModule.forRoot(), FinanceModule],
   controllers: [JobsController],
-  providers: [RecalculateFinesService],
+  providers: [RecalculateFinesService, ReconcileLedgerBalancesService],
 })
 export class JobsModule {}

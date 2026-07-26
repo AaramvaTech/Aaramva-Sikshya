@@ -5,7 +5,9 @@ import {
   FeeStructureItemRow,
   toFeeStructureResponse,
   FeeStructureResponseDto,
+  toMoney,
 } from './entities/finance.entity';
+import { Money } from '../../common/money/money';
 import {
   CreateFeeStructureDto,
   UpdateFeeStructureItemsDto,
@@ -47,13 +49,13 @@ export class FeeStructureService {
           `INSERT INTO fee_structure_items
              (fee_structure_id, fee_category_id, amount, due_day_of_month, due_date,
               fine_per_day, grace_period_days)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6, $7)`,
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::numeric, $7)`,
           structure.id,
           item.feeCategoryId,
           item.amount,
           item.dueDayOfMonth ?? null,
           item.dueDate ?? null,
-          item.finePerDay ?? 0,
+          item.finePerDay ?? '0',
           item.gracePeriodDays ?? 0,
         );
       }
@@ -115,7 +117,7 @@ export class FeeStructureService {
         className: r.class_name,
         academicYearName: r.academic_year_name,
         itemCount: parseInt(r.item_count, 10),
-        totalAmount: parseFloat(r.total_amount),
+        totalAmount: toMoney(r.total_amount).toNumber(),
       })),
       meta: { page, limit, total },
     };
@@ -146,7 +148,7 @@ export class FeeStructureService {
       className: rows[0].class_name,
       academicYearName: rows[0].academic_year_name,
       itemCount: items.length,
-      totalAmount: items.reduce((s, i) => s + parseFloat(String(i.amount)), 0),
+      totalAmount: items.reduce((s, i) => s.add(toMoney(i.amount)), Money.zero()).toNumber(),
     };
   }
 
@@ -167,13 +169,13 @@ export class FeeStructureService {
           `INSERT INTO fee_structure_items
              (fee_structure_id, fee_category_id, amount, due_day_of_month, due_date,
               fine_per_day, grace_period_days)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6, $7)`,
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::numeric, $7)`,
           id,
           item.feeCategoryId,
           item.amount,
           item.dueDayOfMonth ?? null,
           item.dueDate ?? null,
-          item.finePerDay ?? 0,
+          item.finePerDay ?? '0',
           item.gracePeriodDays ?? 0,
         );
       }

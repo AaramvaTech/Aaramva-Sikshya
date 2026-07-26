@@ -9,7 +9,7 @@ import {
   PaymentRow,
   toPaymentResponse,
   PaymentResponseDto,
-  toNum,
+  toMoney,
 } from './entities/finance.entity';
 import { RecordPaymentDto, PaymentQueryDto } from './dto/payment.dto';
 
@@ -73,7 +73,7 @@ export class PaymentService {
          ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
          RETURNING value`,
       );
-      const paymentNumber = `PAY-${bsYear}-${String(Number(seqRow.value)).padStart(6, '0')}`;
+      const paymentNumber = `PAY-${bsYear}-${seqRow.value.toString().padStart(6, '0')}`;
 
       // Insert payment
       const [payment] = await tx.$queryRawUnsafe<PaymentRow[]>(
@@ -98,8 +98,8 @@ export class PaymentService {
          WHERE invoice_id = $1::uuid AND deleted_at IS NULL`,
         dto.invoiceId,
       );
-      const totalPaid = toNum(sumRow.total_paid);
-      const totalAmount = toNum(invoice.total_amount);
+      const totalPaid = toMoney(sumRow.total_paid).toNumber();
+      const totalAmount = toMoney(invoice.total_amount).toNumber();
       const newStatus = this.deriveStatus(totalAmount, totalPaid, invoice.due_date);
 
       // Update invoice atomically — status is first param (matches test assertions)
@@ -120,7 +120,7 @@ export class PaymentService {
     this.eventEmitter.emit('payment.received', {
       studentId: payment.student_id,
       invoiceId: payment.invoice_id,
-      amount: toNum(payment.amount),
+      amount: toMoney(payment.amount).toNumber(),
       tenantSlug: slug,
     });
   }
@@ -158,8 +158,8 @@ export class PaymentService {
 
       if (!infoRow) return;
 
-      const totalPaid = toNum(infoRow.total_paid);
-      const totalAmount = toNum(infoRow.total_amount);
+      const totalPaid = toMoney(infoRow.total_paid).toNumber();
+      const totalAmount = toMoney(infoRow.total_amount).toNumber();
       const newStatus = this.deriveStatus(totalAmount, totalPaid, infoRow.due_date);
 
       await tx.$executeRawUnsafe(
