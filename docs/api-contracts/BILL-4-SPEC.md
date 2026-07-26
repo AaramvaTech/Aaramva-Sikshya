@@ -33,6 +33,7 @@ The old `invoices` / `invoice_items` / `payments` tables and both gateway contro
 | B4-8 | **Previous balance** on an invoice is read from `student_account_balances` (or the SQL ledger sum) at post time and snapshotted onto the invoice as a signed figure. It is a header value, never a line item (R9). |
 | B4-9 | Tax is computed **after** concession on the taxable base and **snapshotted** onto the invoice and its items (R4, R5). Ships with zero tax rows, so no tax appears unless a rate exists for the invoice date. |
 | B4-10 | Invoice numbering uses the R13 namespaced sequence with the tenant's reset policy (default CONTINUOUS), via the existing atomic upsert. A **voided draft never consumes a number**; numbers are assigned only at post time. |
+| B4-11 | A **FAILED line is not automatically retried** by a later post/drain — re-posting a run re-selects only `outcome = 'DRAFT'` lines. A failure must surface for a human to review and act on, not silently retry on its own; the run still completes (transitions to POSTED) around a FAILED line, but that line stays FAILED until someone investigates. Confirmed as intentional at Checkpoint C (2026-07-26) — not a shortfall of Checkpoint B's implementation. |
 
 ---
 
