@@ -13,8 +13,8 @@ const ACCOUNTANT_AND_ABOVE = [
 ];
 
 /**
- * BILL-4 Checkpoint A only: draft generation + read. No post/regenerate/
- * exclude/void endpoints yet (BILL-4-SPEC.md §7 Checkpoints B/C).
+ * BILL-4 Checkpoints A + B: draft generation, read, and post. No
+ * regenerate/exclude/void endpoints yet (BILL-4-SPEC.md §7 Checkpoint C).
  */
 @Controller('finance/bill/runs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,5 +37,11 @@ export class BillRunController {
   @Roles(...ACCOUNTANT_AND_ABOVE)
   findOne(@Param('id', ParseUUIDPipe) id: string, @Query() lineQuery: BillRunLineQueryDto) {
     return this.billRunService.findOne(id, lineQuery);
+  }
+
+  @Post(':id/post')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  requestPost(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('userId') userId: string) {
+    return this.billRunService.requestPost(id, userId);
   }
 }

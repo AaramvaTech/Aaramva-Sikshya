@@ -224,4 +224,44 @@ describe('BillRunService', () => {
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 0 });
     });
   });
+
+  describe('requestPost', () => {
+    it('404s when the run does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.requestPost('missing', 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects posting a VOIDED run', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'VOIDED' }]);
+      await expect(service.requestPost('run-1', 'user-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('is a no-op when the run is already POSTED (idempotent — no UPDATE issued)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTED' }]);
+      const result = await service.requestPost('run-1', 'user-1');
+      expect(result.status).toBe('POSTED');
+      expect(tenantPrisma.query).toHaveBeenCalledTimes(1); // only the initial fetch
+    });
+
+    it('is a no-op when the run is already POSTING', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTING' }]);
+      const result = await service.requestPost('run-1', 'user-1');
+      expect(result.status).toBe('POSTING');
+      expect(tenantPrisma.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('transitions DRAFT -> POSTING and stamps posted_by', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]) // fetch
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTING', posted_by: 'user-9' }]); // UPDATE RETURNING *
+
+      const result = await service.requestPost('run-1', 'user-9');
+
+      expect(tenantPrisma.query).toHaveBeenLastCalledWith(
+        expect.stringContaining("SET status = 'POSTING'"),
+        'run-1', 'user-9',
+      );
+      expect(result.status).toBe('POSTING');
+    });
+  });
 });

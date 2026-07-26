@@ -24,6 +24,8 @@ import { BulkAssignPoller } from './bulk-assign.poller';
 import { FeePreviewService } from './fee-preview.service';
 import { ConcessionRegisterReportService } from './concession-register-report.service';
 import { BillRunService } from './bill-run.service';
+import { BillRunPostRunnerService } from './bill-run-post-runner.service';
+import { BillRunPostPoller } from './bill-run-post.poller';
 import { LedgerController } from './ledger.controller';
 import { LedgerService } from './ledger.service';
 import { OpeningBalanceImportService } from './opening-balance-import.service';
@@ -70,6 +72,8 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     FeePreviewService,
     ConcessionRegisterReportService,
     BillRunService,
+    BillRunPostRunnerService,
+    BillRunPostPoller,
     LedgerService,
     OpeningBalanceImportService,
     EsewaService,

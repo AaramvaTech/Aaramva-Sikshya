@@ -197,6 +197,38 @@ export class BillRunService {
     };
   }
 
+  /**
+   * BILL-4-SPEC.md §3 "Post". Idempotent: POSTED/POSTING are no-ops (return
+   * current state, no write) — only a DRAFT run actually transitions. The
+   * real work (invoice creation, ledger entry) happens later, out-of-band,
+   * via BillRunPostRunnerService/BillRunPostPoller — this method only flips
+   * the run into the POSTING state and stamps who requested it.
+   */
+  async requestPost(id: string, userId: string): Promise<BillRunResponseDto> {
+    const rows = await this.tenantPrisma.query<BillRunRow>(
+      `SELECT * FROM bill_runs WHERE id = $1::uuid AND deleted_at IS NULL`,
+      id,
+    );
+    if (!rows[0]) throw new NotFoundException(`Bill run ${id} not found`);
+    const run = rows[0];
+
+    if (run.status === 'VOIDED') {
+      throw new BadRequestException('Cannot post a voided run');
+    }
+    if (run.status === 'POSTED' || run.status === 'POSTING') {
+      return toBillRunResponse(run);
+    }
+
+    const updatedRows = await this.tenantPrisma.query<BillRunRow>(
+      `UPDATE bill_runs SET status = 'POSTING', posted_by = $2::uuid, updated_at = NOW()
+       WHERE id = $1::uuid AND status = 'DRAFT'
+       RETURNING *`,
+      id, userId,
+    );
+    // A concurrent request may have already flipped it — either way, return current state.
+    return toBillRunResponse(updatedRows[0] ?? run);
+  }
+
   private async resolveRoster(scope: BillRunScope, classId?: string): Promise<string[]> {
     if (scope === BillRunScope.CLASS) {
       const rows = await this.tenantPrisma.query<{ id: string }>(
