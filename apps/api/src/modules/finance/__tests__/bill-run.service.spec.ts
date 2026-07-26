@@ -267,4 +267,62 @@ describe('BillRunService', () => {
       expect(result.status).toBe('POSTING');
     });
   });
+
+  describe('excludeLines', () => {
+    it('404s when the run does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.excludeLines('missing', ['student-1'])).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects excluding from a non-DRAFT run', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTED' }]);
+      await expect(service.excludeLines('run-1', ['student-1'])).rejects.toThrow(BadRequestException);
+    });
+
+    it('marks the given students EXCLUDED, recomputes totals, and returns the run detail', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]) // fetch + status check
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT', total_gross: '0', total_net: '0' }]) // findOne: run row
+        .mockResolvedValueOnce([{ outcome: 'EXCLUDED', count: '1' }]) // findOne: outcome summary
+        .mockResolvedValueOnce([]); // findOne: lines page
+
+      const result = await service.excludeLines('run-1', ['student-1']);
+
+      expect(tenantPrisma.execute).toHaveBeenCalledWith(
+        expect.stringContaining("SET outcome = 'EXCLUDED'"),
+        'run-1', ['student-1'],
+      );
+      expect(tenantPrisma.execute).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE bill_runs br SET'),
+        'run-1',
+      );
+      expect(result.outcomeSummary).toEqual({ EXCLUDED: 1 });
+    });
+  });
+
+  describe('voidRun', () => {
+    it('404s when the run does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.voidRun('missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects voiding a non-DRAFT run', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTED' }]);
+      await expect(service.voidRun('run-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('voids a DRAFT run: status VOIDED, soft-deleted', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]) // fetch
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'VOIDED', deleted_at: new Date('2026-07-26') }]); // UPDATE RETURNING *
+
+      const result = await service.voidRun('run-1');
+
+      expect(tenantPrisma.query).toHaveBeenLastCalledWith(
+        expect.stringContaining("SET status = 'VOIDED'"),
+        'run-1',
+      );
+      expect(result.status).toBe('VOIDED');
+    });
+  });
 });

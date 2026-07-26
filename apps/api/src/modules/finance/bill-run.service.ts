@@ -223,6 +223,72 @@ export class BillRunService {
     return toBillRunResponse(updatedRows[0] ?? run);
   }
 
+  /**
+   * BILL-4-SPEC.md §3 "Preview / adjust": "the accountant... may exclude a
+   * student (line -> EXCLUDED) before posting." Only DRAFT lines within a
+   * DRAFT run are eligible — a POSTED/SKIPPED_* line is left alone.
+   */
+  async excludeLines(id: string, studentIds: string[]): Promise<BillRunDetailResponseDto> {
+    const rows = await this.tenantPrisma.query<BillRunRow>(
+      `SELECT * FROM bill_runs WHERE id = $1::uuid AND deleted_at IS NULL`,
+      id,
+    );
+    if (!rows[0]) throw new NotFoundException(`Bill run ${id} not found`);
+    if (rows[0].status !== 'DRAFT') {
+      throw new BadRequestException('Students can only be excluded from a DRAFT run');
+    }
+
+    await this.tenantPrisma.execute(
+      `UPDATE bill_run_lines SET outcome = 'EXCLUDED'
+       WHERE bill_run_id = $1::uuid AND student_id = ANY($2::uuid[]) AND outcome = 'DRAFT'`,
+      id, studentIds,
+    );
+
+    // R1: re-aggregate in SQL, same shape as generateDraft's own final step —
+    // an excluded line's amount must stop counting toward the run's totals.
+    await this.tenantPrisma.execute(
+      `UPDATE bill_runs br SET
+         total_gross = agg.gross, total_concession = agg.concession,
+         total_tax = agg.tax, total_net = agg.net, updated_at = NOW()
+       FROM (
+         SELECT COALESCE(SUM(gross),0) AS gross, COALESCE(SUM(concession),0) AS concession,
+                COALESCE(SUM(tax),0) AS tax, COALESCE(SUM(net),0) AS net
+         FROM bill_run_lines WHERE bill_run_id = $1::uuid AND outcome = 'DRAFT'
+       ) agg
+       WHERE br.id = $1::uuid`,
+      id,
+    );
+
+    return this.findOne(id);
+  }
+
+  /**
+   * BILL-4-SPEC.md §3 "Void a draft": "a DRAFT run can be voided wholesale
+   * (no invoices exist yet, nothing to unwind). A POSTED run cannot be
+   * voided here." No cascade to bill_run_lines needed — they're always
+   * scoped by bill_run_id and a VOIDED run's lines are simply inert history.
+   * Soft-deleting (not hard) frees the idempotency_key's partial unique
+   * index (WHERE deleted_at IS NULL) so the period can be re-drafted.
+   */
+  async voidRun(id: string): Promise<BillRunResponseDto> {
+    const rows = await this.tenantPrisma.query<BillRunRow>(
+      `SELECT * FROM bill_runs WHERE id = $1::uuid AND deleted_at IS NULL`,
+      id,
+    );
+    if (!rows[0]) throw new NotFoundException(`Bill run ${id} not found`);
+    if (rows[0].status !== 'DRAFT') {
+      throw new BadRequestException('Only a DRAFT run can be voided');
+    }
+
+    const [updated] = await this.tenantPrisma.query<BillRunRow>(
+      `UPDATE bill_runs SET status = 'VOIDED', deleted_at = NOW(), updated_at = NOW()
+       WHERE id = $1::uuid AND status = 'DRAFT'
+       RETURNING *`,
+      id,
+    );
+    return toBillRunResponse(updated);
+  }
+
   private async resolveRoster(scope: BillRunScope, classId?: string): Promise<string[]> {
     if (scope === BillRunScope.CLASS) {
       const rows = await this.tenantPrisma.query<{ id: string }>(

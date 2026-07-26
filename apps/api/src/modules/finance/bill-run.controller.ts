@@ -1,11 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
+  Patch, Post, Query, UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import { BillRunService } from './bill-run.service';
-import { CreateBillRunDto, BillRunQueryDto, BillRunLineQueryDto } from './dto/bill-run.dto';
+import {
+  CreateBillRunDto, BillRunQueryDto, BillRunLineQueryDto, ExcludeBillRunLinesDto,
+} from './dto/bill-run.dto';
 
 const ACCOUNTANT_AND_ABOVE = [
   Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL,
@@ -13,8 +18,9 @@ const ACCOUNTANT_AND_ABOVE = [
 ];
 
 /**
- * BILL-4 Checkpoints A + B: draft generation, read, and post. No
- * regenerate/exclude/void endpoints yet (BILL-4-SPEC.md §7 Checkpoint C).
+ * BILL-4 Checkpoints A + B + C: draft generation, read, post, exclude, and
+ * void. No regenerate endpoint (not named as required by any checkpoint's
+ * live proof — draft edits happen via a fresh draft after voiding).
  */
 @Controller('finance/bill/runs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -43,5 +49,18 @@ export class BillRunController {
   @Roles(...ACCOUNTANT_AND_ABOVE)
   requestPost(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('userId') userId: string) {
     return this.billRunService.requestPost(id, userId);
+  }
+
+  @Patch(':id/exclude')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  excludeLines(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ExcludeBillRunLinesDto) {
+    return this.billRunService.excludeLines(id, dto.studentIds);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  voidRun(@Param('id', ParseUUIDPipe) id: string) {
+    return this.billRunService.voidRun(id);
   }
 }

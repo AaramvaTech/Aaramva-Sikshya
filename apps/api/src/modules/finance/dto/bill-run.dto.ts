@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { ArrayMinSize, IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 export enum BillRunScope {
   CLASS = 'CLASS',
@@ -49,4 +49,8 @@ export class BillRunLineQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
   @IsOptional() @IsEnum(LINE_OUTCOMES) outcome?: string;
+}
+
+export class ExcludeBillRunLinesDto {
+  @IsArray() @ArrayMinSize(1) @IsUUID('4', { each: true }) studentIds: string[];
 }
