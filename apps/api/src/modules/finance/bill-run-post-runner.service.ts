@@ -132,6 +132,13 @@ export class BillRunPostRunnerService {
     const resolved = await this.billLineResolverService.resolve(
       studentId, run.academic_year_id, run.bs_year, run.bs_month,
     );
+    // Defensive: B4-6 assumes nothing changes between draft and post, but if
+    // it does (e.g. the assignment was deleted/corrected in between), the
+    // fresh resolve() no longer returning DRAFT must become a FAILED line —
+    // never a silently-posted zero-value invoice.
+    if (resolved.outcome !== 'DRAFT') {
+      throw new Error(resolved.skipReason ?? 'Fee resolution no longer returns DRAFT at post time');
+    }
 
     const todayBs = adToBs(new Date(todayAdInNepal()));
     const fiscalYear = fiscalYearBs(todayBs.year, todayBs.month);

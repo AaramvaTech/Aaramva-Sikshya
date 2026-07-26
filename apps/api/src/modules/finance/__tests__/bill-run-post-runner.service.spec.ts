@@ -201,6 +201,29 @@ describe('BillRunPostRunnerService', () => {
     expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1); // only the re-check — nothing else ran
   });
 
+  it('marks FAILED (not a silent zero-value invoice) when the fresh resolve() no longer returns DRAFT at post time', async () => {
+    // e.g. the assignment was deleted/corrected between draft-generation and posting.
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce({
+      outcome: 'SKIPPED_NO_ASSIGNMENT',
+      skipReason: 'No active fee structure assignment for this student in the given academic year',
+      gross: 0, concession: 0, taxableBase: 0, taxRate: null, taxAmount: 0, net: 0, items: [],
+    } as any);
+
+    const result = await service.drainCurrentTenant();
+
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 0, linesFailed: 1 });
+    expect(tenantPrisma.execute).toHaveBeenCalledWith(
+      expect.stringContaining("outcome = 'FAILED'"),
+      'line-1', 'No active fee structure assignment for this student in the given academic year',
+    );
+    // never reached the lock — no invoice/ledger write was attempted
+    expect(ledgerService.withStudentLock).not.toHaveBeenCalled();
+  });
+
   it('uses the RESET-mode fiscal-year key when the tenant setting is enabled', async () => {
     financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: true });
     (tenantPrisma.query as jest.Mock)
