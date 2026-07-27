@@ -85,4 +85,33 @@ export class StudentFeeStructureAssignmentService {
     );
     return rows[0] ?? null;
   }
+
+  /**
+   * BILL-4 Checkpoint C (proration, B4-5): unlike findActiveAssignment
+   * (a single asOfDate snapshot), this finds an assignment covering ANY
+   * part of [periodStart, periodEnd] — required to find a student whose
+   * effective_from starts mid-period, who findActiveAssignment(periodStart)
+   * would incorrectly miss.
+   */
+  async findAssignmentOverlappingPeriod(
+    studentId: string,
+    academicYearId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<StudentFeeStructureAssignmentRow | null> {
+    const rows = await this.tenantPrisma.query<StudentFeeStructureAssignmentRow>(
+      `SELECT * FROM student_fee_structure_assignments
+       WHERE student_id = $1::uuid AND academic_year_id = $2::uuid
+         AND deleted_at IS NULL
+         AND effective_from <= $4::date
+         AND (effective_to IS NULL OR effective_to >= $3::date)
+       ORDER BY effective_from DESC
+       LIMIT 1`,
+      studentId,
+      academicYearId,
+      periodStart,
+      periodEnd,
+    );
+    return rows[0] ?? null;
+  }
 }

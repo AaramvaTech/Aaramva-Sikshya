@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { FinanceController } from './finance.controller';
 import { BillCatalogController } from './bill-catalog.controller';
 import { BillAssignmentController } from './bill-assignment.controller';
+import { BillRunController } from './bill-run.controller';
 import { FeeCategoryService } from './fee-category.service';
 import { FeeStructureService } from './fee-structure.service';
 import { InvoiceService } from './invoice.service';
@@ -22,6 +23,14 @@ import { BulkAssignRunnerService } from './bulk-assign-runner.service';
 import { BulkAssignPoller } from './bulk-assign.poller';
 import { FeePreviewService } from './fee-preview.service';
 import { ConcessionRegisterReportService } from './concession-register-report.service';
+import { BillRunService } from './bill-run.service';
+import { BillLineResolverService } from './bill-line-resolver.service';
+import { BillRunPostRunnerService } from './bill-run-post-runner.service';
+import { BillRunPostPoller } from './bill-run-post.poller';
+import { FinanceSettingsService } from './finance-settings.service';
+import { FinanceSettingsController } from './finance-settings.controller';
+import { BillInvoiceService } from './bill-invoice.service';
+import { BillInvoiceController } from './bill-invoice.controller';
 import { LedgerController } from './ledger.controller';
 import { LedgerService } from './ledger.service';
 import { OpeningBalanceImportService } from './opening-balance-import.service';
@@ -38,6 +47,9 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     FinanceController,
     BillCatalogController,
     BillAssignmentController,
+    BillRunController,
+    FinanceSettingsController,
+    BillInvoiceController,
     LedgerController,
     EsewaController,
     EsewaPublicController,
@@ -66,6 +78,12 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     BulkAssignPoller,
     FeePreviewService,
     ConcessionRegisterReportService,
+    BillRunService,
+    BillLineResolverService,
+    BillRunPostRunnerService,
+    BillRunPostPoller,
+    FinanceSettingsService,
+    BillInvoiceService,
     LedgerService,
     OpeningBalanceImportService,
     EsewaService,

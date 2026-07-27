@@ -37,7 +37,16 @@ interface PostEntryParams {
 export class LedgerService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  private async withStudentLock<T>(studentId: string, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
+  /**
+   * Public so other services (e.g. BillRunPostRunnerService) can compose a
+   * BIGGER caller-owned transaction under the same per-student lock, rather
+   * than calling a LedgerService method that opens its own separate
+   * top-level transaction (which would NOT participate in the caller's own
+   * transaction/rollback). Mirrors the recordPaymentInTx extraction
+   * precedent (PAY-1): shared write logic, composed into a bigger
+   * transaction by a different caller.
+   */
+  async withStudentLock<T>(studentId: string, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
     return this.tenantPrisma.run(async (tx) => {
       // Namespace inlined as a literal, not bound as a parameter — mirrors
       // tenant-migration.service.ts's own advisory-lock call. A bound JS
@@ -102,14 +111,23 @@ export class LedgerService {
     );
   }
 
+  /**
+   * Participates in an ALREADY-OPEN, ALREADY-LOCKED transaction — for
+   * callers that need the entry insert to be one atomic unit with OTHER
+   * writes (e.g. BillRunPostRunnerService's bill_invoice insert), not a
+   * second, separate top-level transaction. Does NOT acquire the advisory
+   * lock itself — the caller must already hold it (via withStudentLock).
+   */
+  async postEntryInTx(tx: TenantTx, params: PostEntryParams): Promise<LedgerEntryResponseDto> {
+    const entry = await this.insertEntry(tx, params);
+    const delta = toMoney(params.debit).sub(toMoney(params.credit));
+    await this.bumpBalance(tx, params.studentId, params.academicYearId, delta, entry.id);
+    return toLedgerEntryResponse(entry);
+  }
+
   /** Generic posting path — used directly by callers that already know their entry_type. */
   async postEntry(params: PostEntryParams): Promise<LedgerEntryResponseDto> {
-    return this.withStudentLock(params.studentId, async (tx) => {
-      const entry = await this.insertEntry(tx, params);
-      const delta = toMoney(params.debit).sub(toMoney(params.credit));
-      await this.bumpBalance(tx, params.studentId, params.academicYearId, delta, entry.id);
-      return toLedgerEntryResponse(entry);
-    });
+    return this.withStudentLock(params.studentId, (tx) => this.postEntryInTx(tx, params));
   }
 
   /** One row of an opening-balance import. Guards against double-import under the same lock that posts it. */
