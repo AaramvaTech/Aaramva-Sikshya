@@ -76,7 +76,7 @@ describe('BillInvoiceService', () => {
     it('returns the invoice with items for ACCOUNTANT_AND_ABOVE (no ownership check)', async () => {
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([mockInvoiceRow])
-        .mockResolvedValueOnce([{ id: 'item-1', bill_invoice_id: 'invoice-1', fee_head_id: 'fh-1', fee_head_name: 'Tuition', recurrence: 'MONTHLY', gross_amount: '3000', concession_amount: '0', is_taxable: false, net_amount: '3000', proration_note: null, created_at: new Date() }]);
+        .mockResolvedValueOnce([{ id: 'item-1', bill_invoice_id: 'invoice-1', fee_head_id: 'fh-1', transport_route_id: null, item_name: 'Tuition', recurrence: 'MONTHLY', gross_amount: '3000', concession_amount: '0', is_taxable: false, net_amount: '3000', proration_note: null, created_at: new Date() }]);
 
       const result = await service.findOne('invoice-1');
       expect(result.items).toHaveLength(1);

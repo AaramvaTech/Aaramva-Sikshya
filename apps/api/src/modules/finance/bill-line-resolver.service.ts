@@ -21,8 +21,9 @@ interface ActiveTaxRate {
 }
 
 export interface ResolvedInvoiceItem {
-  feeHeadId: string;
-  feeHeadName: string;
+  feeHeadId: string | null;
+  transportRouteId: string | null;
+  itemName: string;
   recurrence: string | null;
   isTaxable: boolean;
   grossAmount: number;
@@ -59,11 +60,19 @@ function clampNonNegative(amount: Money): Money {
  * assignment is found by preview()'s OWN internal check too), and prorates
  * only the per-head amounts flagged fee_heads.proration_policy='MONTHLY'.
  *
- * NOT prorated (documented, narrow simplifications — see BILL-BUGS.md):
+ * NOT prorated (documented, narrow simplification — see BILL-BUGS.md):
  * whole-bill concessions (FeePreviewService's own computed dollar amount is
- * used as-is, not re-derived against prorated head totals) and transport
- * (folded into the total unprorated; it has no fee_head_id so it was never
- * itemizable in the first place — TRANSPORT-ITEM).
+ * used as-is, not re-derived against prorated head totals) — this also means
+ * a whole-bill concession is never attributed to any single item, including
+ * the transport item below, so item nets can sum to less than the header net
+ * when both are present (TRANSPORT-ITEM's "simple version" ruling: the
+ * header stays correct; per-item apportionment is deferred, logged
+ * must-resolve-before-BILL-8, not accepted permanently).
+ *
+ * TRANSPORT-ITEM: transport gets its own item (transportRouteId set,
+ * feeHeadId null — mirrors the CHECK constraint on bill_invoice_items),
+ * unprorated (it has no fee_heads.proration_policy to key on) and with
+ * concessionAmount always 0 (the "simple version" above).
  */
 @Injectable()
 export class BillLineResolverService {
@@ -128,7 +137,7 @@ export class BillLineResolverService {
     let concessionHeadTotal = Money.zero();
     let taxableBaseTotal = Money.zero();
 
-    const items: ResolvedInvoiceItem[] = preview.heads.map((head) => {
+    const feeHeadItems: ResolvedInvoiceItem[] = preview.heads.map((head) => {
       const meta = metaMap.get(head.feeHeadId);
       const isMonthly = meta?.proration_policy === 'MONTHLY';
       const factor = isMonthly ? fraction : 1;
@@ -147,7 +156,8 @@ export class BillLineResolverService {
 
       return {
         feeHeadId: head.feeHeadId,
-        feeHeadName: head.feeHeadName,
+        transportRouteId: null,
+        itemName: head.feeHeadName,
         recurrence: meta?.recurrence ?? null,
         isTaxable,
         grossAmount: gross.toNumber(),
@@ -158,6 +168,21 @@ export class BillLineResolverService {
     });
 
     const transportAmount = preview.transport ? toMoney(preview.transport.amount) : Money.zero();
+    const transportItem: ResolvedInvoiceItem | null = preview.transport
+      ? {
+          feeHeadId: null,
+          transportRouteId: preview.transport.transportRouteId,
+          itemName: preview.transport.transportRouteName,
+          recurrence: null,
+          isTaxable: false,
+          grossAmount: transportAmount.toNumber(),
+          concessionAmount: 0,
+          netAmount: transportAmount.toNumber(),
+          prorationNote: null,
+        }
+      : null;
+    const items: ResolvedInvoiceItem[] = transportItem ? [...feeHeadItems, transportItem] : feeHeadItems;
+
     const wholeBillConcessionTotal = preview.wholeBillConcessions.reduce(
       (acc, c) => acc.add(toMoney(c.amount)), Money.zero(),
     );

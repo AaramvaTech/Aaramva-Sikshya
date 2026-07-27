@@ -192,20 +192,20 @@ export class BillRunPostRunnerService {
         amountEn, amountNe, postedBy,
       );
 
+      // TRANSPORT-ITEM: resolved.items now includes a transport row (if the
+      // student has an active transport assignment) alongside fee-head rows
+      // — exactly one of fee_head_id/transport_route_id is set per row, per
+      // bill_invoice_items' chk_bill_invoice_items_one_kind CHECK.
       for (const item of resolved.items) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_invoice_items
-             (bill_invoice_id, fee_head_id, fee_head_name, recurrence, gross_amount,
-              concession_amount, is_taxable, net_amount, proration_note)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
-          invoice.id, item.feeHeadId, item.feeHeadName, item.recurrence,
+             (bill_invoice_id, fee_head_id, transport_route_id, item_name, recurrence,
+              gross_amount, concession_amount, is_taxable, net_amount, proration_note)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)`,
+          invoice.id, item.feeHeadId, item.transportRouteId, item.itemName, item.recurrence,
           item.grossAmount, item.concessionAmount, item.isTaxable, item.netAmount, item.prorationNote,
         );
       }
-      // Transport (if present) has no fee_head_id and is NOT itemized as a
-      // bill_invoice_item — its amount is still correctly folded into this
-      // invoice's aggregate totals via bill_run_lines.gross/net. Documented
-      // gap, see BILL-BUGS.md (TRANSPORT-ITEM) — the DDL reserves no column.
 
       const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
         studentId,

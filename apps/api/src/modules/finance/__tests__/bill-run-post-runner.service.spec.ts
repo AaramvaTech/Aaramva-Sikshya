@@ -39,7 +39,7 @@ const mockResolved = {
   outcome: 'DRAFT' as const, skipReason: null,
   gross: 3000, concession: 0, taxableBase: 0, taxRate: null, taxAmount: 0, net: 3000,
   items: [{
-    feeHeadId: 'fh-1', feeHeadName: 'Tuition', recurrence: 'MONTHLY', isTaxable: false,
+    feeHeadId: 'fh-1', transportRouteId: null, itemName: 'Tuition', recurrence: 'MONTHLY', isTaxable: false,
     grossAmount: 3000, concessionAmount: 0, netAmount: 3000, prorationNote: null,
   }],
 };
@@ -117,7 +117,7 @@ describe('BillRunPostRunnerService', () => {
 
     expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO bill_invoice_items'),
-      'invoice-1', 'fh-1', 'Tuition', 'MONTHLY', 3000, 0, false, 3000, null,
+      'invoice-1', 'fh-1', null, 'Tuition', 'MONTHLY', 3000, 0, false, 3000, null,
     );
 
     expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
