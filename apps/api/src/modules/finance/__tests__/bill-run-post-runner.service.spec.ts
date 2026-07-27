@@ -245,5 +245,12 @@ describe('BillRunPostRunnerService', () => {
       expect.stringContaining('INSERT INTO sequences'),
       expect.stringMatching(/^bill_invoice:demo:\d{4}$/),
     );
+
+    // FIX-RESET-COLLISION: the visible invoice_number must carry the R
+    // marker in RESET mode — this is what stops it from ever colliding with
+    // a CONTINUOUS-mode number that reached the same underlying seq value.
+    const [insertSql, invoiceNumberArg] = mockTx.$queryRawUnsafe.mock.calls[3];
+    expect(insertSql).toEqual(expect.stringContaining('INSERT INTO bill_invoices'));
+    expect(invoiceNumberArg).toMatch(/^BINV-R\d{4}-\d{6}$/);
   });
 });

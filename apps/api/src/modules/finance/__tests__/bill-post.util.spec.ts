@@ -35,16 +35,28 @@ describe('bill-post.util', () => {
   });
 
   describe('buildInvoiceNumber', () => {
-    it('pads the sequence value to 6 digits', () => {
-      expect(buildInvoiceNumber(2083, 1)).toBe('BINV-2083-000001');
+    it('CONTINUOUS: pads the sequence value to 6 digits, unchanged format', () => {
+      expect(buildInvoiceNumber(false, 2083, 2082, 1)).toBe('BINV-2083-000001');
     });
 
-    it('handles a bigint sequence value (Postgres BIGINT column)', () => {
-      expect(buildInvoiceNumber(2083, BigInt(42))).toBe('BINV-2083-000042');
+    it('CONTINUOUS: handles a bigint sequence value (Postgres BIGINT column)', () => {
+      expect(buildInvoiceNumber(false, 2083, 2082, BigInt(42))).toBe('BINV-2083-000042');
     });
 
-    it('does not truncate a 6+ digit sequence value', () => {
-      expect(buildInvoiceNumber(2083, 1234567)).toBe('BINV-2083-1234567');
+    it('CONTINUOUS: does not truncate a 6+ digit sequence value', () => {
+      expect(buildInvoiceNumber(false, 2083, 2082, 1234567)).toBe('BINV-2083-1234567');
+    });
+
+    it('RESET: uses the fiscal year with an R marker, not the calendar bsYear', () => {
+      expect(buildInvoiceNumber(true, 2083, 2082, 1)).toBe('BINV-R2082-000001');
+    });
+
+    it('FIX-RESET-COLLISION: CONTINUOUS and RESET never produce the same string for the same seq value', () => {
+      const continuous = buildInvoiceNumber(false, 2083, 2083, 1);
+      const reset = buildInvoiceNumber(true, 2083, 2083, 1);
+      expect(continuous).not.toBe(reset);
+      expect(continuous).toBe('BINV-2083-000001');
+      expect(reset).toBe('BINV-R2083-000001');
     });
   });
 });

@@ -163,7 +163,7 @@ export class BillRunPostRunnerService {
          RETURNING value`,
         seqKey,
       );
-      const invoiceNumber = buildInvoiceNumber(todayBs.year, seqRow.value);
+      const invoiceNumber = buildInvoiceNumber(invoiceNumberingReset, todayBs.year, fiscalYear, seqRow.value);
 
       // Frozen at draft time (bill_run_lines) — includes tax already, since
       // BillLineResolverService computes net = (gross - concession) + tax.
