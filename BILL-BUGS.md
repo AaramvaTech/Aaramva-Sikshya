@@ -4,6 +4,26 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-5 Checkpoint A — payment engine core (2026-07-29, branch `feat/bill-5-payments`)
+
+**Cross-phase touch NOT listed in BILL-5-SPEC.md §8, found while implementing:** `student_ledger_entries.entry_type`'s CHECK constraint (`0021_bill_ledger.sql`) only allowed `OPENING_BALANCE, INVOICE, PAYMENT, REFUND, CREDIT_NOTE, FINE, WRITE_OFF, ADJUSTMENT` — no `DEPOSIT`, even though B5-9 explicitly requires a `DEPOSIT` entry type for pure-advance (`ADVANCE_ONLY`) payments. Widened in `0024_bill_payments.sql` via a catalog-driven `DO` block (the original CHECK was inline/auto-named, not given an explicit constraint name, so the fix looks it up via `pg_constraint` rather than guessing the generated name). Verified live on `demo` before rolling to the other 7 tenants: `pg_get_constraintdef` now lists `DEPOSIT` alongside the original 8 values.
+
+**B5-3 "behind a permission" ruling (Srijan, asked directly — no existing finer-grained permission system exists in this codebase, confirmed by grep):** MANUAL allocation requires `PRINCIPAL_AND_ABOVE`, narrower than the endpoint's base `ACCOUNTANT_AND_ABOVE` gate. A plain `ACCOUNTANT` (cashier) may record `AUTO_FIFO`/`ADVANCE_ONLY` payments but not override which invoice gets paid. Enforced in `BillPaymentController.recordPayment` (not via `@Roles()`, since the check depends on the request body's `allocationMode`, not the route).
+
+**Checkpoint A method scope: CASH only.** `BillPaymentMethod`/the migration's CHECK declare the full B5-6 enum (`CASH, CHEQUE, BANK_TRANSFER, ESEWA, KHALTI`) as the permanent wire contract, but `BillPaymentService.recordPayment` rejects anything but `CASH` with a 400 this checkpoint. `BANK_TRANSFER` is architecturally identical to `CASH` (also born `CLEARED` immediately per spec §4) and would need zero new logic to enable — deliberately deferred anyway since Checkpoint A's own spec wording says "a CLEARED cash payment," not "cash and bank-transfer." Trivial to lift whenever wanted.
+
+**Checkpoint A endpoint scope: `GET /finance/students/:studentId/statement` and `GET /finance/students/:studentId/advance-balance` (BILL-5-SPEC.md §5) were NOT built this checkpoint** — neither appears in Checkpoint A's own §7 description, and the existing `GET /finance/students/:studentId/balance` (`LedgerService.getBalance`, already returns `{balance, sign: 'OWES'|'ADVANCE'|'ZERO'}`) already covers what Checkpoint A's own live-proof tests need (spec test 6: "advance-balance rises"). Flagged for confirmation, not silently dropped from the phase — both remain in scope for a later checkpoint if still wanted as dedicated routes.
+
+**Tenant-naming note (not a deviation, just a discrepancy against the instruction wording):** the migration rollout instruction said "canary demo first, then all tenants + scratch" — the actual `public.tenants` roster has 8 tenants (`demo, stacey-mejia, kaye-nashh, motherland-school, raja-mcintyres, jorden-donovan, geetanjali-school-college, test`) and none is literally named `scratch`. The blanket `npm run migrate:tenants` (no `--tenant` filter) rolled out to all 8 regardless of naming, so the migration itself is unaffected — this only matters for picking which tenant hosts the Checkpoint A live-proof data (Tasks 9-11), raised separately.
+
+**Design not explicitly in the spec, added for defensiveness (not a deviation, documented for completeness):** `bill_payments.amount` and `bill_payment_allocations.amount` both get a DB-level `CHECK (amount > 0)` — the spec's loose DDL sketch doesn't state this explicitly but it mirrors `student_ledger_entries`' own `CHECK (debit > 0 OR credit > 0)` philosophy and blocks a nonsensical zero/negative row at the schema level, not just in the service. A `UNIQUE (bill_payment_id, bill_invoice_id)` index on `bill_payment_allocations` similarly blocks one payment from allocating twice to the same invoice (a second top-up is a second `bill_payment`, not a second row here).
+
+**Full suite: 933 tests, 114 suites** (was 911/111 after the FIX-RESET-COLLISION/TRANSPORT-ITEM cleanup pass; +22 tests/+3 suites — `bill-payment-allocation.util.spec.ts` 5, `bill-payment.util.spec.ts` 6, `bill-payment.service.spec.ts` 11). `tsc -p tsconfig.build.json --noEmit` clean. Dev server boots clean, all three new routes mapped (`POST/GET /finance/bill/payments`, `GET /finance/bill/payments/:id`), no DI resolution errors.
+
+**Live proof:** see the Checkpoint A report (8,500→5,000→3,500 invariant, FIFO-across-three-invoices, both with raw `SELECT` read-backs).
+
+---
+
 ## TRANSPORT-ITEM — resolved (2026-07-27, branch `fix/bill-reset-collision-transport-item`, Checkpoint B — completes the cleanup pass)
 
 **Root cause, confirmed by reading the merged code:** `bill_invoice_items.fee_head_id` was `NOT NULL` with no `transport_route_id` column, so a student's transport charge was correctly folded into the invoice's aggregate totals (`bill_run_lines.gross`/`net`, via `BillLineResolverService`) but could never appear as its own line item — a printed bill would show the right total with an incomplete itemized breakdown.
