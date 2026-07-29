@@ -25,6 +25,14 @@ export interface BillPaymentRow {
   created_at: Date | string;
   updated_at: Date | string;
   deleted_at: Date | string | null;
+  cleared_at: Date | string | null;
+  cleared_by: string | null;
+  bounced_at: Date | string | null;
+  bounced_by: string | null;
+  bounce_reason: string | null;
+  voided_at: Date | string | null;
+  voided_by: string | null;
+  void_reason: string | null;
   total_count?: string;
 }
 
@@ -64,6 +72,14 @@ export interface BillPaymentResponseDto {
   notes: string | null;
   receivedBy: string;
   createdAt: string;
+  clearedAt: string | null;
+  clearedBy: string | null;
+  bouncedAt: string | null;
+  bouncedBy: string | null;
+  bounceReason: string | null;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
   allocations?: BillPaymentAllocationResponseDto[];
   /** Sum of this payment's allocations — only present when allocations were loaded. */
   allocatedAmount?: number;
@@ -125,6 +141,14 @@ export function toBillPaymentResponse(
     notes: row.notes,
     receivedBy: row.received_by,
     createdAt: toIso(row.created_at),
+    clearedAt: row.cleared_at ? toIso(row.cleared_at) : null,
+    clearedBy: row.cleared_by,
+    bouncedAt: row.bounced_at ? toIso(row.bounced_at) : null,
+    bouncedBy: row.bounced_by,
+    bounceReason: row.bounce_reason,
+    voidedAt: row.voided_at ? toIso(row.voided_at) : null,
+    voidedBy: row.voided_by,
+    voidReason: row.void_reason,
     allocations: allocations?.map(toBillPaymentAllocationResponse),
     ...(allocatedAmount !== undefined
       ? { allocatedAmount: allocatedAmount.toNumber(), advanceAmount: amount.sub(allocatedAmount).toNumber() }
