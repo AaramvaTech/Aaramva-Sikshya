@@ -104,6 +104,14 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 
 ---
 
+## Agent workflow conventions
+
+**Standing rule: never call `ScheduleWakeup` (or any self-scheduling / delayed-re-injection primitive) in this project.** This project's workflow is checkpoint → stop → wait for explicit human input. `Monitor` and backgrounded `Bash` already deliver completion notifications for anything worth waiting on — there is no legitimate use here for a mechanism that resumes work on its own timer without a human turn in between.
+
+Found live 2026-07-29 (BILL-5 Checkpoint A): used twice as an ad-hoc fallback alongside `Monitor` for background waits (waiting on a dev-server recompile, then a bill-run poller drain). The second call replayed its saved prompt into the conversation as a new turn *after* the real `Monitor` notification had already resolved the wait and the checkpoint had moved on — indistinguishable from a genuine user message, and exactly the kind of unrequested, timer-driven resumption this rule exists to prevent.
+
+---
+
 ## Module build order (follow this sequence)
 
 1. ✅ **Foundation** — Tenant resolution, Auth (JWT), RBAC, TenantPrismaService
