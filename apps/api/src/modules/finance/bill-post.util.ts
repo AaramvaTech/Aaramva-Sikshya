@@ -32,14 +32,38 @@ export function buildInvoiceSequenceKey(
 }
 
 /**
- * Visible invoice number. bsYear here is the CURRENT bs year at post time
- * (matches the old system's own `INV-<bsYear>-NNNNNN` convention — the BS
- * year is a display label only, per R13's own text; the counter itself
- * never resets, tracked separately by buildInvoiceSequenceKey's stable key).
+ * Visible invoice number. FIX-RESET-COLLISION: the string itself must
+ * disambiguate which sequence key produced it, not just the underlying
+ * counter — CONTINUOUS and a fiscal-year RESET key can each independently
+ * reach the same seqValue (e.g. both 1) in the same bsYear, and
+ * bill_invoices.invoice_number is a bare, tenant-global UNIQUE constraint,
+ * so two textually-identical numbers would otherwise collide (reproduced
+ * live at Checkpoint C — see BILL-BUGS.md).
+ *
+ * CONTINUOUS keeps the exact pre-existing `BINV-<bsYear>-NNNNNN` shape
+ * (bsYear = current BS year at post time, a display label only — matches
+ * the old system's own `INV-<bsYear>-NNNNNN` convention; the counter itself
+ * never resets, tracked by buildInvoiceSequenceKey's stable key) — every
+ * already-issued invoice number, and every future CONTINUOUS one, is
+ * byte-for-byte unchanged by this fix.
+ *
+ * RESET inserts a literal "R" immediately after the "BINV-" prefix and uses
+ * the fiscal year (not the calendar bsYear) as its label, matching what
+ * buildInvoiceSequenceKey actually keys on. "R" can never appear in that
+ * position in a CONTINUOUS-mode string (always a digit there), so the two
+ * modes are structurally incapable of colliding regardless of what either
+ * counter's numeric value is.
+ *
  * "BINV" prefix (not "INV") distinguishes the new bill_invoices series from
  * the old invoices table's numbers at a glance (same reasoning as BUGS-3's
  * bill_ table-name prefix).
  */
-export function buildInvoiceNumber(bsYear: number, seqValue: bigint | number): string {
-  return `BINV-${bsYear}-${seqValue.toString().padStart(6, '0')}`;
+export function buildInvoiceNumber(
+  resetPerFiscalYear: boolean,
+  bsYear: number,
+  fiscalYearBsValue: number,
+  seqValue: bigint | number,
+): string {
+  const padded = seqValue.toString().padStart(6, '0');
+  return resetPerFiscalYear ? `BINV-R${fiscalYearBsValue}-${padded}` : `BINV-${bsYear}-${padded}`;
 }

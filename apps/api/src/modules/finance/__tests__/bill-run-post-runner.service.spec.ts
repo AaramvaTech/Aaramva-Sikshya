@@ -39,7 +39,7 @@ const mockResolved = {
   outcome: 'DRAFT' as const, skipReason: null,
   gross: 3000, concession: 0, taxableBase: 0, taxRate: null, taxAmount: 0, net: 3000,
   items: [{
-    feeHeadId: 'fh-1', feeHeadName: 'Tuition', recurrence: 'MONTHLY', isTaxable: false,
+    feeHeadId: 'fh-1', transportRouteId: null, itemName: 'Tuition', recurrence: 'MONTHLY', isTaxable: false,
     grossAmount: 3000, concessionAmount: 0, netAmount: 3000, prorationNote: null,
   }],
 };
@@ -117,7 +117,7 @@ describe('BillRunPostRunnerService', () => {
 
     expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO bill_invoice_items'),
-      'invoice-1', 'fh-1', 'Tuition', 'MONTHLY', 3000, 0, false, 3000, null,
+      'invoice-1', 'fh-1', null, 'Tuition', 'MONTHLY', 3000, 0, false, 3000, null,
     );
 
     expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
@@ -245,5 +245,12 @@ describe('BillRunPostRunnerService', () => {
       expect.stringContaining('INSERT INTO sequences'),
       expect.stringMatching(/^bill_invoice:demo:\d{4}$/),
     );
+
+    // FIX-RESET-COLLISION: the visible invoice_number must carry the R
+    // marker in RESET mode — this is what stops it from ever colliding with
+    // a CONTINUOUS-mode number that reached the same underlying seq value.
+    const [insertSql, invoiceNumberArg] = mockTx.$queryRawUnsafe.mock.calls[3];
+    expect(insertSql).toEqual(expect.stringContaining('INSERT INTO bill_invoices'));
+    expect(invoiceNumberArg).toMatch(/^BINV-R\d{4}-\d{6}$/);
   });
 });

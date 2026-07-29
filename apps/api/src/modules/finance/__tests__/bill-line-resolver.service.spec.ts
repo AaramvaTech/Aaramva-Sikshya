@@ -23,12 +23,12 @@ function makeAssignment(effectiveFromAd: string) {
   };
 }
 
-function makePreview(heads: any[], transport: any = null) {
+function makePreview(heads: any[], transport: any = null, wholeBillConcessions: any[] = []) {
   const grossTotal = heads.reduce((s, h) => s + h.grossAmount, 0) + (transport?.amount ?? 0);
   const netTotal = heads.reduce((s, h) => s + h.netAmount, 0) + (transport?.amount ?? 0);
   return {
     studentId: 'student-1', feeStructureId: 'fs-1', feeStructureName: 'proof', academicYearId: 'year-1',
-    asOfDate: PERIOD_END, heads, transport, wholeBillConcessions: [],
+    asOfDate: PERIOD_END, heads, transport, wholeBillConcessions,
     grossTotal, concessionTotal: 0, netTotal,
   };
 }
@@ -158,7 +158,7 @@ describe('BillLineResolverService', () => {
     expect(result.net).toBe(1500 + 130);
   });
 
-  it('transport is included in the total but not itemized (documented gap, see BILL-BUGS.md)', async () => {
+  it('TRANSPORT-ITEM: transport becomes its own line item, zero concession, alongside fee-head items', async () => {
     assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
     feePreviewService.preview.mockResolvedValueOnce(makePreview(
       [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 }],
@@ -171,6 +171,58 @@ describe('BillLineResolverService', () => {
     const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
     expect(result.gross).toBe(1300);
     expect(result.net).toBe(1300);
-    expect(result.items).toHaveLength(1); // transport never becomes its own item
+    expect(result.items).toHaveLength(2);
+
+    const transportItem = result.items.find((i) => i.transportRouteId === 'route-1')!;
+    expect(transportItem).toBeDefined();
+    expect(transportItem.feeHeadId).toBeNull();
+    expect(transportItem.itemName).toBe('Route A');
+    expect(transportItem.grossAmount).toBe(300);
+    expect(transportItem.concessionAmount).toBe(0);
+    expect(transportItem.netAmount).toBe(300);
+    expect(transportItem.prorationNote).toBeNull();
+
+    const feeHeadItem = result.items.find((i) => i.feeHeadId === 'fh-1')!;
+    expect(feeHeadItem.transportRouteId).toBeNull();
+    expect(feeHeadItem.itemName).toBe('Tuition');
+  });
+
+  it('no transport assignment: items array has no transport row', async () => {
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
+    feePreviewService.preview.mockResolvedValueOnce(makePreview(
+      [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 }],
+    ) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'NONE' }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+    expect(result.items).toHaveLength(1);
+    expect(result.items.every((i) => i.transportRouteId === null)).toBe(true);
+  });
+
+  it('MUST-RESOLVE-BEFORE-BILL-8: whole-bill concession + transport together — header net is correct, but item nets do not sum to it (simple version, not apportioned)', async () => {
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
+    feePreviewService.preview.mockResolvedValueOnce(makePreview(
+      [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 }],
+      { transportRouteId: 'route-1', transportRouteName: 'Route A', amount: 300 },
+      [{ amount: 200 }],
+    ) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'NONE' }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+    expect(result.gross).toBe(1300);
+    expect(result.concession).toBe(200);
+    expect(result.net).toBe(1100); // header is correct: 1300 - 200
+
+    const transportItem = result.items.find((i) => i.transportRouteId === 'route-1')!;
+    expect(transportItem.concessionAmount).toBe(0);
+    expect(transportItem.netAmount).toBe(300); // not apportioned a share of the 200
+
+    const itemNetSum = result.items.reduce((s, i) => s + i.netAmount, 0);
+    expect(itemNetSum).toBe(1300); // documented: does NOT equal result.net (1100) when a whole-bill concession is active
+    expect(itemNetSum).not.toBe(result.net);
   });
 });

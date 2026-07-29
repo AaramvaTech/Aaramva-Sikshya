@@ -37,8 +37,9 @@ export interface BillInvoiceRow {
 export interface BillInvoiceItemRow {
   id: string;
   bill_invoice_id: string;
-  fee_head_id: string;
-  fee_head_name: string;
+  fee_head_id: string | null;
+  transport_route_id: string | null;
+  item_name: string;
   recurrence: string | null;
   gross_amount: string | number;
   concession_amount: string | number;
@@ -82,8 +83,9 @@ export interface BillInvoiceResponseDto {
 
 export interface BillInvoiceItemResponseDto {
   id: string;
-  feeHeadId: string;
-  feeHeadName: string;
+  feeHeadId: string | null;
+  transportRouteId: string | null;
+  itemName: string;
   recurrence: string | null;
   grossAmount: number;
   concessionAmount: number;
@@ -147,7 +149,8 @@ export function toBillInvoiceItemResponse(row: BillInvoiceItemRow): BillInvoiceI
   return {
     id: row.id,
     feeHeadId: row.fee_head_id,
-    feeHeadName: row.fee_head_name,
+    transportRouteId: row.transport_route_id,
+    itemName: row.item_name,
     recurrence: row.recurrence,
     grossAmount: toMoney(row.gross_amount).toNumber(),
     concessionAmount: toMoney(row.concession_amount).toNumber(),
