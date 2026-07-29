@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { BillPaymentService } from '../bill-payment.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -59,6 +59,7 @@ describe('BillPaymentService', () => {
           useValue: {
             withStudentLock: jest.fn().mockImplementation((_studentId: string, fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
             postEntryInTx: jest.fn(),
+            reverseInTx: jest.fn(),
           },
         },
         { provide: FinanceSettingsService, useValue: { getInvoiceNumberingReset: jest.fn() } },
@@ -230,6 +231,167 @@ describe('BillPaymentService', () => {
           'user-1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('recordPayment — CHEQUE (PENDING, no ledger entry)', () => {
+    it('records a PENDING cheque payment: allocations inserted, status PENDING, no ledger entry', async () => {
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '8500.00' }]) // AUTO_FIFO candidates
+        .mockResolvedValueOnce([{ value: BigInt(5) }]) // sequence upsert
+        .mockResolvedValueOnce([{ id: 'payment-cheque-1' }]) // bill_payments insert
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-cheque-1', bill_invoice_id: 'invoice-1', amount: '5000.00', created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cheque-1', method: 'CHEQUE', status: 'PENDING', amount: '5000.00', ledger_entry_id: null }]);
+
+      const result = await service.recordPayment(
+        baseDto({
+          amount: '5000.00', method: BillPaymentMethod.CHEQUE,
+          reference: 'CHQ-001', chequeBank: 'Nepal Bank', chequeDate: '2026-07-29',
+        }),
+        'user-1',
+      );
+
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations'),
+        'payment-cheque-1', 'invoice-1', '5000.00',
+      );
+      expect(result.status).toBe('PENDING');
+      expect(result.ledgerEntryId).toBeNull();
+    });
+
+    it('rejects a CHEQUE payment missing chequeBank/chequeDate', async () => {
+      mockExistenceChecks();
+      await expect(
+        service.recordPayment(baseDto({ method: BillPaymentMethod.CHEQUE, reference: 'CHQ-002' }), 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('updateChequeStatus — PENDING -> CLEARED', () => {
+    it('posts the deferred ledger entry now, sets cleared_at/cleared_by, recomputes invoice status', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-cheque-1', method: 'CHEQUE', status: 'PENDING',
+        academic_year_id: 'year-1', amount: '5000.00', ledger_entry_id: null,
+      }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'PENDING' }]) // re-check under lock
+        .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }]) // this payment's allocations
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cheque-1', method: 'CHEQUE', status: 'CLEARED' }]) // re-select payment
+        .mockResolvedValueOnce([]); // re-select allocations
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-cleared' } as any);
+
+      const result = await service.updateChequeStatus('payment-cheque-1', { status: 'CLEARED' }, 'owner-1');
+
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        studentId: 'student-1', academicYearId: 'year-1', debit: '0', credit: '5000.00',
+      }));
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE bill_payments SET status = \'CLEARED\''),
+        'payment-cheque-1', 'ledger-entry-cleared', 'owner-1',
+      );
+      expect(result.status).toBe('CLEARED');
+    });
+  });
+
+  describe('updateChequeStatus — PENDING -> BOUNCED', () => {
+    it('flips status, records bounce audit, posts no ledger entry (none ever existed)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-cheque-2', method: 'CHEQUE', status: 'PENDING', ledger_entry_id: null,
+      }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'PENDING' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cheque-2', method: 'CHEQUE', status: 'BOUNCED' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.updateChequeStatus('payment-cheque-2', { status: 'BOUNCED', reason: 'insufficient funds' }, 'owner-1');
+
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+      expect(ledgerService.reverseInTx).not.toHaveBeenCalled();
+      expect(result.status).toBe('BOUNCED');
+    });
+  });
+
+  describe('updateChequeStatus — CLEARED -> BOUNCED (rare, after clearing)', () => {
+    it('appends a reversing ledger entry via reverseInTx, does not touch the original entry', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-cheque-3', method: 'CHEQUE', status: 'CLEARED', ledger_entry_id: 'ledger-entry-x',
+      }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'CLEARED' }])
+        .mockResolvedValueOnce([{ id: 'ledger-entry-x', student_id: 'student-1', academic_year_id: 'year-1', entry_type: 'PAYMENT', debit: '0.00', credit: '5000.00', narration: 'Payment RCPT-1' }])
+        .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cheque-3', method: 'CHEQUE', status: 'BOUNCED' }])
+        .mockResolvedValueOnce([]);
+      ledgerService.reverseInTx.mockResolvedValueOnce({ id: 'ledger-entry-reversal' } as any);
+
+      const result = await service.updateChequeStatus('payment-cheque-3', { status: 'BOUNCED', reason: 'bank reversal' }, 'owner-1');
+
+      expect(ledgerService.reverseInTx).toHaveBeenCalledWith(
+        mockTx, expect.objectContaining({ id: 'ledger-entry-x' }), 'owner-1',
+      );
+      expect(result.status).toBe('BOUNCED');
+    });
+  });
+
+  describe('updateChequeStatus — invalid transitions rejected', () => {
+    it('rejects a non-CHEQUE payment', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, method: 'CASH' }]);
+      await expect(service.updateChequeStatus('payment-1', { status: 'CLEARED' }, 'owner-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects transitioning an already-BOUNCED cheque', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, method: 'CHEQUE', status: 'BOUNCED' }]);
+      await expect(service.updateChequeStatus('payment-1', { status: 'CLEARED' }, 'owner-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('voidPayment', () => {
+    it('reverses a CLEARED payment via reverseInTx and marks it VOIDED', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-1', status: 'CLEARED', ledger_entry_id: 'ledger-entry-1',
+      }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'CLEARED' }])
+        .mockResolvedValueOnce([{ id: 'ledger-entry-1', student_id: 'student-1', academic_year_id: 'year-1', entry_type: 'PAYMENT', debit: '0.00', credit: '5000.00', narration: 'Payment RCPT-1' }])
+        .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-1', status: 'VOIDED' }])
+        .mockResolvedValueOnce([]);
+      ledgerService.reverseInTx.mockResolvedValueOnce({ id: 'ledger-entry-void-reversal' } as any);
+
+      const result = await service.voidPayment('payment-1', { reason: 'data entry error' }, 'owner-1');
+
+      expect(ledgerService.reverseInTx).toHaveBeenCalledWith(
+        mockTx, expect.objectContaining({ id: 'ledger-entry-1' }), 'owner-1',
+      );
+      expect(result.status).toBe('VOIDED');
+    });
+
+    it('voids a PENDING payment with no ledger reversal (nothing was ever posted)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-2', status: 'PENDING', ledger_entry_id: null,
+      }]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'PENDING' }])
+        .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-2', status: 'VOIDED' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.voidPayment('payment-2', {}, 'owner-1');
+
+      expect(ledgerService.reverseInTx).not.toHaveBeenCalled();
+      expect(result.status).toBe('VOIDED');
+    });
+
+    it('rejects voiding an already-VOIDED payment', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, status: 'VOIDED' }]);
+      await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects voiding an already-BOUNCED payment', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, status: 'BOUNCED' }]);
+      await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(BadRequestException);
     });
   });
 

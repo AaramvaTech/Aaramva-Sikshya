@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { adToBs } from 'bs-calendar';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -12,9 +12,11 @@ import { fiscalYearBs } from './bill-post.util';
 import { buildReceiptNumber, buildReceiptSequenceKey } from './bill-payment.util';
 import { AllocationPlanItem, planAutoFifoAllocation, UnpaidInvoiceCandidate } from './bill-payment-allocation.util';
 import { BillPaymentAllocationMode, BillPaymentMethod, BillPaymentQueryDto, CreateBillPaymentDto } from './dto/bill-payment.dto';
+import { UpdateChequeStatusDto, VoidPaymentDto } from './dto/cheque-status.dto';
 import {
   BillPaymentAllocationRow, BillPaymentResponseDto, BillPaymentRow, toBillPaymentResponse,
 } from './entities/bill-payment.entity';
+import { LedgerEntryRow } from './entities/ledger.entity';
 import { Role } from '../common/enums/role.enum';
 
 /**
@@ -25,10 +27,17 @@ import { Role } from '../common/enums/role.enum';
  * PAYMENT/DEPOSIT ledger entry are one atomic unit. Mirrors
  * BillRunPostRunnerService.postLine's structure exactly.
  *
- * CASH-only this checkpoint (BANK_TRANSFER is architecturally identical —
- * also born CLEARED per spec §4 — but Checkpoint A's own wording says "CASH
- * payment", so it's deliberately deferred; trivial to add later). CHEQUE/
- * ESEWA/KHALTI need their own checkpoints (B and C).
+ * CASH and CHEQUE only (Checkpoint B). BANK_TRANSFER (architecturally
+ * identical to CASH — also born CLEARED per spec §4) remains deliberately
+ * deferred; ESEWA/KHALTI need Checkpoint C's gateway re-pointing.
+ *
+ * B5-5 cheque lifecycle: a CHEQUE payment is born PENDING — its allocations
+ * are inserted immediately (the intended settlement is decided at record
+ * time) but they do NOT count toward an invoice's settlement status or
+ * toward a later payment's "outstanding" queries until this payment's own
+ * status becomes CLEARED. That single rule (`bp.status = 'CLEARED'` gating
+ * every join to bill_payment_allocations) is what makes PENDING/BOUNCED/
+ * VOIDED all correctly stop counting without a separate code path each.
  */
 @Injectable()
 export class BillPaymentService {
@@ -50,10 +59,13 @@ export class BillPaymentService {
     );
     if (!yearRows[0]) throw new NotFoundException(`Academic year ${dto.academicYearId} not found`);
 
-    if (dto.method !== BillPaymentMethod.CASH) {
+    if (dto.method !== BillPaymentMethod.CASH && dto.method !== BillPaymentMethod.CHEQUE) {
       throw new BadRequestException(
-        `Method ${dto.method} is not yet supported — BILL-5 Checkpoint A records CASH payments only`,
+        `Method ${dto.method} is not yet supported — BILL-5 Checkpoint B records CASH and CHEQUE payments only`,
       );
+    }
+    if (dto.method === BillPaymentMethod.CHEQUE && (!dto.chequeBank || !dto.chequeDate || !dto.reference)) {
+      throw new BadRequestException('CHEQUE payments require reference (cheque number), chequeBank, and chequeDate');
     }
 
     const amount = toMoney(dto.amount);
@@ -117,58 +129,59 @@ export class BillPaymentService {
         seqKey,
       );
       const receiptNumber = buildReceiptNumber(invoiceNumberingReset, todayBs.year, fiscalYear, seqRow.value);
+      const status = dto.method === BillPaymentMethod.CHEQUE ? 'PENDING' : 'CLEARED';
 
       const [payment] = await tx.$queryRawUnsafe<{ id: string }[]>(
         `INSERT INTO bill_payments
            (receipt_number, student_id, academic_year_id, amount, method, status,
             received_date, received_bs_year, received_bs_month, received_bs_day,
-            reference, allocation_mode, notes, received_by)
-         VALUES ($1, $2::uuid, $3::uuid, $4::numeric, $5, 'CLEARED',
-                 $6::date, $7, $8, $9,
-                 $10, $11, $12, $13::uuid)
+            reference, cheque_bank, cheque_date, allocation_mode, notes, received_by)
+         VALUES ($1, $2::uuid, $3::uuid, $4::numeric, $5, $6,
+                 $7::date, $8, $9, $10,
+                 $11, $12, $13::date, $14, $15, $16::uuid)
          RETURNING id`,
-        receiptNumber, dto.studentId, dto.academicYearId, amount.toDb(), dto.method,
+        receiptNumber, dto.studentId, dto.academicYearId, amount.toDb(), dto.method, status,
         receivedDate, bs.year, bs.month, bs.day,
-        dto.reference ?? null, dto.allocationMode, dto.notes ?? null, receivedById,
+        dto.reference ?? null, dto.chequeBank ?? null, dto.chequeDate ?? null,
+        dto.allocationMode, dto.notes ?? null, receivedById,
       );
 
+      // Allocations are ALWAYS inserted, regardless of status — B5-5: even a
+      // PENDING cheque's intended settlement is decided at record time. They
+      // simply don't count (see recomputeInvoiceStatus / fetchUnpaidInvoices
+      // OldestFirst / fetchInvoicesByIds's CLEARED-only join) until this
+      // payment's own status becomes CLEARED.
       for (const alloc of allocations) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
            VALUES ($1::uuid, $2::uuid, $3::numeric)`,
           payment.id, alloc.billInvoiceId, alloc.amount.toDb(),
         );
-        await tx.$executeRawUnsafe(
-          `UPDATE bill_invoices SET
-             status = CASE
-               WHEN total_receivable <= (
-                 SELECT COALESCE(SUM(amount), 0) FROM bill_payment_allocations WHERE bill_invoice_id = $1::uuid
-               ) THEN 'SETTLED'
-               ELSE 'PARTIALLY_PAID'
-             END,
-             updated_at = NOW()
-           WHERE id = $1::uuid`,
-          alloc.billInvoiceId,
-        );
       }
 
-      const entryType = allocations.length > 0 ? 'PAYMENT' : 'DEPOSIT';
-      const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
-        studentId: dto.studentId,
-        academicYearId: dto.academicYearId,
-        entryType,
-        debit: '0',
-        credit: amount.toDb(),
-        narration: `${entryType === 'PAYMENT' ? 'Payment' : 'Deposit'} ${receiptNumber}`,
-        refDocType: 'bill_payment',
-        refDocId: payment.id,
-        createdById: receivedById,
-      });
+      if (status === 'CLEARED') {
+        for (const alloc of allocations) {
+          await this.recomputeInvoiceStatus(tx, alloc.billInvoiceId);
+        }
 
-      await tx.$executeRawUnsafe(
-        `UPDATE bill_payments SET ledger_entry_id = $1::uuid WHERE id = $2::uuid`,
-        ledgerEntry.id, payment.id,
-      );
+        const entryType = allocations.length > 0 ? 'PAYMENT' : 'DEPOSIT';
+        const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
+          studentId: dto.studentId,
+          academicYearId: dto.academicYearId,
+          entryType,
+          debit: '0',
+          credit: amount.toDb(),
+          narration: `${entryType === 'PAYMENT' ? 'Payment' : 'Deposit'} ${receiptNumber}`,
+          refDocType: 'bill_payment',
+          refDocId: payment.id,
+          createdById: receivedById,
+        });
+
+        await tx.$executeRawUnsafe(
+          `UPDATE bill_payments SET ledger_entry_id = $1::uuid, cleared_at = NOW(), cleared_by = $3::uuid WHERE id = $2::uuid`,
+          ledgerEntry.id, payment.id, receivedById,
+        );
+      }
 
       const allocRows = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
         `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`,
@@ -230,12 +243,22 @@ export class BillPaymentService {
     return toBillPaymentResponse(rows[0], allocations);
   }
 
+  /**
+   * B5-5: a PENDING/BOUNCED/VOIDED payment's allocations must NOT make an
+   * invoice look "spoken for" — only a CLEARED payment's allocations count
+   * as real outstanding-reducing money. The EXISTS join (not a plain LEFT
+   * JOIN bill_payments) is what makes a non-CLEARED allocation's amount
+   * simply not appear in the SUM at all, rather than appearing and needing
+   * to be zeroed out with a CASE.
+   */
   private async fetchUnpaidInvoicesOldestFirst(tx: TenantTx, studentId: string): Promise<UnpaidInvoiceCandidate[]> {
     const rows = await tx.$queryRawUnsafe<{ id: string; outstanding: string }[]>(
       `SELECT bi.id,
               bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
        FROM bill_invoices bi
-       LEFT JOIN bill_payment_allocations bpa ON bpa.bill_invoice_id = bi.id
+       LEFT JOIN bill_payment_allocations bpa
+         ON bpa.bill_invoice_id = bi.id
+         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
        WHERE bi.student_id = $1::uuid AND bi.deleted_at IS NULL
          AND bi.status IN ('POSTED', 'PARTIALLY_PAID')
        GROUP BY bi.id, bi.total_receivable, bi.issue_date, bi.created_at
@@ -253,13 +276,197 @@ export class BillPaymentService {
       `SELECT bi.id,
               bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
        FROM bill_invoices bi
-       LEFT JOIN bill_payment_allocations bpa ON bpa.bill_invoice_id = bi.id
+       LEFT JOIN bill_payment_allocations bpa
+         ON bpa.bill_invoice_id = bi.id
+         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
        WHERE bi.student_id = $1::uuid AND bi.deleted_at IS NULL
          AND bi.status != 'VOIDED' AND bi.id = ANY($2::uuid[])
        GROUP BY bi.id`,
       studentId, ids,
     );
     return new Map(rows.map((r) => [r.id, { billInvoiceId: r.id, outstanding: toMoney(r.outstanding) }]));
+  }
+
+  /**
+   * B5-2/B5-5: an invoice's settlement status is derived from the SUM of
+   * its allocations, but ONLY allocations whose parent bill_payments row is
+   * currently CLEARED count (PENDING never counted; BOUNCED/VOIDED stop
+   * counting the moment they transition away from CLEARED). 3-branch, not
+   * Checkpoint A's original 2-branch — Checkpoint A never needed a POSTED-
+   * reversion case since allocations there only ever got added; Checkpoint B
+   * introduces BOUNCED-after-CLEARED and VOID, both of which can drop a
+   * previously-counted allocation back to zero.
+   */
+  private async recomputeInvoiceStatus(tx: TenantTx, billInvoiceId: string): Promise<void> {
+    await tx.$executeRawUnsafe(
+      `UPDATE bill_invoices SET
+         status = CASE
+           WHEN total_receivable <= (
+             SELECT COALESCE(SUM(bpa.amount), 0)
+             FROM bill_payment_allocations bpa
+             JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+             WHERE bpa.bill_invoice_id = $1::uuid
+           ) THEN 'SETTLED'
+           WHEN (
+             SELECT COALESCE(SUM(bpa.amount), 0)
+             FROM bill_payment_allocations bpa
+             JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+             WHERE bpa.bill_invoice_id = $1::uuid
+           ) > 0 THEN 'PARTIALLY_PAID'
+           ELSE 'POSTED'
+         END,
+         updated_at = NOW()
+       WHERE id = $1::uuid`,
+      billInvoiceId,
+    );
+  }
+
+  async updateChequeStatus(
+    paymentId: string, dto: UpdateChequeStatusDto, staffId: string,
+  ): Promise<BillPaymentResponseDto> {
+    const rows = await this.tenantPrisma.query<BillPaymentRow>(
+      `SELECT * FROM bill_payments WHERE id = $1::uuid AND deleted_at IS NULL`, paymentId,
+    );
+    if (!rows[0]) throw new NotFoundException(`Payment ${paymentId} not found`);
+    const payment = rows[0];
+
+    if (payment.method !== 'CHEQUE') {
+      throw new BadRequestException('Only CHEQUE payments have a cheque-status transition');
+    }
+    if (payment.status !== 'PENDING' && payment.status !== 'CLEARED') {
+      throw new BadRequestException(`Cannot transition a payment from status ${payment.status}`);
+    }
+    if (payment.status === 'CLEARED' && dto.status !== 'BOUNCED') {
+      throw new BadRequestException(`Invalid transition CLEARED -> ${dto.status}`);
+    }
+
+    return this.ledgerService.withStudentLock(payment.student_id, async (tx) => {
+      const [current] = await tx.$queryRawUnsafe<{ status: string }[]>(
+        `SELECT status FROM bill_payments WHERE id = $1::uuid`, paymentId,
+      );
+      if (current.status !== payment.status) {
+        throw new ConflictException(`Payment status changed concurrently (now ${current.status})`);
+      }
+
+      if (payment.status === 'PENDING' && dto.status === 'CLEARED') {
+        const allocRows = await tx.$queryRawUnsafe<{ bill_invoice_id: string }[]>(
+          `SELECT bill_invoice_id FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid`, paymentId,
+        );
+        const entryType = allocRows.length > 0 ? 'PAYMENT' : 'DEPOSIT';
+        const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
+          studentId: payment.student_id,
+          academicYearId: payment.academic_year_id,
+          entryType,
+          debit: '0',
+          credit: toMoney(payment.amount).toDb(),
+          narration: `${entryType === 'PAYMENT' ? 'Payment' : 'Deposit'} ${payment.receipt_number} (cheque cleared)`,
+          refDocType: 'bill_payment',
+          refDocId: paymentId,
+          createdById: staffId,
+        });
+        await tx.$executeRawUnsafe(
+          `UPDATE bill_payments SET status = 'CLEARED', ledger_entry_id = $2::uuid,
+             cleared_at = NOW(), cleared_by = $3::uuid, updated_at = NOW()
+           WHERE id = $1::uuid`,
+          paymentId, ledgerEntry.id, staffId,
+        );
+        for (const a of allocRows) {
+          await this.recomputeInvoiceStatus(tx, a.bill_invoice_id);
+        }
+      } else if (payment.status === 'PENDING' && dto.status === 'BOUNCED') {
+        await tx.$executeRawUnsafe(
+          `UPDATE bill_payments SET status = 'BOUNCED', bounced_at = NOW(), bounced_by = $2::uuid,
+             bounce_reason = $3, updated_at = NOW()
+           WHERE id = $1::uuid`,
+          paymentId, staffId, dto.reason ?? null,
+        );
+      } else {
+        // CLEARED -> BOUNCED: rare, bank reversal after clearing.
+        if (payment.ledger_entry_id) {
+          const [originalEntry] = await tx.$queryRawUnsafe<LedgerEntryRow[]>(
+            `SELECT * FROM student_ledger_entries WHERE id = $1::uuid`, payment.ledger_entry_id,
+          );
+          await this.ledgerService.reverseInTx(tx, originalEntry, staffId);
+        }
+        await tx.$executeRawUnsafe(
+          `UPDATE bill_payments SET status = 'BOUNCED', bounced_at = NOW(), bounced_by = $2::uuid,
+             bounce_reason = $3, updated_at = NOW()
+           WHERE id = $1::uuid`,
+          paymentId, staffId, dto.reason ?? null,
+        );
+        const allocRows = await tx.$queryRawUnsafe<{ bill_invoice_id: string }[]>(
+          `SELECT bill_invoice_id FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid`, paymentId,
+        );
+        for (const a of allocRows) {
+          await this.recomputeInvoiceStatus(tx, a.bill_invoice_id);
+        }
+      }
+
+      const [updatedRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
+        `SELECT * FROM bill_payments WHERE id = $1::uuid`, paymentId,
+      );
+      const updatedAllocations = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
+        `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`, paymentId,
+      );
+      return toBillPaymentResponse(updatedRow, updatedAllocations);
+    });
+  }
+
+  /**
+   * B5-11: void reverses via an appended ledger entry if one existed
+   * (CLEARED payment) or is a plain status flip if nothing was ever posted
+   * (PENDING). Receipt number is retained (never reused, matches B5-8).
+   * Voiding is disallowed once a payment is already VOIDED (idempotency
+   * guard) or BOUNCED (already dead — no ledger effect left to reverse and
+   * no meaningful "undo" of a bounce).
+   */
+  async voidPayment(paymentId: string, dto: VoidPaymentDto, staffId: string): Promise<BillPaymentResponseDto> {
+    const rows = await this.tenantPrisma.query<BillPaymentRow>(
+      `SELECT * FROM bill_payments WHERE id = $1::uuid AND deleted_at IS NULL`, paymentId,
+    );
+    if (!rows[0]) throw new NotFoundException(`Payment ${paymentId} not found`);
+    const payment = rows[0];
+
+    if (payment.status === 'VOIDED') throw new ConflictException('Payment already voided');
+    if (payment.status === 'BOUNCED') throw new BadRequestException('Cannot void an already-bounced payment');
+
+    return this.ledgerService.withStudentLock(payment.student_id, async (tx) => {
+      const [current] = await tx.$queryRawUnsafe<{ status: string }[]>(
+        `SELECT status FROM bill_payments WHERE id = $1::uuid`, paymentId,
+      );
+      if (current.status === 'VOIDED' || current.status === 'BOUNCED') {
+        throw new ConflictException(`Payment status changed concurrently (now ${current.status})`);
+      }
+
+      if (current.status === 'CLEARED' && payment.ledger_entry_id) {
+        const [originalEntry] = await tx.$queryRawUnsafe<LedgerEntryRow[]>(
+          `SELECT * FROM student_ledger_entries WHERE id = $1::uuid`, payment.ledger_entry_id,
+        );
+        await this.ledgerService.reverseInTx(tx, originalEntry, staffId);
+      }
+
+      await tx.$executeRawUnsafe(
+        `UPDATE bill_payments SET status = 'VOIDED', voided_at = NOW(), voided_by = $2::uuid,
+           void_reason = $3, updated_at = NOW()
+         WHERE id = $1::uuid`,
+        paymentId, staffId, dto.reason ?? null,
+      );
+
+      const allocRows = await tx.$queryRawUnsafe<{ bill_invoice_id: string }[]>(
+        `SELECT bill_invoice_id FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid`, paymentId,
+      );
+      for (const a of allocRows) {
+        await this.recomputeInvoiceStatus(tx, a.bill_invoice_id);
+      }
+
+      const [updatedRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
+        `SELECT * FROM bill_payments WHERE id = $1::uuid`, paymentId,
+      );
+      const updatedAllocations = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
+        `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`, paymentId,
+      );
+      return toBillPaymentResponse(updatedRow, updatedAllocations);
+    });
   }
 
   private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
