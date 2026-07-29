@@ -58,7 +58,10 @@ async function main(): Promise<void> {
       }
       console.log('─'.repeat(72));
       console.log(`${rows.length} tenants\n`);
-      return;
+      await app.close();
+      // Same reasoning as the process.exit(0) at the bottom of this
+      // function — this branch returns early and would otherwise skip it.
+      process.exit(0);
     }
 
     const mode = args.dryRun ? 'DRY-RUN (no writes)' : 'APPLY';
@@ -101,6 +104,11 @@ async function main(): Promise<void> {
   }
 
   await app.close();
+  // AppModule registers @Interval/@Cron providers (pollers, fine/ledger
+  // cron jobs) that keep timers alive even in a headless application
+  // context — app.close() alone does not stop the Node process. Explicit
+  // exit, matching the catch branch's process.exit(1) above.
+  process.exit(0);
 }
 
 main().catch((err) => {

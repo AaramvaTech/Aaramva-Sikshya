@@ -536,6 +536,9 @@ async function seedDemo(): Promise<void> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   await app.close();
+  // AppModule's @Interval/@Cron providers keep timers alive even in a
+  // headless application context — app.close() alone won't exit the process.
+  process.exit(0);
 }
 
 seedDemo().catch((err) => {
