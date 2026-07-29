@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -7,11 +7,14 @@ import { Role } from '../common/enums/role.enum';
 import type { AuthUser } from '../auth/auth.types';
 import { BillPaymentService } from './bill-payment.service';
 import { BillPaymentAllocationMode, BillPaymentQueryDto, CreateBillPaymentDto } from './dto/bill-payment.dto';
+import { UpdateChequeStatusDto, VoidPaymentDto } from './dto/cheque-status.dto';
 
 const ACCOUNTANT_AND_ABOVE = [
   Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL,
   Role.ACADEMIC_COORDINATOR, Role.ACCOUNTANT,
 ];
+
+const OWNER_ONLY = [Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER];
 
 /**
  * BILL-5-SPEC.md §5. B5-3's MANUAL-allocation "behind a permission" is
@@ -47,5 +50,25 @@ export class BillPaymentController {
   @Roles(...ACCOUNTANT_AND_ABOVE, Role.PARENT)
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.billPaymentService.findOne(id, user.userId, user.role);
+  }
+
+  @Patch('bill/payments/:id/cheque-status')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  updateChequeStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateChequeStatusDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billPaymentService.updateChequeStatus(id, dto, userId);
+  }
+
+  @Post('bill/payments/:id/void')
+  @Roles(...OWNER_ONLY)
+  voidPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VoidPaymentDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.billPaymentService.voidPayment(id, dto, userId);
   }
 }
