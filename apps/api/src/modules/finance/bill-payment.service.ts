@@ -123,7 +123,7 @@ export class BillPaymentService {
            (receipt_number, student_id, academic_year_id, amount, method, status,
             received_date, received_bs_year, received_bs_month, received_bs_day,
             reference, allocation_mode, notes, received_by)
-         VALUES ($1, $2::uuid, $3::uuid, $4, $5, 'CLEARED',
+         VALUES ($1, $2::uuid, $3::uuid, $4::numeric, $5, 'CLEARED',
                  $6::date, $7, $8, $9,
                  $10, $11, $12, $13::uuid)
          RETURNING id`,
@@ -135,7 +135,7 @@ export class BillPaymentService {
       for (const alloc of allocations) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
-           VALUES ($1::uuid, $2::uuid, $3)`,
+           VALUES ($1::uuid, $2::uuid, $3::numeric)`,
           payment.id, alloc.billInvoiceId, alloc.amount.toDb(),
         );
         await tx.$executeRawUnsafe(
