@@ -5,6 +5,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { LedgerService } from './ledger.service';
 import { BillLineResolverService } from './bill-line-resolver.service';
 import { FinanceSettingsService } from './finance-settings.service';
+import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { amountInWords } from '../../common/money/amount-in-words';
 import { todayAdInNepal } from '../common/utils/date.util';
@@ -243,7 +244,15 @@ export class BillRunPostRunnerService {
         studentId,
       );
 
-      if (advanceCandidates.length > 0) {
+      // total_receivable = netAmount + previousBalance can itself already be
+      // <= 0 when a student's pre-existing advance exceeds this invoice's own
+      // charge (previousBalance negative and large) — BILL-4's own field,
+      // uncapped. Nothing to consume via THIS mechanism in that case (the
+      // negative figure already reflects the advance for display purposes);
+      // guarded here so planAdvanceConsumption is never handed a negative
+      // "invoiceOutstanding", which would otherwise attempt a negative
+      // bill_payment_allocations.amount and hit that table's CHECK (amount > 0).
+      if (advanceCandidates.length > 0 && totalReceivable.compare(Money.zero()) > 0) {
         const plan = planAdvanceConsumption(
           totalReceivable,
           advanceCandidates.map((r) => ({ billPaymentId: r.id, remaining: toMoney(r.remaining) })),

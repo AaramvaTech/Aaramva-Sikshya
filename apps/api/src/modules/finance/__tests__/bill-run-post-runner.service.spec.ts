@@ -287,4 +287,30 @@ describe('BillRunPostRunnerService', () => {
       'pay-advance-1', 'invoice-2', '1000.00',
     );
   });
+
+  it('consumes nothing when total_receivable is already <= 0 (pre-existing advance exceeds this invoice charge) — no negative allocation attempted', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
+      .mockResolvedValueOnce([{ sum: '-5000.00' }]) // previous balance: 5000 advance, more than this 3000 charge
+      .mockResolvedValueOnce([{ value: BigInt(3) }])
+      .mockResolvedValueOnce([{ id: 'invoice-3' }])
+      .mockResolvedValueOnce([{ id: 'pay-advance-2', remaining: '5000.00' }]); // candidates ARE found...
+
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-3' } as any);
+
+    const result = await service.drainCurrentTenant();
+
+    // total_receivable = 3000 + (-5000) = -2000 <= 0 -> guarded, zero consumption attempted
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO bill_payment_allocations'),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+  });
 });
