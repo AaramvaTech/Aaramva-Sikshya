@@ -11,10 +11,11 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
-import { PaymentService } from '../payment.service';
-import { PaymentMethod } from '../dto/payment.dto';
+import { BillPaymentService } from '../bill-payment.service';
+import { LedgerService } from '../ledger.service';
+import { BillPaymentAllocationMode, BillPaymentMethod } from '../dto/bill-payment.dto';
 import { InitiateEsewaPaymentDto } from '../dto/esewa.dto';
-import { InvoiceRow, toMoney } from '../entities/finance.entity';
+import { toMoney } from '../entities/finance.entity';
 import { Money } from '../../../common/money/money';
 import { Role } from '../../common/enums/role.enum';
 import type { AuthUser } from '../../auth/auth.types';
@@ -29,7 +30,8 @@ import {
 
 export interface PaymentTransactionRow {
   id: string;
-  invoice_id: string;
+  invoice_id: string | null;
+  bill_invoice_id: string | null;
   gateway: string;
   transaction_uuid: string;
   amount: string | number;
@@ -38,10 +40,20 @@ export interface PaymentTransactionRow {
   failure_reason: string | null;
   raw_payload: unknown;
   payment_id: string | null;
+  bill_payment_id: string | null;
   initiated_by: string;
   verified_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+/** bill_invoices row + the CLEARED-only allocation-sum-derived `outstanding` column. */
+interface BillInvoiceOutstandingRow {
+  id: string;
+  invoice_number: string;
+  student_id: string;
+  academic_year_id: string;
+  outstanding: string | number;
 }
 
 /**
@@ -113,7 +125,8 @@ export class EsewaService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
-    private readonly paymentService: PaymentService,
+    private readonly billPaymentService: BillPaymentService,
+    private readonly ledgerService: LedgerService,
   ) {
     this.productCode = this.config.get<string>('ESEWA_PRODUCT_CODE') || '';
     this.secretKey = this.config.get<string>('ESEWA_SECRET_KEY') || '';
@@ -165,8 +178,15 @@ export class EsewaService implements OnModuleInit {
     this.assertEnabled();
     const { slug } = this.tenantContext.getOrThrow();
 
-    const [invoice] = await this.tenantPrisma.query<InvoiceRow>(
-      `SELECT * FROM invoices WHERE id = $1::uuid AND deleted_at IS NULL`,
+    const [invoice] = await this.tenantPrisma.query<BillInvoiceOutstandingRow>(
+      `SELECT bi.*,
+              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+       FROM bill_invoices bi
+       LEFT JOIN bill_payment_allocations bpa
+         ON bpa.bill_invoice_id = bi.id
+         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       WHERE bi.id = $1::uuid AND bi.deleted_at IS NULL
+       GROUP BY bi.id`,
       dto.invoiceId,
     );
     if (!invoice) throw new NotFoundException(`Invoice ${dto.invoiceId} not found`);
@@ -175,7 +195,7 @@ export class EsewaService implements OnModuleInit {
       await this.assertParentOwnsStudent(user.userId, invoice.student_id);
     }
 
-    const outstanding = toMoney(invoice.balance).toNumber();
+    const outstanding = toMoney(invoice.outstanding).toNumber();
     if (outstanding <= 0) {
       throw new BadRequestException('Invoice has no outstanding balance to pay');
     }
@@ -183,7 +203,7 @@ export class EsewaService implements OnModuleInit {
     const transactionUuid = randomUUID(); // alphanumeric + hyphen, per eSewa constraint
 
     await this.tenantPrisma.execute(
-      `INSERT INTO payment_transactions (invoice_id, gateway, transaction_uuid, amount, initiated_by)
+      `INSERT INTO payment_transactions (bill_invoice_id, gateway, transaction_uuid, amount, initiated_by)
        VALUES ($1::uuid, 'ESEWA', $2, $3, $4::uuid)`,
       dto.invoiceId,
       transactionUuid,
@@ -326,7 +346,13 @@ export class EsewaService implements OnModuleInit {
     txn: PaymentTransactionRow,
     check: EsewaStatusCheckResponse,
   ): Promise<EsewaVerifyResult> {
-    const payment = await this.tenantPrisma.run(async (tx) => {
+    const [invoiceRow] = await this.tenantPrisma.query<{ student_id: string; academic_year_id: string }>(
+      `SELECT student_id, academic_year_id FROM bill_invoices WHERE id = $1::uuid`,
+      txn.bill_invoice_id,
+    );
+    // invoiceRow is guaranteed by the FK — bill_invoice_id was validated at initiate() time.
+
+    const payment = await this.ledgerService.withStudentLock(invoiceRow.student_id, async (tx) => {
       const [claimed] = await tx.$queryRawUnsafe<PaymentTransactionRow[]>(
         `UPDATE payment_transactions
          SET status = 'VERIFIED', gateway_ref = $2, failure_reason = NULL,
@@ -338,12 +364,35 @@ export class EsewaService implements OnModuleInit {
       );
       if (!claimed) return null; // lost the race — someone else settled it
 
-      const paymentRow = await this.paymentService.recordPaymentInTx(
+      // Race guard: the invoice's outstanding may have shrunk since initiate()
+      // (e.g. a cash payment landed on it first). Cap the MANUAL target at
+      // whatever's left; anything beyond that becomes advance credit (B5-7),
+      // never a rejection of a gateway-confirmed payment.
+      const [{ outstanding }] = await tx.$queryRawUnsafe<{ outstanding: string | number }[]>(
+        `SELECT bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+         FROM bill_invoices bi
+         LEFT JOIN bill_payment_allocations bpa
+           ON bpa.bill_invoice_id = bi.id
+           AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+         WHERE bi.id = $1::uuid
+         GROUP BY bi.id`,
+        claimed.bill_invoice_id,
+      );
+      const claimedAmount = toMoney(claimed.amount);
+      const currentOutstanding = toMoney(outstanding);
+      const targetAmount = currentOutstanding.compare(Money.zero()) > 0
+        ? (claimedAmount.compare(currentOutstanding) <= 0 ? claimedAmount : currentOutstanding)
+        : Money.zero();
+
+      const paymentRow = await this.billPaymentService.recordPaymentInTx(
         tx,
         {
-          invoiceId: claimed.invoice_id,
-          amount: toMoney(claimed.amount).toNumber(),
-          method: PaymentMethod.ESEWA,
+          studentId: invoiceRow.student_id,
+          academicYearId: invoiceRow.academic_year_id,
+          amount: claimedAmount,
+          method: BillPaymentMethod.ESEWA,
+          allocationMode: targetAmount.isZero() ? BillPaymentAllocationMode.ADVANCE_ONLY : BillPaymentAllocationMode.MANUAL,
+          targets: targetAmount.isZero() ? undefined : [{ billInvoiceId: claimed.bill_invoice_id!, amount: targetAmount.toDb() }],
           reference: check.ref_id ?? claimed.transaction_uuid,
           notes: `eSewa online payment (transaction ${claimed.transaction_uuid})`,
         },
@@ -351,7 +400,7 @@ export class EsewaService implements OnModuleInit {
       );
 
       await tx.$executeRawUnsafe(
-        `UPDATE payment_transactions SET payment_id = $1::uuid WHERE id = $2::uuid`,
+        `UPDATE payment_transactions SET bill_payment_id = $1::uuid WHERE id = $2::uuid`,
         paymentRow.id,
         claimed.id,
       );
@@ -365,9 +414,11 @@ export class EsewaService implements OnModuleInit {
         : this.toResult('FAILED', fresh, fresh.failure_reason ?? undefined);
     }
 
-    this.paymentService.emitPaymentReceived(payment);
+    // No bill_payments-side equivalent of PaymentService.emitPaymentReceived
+    // exists yet (Checkpoint A/B never built a payment.received-style event
+    // for the new payments rail) — correctly omitted here, not silently dropped.
     this.logger.log(
-      `eSewa ${txn.transaction_uuid}: VERIFIED, payment ${payment.payment_number} recorded for invoice ${txn.invoice_id}`,
+      `eSewa ${txn.transaction_uuid}: VERIFIED, payment ${payment.receiptNumber} recorded for invoice ${txn.bill_invoice_id}`,
     );
     return this.toResult('VERIFIED', fresh);
   }
@@ -424,8 +475,8 @@ export class EsewaService implements OnModuleInit {
     const txn = await this.loadTransaction(transactionUuid);
     if (user.role === Role.PARENT) {
       const [invoice] = await this.tenantPrisma.query<{ student_id: string }>(
-        `SELECT student_id FROM invoices WHERE id = $1::uuid`,
-        txn.invoice_id,
+        `SELECT student_id FROM bill_invoices WHERE id = $1::uuid`,
+        txn.bill_invoice_id,
       );
       await this.assertParentOwnsStudent(user.userId, invoice?.student_id ?? '');
     }
@@ -550,9 +601,9 @@ export class EsewaService implements OnModuleInit {
     const rows = await this.tenantPrisma.query<
       PaymentTransactionRow & { invoice_number: string }
     >(
-      `SELECT pt.*, i.invoice_number
+      `SELECT pt.*, bi.invoice_number
        FROM payment_transactions pt
-       JOIN invoices i ON i.id = pt.invoice_id
+       JOIN bill_invoices bi ON bi.id = pt.bill_invoice_id
        WHERE pt.transaction_uuid = $1`,
       transactionUuid,
     );
@@ -628,7 +679,7 @@ export class EsewaService implements OnModuleInit {
       transactionUuid: txn.transaction_uuid,
       status: state === 'EXPIRED' ? 'EXPIRED' : txn.status,
       amount: toMoney(txn.amount).toNumber(),
-      invoiceId: txn.invoice_id,
+      invoiceId: txn.bill_invoice_id ?? '',
       gatewayRef: txn.gateway_ref,
       reason,
     };
