@@ -19,6 +19,20 @@ import {
 import { LedgerEntryRow } from './entities/ledger.entity';
 import { Role } from '../common/enums/role.enum';
 
+export interface RecordPaymentInTxParams {
+  studentId: string;
+  academicYearId: string;
+  amount: Money;
+  method: BillPaymentMethod;
+  allocationMode: BillPaymentAllocationMode;
+  targets?: { billInvoiceId: string; amount: string }[];
+  receivedDate?: string;
+  reference?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+  notes?: string;
+}
+
 /**
  * BILL-5-SPEC.md §3/§7 Checkpoint A — record a payment and run the
  * allocation engine, all inside ONE per-student locked transaction
@@ -77,123 +91,147 @@ export class BillPaymentService {
       throw new BadRequestException('MANUAL allocation requires at least one target invoice');
     }
 
-    const receivedDate = dto.receivedDate ?? todayAdInNepal();
+    return this.ledgerService.withStudentLock(dto.studentId, (tx) => this.recordPaymentInTx(tx, {
+      studentId: dto.studentId,
+      academicYearId: dto.academicYearId,
+      amount,
+      method: dto.method,
+      allocationMode: dto.allocationMode,
+      targets: dto.targets,
+      receivedDate: dto.receivedDate,
+      reference: dto.reference,
+      chequeBank: dto.chequeBank,
+      chequeDate: dto.chequeDate,
+      notes: dto.notes,
+    }, receivedById));
+  }
+
+  /**
+   * Participates in an ALREADY-OPEN, ALREADY-LOCKED transaction — mirrors
+   * LedgerService's postEntry/postEntryInTx and reverse/reverseInTx split
+   * (this is the third instance of that exact pattern in this codebase).
+   * Deliberately does NOT re-validate the CASH/CHEQUE-only restriction or
+   * cheque-field requirements — those are recordPayment()'s own HTTP-facing
+   * business rules; a caller composing this directly (EsewaService/
+   * KhaltiService, Checkpoint C) passes method ESEWA/KHALTI, which
+   * recordPayment() itself would reject. The caller is trusted, exactly
+   * like postEntryInTx/reverseInTx trust theirs.
+   */
+  async recordPaymentInTx(
+    tx: TenantTx, params: RecordPaymentInTxParams, receivedById: string,
+  ): Promise<BillPaymentResponseDto> {
+    const receivedDate = params.receivedDate ?? todayAdInNepal();
     const bs = bsOf(receivedDate);
     const { invoiceNumberingReset } = await this.financeSettingsService.getInvoiceNumberingReset();
     const todayBs = adToBs(new Date(todayAdInNepal()));
     const fiscalYear = fiscalYearBs(todayBs.year, todayBs.month);
     const { slug } = this.tenantContext.getOrThrow();
+    const amount = params.amount;
 
-    return this.ledgerService.withStudentLock(dto.studentId, async (tx) => {
-      let allocations: AllocationPlanItem[];
-      let remainder: Money;
+    let allocations: AllocationPlanItem[];
 
-      if (dto.allocationMode === BillPaymentAllocationMode.ADVANCE_ONLY) {
-        allocations = [];
-        remainder = amount;
-      } else if (dto.allocationMode === BillPaymentAllocationMode.AUTO_FIFO) {
-        const candidates = await this.fetchUnpaidInvoicesOldestFirst(tx, dto.studentId);
-        const plan = planAutoFifoAllocation(amount, candidates);
-        allocations = plan.allocations;
-        remainder = plan.remainder;
-      } else {
-        const ids = dto.targets!.map((t) => t.billInvoiceId);
-        const invoiceMap = await this.fetchInvoicesByIds(tx, dto.studentId, ids);
-        let sum = Money.zero();
-        allocations = [];
-        for (const target of dto.targets!) {
-          const invoice = invoiceMap.get(target.billInvoiceId);
-          if (!invoice) {
-            throw new NotFoundException(`Invoice ${target.billInvoiceId} not found for this student`);
-          }
-          const targetAmount = toMoney(target.amount);
-          if (targetAmount.compare(invoice.outstanding) > 0) {
-            throw new BadRequestException(
-              `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s outstanding balance of ${invoice.outstanding.toDb()}`,
-            );
-          }
-          sum = sum.add(targetAmount);
-          allocations.push({ billInvoiceId: target.billInvoiceId, amount: targetAmount });
+    if (params.allocationMode === BillPaymentAllocationMode.ADVANCE_ONLY) {
+      allocations = [];
+    } else if (params.allocationMode === BillPaymentAllocationMode.AUTO_FIFO) {
+      const candidates = await this.fetchUnpaidInvoicesOldestFirst(tx, params.studentId);
+      const plan = planAutoFifoAllocation(amount, candidates);
+      allocations = plan.allocations;
+    } else {
+      const ids = params.targets!.map((t) => t.billInvoiceId);
+      const invoiceMap = await this.fetchInvoicesByIds(tx, params.studentId, ids);
+      let sum = Money.zero();
+      allocations = [];
+      for (const target of params.targets!) {
+        const invoice = invoiceMap.get(target.billInvoiceId);
+        if (!invoice) {
+          throw new NotFoundException(`Invoice ${target.billInvoiceId} not found for this student`);
         }
-        if (sum.compare(amount) > 0) {
-          throw new BadRequestException(`Total allocation ${sum.toDb()} exceeds payment amount ${amount.toDb()}`);
+        const targetAmount = toMoney(target.amount);
+        if (targetAmount.compare(invoice.outstanding) > 0) {
+          throw new BadRequestException(
+            `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s outstanding balance of ${invoice.outstanding.toDb()}`,
+          );
         }
-        remainder = amount.sub(sum);
+        sum = sum.add(targetAmount);
+        allocations.push({ billInvoiceId: target.billInvoiceId, amount: targetAmount });
       }
+      if (sum.compare(amount) > 0) {
+        throw new BadRequestException(`Total allocation ${sum.toDb()} exceeds payment amount ${amount.toDb()}`);
+      }
+    }
 
-      const seqKey = buildReceiptSequenceKey(slug, invoiceNumberingReset, fiscalYear);
-      const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
-        `INSERT INTO sequences (key, value) VALUES ($1, 1)
-         ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
-         RETURNING value`,
-        seqKey,
+    const seqKey = buildReceiptSequenceKey(slug, invoiceNumberingReset, fiscalYear);
+    const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
+      `INSERT INTO sequences (key, value) VALUES ($1, 1)
+       ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
+       RETURNING value`,
+      seqKey,
+    );
+    const receiptNumber = buildReceiptNumber(invoiceNumberingReset, todayBs.year, fiscalYear, seqRow.value);
+    const status = params.method === BillPaymentMethod.CHEQUE ? 'PENDING' : 'CLEARED';
+
+    const [payment] = await tx.$queryRawUnsafe<{ id: string }[]>(
+      `INSERT INTO bill_payments
+         (receipt_number, student_id, academic_year_id, amount, method, status,
+          received_date, received_bs_year, received_bs_month, received_bs_day,
+          reference, cheque_bank, cheque_date, allocation_mode, notes, received_by)
+       VALUES ($1, $2::uuid, $3::uuid, $4::numeric, $5, $6,
+               $7::date, $8, $9, $10,
+               $11, $12, $13::date, $14, $15, $16::uuid)
+       RETURNING id`,
+      receiptNumber, params.studentId, params.academicYearId, amount.toDb(), params.method, status,
+      receivedDate, bs.year, bs.month, bs.day,
+      params.reference ?? null, params.chequeBank ?? null, params.chequeDate ?? null,
+      params.allocationMode, params.notes ?? null, receivedById,
+    );
+
+    // Allocations are ALWAYS inserted, regardless of status — B5-5: even a
+    // PENDING cheque's intended settlement is decided at record time. They
+    // simply don't count (see recomputeInvoiceStatus / fetchUnpaidInvoices
+    // OldestFirst / fetchInvoicesByIds's CLEARED-only join) until this
+    // payment's own status becomes CLEARED.
+    for (const alloc of allocations) {
+      await tx.$executeRawUnsafe(
+        `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
+         VALUES ($1::uuid, $2::uuid, $3::numeric)`,
+        payment.id, alloc.billInvoiceId, alloc.amount.toDb(),
       );
-      const receiptNumber = buildReceiptNumber(invoiceNumberingReset, todayBs.year, fiscalYear, seqRow.value);
-      const status = dto.method === BillPaymentMethod.CHEQUE ? 'PENDING' : 'CLEARED';
+    }
 
-      const [payment] = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO bill_payments
-           (receipt_number, student_id, academic_year_id, amount, method, status,
-            received_date, received_bs_year, received_bs_month, received_bs_day,
-            reference, cheque_bank, cheque_date, allocation_mode, notes, received_by)
-         VALUES ($1, $2::uuid, $3::uuid, $4::numeric, $5, $6,
-                 $7::date, $8, $9, $10,
-                 $11, $12, $13::date, $14, $15, $16::uuid)
-         RETURNING id`,
-        receiptNumber, dto.studentId, dto.academicYearId, amount.toDb(), dto.method, status,
-        receivedDate, bs.year, bs.month, bs.day,
-        dto.reference ?? null, dto.chequeBank ?? null, dto.chequeDate ?? null,
-        dto.allocationMode, dto.notes ?? null, receivedById,
-      );
-
-      // Allocations are ALWAYS inserted, regardless of status — B5-5: even a
-      // PENDING cheque's intended settlement is decided at record time. They
-      // simply don't count (see recomputeInvoiceStatus / fetchUnpaidInvoices
-      // OldestFirst / fetchInvoicesByIds's CLEARED-only join) until this
-      // payment's own status becomes CLEARED.
+    if (status === 'CLEARED') {
       for (const alloc of allocations) {
-        await tx.$executeRawUnsafe(
-          `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
-           VALUES ($1::uuid, $2::uuid, $3::numeric)`,
-          payment.id, alloc.billInvoiceId, alloc.amount.toDb(),
-        );
+        await this.recomputeInvoiceStatus(tx, alloc.billInvoiceId);
       }
 
-      if (status === 'CLEARED') {
-        for (const alloc of allocations) {
-          await this.recomputeInvoiceStatus(tx, alloc.billInvoiceId);
-        }
+      const entryType = allocations.length > 0 ? 'PAYMENT' : 'DEPOSIT';
+      const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
+        studentId: params.studentId,
+        academicYearId: params.academicYearId,
+        entryType,
+        debit: '0',
+        credit: amount.toDb(),
+        narration: `${entryType === 'PAYMENT' ? 'Payment' : 'Deposit'} ${receiptNumber}`,
+        refDocType: 'bill_payment',
+        refDocId: payment.id,
+        createdById: receivedById,
+      });
 
-        const entryType = allocations.length > 0 ? 'PAYMENT' : 'DEPOSIT';
-        const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
-          studentId: dto.studentId,
-          academicYearId: dto.academicYearId,
-          entryType,
-          debit: '0',
-          credit: amount.toDb(),
-          narration: `${entryType === 'PAYMENT' ? 'Payment' : 'Deposit'} ${receiptNumber}`,
-          refDocType: 'bill_payment',
-          refDocId: payment.id,
-          createdById: receivedById,
-        });
-
-        await tx.$executeRawUnsafe(
-          `UPDATE bill_payments SET ledger_entry_id = $1::uuid, cleared_at = NOW(), cleared_by = $3::uuid WHERE id = $2::uuid`,
-          ledgerEntry.id, payment.id, receivedById,
-        );
-      }
-
-      const allocRows = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
-        `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`,
-        payment.id,
+      await tx.$executeRawUnsafe(
+        `UPDATE bill_payments SET ledger_entry_id = $1::uuid, cleared_at = NOW(), cleared_by = $3::uuid WHERE id = $2::uuid`,
+        ledgerEntry.id, payment.id, receivedById,
       );
-      const [paymentRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
-        `SELECT * FROM bill_payments WHERE id = $1::uuid`,
-        payment.id,
-      );
+    }
 
-      return toBillPaymentResponse(paymentRow, allocRows);
-    });
+    const allocRows = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
+      `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`,
+      payment.id,
+    );
+    const [paymentRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
+      `SELECT * FROM bill_payments WHERE id = $1::uuid`,
+      payment.id,
+    );
+
+    return toBillPaymentResponse(paymentRow, allocRows);
   }
 
   async findAll(query: BillPaymentQueryDto): Promise<{

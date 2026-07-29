@@ -6,6 +6,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
 import { FinanceSettingsService } from '../finance-settings.service';
 import { Role } from '../../common/enums/role.enum';
+import { Money } from '../../../common/money/money';
 import { BillPaymentAllocationMode, BillPaymentMethod, CreateBillPaymentDto } from '../dto/bill-payment.dto';
 
 const mockTx = {
@@ -392,6 +393,54 @@ describe('BillPaymentService', () => {
     it('rejects voiding an already-BOUNCED payment', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, status: 'BOUNCED' }]);
       await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('recordPaymentInTx — callable directly with resolved params, bypassing recordPayment\'s own validation', () => {
+    it('records an ESEWA payment (a method recordPayment() itself would reject) when called directly, without acquiring its own lock', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '5000.00' }]) // fetchInvoicesByIds (MANUAL target)
+        .mockResolvedValueOnce([{ value: BigInt(9) }]) // sequence upsert
+        .mockResolvedValueOnce([{ id: 'payment-esewa-1' }]) // bill_payments insert
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-esewa-1', bill_invoice_id: 'invoice-1', amount: '5000.00', created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-esewa-1', method: 'ESEWA', amount: '5000.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-esewa-1' } as any);
+
+      const result = await service.recordPaymentInTx(mockTx as any, {
+        studentId: 'student-1', academicYearId: 'year-1', amount: Money.fromDb('5000.00'),
+        method: BillPaymentMethod.ESEWA, allocationMode: BillPaymentAllocationMode.MANUAL,
+        targets: [{ billInvoiceId: 'invoice-1', amount: '5000.00' }],
+        reference: 'esewa-ref-123',
+      }, 'system');
+
+      expect(result.method).toBe('ESEWA');
+      expect(result.status).toBe('CLEARED');
+      expect(ledgerService.withStudentLock).not.toHaveBeenCalled(); // no lock acquired by recordPaymentInTx itself
+      expect(mockTx.$queryRawUnsafe).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('INSERT INTO bill_payments'),
+        expect.anything(), 'student-1', 'year-1', '5000.00', 'ESEWA', 'CLEARED',
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(),
+        'esewa-ref-123', null, null, 'MANUAL', null, 'system',
+      );
+    });
+
+    it('records an ADVANCE_ONLY DEPOSIT when called directly with no targets', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ value: BigInt(10) }]) // sequence upsert (no candidate query for ADVANCE_ONLY)
+        .mockResolvedValueOnce([{ id: 'payment-esewa-2' }])
+        .mockResolvedValueOnce([]) // allocations re-select: empty
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-esewa-2', method: 'KHALTI', allocation_mode: 'ADVANCE_ONLY', amount: '1200.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-esewa-2' } as any);
+
+      const result = await service.recordPaymentInTx(mockTx as any, {
+        studentId: 'student-1', academicYearId: 'year-1', amount: Money.fromDb('1200.00'),
+        method: BillPaymentMethod.KHALTI, allocationMode: BillPaymentAllocationMode.ADVANCE_ONLY,
+        reference: 'khalti-pidx-abc',
+      }, 'system');
+
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({ entryType: 'DEPOSIT', credit: '1200.00' }));
+      expect(result.allocations).toEqual([]);
     });
   });
 
