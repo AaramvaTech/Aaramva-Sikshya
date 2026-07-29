@@ -4,6 +4,21 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## PAY-UI-REPOINT — open follow-up, HARD GATE before any real school uses online payment (logged 2026-07-29, from BILL-5 Checkpoint C pre-flight)
+
+**Not a deviation from this checkpoint's own scope — a deliberately descoped consequence of it, ruled on by Srijan.** Checkpoint C re-points the eSewa/Khalti *backend* gateway services from the old `invoices` table to `bill_invoices`. Found during pre-flight (`docs/api-contracts/BILL-5-checkpoint-c-preflight.md` §3), by reading the actual frontend code, not assumed: `apps/mobile`'s parent Fees screen (`app/(parent)/fees.tsx`, `hooks/useEsewaPayment.ts`, `hooks/usePayments.ts`) is a **live, currently-shipped** "Pay with eSewa/Khalti" button, and it is wired entirely to the OLD `invoices`/`payments` shape today (`type Invoice` — `totalAmount`/`paidAmount`/`balance`/old status enum). `apps/web` has no gateway-initiation UI at all (confirmed by grep — matches WEB-P Phase 5's own explicit exclusion of checkout).
+
+**Ruling (Srijan): ship Checkpoint C backend-only, as planned — do not widen its scope to touch mobile/web.** Zero real blast radius today (no live tenant has real `bill_invoices` money flowing through it outside `demo`'s proof scaffolding), and touching frontend payment UI while also mid-switch on the R10-frozen backend rail would work against the whole point of keeping this checkpoint isolated.
+
+**What's actually required before this is safe to expose to a real school:**
+1. `apps/mobile`'s Fees screen needs a new data source (a `bill_invoices`-shaped list, once one exists — no such endpoint is built as of Checkpoint C either) and its "Pay with eSewa/Khalti" buttons need to send `bill_invoices.id` values, not `invoices.id`.
+2. `apps/web` needs an actual parent-facing checkout entry point — none exists (WEB-P Phase 5 explicitly excluded it).
+3. Until both land, the mobile pay button keeps working exactly as it does today (still targeting the old rail — Checkpoint C does not touch it, does not disable it, does not change its behavior in any way). It does **not** silently break at Checkpoint C's merge — it only becomes stale/superseded once a school's real billing data actually lives in `bill_invoices` rather than `invoices`, which itself hasn't happened for any real tenant yet.
+
+**This is a hard gate, not a nice-to-have:** flipping a real school's onboarding/provisioning to the new `bill_invoices` billing flow before PAY-UI-REPOINT lands would silently break their parents' ability to pay online — the exact 404 scenario the pre-flight caught. Whoever plans that cutover must check this item first.
+
+---
+
 ## BILL-5 Checkpoint B — cheque lifecycle, advance auto-apply, void (2026-07-29, branch `feat/bill-5-payments`)
 
 **Design decision, not explicit in the spec's literal text, reasoned from the schema's own CHECK constraints: advance auto-apply on invoice post posts ZERO new ledger entries.** B5-4 says the consumption is "a separate PAYMENT/allocation entry, not a modification of the invoice entry" — read that as requiring a fresh `student_ledger_entries` row, and it would double-count: `student_ledger_entries` has `CHECK (debit > 0 OR credit > 0)` and `CHECK (NOT (debit > 0 AND credit > 0))` — every entry is a pure, non-zero debit or credit, no balance-neutral shape is representable. The money being consumed was already fully credited by its original `DEPOSIT`/`PAYMENT` entry when first received, and the new invoice's own `INVOICE` entry already fully captures the new charge — a further credit for the "same" money would make the balance more negative than correct. Consumption is therefore purely a new `bill_payment_allocations` row linking the old (already-CLEARED) payment to the new invoice. Confirmed live (Task 11): the invoice's `total_receivable` already nets the negative (advance) `previous_balance` against the new charge, so the visible "total owed" already reflects the credit even before any allocation row exists — the allocation is bookkeeping (which invoice does this money settle), not a second money movement.
