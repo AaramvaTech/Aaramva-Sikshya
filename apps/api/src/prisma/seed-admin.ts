@@ -75,7 +75,13 @@ async function seedAdmin(): Promise<void> {
   }
 }
 
-seedAdmin().catch((err) => {
+// app.close() runs in seedAdmin()'s finally block (both success and error
+// paths) — process.exit(0) belongs here instead, only on the resolved path,
+// so a thrown error still falls through to .catch()'s process.exit(1) below
+// rather than being masked by an exit(0) racing it in a shared finally.
+// AppModule's @Interval/@Cron providers keep timers alive even in a headless
+// application context — app.close() alone won't exit the process.
+seedAdmin().then(() => process.exit(0)).catch((err) => {
   console.error('seed:admin failed:', err);
   process.exit(1);
 });
