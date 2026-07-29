@@ -57,6 +57,10 @@ export class CreateBillPaymentDto {
   @IsOptional() @IsString() reference?: string;
 
   @IsOptional() @IsString() notes?: string;
+
+  /** CHEQUE-only metadata — required when method is CHEQUE, validated in BillPaymentService (same convention as targets/MANUAL). */
+  @IsOptional() @IsString() chequeBank?: string;
+  @IsOptional() @IsDateString() chequeDate?: string;
 }
 
 export class BillPaymentQueryDto {
