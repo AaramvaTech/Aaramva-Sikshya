@@ -176,6 +176,47 @@ export class LedgerService {
   }
 
   /**
+   * Participates in an ALREADY-OPEN, ALREADY-LOCKED transaction — mirrors
+   * postEntryInTx's relationship to postEntry. Used by BillPaymentService's
+   * void and CLEARED->BOUNCED paths (B5-11) to compose the reversal into
+   * the SAME transaction as the bill_payments status flip, rather than
+   * reverse()'s own separate top-level transaction. Does NOT acquire the
+   * advisory lock itself, and does NOT re-fetch the original entry — the
+   * caller supplies it (already fetched via their own tx), so this stays a
+   * pure "given this row, mirror it" operation with exactly one guard query
+   * (already-reversed) before the insert — deliberately NOT a fresh SELECT
+   * of `original` by id, which would add a second tx query here and change
+   * reverse()'s own call count below.
+   */
+  async reverseInTx(tx: TenantTx, original: LedgerEntryRow, createdById: string): Promise<LedgerEntryResponseDto> {
+    const alreadyReversed = await tx.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT id FROM student_ledger_entries WHERE reverses_entry_id = $1::uuid`,
+      original.id,
+    );
+    if (alreadyReversed.length > 0) {
+      throw new ConflictException(`Ledger entry ${original.id} has already been reversed`);
+    }
+
+    const mirrorDebit = toMoney(original.credit).toDb();
+    const mirrorCredit = toMoney(original.debit).toDb();
+    const narration = `Reversal of entry ${original.id}${original.narration ? `: ${original.narration}` : ''}`;
+
+    const entry = await this.insertEntry(tx, {
+      studentId: original.student_id,
+      academicYearId: original.academic_year_id,
+      entryType: original.entry_type,
+      debit: mirrorDebit,
+      credit: mirrorCredit,
+      narration,
+      reversesEntryId: original.id,
+      createdById,
+    });
+    const delta = toMoney(mirrorDebit).sub(toMoney(mirrorCredit));
+    await this.bumpBalance(tx, original.student_id, original.academic_year_id, delta, entry.id);
+    return toLedgerEntryResponse(entry);
+  }
+
+  /**
    * OWNER_ONLY. Mirrors the original with debit/credit swapped — net effect on
    * the balance is exactly the inverse, leaving it unchanged from before the
    * original entry (invariant 4). Reuses the original's own entry_type (the
@@ -191,33 +232,7 @@ export class LedgerService {
     const original = originalRows[0];
     if (!original) throw new NotFoundException(`Ledger entry ${entryId} not found`);
 
-    return this.withStudentLock(original.student_id, async (tx) => {
-      const alreadyReversed = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM student_ledger_entries WHERE reverses_entry_id = $1::uuid`,
-        entryId,
-      );
-      if (alreadyReversed.length > 0) {
-        throw new ConflictException(`Ledger entry ${entryId} has already been reversed`);
-      }
-
-      const mirrorDebit = toMoney(original.credit).toDb();
-      const mirrorCredit = toMoney(original.debit).toDb();
-      const narration = `Reversal of entry ${entryId}${original.narration ? `: ${original.narration}` : ''}`;
-
-      const entry = await this.insertEntry(tx, {
-        studentId: original.student_id,
-        academicYearId: original.academic_year_id,
-        entryType: original.entry_type,
-        debit: mirrorDebit,
-        credit: mirrorCredit,
-        narration,
-        reversesEntryId: entryId,
-        createdById,
-      });
-      const delta = toMoney(mirrorDebit).sub(toMoney(mirrorCredit));
-      await this.bumpBalance(tx, original.student_id, original.academic_year_id, delta, entry.id);
-      return toLedgerEntryResponse(entry);
-    });
+    return this.withStudentLock(original.student_id, (tx) => this.reverseInTx(tx, original, createdById));
   }
 
   /** Paginated statement, chronological, each row carrying the running balance as of that entry. */

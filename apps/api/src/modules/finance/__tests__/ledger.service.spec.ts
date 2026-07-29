@@ -174,6 +174,33 @@ describe('LedgerService', () => {
     });
   });
 
+  describe('reverseInTx', () => {
+    it('takes the already-fetched original row (no re-fetch) and mirrors it, composed into the caller-owned tx, no separate lock', async () => {
+      const original = makeEntryRow({ debit: '500.00', credit: '0.00' });
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([]) // not already reversed
+        .mockResolvedValueOnce([
+          makeEntryRow({ id: 'entry-2', debit: '0.00', credit: '500.00', reverses_entry_id: 'entry-1' }),
+        ]);
+
+      const result = await service.reverseInTx(mockTx as any, original as any, 'user-2');
+
+      expect(result.debit).toBe(0);
+      expect(result.credit).toBe(500);
+      expect(result.reversesEntryId).toBe('entry-1');
+      // no fresh SELECT of the original entry — reverseInTx trusts the caller's row
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(2); // already-reversed check + insert RETURNING
+    });
+
+    it('409s when the entry has already been reversed, without ever inserting', async () => {
+      const original = makeEntryRow({ debit: '500.00', credit: '0.00' });
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'existing-reversal' }]);
+
+      await expect(service.reverseInTx(mockTx as any, original as any, 'user-2')).rejects.toThrow(ConflictException);
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('getStudentLedger', () => {
     it('rejects a PARENT who does not own the student', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'someone-else' }]);
