@@ -18,5 +18,10 @@
  * ONLY Srijan flips this — via an explicit, separate, reviewable commit
  * once he's confirmed the native-speaker review. Never set to true as a
  * side effect of any other change.
+ *
+ * REVIEWED 2026-07-30: Srijan confirmed the Devanagari sample bill +
+ * receipt to a native Nepali reader — amount-in-words and fixed labels
+ * read correctly. Flagged "for now" (not a certified/final sign-off) —
+ * revisit if he raises specific strings later.
  */
-export const NEPALI_PRINT_REVIEWED = false;
+export const NEPALI_PRINT_REVIEWED = true;
