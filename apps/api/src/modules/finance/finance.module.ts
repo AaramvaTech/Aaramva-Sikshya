@@ -48,6 +48,9 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
 import { BillPdfService } from './bill-pdf.service';
 import { BillDocumentService } from './bill-document.service';
 import { BillPdfController } from './bill-pdf.controller';
+import { BillReceiptService } from './bill-receipt.service';
+import { BillReceiptDocumentService } from './bill-receipt-document.service';
+import { BillReceiptController } from './bill-receipt.controller';
 
 @Module({
   imports: [StorageModule, SuperAdminModule],
@@ -66,6 +69,7 @@ import { BillPdfController } from './bill-pdf.controller';
     KhaltiPublicController,
     PaymentGatewaysController,
     BillPdfController,
+    BillReceiptController,
   ],
   providers: [
     FeeCategoryService,
@@ -101,6 +105,8 @@ import { BillPdfController } from './bill-pdf.controller';
     KhaltiService,
     BillPdfService,
     BillDocumentService,
+    BillReceiptService,
+    BillReceiptDocumentService,
   ],
   exports: [InvoiceService, PaymentService, LedgerService],
 })
