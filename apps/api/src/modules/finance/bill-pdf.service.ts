@@ -4,13 +4,14 @@ import { loadPdfFonts, pickFont } from '../../common/pdf/pdf-fonts';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { Money } from '../../common/money/money';
 
-const PRIMARY = '#0B6B43';
 const MUTED = '#6b7280';
-const BORDER = '#d1d5db';
 const INK = '#111827';
-const DANGER = '#DC2626';
-/** Fee-table header row + Total Receivable highlight — per the reviewed design. */
-const TINT = '#E1F5EE';
+const AMBER = '#c0703a';
+/** Warm off-white panel background — the neutral surface everywhere the
+ *  accent is NOT used, per the reviewed design's "one accent used
+ *  purposefully" rule. */
+const WARM_PANEL = '#f7f5f0';
+const HAIRLINE = '#e5e2da';
 
 export interface BillPdfLineItem {
   itemName: string;
@@ -36,6 +37,11 @@ export interface BillPdfTenant {
   principalName: string | null;
   principalSignatureBuffer: Buffer | null;
   schoolStampBuffer: Buffer | null;
+  /** BILL-8: per-tenant billing accent — resolved (curated-set + default
+   *  fallback) by BillDocumentService. NOT hardcoded here — every accent
+   *  use in this file reads it from this parameter. */
+  accentColor: string;
+  accentTint: string;
 }
 
 export interface BillPdfInvoice {
@@ -64,20 +70,23 @@ export interface BillPdfData {
 }
 
 /** Plain lakh-grouped number, no currency prefix — used everywhere except
- *  the final Total Receivable figure (design: "Rs." appears once, at the
- *  bottom, not on every row). */
+ *  the final Total Receivable figure (design: "Rs." appears once). */
 const num = (n: number): string => Money.fromNumber(n).toDisplay();
 const money = (n: number): string => `Rs. ${num(n)}`;
 
 /**
- * BILL-8 Checkpoint A — A4 bill. Round 3: rebuilt against Srijan's own
- * reference mockup (exact target, not a description of one). Pure renderer:
- * takes already-fetched, already-footed data (BillDocumentService resolves
- * invoice/tenant/images and applies §2's apportionment before calling this)
- * and produces PDF bytes only — same "pure renderer" discipline as
- * examination/pdf.service.ts. This file only changes drawing code; the
- * footing/snapshot/reprint logic it's fed lives entirely in
- * BillDocumentService and is untouched.
+ * BILL-8 Checkpoint A — A4 bill. Round 5: rebuilt to the warm target design
+ * with a genuinely per-tenant accent (no hardcoded color anywhere in this
+ * file — every accent use reads `tenant.accentColor`/`accentTint`, resolved
+ * upstream by BillDocumentService from the tenant's curated brandColor).
+ * Pure renderer: takes already-fetched, already-footed, already-colored
+ * data and produces PDF bytes only — same discipline as
+ * examination/pdf.service.ts. Footing/snapshot/reprint logic lives entirely
+ * in BillDocumentService and is untouched by this file.
+ *
+ * Accent is used in exactly four places, per the reviewed design: the
+ * header rule, the logo tile background (pale tint), the invoice-number
+ * text, and the Total Receivable pill. Everywhere else is warm neutral.
  *
  * Every doc.image() call is guarded by a null check — a missing logo/QR/
  * signature/stamp renders nothing at all, and the layout collapses the
@@ -99,259 +108,261 @@ export class BillPdfService {
 
       const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const left = doc.page.margins.left;
-      const GAP = 22; // breathing room between major sections
+      const GAP = 24;
+      const { accentColor, accentTint } = data.tenant;
 
-      this.renderHeader(doc, data.tenant, left, pageW);
+      this.renderHeader(doc, data.tenant, left, pageW, accentColor, accentTint);
       doc.y += GAP;
-      this.renderInvoiceTitle(doc, left, pageW);
+      this.renderInvoiceTitleRow(doc, data.invoice, left, pageW, accentColor);
       doc.y += GAP;
-      this.renderInvoiceMeta(doc, data.invoice, left, pageW);
+      this.renderMetaPanel(doc, data.invoice, left, pageW);
       doc.y += GAP;
       this.renderItemsTable(doc, data.items, left, pageW);
       doc.y += GAP;
       const wholeBillConcession = data.items.reduce((acc, i) => acc + i.apportionedConcession, 0);
-      this.renderSummary(doc, data.invoice, wholeBillConcession, left, pageW);
-      doc.y += GAP;
-      this.renderAmountInWords(doc, data.invoice.amountInWordsEn, left, pageW);
-      doc.y += GAP * 1.4;
-      this.renderFooter(doc, data.tenant, left, pageW);
+      this.renderBottomSplit(doc, data, wholeBillConcession, left, pageW, accentColor);
+      doc.y += GAP * 0.8;
+      this.renderSignature(doc, data.tenant, left, pageW);
 
       doc.end();
     });
   }
 
-  private renderHeader(doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number) {
+  private renderHeader(
+    doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number,
+    accentColor: string, accentTint: string,
+  ) {
     const top = doc.y;
-    const logoSize = 56;
+    const tileSize = 46;
+    const radius = 10;
     if (tenant.logoBuffer) {
+      doc.roundedRect(left, top, tileSize, tileSize, radius).fill(accentTint);
       try {
-        doc.image(tenant.logoBuffer, left, top, { fit: [logoSize, logoSize] });
+        doc.save();
+        doc.roundedRect(left, top, tileSize, tileSize, radius).clip();
+        doc.image(tenant.logoBuffer, left, top, { fit: [tileSize, tileSize], align: 'center', valign: 'center' });
+        doc.restore();
       } catch {
-        // Corrupt/unsupported logo bytes must never break bill generation.
+        // Corrupt/unsupported logo bytes must never break bill generation —
+        // the tinted tile still rendered above, just without an image in it.
+        doc.restore();
       }
     }
     // Collapse the reserved space entirely when there's no logo — never a gap.
-    const textX = tenant.logoBuffer ? left + logoSize + 14 : left;
+    const textX = tenant.logoBuffer ? left + tileSize + 14 : left;
     const panBoxW = 150;
     const textW = pageW - (textX - left) - panBoxW - 14;
 
-    doc.font(pickFont(tenant.name, true)).fontSize(21).fillColor(PRIMARY)
-      .text(tenant.name, textX, top, { width: textW });
+    doc.font(pickFont(tenant.name, true)).fontSize(19).fillColor(accentColor)
+      .text(tenant.name, textX, top + 2, { width: textW });
     if (tenant.tagline) {
       doc.font(pickFont(tenant.tagline)).fontSize(10).fillColor(MUTED)
         .text(tenant.tagline, textX, doc.y + 2, { width: textW });
     }
     const contactLine = [tenant.address, tenant.phone, tenant.website].filter(Boolean).join('   ·   ');
     if (contactLine) {
-      // Wider than name/tagline above: by the third text line, doc.y has
-      // cleared the PAN box's bottom edge, so this line doesn't need to
-      // dodge it — using the narrower width here wrapped it to 2 lines.
       const contactW = pageW - (textX - left);
       doc.font('latin').fontSize(8.5).fillColor(MUTED).text(contactLine, textX, doc.y + 2, { width: contactW });
     }
     const textBottom = doc.y;
 
-    // PAN — bordered box, top-right.
+    // PAN + reg — top-right, small, dark values, no border this round.
     let panBottom = top;
     if (tenant.panNumber) {
-      const boxH = 34;
-      const boxX = left + pageW - panBoxW;
-      doc.rect(boxX, top, panBoxW, boxH).strokeColor(BORDER).lineWidth(0.75).stroke();
       doc.font('latin').fontSize(7.5).fillColor(MUTED)
-        .text('PAN NO.', boxX, top + 7, { width: panBoxW - 12, align: 'right' });
-      doc.font('latin-bold').fontSize(12).fillColor(INK)
-        .text(tenant.panNumber, boxX, top + 18, { width: panBoxW - 12, align: 'right' });
-      panBottom = top + boxH;
+        .text('PAN NO.', left + pageW - panBoxW, top, { width: panBoxW, align: 'right' });
+      doc.font('latin-bold').fontSize(10.5).fillColor(INK)
+        .text(tenant.panNumber, left + pageW - panBoxW, top + 11, { width: panBoxW, align: 'right' });
+      panBottom = top + 26;
     }
     if (tenant.registrationNumber) {
       doc.font('latin').fontSize(7.5).fillColor(MUTED)
-        .text(`Reg. No. ${tenant.registrationNumber}`, left + pageW - panBoxW, panBottom + 6, { width: panBoxW, align: 'right' });
-      panBottom += 16;
+        .text(`Reg. No. ${tenant.registrationNumber}`, left + pageW - panBoxW, panBottom + 4, { width: panBoxW, align: 'right' });
+      panBottom += 14;
     }
 
-    doc.y = Math.max(textBottom, panBottom, top + logoSize) + 10;
-    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(PRIMARY).lineWidth(1.5).stroke();
+    doc.y = Math.max(textBottom, panBottom, top + tileSize) + 10;
+    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(accentColor).lineWidth(2).stroke();
   }
 
-  /** Centered, bordered "INVOICE" label with letter-spacing. */
-  private renderInvoiceTitle(doc: PDFKit.PDFDocument, left: number, pageW: number) {
-    const label = 'I N V O I C E';
-    doc.font('latin-bold').fontSize(13);
-    const textW = doc.widthOfString(label);
-    const boxW = textW + 50;
-    const boxH = 26;
-    const boxX = left + (pageW - boxW) / 2;
-    const boxY = doc.y;
-    doc.rect(boxX, boxY, boxW, boxH).strokeColor(PRIMARY).lineWidth(1).stroke();
-    doc.fillColor(PRIMARY).text(label, boxX, boxY + 8, { width: boxW, align: 'center' });
-    doc.y = boxY + boxH;
-  }
-
-  private renderInvoiceMeta(doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number) {
+  private renderInvoiceTitleRow(
+    doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number, accentColor: string,
+  ) {
     const y = doc.y;
-    const colW = pageW / 2;
-    const rowGap = 32;
-    const field = (label: string, value: string, x: number, fy: number) => {
-      doc.font('latin').fontSize(7.5).fillColor(MUTED).text(label.toUpperCase(), x, fy);
-      doc.font(pickFont(value, true)).fontSize(10.5).fillColor(INK).text(value || '—', x, fy + 11);
-    };
-    field('Invoice No.', inv.invoiceNumber, left, y);
-    field('Student', inv.studentName, left + colW, y);
-    field('Class', inv.className, left, y + rowGap);
-    field('Installment', `${BS_MONTH_NAMES_EN[inv.bsMonth - 1]} ${inv.bsYear}`, left + colW, y + rowGap);
-    field('Issue Date', `${inv.issueDateAd} (${inv.issueDateBs} BS)`, left, y + rowGap * 2);
-    field('Due Date', `${inv.dueDateAd} (${inv.dueDateBs} BS)`, left + colW, y + rowGap * 2);
-    doc.y = y + rowGap * 2 + 22;
+    doc.font('latin-bold').fontSize(20).fillColor(INK).text('Invoice', left, y);
+    doc.font(pickFont(inv.invoiceNumber, true)).fontSize(11).fillColor(accentColor)
+      .text(inv.invoiceNumber, left, y + 26);
+
+    const dateW = pageW * 0.4;
+    const dateX = left + pageW - dateW;
+    doc.font('latin').fontSize(7.5).fillColor(MUTED)
+      .text('ISSUED', dateX, y, { width: dateW, align: 'right' });
+    doc.font('latin').fontSize(9.5).fillColor(INK)
+      .text(`${inv.issueDateAd}  (${inv.issueDateBs} BS)`, dateX, y + 10, { width: dateW, align: 'right' });
+    doc.font('latin').fontSize(7.5).fillColor(MUTED)
+      .text('DUE', dateX, y + 26, { width: dateW, align: 'right' });
+    doc.font('latin').fontSize(9.5).fillColor(INK)
+      .text(`${inv.dueDateAd}  (${inv.dueDateBs} BS)`, dateX, y + 36, { width: dateW, align: 'right' });
+
+    doc.y = y + 50;
+  }
+
+  private renderMetaPanel(doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number) {
+    const y = doc.y;
+    const panelH = 62;
+    doc.roundedRect(left, y, pageW, panelH, 8).fill(WARM_PANEL);
+
+    const cols = [
+      { label: 'Student', value: inv.studentName },
+      { label: 'Class', value: inv.className },
+      { label: 'Installment', value: `${BS_MONTH_NAMES_EN[inv.bsMonth - 1]} ${inv.bsYear}` },
+    ];
+    const colW = pageW / 3;
+    cols.forEach((c, i) => {
+      const x = left + i * colW + 18;
+      doc.font('latin').fontSize(7.5).fillColor(MUTED).text(c.label.toUpperCase(), x, y + 16, { width: colW - 30 });
+      doc.font(pickFont(c.value, true)).fontSize(11).fillColor(INK).text(c.value || '—', x, y + 28, { width: colW - 30 });
+    });
+
+    doc.y = y + panelH;
   }
 
   private renderItemsTable(doc: PDFKit.PDFDocument, items: BillPdfLineItem[], left: number, pageW: number) {
     const cols = [
-      { label: 'Fee head', w: 0.30, align: 'left' as const },
-      { label: 'Gross', w: 0.14, align: 'right' as const },
-      { label: 'Concession', w: 0.14, align: 'right' as const },
-      { label: 'Non-taxable', w: 0.14, align: 'right' as const },
-      { label: 'Taxable', w: 0.14, align: 'right' as const },
-      { label: 'Total', w: 0.14, align: 'right' as const },
+      { label: 'FEE HEAD', w: 0.30, align: 'left' as const },
+      { label: 'GROSS', w: 0.14, align: 'right' as const },
+      { label: 'CONCESSION', w: 0.14, align: 'right' as const },
+      { label: 'NON-TAXABLE', w: 0.14, align: 'right' as const },
+      { label: 'TAXABLE', w: 0.14, align: 'right' as const },
+      { label: 'TOTAL', w: 0.14, align: 'right' as const },
     ];
     const xs: number[] = [];
     let acc = left;
     for (const c of cols) { xs.push(acc); acc += c.w * pageW; }
 
-    // Tinted header row.
     const headerY = doc.y;
-    const headerH = 22;
-    doc.rect(left, headerY, pageW, headerH).fill(TINT);
-    doc.font('latin-bold').fontSize(8.5).fillColor(PRIMARY);
-    cols.forEach((c, i) => doc.text(c.label, xs[i] + 8, headerY + 7, { width: c.w * pageW - 12, align: c.align }));
-    doc.y = headerY + headerH;
+    doc.font('latin').fontSize(7.5).fillColor(MUTED);
+    cols.forEach((c, i) => doc.text(c.label, xs[i] + 4, headerY, { width: c.w * pageW - 8, align: c.align }));
+    doc.y = headerY + 16;
 
-    const rowH = 24;
-    items.forEach((item, idx) => {
+    const rowH = 26;
+    items.forEach((item) => {
       if (doc.y > doc.page.height - 100) doc.addPage();
       const totalConcession = item.concessionAmount + item.apportionedConcession;
       const net = item.grossAmount - totalConcession;
       const nonTaxable = item.isTaxable ? 0 : net;
       const taxable = item.isTaxable ? net : 0;
       const rowY = doc.y;
-      const textY = rowY + 7;
+      // Hairline above each row (including the first, under the header labels).
+      doc.moveTo(left, rowY).lineTo(left + pageW, rowY).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
+      const textY = rowY + 8;
       doc.font(pickFont(item.itemName, true)).fontSize(9.5).fillColor(INK)
-        .text(item.itemName, xs[0] + 8, textY, { width: cols[0].w * pageW - 12, align: 'left' });
+        .text(item.itemName, xs[0] + 4, textY, { width: cols[0].w * pageW - 8, align: 'left' });
       doc.font('latin').fontSize(9.5).fillColor(INK)
-        .text(num(item.grossAmount), xs[1] + 8, textY, { width: cols[1].w * pageW - 12, align: 'right' });
-      doc.fillColor(totalConcession > 0 ? DANGER : INK)
-        .text(num(totalConcession), xs[2] + 8, textY, { width: cols[2].w * pageW - 12, align: 'right' });
-      doc.fillColor(INK)
-        .text(num(nonTaxable), xs[3] + 8, textY, { width: cols[3].w * pageW - 12, align: 'right' })
-        .text(num(taxable), xs[4] + 8, textY, { width: cols[4].w * pageW - 12, align: 'right' })
-        .text(num(net), xs[5] + 8, textY, { width: cols[5].w * pageW - 12, align: 'right' });
+        .text(num(item.grossAmount), xs[1] + 4, textY, { width: cols[1].w * pageW - 8, align: 'right' });
+      doc.fillColor(totalConcession > 0 ? AMBER : INK)
+        .text(totalConcession > 0 ? `-${num(totalConcession)}` : num(totalConcession),
+          xs[2] + 4, textY, { width: cols[2].w * pageW - 8, align: 'right' });
+      doc.font('latin').fillColor(INK)
+        .text(num(nonTaxable), xs[3] + 4, textY, { width: cols[3].w * pageW - 8, align: 'right' })
+        .text(num(taxable), xs[4] + 4, textY, { width: cols[4].w * pageW - 8, align: 'right' });
+      // Total column — medium weight, per the reviewed design.
+      doc.font('latin-bold').fillColor(INK)
+        .text(num(net), xs[5] + 4, textY, { width: cols[5].w * pageW - 8, align: 'right' });
       doc.y = rowY + rowH;
-      // 0.5px row separator, skipped after the last row (the totals block
-      // below provides its own visual boundary).
-      if (idx < items.length - 1) {
-        doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(BORDER).lineWidth(0.5).stroke();
-      }
     });
-    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(BORDER).lineWidth(0.5).stroke();
+    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
   }
 
-  private renderSummary(
+  private renderBottomSplit(
     doc: PDFKit.PDFDocument,
-    inv: BillPdfInvoice,
+    data: BillPdfData,
     wholeBillConcession: number,
     left: number,
     pageW: number,
+    accentColor: string,
   ) {
-    if (doc.y > doc.page.height - 180) doc.addPage();
-    const summaryW = 270;
-    const summaryX = left + pageW - summaryW;
-    const labelW = summaryW * 0.6;
-    const valueW = summaryW * 0.4;
-    // Fixed row height assumes every label fits on one line at this width —
-    // true for this phase's known, bounded label set ("Less: Scholarship/
-    // Discount" is the longest). A future label that doesn't fit needs a
-    // real measured-height row, not a wider guess here.
-    const row = (label: string, value: string, valueColor = INK) => {
-      const y = doc.y;
-      doc.font('latin').fontSize(9.5).fillColor(INK)
-        .text(label, summaryX, y, { width: labelW, align: 'left' });
-      doc.font('latin').fontSize(9.5).fillColor(valueColor)
-        .text(value, summaryX + labelW, y, { width: valueW, align: 'right' });
-      doc.y = y + 18;
-    };
+    if (doc.y > doc.page.height - 220) doc.addPage();
+    const { invoice: inv, tenant } = data;
+    const totalsW = 220;
+    const totalsX = left + pageW - totalsW;
+    const leftColW = pageW - totalsW - 24;
+    const top = doc.y;
 
-    if (wholeBillConcession > 0) {
-      row('Less: Scholarship / Discount', `(${num(wholeBillConcession)})`, DANGER);
+    // ── LEFT: amount in words, QR tile, payment instructions ──────────────
+    let ly = top;
+    if (inv.amountInWordsEn) {
+      doc.font('latin').fontSize(8).fillColor(MUTED).text('AMOUNT IN WORDS', left, ly, { width: leftColW });
+      doc.font('latin-bold').fontSize(10.5).fillColor(INK)
+        .text(`${inv.amountInWordsEn} only`, left, ly + 11, { width: leftColW });
+      ly += 34;
     }
+    const qrSize = 52;
+    if (tenant.qrImageBuffer) {
+      doc.roundedRect(left, ly, qrSize, qrSize, 6).fill(WARM_PANEL);
+      try {
+        doc.save();
+        doc.roundedRect(left, ly, qrSize, qrSize, 6).clip();
+        doc.image(tenant.qrImageBuffer, left, ly, { fit: [qrSize, qrSize], align: 'center', valign: 'center' });
+        doc.restore();
+      } catch {
+        doc.restore();
+      }
+    }
+    if (tenant.paymentInstructions) {
+      const textX = tenant.qrImageBuffer ? left + qrSize + 12 : left;
+      const textW = leftColW - (textX - left);
+      doc.font('latin').fontSize(8).fillColor(MUTED).text('PAYMENT INSTRUCTIONS', textX, ly);
+      doc.font('latin').fontSize(8.5).fillColor(INK)
+        .text(tenant.paymentInstructions, textX, ly + 11, { width: textW });
+    }
+    const leftBottom = tenant.qrImageBuffer ? ly + qrSize : ly + 40;
+
+    // ── RIGHT: totals stack + accent-filled Total Receivable pill ─────────
+    let ry = top;
+    const row = (label: string, value: string, valueColor = INK) => {
+      doc.font('latin').fontSize(9.5).fillColor(INK).text(label, totalsX, ry, { width: totalsW * 0.55 });
+      doc.font('latin').fontSize(9.5).fillColor(valueColor)
+        .text(value, totalsX + totalsW * 0.55, ry, { width: totalsW * 0.45, align: 'right' });
+      ry += 18;
+    };
+    // Subtotal = pre-tax net (concessions are already itemized per-line
+    // above with the amber minus-sign treatment, so no separate aggregate
+    // discount row here).
+    row('Subtotal', num(inv.netAmount - inv.taxAmount));
     if (inv.taxRate != null) {
       row(`Tax (${inv.taxRate}%)`, num(inv.taxAmount));
     }
     const prevAbs = Math.abs(inv.previousBalance);
     if (prevAbs > 0) {
-      const label = inv.previousBalance > 0 ? 'Previous balance (Dr)' : 'Previous balance (Cr)';
-      row(label, num(prevAbs));
+      row(inv.previousBalance > 0 ? 'Previous balance (Dr)' : 'Previous balance (Cr)', num(prevAbs));
     }
+    ry += 6;
 
-    doc.y += 6;
+    const pillH = 44;
+    doc.roundedRect(totalsX, ry, totalsW, pillH, pillH / 2).fill(accentColor);
+    doc.font('latin').fontSize(8.5).fillColor('#FFFFFF')
+      .text('TOTAL RECEIVABLE', totalsX + 18, ry + 10, { width: totalsW - 36 });
+    doc.font('latin-bold').fontSize(15).fillColor('#FFFFFF')
+      .text(money(inv.totalReceivable), totalsX + 18, ry + 22, { width: totalsW - 36 });
+    const rightBottom = ry + pillH;
 
-    // Total Receivable — the one figure on this block that carries "Rs."
-    // and the only bold/tinted row (no separate "Grand Total" line above it
-    // — per the reviewed design, this row already includes the previous
-    // balance, so a second subtotal would be redundant).
-    const trY = doc.y;
-    const trH = 26;
-    doc.rect(summaryX, trY, summaryW, trH).fill(TINT);
-    doc.font('latin-bold').fontSize(12.5).fillColor(PRIMARY)
-      .text('Total receivable', summaryX + 10, trY + 7, { width: labelW - 10, align: 'left' });
-    doc.font('latin-bold').fontSize(12.5).fillColor(PRIMARY)
-      .text(money(inv.totalReceivable), summaryX + labelW, trY + 7, { width: valueW - 10, align: 'right' });
-    doc.y = trY + trH;
+    doc.y = Math.max(leftBottom, rightBottom) + 4;
   }
 
-  private renderAmountInWords(doc: PDFKit.PDFDocument, amountInWordsEn: string | null, left: number, pageW: number) {
-    if (!amountInWordsEn) return;
-    if (doc.y > doc.page.height - 140) doc.addPage();
-    doc.font('latin').fontSize(8).fillColor(MUTED).text('AMOUNT IN WORDS', left, doc.y);
-    doc.font('latin-bold').fontSize(10.5).fillColor(INK)
-      .text(`${amountInWordsEn} only`, left, doc.y + 3, { width: pageW });
-  }
-
-  private renderFooter(doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number) {
-    if (doc.y > doc.page.height - 120) doc.addPage();
-    const y = doc.y;
-    const qrSize = 56;
-
-    // QR image left + payment instructions text. The text column starts
-    // right after the QR if present; when absent, it starts at `left` —
-    // the reserved QR width collapses entirely rather than leaving a gap.
-    if (tenant.paymentInstructions || tenant.qrImageBuffer) {
-      if (tenant.qrImageBuffer) {
-        try {
-          doc.image(tenant.qrImageBuffer, left, y, { fit: [qrSize, qrSize] });
-        } catch {
-          // Corrupt QR bytes never block bill generation.
-        }
-      }
-      if (tenant.paymentInstructions) {
-        const textX = tenant.qrImageBuffer ? left + qrSize + 14 : left;
-        doc.font('latin').fontSize(8).fillColor(MUTED).text('PAYMENT INSTRUCTIONS', textX, y);
-        doc.font('latin').fontSize(9).fillColor(INK)
-          .text(tenant.paymentInstructions, textX, y + 12, { width: pageW * 0.55 - (textX - left) });
-      }
-    }
-
-    // Signature block right — "For: {School}" + principal name, with
-    // optional stamp/signature images above. Same null-guard/collapse
-    // discipline as the QR: no image, no reserved gap.
+  private renderSignature(doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number) {
+    if (doc.y > doc.page.height - 90) doc.addPage();
     const sigW = 210;
     const sigX = left + pageW - sigW;
-    let sigTextY = y + 6;
+    let imgBottom = doc.y;
+
     if (tenant.schoolStampBuffer || tenant.principalSignatureBuffer) {
-      const imgY = y;
+      const imgY = doc.y;
       if (tenant.schoolStampBuffer) {
         try {
           doc.image(tenant.schoolStampBuffer, sigX + sigW - 55, imgY, { fit: [50, 50] });
         } catch {
-          // ignore
+          // ignore — hairline + text below still render
         }
       }
       if (tenant.principalSignatureBuffer) {
@@ -361,13 +372,15 @@ export class BillPdfService {
           // ignore
         }
       }
-      sigTextY = imgY + 56;
+      imgBottom = imgY + 54;
     }
+
+    doc.moveTo(sigX, imgBottom).lineTo(sigX + sigW, imgBottom).strokeColor(HAIRLINE).lineWidth(0.75).stroke();
     doc.font('latin').fontSize(9).fillColor(INK)
-      .text(`For: ${tenant.name}`, sigX, sigTextY, { width: sigW, align: 'right' });
+      .text(`For: ${tenant.name}`, sigX, imgBottom + 6, { width: sigW, align: 'right' });
     if (tenant.principalName) {
-      doc.font('latin').fontSize(8.5).fillColor(PRIMARY)
-        .text(tenant.principalName, sigX, sigTextY + 13, { width: sigW, align: 'right' });
+      doc.font('latin').fontSize(8.5).fillColor(MUTED)
+        .text(tenant.principalName, sigX, imgBottom + 19, { width: sigW, align: 'right' });
     }
   }
 }

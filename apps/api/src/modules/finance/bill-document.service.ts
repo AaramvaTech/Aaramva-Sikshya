@@ -6,6 +6,7 @@ import { fetchImageBuffer } from '../branding/branding-color.service';
 import { Role } from '../common/enums/role.enum';
 import { Money } from '../../common/money/money';
 import { amountInWords } from '../../common/money/amount-in-words';
+import { resolveBillBrandColor } from '../../common/tenant-brand-color';
 import { BillInvoiceService } from './bill-invoice.service';
 import { BillInvoiceResponseDto } from './entities/bill-invoice.entity';
 import { apportionWholeBillConcession } from './bill-pdf.util';
@@ -26,6 +27,7 @@ interface TenantHeaderRow {
   principal_name: string | null;
   principal_signature_url: string | null;
   school_stamp_url: string | null;
+  brand_color: string | null;
 }
 
 const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
@@ -34,7 +36,8 @@ const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
   "paymentInstructions" AS payment_instructions, "qrImageUrl" AS qr_image_url,
   "principalName" AS principal_name,
   "principalSignatureUrl" AS principal_signature_url,
-  "schoolStampUrl" AS school_stamp_url`;
+  "schoolStampUrl" AS school_stamp_url,
+  "brandColor" AS brand_color`;
 
 /**
  * BILL-8 Checkpoint A orchestration: fetch (with the same PARENT hard-scope
@@ -133,6 +136,10 @@ export class BillDocumentService {
         ? this.storageService.getObjectBuffer(tenant.school_stamp_url) : Promise.resolve(null),
     ]);
 
+    // No accent color is hardcoded in the drawing code — it's a parameter,
+    // resolved here from the tenant's own curated-set value (or slate).
+    const { color: accentColor, tint: accentTint } = resolveBillBrandColor(tenant.brand_color);
+
     return {
       tenant: {
         name: tenant.name,
@@ -148,6 +155,8 @@ export class BillDocumentService {
         principalName: tenant.principal_name,
         principalSignatureBuffer,
         schoolStampBuffer,
+        accentColor,
+        accentTint,
       },
       invoice: {
         invoiceNumber: invoice.invoiceNumber ?? '—',
