@@ -135,6 +135,36 @@ describe('Money', () => {
     });
   });
 
+  describe('toDisplay — BILL-8 lakh-style thousands separators', () => {
+    it('groups a lakh in the South Asian 2-3-2-2 pattern, not Western 3-3-3', () => {
+      expect(Money.fromNumber(100000).toDisplay()).toBe('1,00,000.00');
+    });
+
+    it('groups a crore', () => {
+      expect(Money.fromNumber(12345678).toDisplay()).toBe('1,23,45,678.00');
+    });
+
+    it('groups a mixed value with decimals', () => {
+      expect(Money.fromNumber(1234567.89).toDisplay()).toBe('12,34,567.89');
+    });
+
+    it('below one thousand needs no separator', () => {
+      expect(Money.fromNumber(450).toDisplay()).toBe('450.00');
+    });
+
+    it('always shows exactly 2dp, even for a whole number', () => {
+      expect(Money.fromNumber(1350).toDisplay()).toBe('1,350.00');
+    });
+
+    it('formats a negative value with the separator preserved', () => {
+      expect(Money.fromNumber(-100000).toDisplay()).toBe('-1,00,000.00');
+    });
+
+    it('formats zero', () => {
+      expect(Money.zero().toDisplay()).toBe('0.00');
+    });
+  });
+
   describe('invalid input', () => {
     it('throws on non-finite fromNumber input', () => {
       expect(() => Money.fromNumber(NaN)).toThrow();

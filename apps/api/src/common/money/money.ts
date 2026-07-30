@@ -88,6 +88,22 @@ export class Money {
     return this.round().toNumber();
   }
 
+  /**
+   * Human-facing formatted string: Nepal/India lakh-style thousands
+   * separators (1,00,000 — not 100,000) with a fixed 2dp. `en-IN` is used
+   * deliberately over `en-NP`: Node's ICU data groups `en-NP` in plain
+   * Western 3-digit runs (confirmed live — a real difference, not a typo),
+   * while `en-IN` carries the correct South Asian 2-3-2-2 CLDR grouping
+   * data. Display only — never parse this back; toDb()/fromDb() is that
+   * boundary. No currency symbol (callers prefix their own).
+   */
+  toDisplay(): string {
+    return this.round().toNumber().toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
   toString(): string {
     return this.toDb();
   }
