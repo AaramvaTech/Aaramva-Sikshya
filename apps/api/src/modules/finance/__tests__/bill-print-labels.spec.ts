@@ -25,16 +25,15 @@ describe('resolvePrintLanguage — B8-6 gate, defensive at render time', () => {
     expect(resolvePrintLanguage('FR')).toBe('EN');
   });
 
-  it('NE/BOTH fall back to EN while the review gate is closed — even if somehow stored', () => {
-    // NEPALI_PRINT_REVIEWED is false in this codebase state; this test's
-    // whole point is failing loudly the day someone flips it without
-    // updating this assertion's premise.
-    expect(resolvePrintLanguage('NE')).toBe('EN');
-    expect(resolvePrintLanguage('BOTH')).toBe('EN');
+  it('NE/BOTH resolve to themselves now that the review gate is open (B8-6, reviewed 2026-07-30)', () => {
+    // NEPALI_PRINT_REVIEWED is true in this codebase state. Flipping it back
+    // to false should make this test fail loudly — that's the point.
+    expect(resolvePrintLanguage('NE')).toBe('NE');
+    expect(resolvePrintLanguage('BOTH')).toBe('BOTH');
   });
 
-  it('a staff query override cannot bypass the gate either', () => {
-    expect(resolvePrintLanguage('EN', 'NE')).toBe('EN');
+  it('a staff query override wins over the stored default', () => {
+    expect(resolvePrintLanguage('EN', 'NE')).toBe('NE');
   });
 
   it('override wins over the stored default when both are valid (EN case)', () => {

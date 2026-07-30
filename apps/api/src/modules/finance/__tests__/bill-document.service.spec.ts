@@ -186,14 +186,14 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
     expect(renderedData.invoice.amountInWordsEn).not.toBe(invoiceWithStaleStoredWords.amountInWordsEn);
   });
 
-  it('B8-6 gate, end to end through the real orchestration: a tenant with printLanguage=NE stored still renders EN while the review gate is closed, at the EN-suffixed key, with amountInWordsNe still computed (harmless, just not selected for print)', async () => {
+  it('B8-6 gate, end to end through the real orchestration: a tenant with printLanguage=NE stored renders NE now that the review gate is open (B8-6, reviewed 2026-07-30), at the NE-suffixed key', async () => {
     (billInvoiceService.findOne as jest.Mock).mockResolvedValueOnce(mockInvoice);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
     (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{
       name: 'Demo School', logo_url: null, pan_number: null, registration_number: null,
       address: null, phone: null, website: null, tagline: null, payment_instructions: null,
       qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
-      brand_color: null, print_language: 'NE', // stored as NE — must not win while the gate is closed
+      brand_color: null, print_language: 'NE',
     }]);
     (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
@@ -201,10 +201,10 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
     await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT, 'NE'); // staff override, also NE
 
     const renderedData = (billPdfService.render as jest.Mock).mock.calls[0][0];
-    expect(renderedData.language).toBe('EN');
-    expect(renderedData.invoice.amountInWordsNe).toEqual(expect.any(String)); // computed regardless
+    expect(renderedData.language).toBe('NE');
+    expect(renderedData.invoice.amountInWordsNe).toEqual(expect.any(String));
     expect(storageService.putObject).toHaveBeenCalledWith(
-      'tenant_demo/bill-pdf/invoice-1-v1-EN.pdf', expect.any(Buffer), 'application/pdf',
+      'tenant_demo/bill-pdf/invoice-1-v1-NE.pdf', expect.any(Buffer), 'application/pdf',
     );
   });
 });

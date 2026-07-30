@@ -116,7 +116,7 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     );
   });
 
-  it('B8-6 gate: a stored printLanguage=NE still resolves EN while the review gate is closed', async () => {
+  it('B8-6 gate: a stored printLanguage=NE resolves NE now that the review gate is open (B8-6, reviewed 2026-07-30)', async () => {
     (billPaymentService.findOne as jest.Mock).mockResolvedValueOnce(mockPayment);
     (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockTenantRow, print_language: 'NE' }]);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
@@ -129,9 +129,9 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     await service.getOrGenerateReceiptPdf('payment-1', 'accountant-1', Role.ACCOUNTANT, 'NE');
 
     const renderedData = (billReceiptService.render as jest.Mock).mock.calls[0][0];
-    expect(renderedData.language).toBe('EN');
+    expect(renderedData.language).toBe('NE');
     expect(storageService.putObject).toHaveBeenCalledWith(
-      'tenant_demo/bill-receipt/payment-1-v1-EN.pdf', expect.any(Buffer), 'application/pdf',
+      'tenant_demo/bill-receipt/payment-1-v1-NE.pdf', expect.any(Buffer), 'application/pdf',
     );
   });
 
