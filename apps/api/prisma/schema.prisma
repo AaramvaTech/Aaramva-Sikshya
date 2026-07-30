@@ -53,6 +53,10 @@ model Tenant {
   // Restricted to a curated, print-tested-readable set — see
   // common/tenant-brand-color.ts. Null = slate default.
   brandColor           String?
+  // BILL-8 B8-5/B8-6: print language for bills/receipts. Null = 'EN'.
+  // 'NE'/'BOTH' are rejected at write time while NEPALI_PRINT_REVIEWED is
+  // false (common/nepali-print-review-gate.ts) — see settings.service.ts.
+  printLanguage        String?
   // BILL-4 R13: invoice-number reset policy. false (default) = CONTINUOUS
   // (counter never resets, matches every tenant's pre-existing behavior);
   // true = RESET (counter restarts each Nepali fiscal year, Shrawan-based).

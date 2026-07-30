@@ -1,5 +1,6 @@
 import { IsEmail, IsHexColor, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { BILL_BRAND_COLORS } from '../../../common/tenant-brand-color';
+import { PRINT_LANGUAGES } from '../../finance/bill-print-labels';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -37,6 +38,13 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsIn(BILL_BRAND_COLORS)
   brandColor?: string;
+
+  /** BILL-8 B8-5/B8-6: shape-validated here (one of the 3 known values);
+   *  the NE/BOTH-requires-review-gate business rule is enforced in
+   *  settings.service.ts, same split as MANUAL allocation's role check. */
+  @IsOptional()
+  @IsIn(PRINT_LANGUAGES)
+  printLanguage?: string;
 
   @IsOptional()
   @IsString()

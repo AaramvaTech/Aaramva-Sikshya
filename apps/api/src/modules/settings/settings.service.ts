@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 import { StorageService } from '../storage/storage.service';
+import { NEPALI_PRINT_REVIEWED } from '../../common/nepali-print-review-gate';
 
 interface TenantProfileRow {
   id: string;
@@ -29,6 +30,7 @@ interface TenantProfileRow {
   principal_signature_url: string | null;
   school_stamp_url: string | null;
   brand_color: string | null;
+  print_language: string | null;
   primary_foreground: string | null;
   color_source: string;
   logo_palette: Record<string, string> | null;
@@ -59,6 +61,7 @@ function toProfileResponse(row: TenantProfileRow) {
     principalSignatureUrl: row.principal_signature_url,
     schoolStampUrl: row.school_stamp_url,
     brandColor: row.brand_color,
+    printLanguage: row.print_language,
     primaryForeground: row.primary_foreground,
     colorSource: row.color_source,
     logoPalette: row.logo_palette,
@@ -78,6 +81,7 @@ const PROFILE_SELECT = `id, name, slug,
   "principalSignatureUrl" AS principal_signature_url,
   "schoolStampUrl" AS school_stamp_url,
   "brandColor" AS brand_color,
+  "printLanguage" AS print_language,
   "primaryForeground" AS primary_foreground,
   "colorSource" AS color_source,
   "logoPalette" AS logo_palette`;
@@ -104,6 +108,17 @@ export class SettingsService {
 
   async updateProfile(dto: UpdateProfileDto) {
     const { tenantId, slug } = this.tenantContext.getOrThrow();
+
+    // BILL-8 B8-6: the DTO's @IsIn only validates the SHAPE (one of the 3
+    // known values) — the "requires native-speaker review" business rule
+    // lives here, same split as MANUAL allocation's role check
+    // (bill-payment.controller.ts): a declarative decorator can't
+    // discriminate on a runtime flag.
+    if (dto.printLanguage !== undefined && dto.printLanguage !== 'EN' && !NEPALI_PRINT_REVIEWED) {
+      throw new BadRequestException(
+        'Nepali print output is not yet available for any school — pending native-speaker review of the Devanagari translation.',
+      );
+    }
 
     // FILE-1: verified storage keys win over their legacy base64 *Url twins.
     // school-logo is the one public-read kind — its column gets the PUBLIC URL
@@ -166,6 +181,8 @@ export class SettingsService {
     if (dto.schoolStampUrl !== undefined) { updates.push(`"schoolStampUrl" = $${idx++}`); values.push(dto.schoolStampUrl); }
     // BILL-8: already restricted to the curated set at the DTO layer (@IsIn).
     if (dto.brandColor !== undefined) { updates.push(`"brandColor" = $${idx++}`); values.push(dto.brandColor); }
+    // BILL-8: gate-checked above; safe to persist unconditionally here.
+    if (dto.printLanguage !== undefined) { updates.push(`"printLanguage" = $${idx++}`); values.push(dto.printLanguage); }
 
     if (updates.length === 0) return this.getProfile();
 
