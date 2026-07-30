@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import { loadPdfFonts, pickFont } from '../../common/pdf/pdf-fonts';
+import { loadPdfFonts, pickFont, drawMixedText } from '../../common/pdf/pdf-fonts';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { Money } from '../../common/money/money';
 import { printLabel, PrintLanguage } from './bill-print-labels';
@@ -178,10 +178,15 @@ export class BillPdfService {
       doc.font(pickFont(tenant.tagline)).fontSize(10).fillColor(MUTED)
         .text(tenant.tagline, textX, doc.y + 2, { width: textW });
     }
-    const contactLine = [tenant.address, tenant.phone, tenant.website].filter(Boolean).join('   ·   ');
-    if (contactLine) {
+    // Mixed script: address is free tenant-entered text (could be either
+    // script) joined with phone/website (always Latin/numeric) — same
+    // audit as the signature line, fixed the same way rather than
+    // assuming one font for the whole joined line.
+    const contactParts = [tenant.address, tenant.phone, tenant.website].filter((p): p is string => !!p);
+    if (contactParts.length > 0) {
+      const contactRuns = contactParts.flatMap((part, i) => (i > 0 ? [{ text: '   ·   ' }, { text: part }] : [{ text: part }]));
       const contactW = pageW - (textX - left);
-      doc.font('latin').fontSize(8.5).fillColor(MUTED).text(contactLine, textX, doc.y + 2, { width: contactW });
+      drawMixedText(doc, contactRuns, textX, doc.y + 2, { width: contactW, align: 'left', fontSize: 8.5, color: MUTED });
     }
     const textBottom = doc.y;
 
@@ -197,8 +202,12 @@ export class BillPdfService {
     }
     if (tenant.registrationNumber) {
       const regLabel = this.label('regNo', lang);
-      doc.font(pickFont(regLabel)).fontSize(7.5).fillColor(MUTED)
-        .text(`${regLabel} ${tenant.registrationNumber}`, left + pageW - panBoxW, panBottom + 4, { width: panBoxW, align: 'right' });
+      // Mixed script: regLabel may be Devanagari, registrationNumber is
+      // whatever the school entered (always Latin in practice) — a single
+      // pickFont() on the concatenated string tofu'd whichever script it
+      // didn't cover. drawMixedText font-picks each run independently.
+      drawMixedText(doc, [{ text: `${regLabel} ` }, { text: tenant.registrationNumber }],
+        left + pageW - panBoxW, panBottom + 4, { width: panBoxW, align: 'right', fontSize: 7.5, color: MUTED });
       panBottom += 14;
     }
 
@@ -349,7 +358,12 @@ export class BillPdfService {
       const textW = leftColW - (textX - left);
       const instrLabel = this.label('paymentInstructions', lang);
       doc.font(pickFont(instrLabel)).fontSize(8).fillColor(MUTED).text(instrLabel.toUpperCase(), textX, ly);
-      doc.font('latin').fontSize(8.5).fillColor(INK)
+      // Free tenant-entered text — could genuinely be in either script, so
+      // this picks dynamically rather than assuming 'latin' (found during
+      // the mixed-script audit; not itself a concatenation bug, but the
+      // same class of oversight — a hardcoded font on text this codebase
+      // doesn't control the script of).
+      doc.font(pickFont(tenant.paymentInstructions)).fontSize(8.5).fillColor(INK)
         .text(tenant.paymentInstructions, textX, ly + 11, { width: textW });
     }
     const leftBottom = tenant.qrImageBuffer ? ly + qrSize : ly + 40;
@@ -367,7 +381,12 @@ export class BillPdfService {
     // discount row here).
     row(this.label('subtotal', lang), num(inv.netAmount - inv.taxAmount));
     if (inv.taxRate != null) {
-      row(`${this.label('tax', lang)} (${inv.taxRate}%)`, num(inv.taxAmount));
+      // The rate% moves into the value slot (already hardcoded 'latin' in
+      // row() below, always safe) rather than concatenating it onto the
+      // label — the label alone may be Devanagari, and "(13%)" glued onto
+      // it would hit the same mixed-script tofu bug drawMixedText exists
+      // to fix elsewhere; here it's simpler to just not concatenate.
+      row(this.label('tax', lang), `${num(inv.taxAmount)} (${inv.taxRate}%)`);
     }
     const prevAbs = Math.abs(inv.previousBalance);
     if (prevAbs > 0) {
@@ -414,8 +433,12 @@ export class BillPdfService {
 
     doc.moveTo(sigX, imgBottom).lineTo(sigX + sigW, imgBottom).strokeColor(HAIRLINE).lineWidth(0.75).stroke();
     const forLabel = this.label('forSchool', lang);
-    doc.font(pickFont(forLabel)).fontSize(9).fillColor(INK)
-      .text(`${forLabel}: ${tenant.name}`, sigX, imgBottom + 6, { width: sigW, align: 'right' });
+    // Mixed script (the reported bug): forLabel may be Devanagari,
+    // tenant.name is whatever script the school entered (usually Latin) —
+    // drawMixedText font-picks each run independently rather than forcing
+    // both through pickFont(forLabel)'s single choice.
+    drawMixedText(doc, [{ text: `${forLabel}: ` }, { text: tenant.name }],
+      sigX, imgBottom + 6, { width: sigW, align: 'right', fontSize: 9, color: INK });
     if (tenant.principalName) {
       doc.font(pickFont(tenant.principalName)).fontSize(8.5).fillColor(MUTED)
         .text(tenant.principalName, sigX, imgBottom + 19, { width: sigW, align: 'right' });

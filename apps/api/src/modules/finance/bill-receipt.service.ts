@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import { loadPdfFonts, pickFont } from '../../common/pdf/pdf-fonts';
+import { loadPdfFonts, pickFont, drawMixedText } from '../../common/pdf/pdf-fonts';
 import { Money } from '../../common/money/money';
 import { printLabel, PrintLanguage } from './bill-print-labels';
 
@@ -152,8 +152,12 @@ export class BillReceiptService {
       doc.moveTo(MARGIN, doc.y).lineTo(MARGIN + w, doc.y).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
       doc.moveDown(0.4);
       const forLabel = label('forSchool');
-      doc.font(pickFont(forLabel)).fontSize(8).fillColor(INK)
-        .text(`${forLabel}: ${data.tenant.name}`, MARGIN, doc.y, { width: w, align: 'center' });
+      // Same mixed-script bug as the bill's signature line: forLabel may
+      // be Devanagari, data.tenant.name is whatever script the school
+      // entered (usually Latin) — drawMixedText font-picks each run
+      // independently instead of forcing both through one font.
+      drawMixedText(doc, [{ text: `${forLabel}: ` }, { text: data.tenant.name }],
+        MARGIN, doc.y, { width: w, align: 'center', fontSize: 8, color: INK });
       if (data.tenant.principalName) {
         doc.moveDown(0.15);
         doc.font(pickFont(data.tenant.principalName)).fontSize(7.5).fillColor(MUTED)
