@@ -79,6 +79,14 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
 
   it('B8-3 byte-identical reprint: when the object already exists at the deterministic key, presigns and returns it WITHOUT re-rendering', async () => {
     (billInvoiceService.findOne as jest.Mock).mockResolvedValueOnce(mockInvoice);
+    // Language is now resolved (for the key) before the cache check, so the
+    // tenant header loads even on a cache hit.
+    (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{
+      name: 'Demo School', logo_url: null, pan_number: null, registration_number: null,
+      address: null, phone: null, website: null, tagline: null, payment_instructions: null,
+      qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
+      brand_color: null, print_language: null,
+    }]);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce({ size: 12345, contentType: 'application/pdf' });
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/presigned-existing');
 
@@ -87,7 +95,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
     expect(result).toEqual({ presignedUrl: 'https://minio.local/presigned-existing', generated: false });
     expect(billPdfService.render).not.toHaveBeenCalled();
     expect(storageService.putObject).not.toHaveBeenCalled();
-    expect(storageService.headObject).toHaveBeenCalledWith('tenant_demo/bill-pdf/invoice-1-v1.pdf');
+    expect(storageService.headObject).toHaveBeenCalledWith('tenant_demo/bill-pdf/invoice-1-v1-EN.pdf');
   });
 
   it('generates, stores at the deterministic key, and presigns on first request (nothing exists yet)', async () => {
@@ -105,7 +113,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
 
     expect(result).toEqual({ presignedUrl: 'https://minio.local/presigned-new', generated: true });
     expect(storageService.putObject).toHaveBeenCalledWith(
-      'tenant_demo/bill-pdf/invoice-1-v1.pdf', Buffer.from('%PDF-1.4 fake'), 'application/pdf',
+      'tenant_demo/bill-pdf/invoice-1-v1-EN.pdf', Buffer.from('%PDF-1.4 fake'), 'application/pdf',
     );
   });
 
@@ -176,5 +184,27 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
     const expectedWords = amountInWords(Money.fromNumber(1800), 'en');
     expect(renderedData.invoice.amountInWordsEn).toBe(expectedWords);
     expect(renderedData.invoice.amountInWordsEn).not.toBe(invoiceWithStaleStoredWords.amountInWordsEn);
+  });
+
+  it('B8-6 gate, end to end through the real orchestration: a tenant with printLanguage=NE stored renders NE now that the review gate is open (B8-6, reviewed 2026-07-30), at the NE-suffixed key', async () => {
+    (billInvoiceService.findOne as jest.Mock).mockResolvedValueOnce(mockInvoice);
+    (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
+    (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{
+      name: 'Demo School', logo_url: null, pan_number: null, registration_number: null,
+      address: null, phone: null, website: null, tagline: null, payment_instructions: null,
+      qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
+      brand_color: null, print_language: 'NE',
+    }]);
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
+
+    await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT, 'NE'); // staff override, also NE
+
+    const renderedData = (billPdfService.render as jest.Mock).mock.calls[0][0];
+    expect(renderedData.language).toBe('NE');
+    expect(renderedData.invoice.amountInWordsNe).toEqual(expect.any(String));
+    expect(storageService.putObject).toHaveBeenCalledWith(
+      'tenant_demo/bill-pdf/invoice-1-v1-NE.pdf', expect.any(Buffer), 'application/pdf',
+    );
   });
 });

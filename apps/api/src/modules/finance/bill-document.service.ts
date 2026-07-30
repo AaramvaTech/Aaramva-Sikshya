@@ -7,6 +7,7 @@ import { Role } from '../common/enums/role.enum';
 import { Money } from '../../common/money/money';
 import { amountInWords } from '../../common/money/amount-in-words';
 import { resolveBillBrandColor } from '../../common/tenant-brand-color';
+import { PrintLanguage, resolvePrintLanguage } from './bill-print-labels';
 import { BillInvoiceService } from './bill-invoice.service';
 import { BillInvoiceResponseDto } from './entities/bill-invoice.entity';
 import { apportionWholeBillConcession } from './bill-pdf.util';
@@ -28,6 +29,7 @@ interface TenantHeaderRow {
   principal_signature_url: string | null;
   school_stamp_url: string | null;
   brand_color: string | null;
+  print_language: string | null;
 }
 
 const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
@@ -37,7 +39,8 @@ const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
   "principalName" AS principal_name,
   "principalSignatureUrl" AS principal_signature_url,
   "schoolStampUrl" AS school_stamp_url,
-  "brandColor" AS brand_color`;
+  "brandColor" AS brand_color,
+  "printLanguage" AS print_language`;
 
 /**
  * BILL-8 Checkpoint A orchestration: fetch (with the same PARENT hard-scope
@@ -58,31 +61,38 @@ export class BillDocumentService {
     private readonly billPdfService: BillPdfService,
   ) {}
 
-  private keyFor(slug: string, invoiceId: string): string {
-    // B8-11: ref id + generation version. Always v1 in Checkpoint A — an
-    // immutable invoice is only ever rendered once; nothing bumps this yet.
-    return `tenant_${slug}/bill-pdf/${invoiceId}-v1.pdf`;
+  private keyFor(slug: string, invoiceId: string, language: string): string {
+    // B8-11: ref id + generation version. Always v1 within a checkpoint — an
+    // immutable invoice is only ever rendered once per version. Language is
+    // part of the key (not the version) — EN/NE/BOTH are genuinely
+    // different documents, each its own immutable cached artifact; a staff
+    // override never overwrites the tenant-default version.
+    return `tenant_${slug}/bill-pdf/${invoiceId}-v1-${language}.pdf`;
   }
 
   async getOrGenerateBillPdf(
     invoiceId: string,
     callerId?: string,
     callerRole?: Role,
+    /** B8-5 §5: staff-only query override — BillPdfController must not pass
+     *  this through for a PARENT caller. */
+    languageOverride?: string,
   ): Promise<{ presignedUrl: string; generated: boolean }> {
     // Scoping (PARENT -> own child only, 404/403 as BillInvoiceService already
     // enforces) happens here, BEFORE anything storage-related — same
     // discipline as the assignment-submission presign (EDU-1).
     const invoice = await this.billInvoiceService.findOne(invoiceId, callerId, callerRole);
     const { slug } = this.tenantContext.getOrThrow();
-    const key = this.keyFor(slug, invoiceId);
+    const tenant = await this.loadTenantHeader();
+    const language = resolvePrintLanguage(tenant.print_language, languageOverride);
+    const key = this.keyFor(slug, invoiceId, language);
 
     const existing = await this.storageService.headObject(key);
     if (existing) {
       return { presignedUrl: await this.storageService.presignRead(key), generated: false };
     }
 
-    const tenant = await this.loadTenantHeader();
-    const pdfData = await this.buildPdfData(invoice, tenant);
+    const pdfData = await this.buildPdfData(invoice, tenant, language);
     const buffer = await this.billPdfService.render(pdfData);
     await this.storageService.putObject(key, buffer, 'application/pdf');
     return { presignedUrl: await this.storageService.presignRead(key), generated: true };
@@ -100,6 +110,7 @@ export class BillDocumentService {
   private async buildPdfData(
     invoice: BillInvoiceResponseDto,
     tenant: TenantHeaderRow,
+    language: PrintLanguage,
   ): Promise<BillPdfData> {
     const items = invoice.items ?? [];
 
@@ -185,8 +196,14 @@ export class BillDocumentService {
         // fiscal year still shows the words as posted, since
         // total_receivable itself never changes after posting.
         amountInWordsEn: amountInWords(Money.fromNumber(invoice.totalReceivable), 'en'),
+        // Computed the same way regardless of language — harmless to
+        // compute even in EN mode; the renderer only ever prints it when
+        // `language` says to. Real correctness (native-speaker review) is
+        // what the render-time gate resolution above is protecting.
+        amountInWordsNe: amountInWords(Money.fromNumber(invoice.totalReceivable), 'ne'),
       },
       items: lineItems,
+      language,
     };
   }
 
