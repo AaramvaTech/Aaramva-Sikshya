@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts, pickFont } from '../../common/pdf/pdf-fonts';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { Money } from '../../common/money/money';
 
 const PRIMARY = '#0B6B43';
 const MUTED = '#6b7280';
 const BORDER = '#d1d5db';
 const INK = '#111827';
+/** Fee-table header row + Total Receivable highlight — per the reviewed design. */
+const TINT = '#E1F5EE';
 
 export interface BillPdfLineItem {
   itemName: string;
@@ -59,14 +62,20 @@ export interface BillPdfData {
   items: BillPdfLineItem[];
 }
 
-const money = (n: number): string => `Rs. ${n.toFixed(2)}`;
+/** Rs. prefix + lakh-style thousands separators (Money.toDisplay — BILL-8). */
+const money = (n: number): string => `Rs. ${Money.fromNumber(n).toDisplay()}`;
 
 /**
- * BILL-8 Checkpoint A — A4 bill, mirrors the Ullens Kathmandu reference
- * layout (B8-4). Pure renderer: takes already-fetched, already-footed data
+ * BILL-8 Checkpoint A — A4 bill, rebuilt to match Srijan's reviewed design
+ * (round 2). Pure renderer: takes already-fetched, already-footed data
  * (BillDocumentService resolves invoice/tenant/images and applies §2's
  * apportionment before calling this) and produces PDF bytes only — same
- * "pure renderer" discipline as examination/pdf.service.ts.
+ * "pure renderer" discipline as examination/pdf.service.ts. This file only
+ * changes drawing code; the footing/snapshot/reprint logic it's fed lives
+ * entirely in BillDocumentService and is untouched.
+ *
+ * Every doc.image() call is guarded by a null check — a missing logo/QR/
+ * signature/stamp renders nothing at all, never a placeholder box.
  */
 @Injectable()
 export class BillPdfService {
@@ -86,7 +95,8 @@ export class BillPdfService {
       const left = doc.page.margins.left;
 
       this.renderHeader(doc, data.tenant, left, pageW);
-      this.renderInvoiceMeta(doc, data.tenant, data.invoice, left, pageW);
+      this.renderInvoiceTitle(doc, left, pageW);
+      this.renderInvoiceMeta(doc, data.invoice, left, pageW);
       this.renderItemsTable(doc, data.items, left, pageW);
       const wholeBillConcession = data.items.reduce((acc, i) => acc + i.apportionedConcession, 0);
       this.renderSummary(doc, data.invoice, wholeBillConcession, left, pageW);
@@ -107,47 +117,58 @@ export class BillPdfService {
       }
     }
     const textX = tenant.logoBuffer ? left + 72 : left;
-    const textW = pageW - (tenant.logoBuffer ? 72 : 0);
-    doc.font(pickFont(tenant.name, true)).fontSize(18).fillColor(PRIMARY)
+    const textW = pageW - (tenant.logoBuffer ? 72 : 0) - 170; // leave room for the PAN box
+    doc.font(pickFont(tenant.name, true)).fontSize(19).fillColor(PRIMARY)
       .text(tenant.name, textX, top, { width: textW });
     if (tenant.tagline) {
-      doc.font('latin').fontSize(9).fillColor(MUTED).text(tenant.tagline, textX, doc.y, { width: textW });
+      doc.font(pickFont(tenant.tagline)).fontSize(9).fillColor(MUTED)
+        .text(tenant.tagline, textX, doc.y, { width: textW });
     }
-    const contactLine = [tenant.address, tenant.phone, tenant.website].filter(Boolean).join('  ·  ');
+    const contactLine = [tenant.address, tenant.phone, tenant.website].filter(Boolean).join('   |   ');
     if (contactLine) {
       doc.font('latin').fontSize(8).fillColor(MUTED).text(contactLine, textX, doc.y, { width: textW });
     }
-    doc.y = Math.max(doc.y, top + 60) + 6;
+    const textBottom = doc.y;
 
-    // PAN — boxed field (B8-4).
+    // PAN — bordered box, top-right.
+    let panBottom = top;
     if (tenant.panNumber) {
-      const boxW = 160;
-      const boxY = doc.y;
-      doc.rect(left + pageW - boxW, boxY, boxW, 24).strokeColor(BORDER).lineWidth(0.75).stroke();
+      const boxW = 150;
+      const boxH = 30;
+      const boxX = left + pageW - boxW;
+      doc.rect(boxX, top, boxW, boxH).strokeColor(BORDER).lineWidth(0.75).stroke();
       doc.font('latin').fontSize(7.5).fillColor(MUTED)
-        .text('PAN NO.', left + pageW - boxW + 6, boxY + 4);
-      doc.font('latin-bold').fontSize(10).fillColor(INK)
-        .text(tenant.panNumber, left + pageW - boxW + 6, boxY + 12);
+        .text('PAN NO.', boxX, top + 6, { width: boxW, align: 'center' });
+      doc.font('latin-bold').fontSize(11).fillColor(INK)
+        .text(tenant.panNumber, boxX, top + 16, { width: boxW, align: 'center' });
+      panBottom = top + boxH;
     }
     if (tenant.registrationNumber) {
       doc.font('latin').fontSize(7.5).fillColor(MUTED)
-        .text(`Reg. No. ${tenant.registrationNumber}`, left, doc.y);
+        .text(`Reg. No. ${tenant.registrationNumber}`, left + pageW - 150, panBottom + 4, { width: 150, align: 'center' });
+      panBottom += 14;
     }
 
-    doc.moveDown(0.6);
+    doc.y = Math.max(textBottom, panBottom, top + 60) + 8;
     doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(PRIMARY).lineWidth(1.5).stroke();
-    doc.moveDown(0.4);
-    doc.font('latin-bold').fontSize(15).fillColor(INK).text('INVOICE', left, doc.y, { align: 'center', width: pageW });
-    doc.moveDown(0.5);
+    doc.y += 10;
   }
 
-  private renderInvoiceMeta(
-    doc: PDFKit.PDFDocument,
-    tenant: BillPdfTenant,
-    inv: BillPdfInvoice,
-    left: number,
-    pageW: number,
-  ) {
+  /** Centered, bordered "INVOICE" label. */
+  private renderInvoiceTitle(doc: PDFKit.PDFDocument, left: number, pageW: number) {
+    const label = 'INVOICE';
+    doc.font('latin-bold').fontSize(14);
+    const textW = doc.widthOfString(label);
+    const boxW = textW + 48;
+    const boxH = 24;
+    const boxX = left + (pageW - boxW) / 2;
+    const boxY = doc.y;
+    doc.rect(boxX, boxY, boxW, boxH).strokeColor(PRIMARY).lineWidth(1).stroke();
+    doc.fillColor(INK).text(label, boxX, boxY + 6, { width: boxW, align: 'center' });
+    doc.y = boxY + boxH + 10;
+  }
+
+  private renderInvoiceMeta(doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number) {
     const y = doc.y;
     const colW = pageW / 2;
     const field = (label: string, value: string, x: number, fy: number) => {
@@ -165,42 +186,48 @@ export class BillPdfService {
 
   private renderItemsTable(doc: PDFKit.PDFDocument, items: BillPdfLineItem[], left: number, pageW: number) {
     const cols = [
-      { key: 'name', label: 'Fee Head', w: 0.30, align: 'left' as const },
-      { key: 'gross', label: 'Gross', w: 0.14, align: 'right' as const },
-      { key: 'concession', label: 'Concession', w: 0.14, align: 'right' as const },
-      { key: 'nonTaxable', label: 'Non-Taxable', w: 0.14, align: 'right' as const },
-      { key: 'taxable', label: 'Taxable', w: 0.14, align: 'right' as const },
-      { key: 'total', label: 'Total', w: 0.14, align: 'right' as const },
+      { label: 'Fee Head', w: 0.30, align: 'left' as const },
+      { label: 'Gross', w: 0.14, align: 'right' as const },
+      { label: 'Concession', w: 0.14, align: 'right' as const },
+      { label: 'Non-Taxable', w: 0.14, align: 'right' as const },
+      { label: 'Taxable', w: 0.14, align: 'right' as const },
+      { label: 'Total', w: 0.14, align: 'right' as const },
     ];
     const xs: number[] = [];
     let acc = left;
     for (const c of cols) { xs.push(acc); acc += c.w * pageW; }
 
-    const hy = doc.y;
-    doc.font('latin-bold').fontSize(8).fillColor(MUTED);
-    cols.forEach((c, i) => doc.text(c.label, xs[i] + 2, hy, { width: c.w * pageW - 4, align: c.align }));
-    doc.y = hy + 13;
-    doc.moveTo(left, doc.y - 2).lineTo(left + pageW, doc.y - 2).strokeColor(BORDER).lineWidth(0.5).stroke();
+    // Tinted header row.
+    const headerY = doc.y;
+    const headerH = 20;
+    doc.rect(left, headerY, pageW, headerH).fill(TINT);
+    doc.font('latin-bold').fontSize(8).fillColor(PRIMARY);
+    cols.forEach((c, i) => doc.text(c.label, xs[i] + 6, headerY + 6, { width: c.w * pageW - 10, align: c.align }));
+    doc.y = headerY + headerH;
+    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(PRIMARY).lineWidth(1).stroke();
 
+    const rowH = 18;
     for (const item of items) {
       if (doc.y > doc.page.height - 100) doc.addPage();
       const totalConcession = item.concessionAmount + item.apportionedConcession;
       const net = item.grossAmount - totalConcession;
       const nonTaxable = item.isTaxable ? 0 : net;
       const taxable = item.isTaxable ? net : 0;
-      const ry = doc.y + 2;
+      const rowY = doc.y;
+      const textY = rowY + 5;
       doc.font(pickFont(item.itemName)).fontSize(9).fillColor(INK)
-        .text(item.itemName, xs[0] + 2, ry, { width: cols[0].w * pageW - 4, align: 'left' });
+        .text(item.itemName, xs[0] + 6, textY, { width: cols[0].w * pageW - 10, align: 'left' });
       const cells = [money(item.grossAmount), money(totalConcession), money(nonTaxable), money(taxable), money(net)];
       doc.font('latin').fontSize(9).fillColor(INK);
       cells.forEach((val, i) => {
         const ci = i + 1;
-        doc.text(val, xs[ci] + 2, ry, { width: cols[ci].w * pageW - 4, align: cols[ci].align });
+        doc.text(val, xs[ci] + 6, textY, { width: cols[ci].w * pageW - 10, align: cols[ci].align });
       });
-      doc.y = ry + 13;
+      doc.y = rowY + rowH;
+      // 0.5px row separator (per the reviewed design).
+      doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(BORDER).lineWidth(0.5).stroke();
     }
-    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(BORDER).lineWidth(0.5).stroke();
-    doc.moveDown(0.6);
+    doc.moveDown(0.8);
   }
 
   private renderSummary(
@@ -211,10 +238,10 @@ export class BillPdfService {
     pageW: number,
   ) {
     if (doc.y > doc.page.height - 180) doc.addPage();
-    const summaryW = pageW * 0.6;
+    const summaryW = 260;
     const summaryX = left + pageW - summaryW;
-    const labelW = summaryW * 0.65;
-    const valueW = summaryW * 0.35;
+    const labelW = summaryW * 0.6;
+    const valueW = summaryW * 0.4;
     // Fixed row height assumes every label fits on one line at this width —
     // true for this phase's known, bounded label set ("Less: Scholarship/
     // Discount" is the longest). A future label that doesn't fit needs a
@@ -242,10 +269,17 @@ export class BillPdfService {
       row(label, money(prevAbs));
     }
 
-    doc.moveTo(summaryX, doc.y).lineTo(left + pageW, doc.y).strokeColor(PRIMARY).lineWidth(1).stroke();
-    doc.y += 4;
-    row('Total Receivable', money(inv.totalReceivable), true);
-    doc.moveDown(0.8);
+    doc.moveDown(0.3);
+
+    // Total Receivable — tinted highlight row.
+    const trY = doc.y;
+    const trH = 22;
+    doc.rect(summaryX, trY, summaryW, trH).fill(TINT);
+    doc.font('latin-bold').fontSize(11.5).fillColor(PRIMARY)
+      .text('Total Receivable', summaryX + 8, trY + 6, { width: labelW - 8, align: 'left' });
+    doc.font('latin-bold').fontSize(11.5).fillColor(PRIMARY)
+      .text(money(inv.totalReceivable), summaryX + labelW, trY + 6, { width: valueW - 8, align: 'right' });
+    doc.y = trY + trH + 8;
   }
 
   private renderAmountInWords(doc: PDFKit.PDFDocument, amountInWordsEn: string | null, left: number, pageW: number) {
@@ -261,6 +295,8 @@ export class BillPdfService {
     if (doc.y > doc.page.height - 120) doc.addPage();
     const y = doc.y;
 
+    // QR image left + payment instructions text — nothing drawn when the
+    // image is absent, never a placeholder box.
     if (tenant.paymentInstructions || tenant.qrImageBuffer) {
       const qrSize = 70;
       if (tenant.qrImageBuffer) {
@@ -278,19 +314,21 @@ export class BillPdfService {
       }
     }
 
+    // Signature line right — "For: {School}" + principal name, with optional
+    // stamp/signature images. Same null-guard discipline as the QR above.
     const sigY = y + 90;
-    const sigW = 180;
+    const sigW = 200;
     const sigX = left + pageW - sigW;
     if (tenant.schoolStampBuffer) {
       try {
-        doc.image(tenant.schoolStampBuffer, sigX + sigW - 60, sigY - 40, { fit: [55, 55] });
+        doc.image(tenant.schoolStampBuffer, sigX + sigW - 60, sigY - 42, { fit: [55, 55] });
       } catch {
         // ignore
       }
     }
     if (tenant.principalSignatureBuffer) {
       try {
-        doc.image(tenant.principalSignatureBuffer, sigX, sigY - 30, { fit: [sigW, 30] });
+        doc.image(tenant.principalSignatureBuffer, sigX, sigY - 32, { fit: [sigW - 65, 30] });
       } catch {
         // ignore
       }
