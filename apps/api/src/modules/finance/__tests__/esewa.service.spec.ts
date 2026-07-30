@@ -6,7 +6,8 @@ import {
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { EsewaService } from '../esewa/esewa.service';
-import { PaymentService } from '../payment.service';
+import { BillPaymentService } from '../bill-payment.service';
+import { LedgerService } from '../ledger.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { Role } from '../../common/enums/role.enum';
@@ -33,19 +34,17 @@ const accountantUser: AuthUser = {
   tenantSlug: 'demo',
 };
 
-const baseInvoiceRow = {
+// bill_invoices row + the join-computed `outstanding` column (CLEARED-only
+// allocation sum subtracted from total_receivable) — BILL-5 Checkpoint C.
+const baseBillInvoiceRow = {
   id: 'inv-1',
-  invoice_number: 'INV-2081-000001',
+  invoice_number: 'BINV-2081-000001',
   student_id: 'student-1',
   academic_year_id: 'year-1',
   due_date: new Date('2025-07-15'),
-  status: 'PARTIAL',
-  subtotal: '1000.00',
-  discount_amount: '0.00',
-  fine_amount: '0.00',
-  total_amount: '1000.00',
-  paid_amount: '400.00',
-  balance: '600.00', // outstanding — the ONLY amount the gateway may charge
+  status: 'PARTIALLY_PAID',
+  total_receivable: '1000.00',
+  outstanding: '600.00', // the ONLY amount the gateway may charge
   created_by: 'user-1',
   created_at: new Date('2025-07-01'),
   updated_at: new Date('2025-07-01'),
@@ -54,7 +53,8 @@ const baseInvoiceRow = {
 
 const baseTxnRow = {
   id: 'txn-row-1',
-  invoice_id: 'inv-1',
+  invoice_id: null,
+  bill_invoice_id: 'inv-1',
   gateway: 'ESEWA',
   transaction_uuid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
   amount: '600.00',
@@ -63,24 +63,40 @@ const baseTxnRow = {
   failure_reason: null,
   raw_payload: {},
   payment_id: null,
+  bill_payment_id: null,
   initiated_by: 'parent-1',
   verified_at: null,
   created_at: new Date(), // fresh by default; tests override for expiry
   updated_at: new Date(),
 };
 
-const basePaymentRow = {
-  id: 'pay-1',
-  payment_number: 'PAY-2081-000001',
-  invoice_id: 'inv-1',
-  student_id: 'student-1',
-  amount: '600.00',
+const baseBillPaymentResult = {
+  id: 'bp-1',
+  receiptNumber: 'RCPT-2081-000001',
+  studentId: 'student-1',
+  academicYearId: 'year-1',
+  amount: 600,
   method: 'ESEWA',
+  status: 'CLEARED',
+  receivedDate: '2025-07-01',
+  receivedBs: null,
   reference: '0007G36',
+  chequeBank: null,
+  chequeDate: null,
+  allocationMode: 'MANUAL',
+  ledgerEntryId: 'ledger-1',
+  gatewayTxnRef: null,
   notes: 'eSewa online payment',
-  received_by: 'parent-1',
-  created_at: new Date(),
-  deleted_at: null,
+  receivedBy: 'parent-1',
+  createdAt: new Date().toISOString(),
+  clearedAt: new Date().toISOString(),
+  clearedBy: 'parent-1',
+  bouncedAt: null,
+  bouncedBy: null,
+  bounceReason: null,
+  voidedAt: null,
+  voidedBy: null,
+  voidReason: null,
 };
 
 const ENABLED_ENV: Record<string, string> = {
@@ -96,9 +112,11 @@ async function makeService(env: Record<string, string>) {
     query: jest.fn(),
     execute: jest.fn().mockResolvedValue(1),
   };
-  const paymentService = {
-    recordPaymentInTx: jest.fn().mockResolvedValue(basePaymentRow),
-    emitPaymentReceived: jest.fn(),
+  const billPaymentService = {
+    recordPaymentInTx: jest.fn().mockResolvedValue(baseBillPaymentResult),
+  };
+  const ledgerService = {
+    withStudentLock: jest.fn().mockImplementation((_studentId: string, fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
   };
   const module = await Test.createTestingModule({
     providers: [
@@ -112,7 +130,8 @@ async function makeService(env: Record<string, string>) {
             .mockReturnValue({ tenantId: 't-1', slug: 'demo', schemaName: 'tenant_demo' }),
         },
       },
-      { provide: PaymentService, useValue: paymentService },
+      { provide: BillPaymentService, useValue: billPaymentService },
+      { provide: LedgerService, useValue: ledgerService },
       {
         provide: ConfigService,
         useValue: { get: jest.fn((key: string) => env[key]) },
@@ -123,7 +142,8 @@ async function makeService(env: Record<string, string>) {
   return {
     service: module.get(EsewaService),
     tenantPrisma,
-    paymentService,
+    billPaymentService,
+    ledgerService,
   };
 }
 
@@ -160,16 +180,19 @@ describe('EsewaService', () => {
     });
   });
 
-  // ─── Initiate: amounts come from the server ─────────────────────────────────
+  // ─── Initiate: amounts come from the server, invoices come from bill_invoices ──
 
   describe('initiate', () => {
-    it('charges the invoice outstanding balance, never a client amount', async () => {
+    it('charges the bill_invoice outstanding balance, never a client amount', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
-      tenantPrisma.query.mockResolvedValueOnce([{ ...baseInvoiceRow }]);
+      tenantPrisma.query.mockResolvedValueOnce([{ ...baseBillInvoiceRow }]);
 
       const result = await service.initiate({ invoiceId: 'inv-1' }, accountantUser);
 
-      // INSERT got the server-computed outstanding (600), not total (1000)
+      expect(tenantPrisma.query.mock.calls[0][0]).toContain('FROM bill_invoices');
+
+      // INSERT got the server-computed outstanding (600), not total_receivable (1000),
+      // and set bill_invoice_id (not invoice_id).
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO payment_transactions'),
         'inv-1',
@@ -177,6 +200,8 @@ describe('EsewaService', () => {
         600,
         accountantUser.userId,
       );
+      const insertSql = tenantPrisma.execute.mock.calls[0][0] as string;
+      expect(insertSql).toContain('bill_invoice_id');
       expect(result.amount).toBe(600);
       expect(result.fields.total_amount).toBe('600');
       expect(result.fields.amount).toBe('600');
@@ -193,10 +218,10 @@ describe('EsewaService', () => {
       );
     });
 
-    it('rejects an invoice with no outstanding balance', async () => {
+    it('rejects a bill_invoice with no outstanding balance', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([
-        { ...baseInvoiceRow, status: 'PAID', paid_amount: '1000.00', balance: '0.00' },
+        { ...baseBillInvoiceRow, status: 'SETTLED', outstanding: '0.00' },
       ]);
       await expect(
         service.initiate({ invoiceId: 'inv-1' }, accountantUser),
@@ -206,7 +231,7 @@ describe('EsewaService', () => {
     it('PARENT can only initiate for own children (guardians linkage)', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
       tenantPrisma.query
-        .mockResolvedValueOnce([{ ...baseInvoiceRow }]) // invoice
+        .mockResolvedValueOnce([{ ...baseBillInvoiceRow }]) // bill_invoice
         .mockResolvedValueOnce([{ student_id: 'someone-elses-child' }]); // guardians
       await expect(
         service.initiate({ invoiceId: 'inv-1' }, parentUser),
@@ -217,21 +242,26 @@ describe('EsewaService', () => {
     it('PARENT with matching guardian row initiates fine', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
       tenantPrisma.query
-        .mockResolvedValueOnce([{ ...baseInvoiceRow }])
+        .mockResolvedValueOnce([{ ...baseBillInvoiceRow }])
         .mockResolvedValueOnce([{ student_id: 'student-1' }]);
       const result = await service.initiate({ invoiceId: 'inv-1' }, parentUser);
       expect(result.transactionUuid).toMatch(/^[0-9a-f-]{36}$/);
     });
   });
 
-  // ─── Verify: exactly-once credit ────────────────────────────────────────────
+  // ─── Verify: exactly-once credit into bill_payments ────────────────────────
 
   describe('verify', () => {
-    it('COMPLETE status-check credits the invoice exactly once (double callback)', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
+    it('COMPLETE status-check credits the bill_invoice exactly once (double callback)', async () => {
+      const { service, tenantPrisma, billPaymentService, ledgerService } = await makeService(ENABLED_ENV);
 
       // First callback: INITIATED row, gateway confirms COMPLETE
-      tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow }]);
+      tenantPrisma.query
+        .mockResolvedValueOnce([{ ...baseTxnRow }]) // loadTransaction
+        .mockResolvedValueOnce([{ student_id: 'student-1', academic_year_id: 'year-1' }]) // bill_invoices lookup (creditOnce)
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ]); // fresh re-read
       mockFetchOnce({
         product_code: 'EPAYTEST',
         transaction_uuid: baseTxnRow.transaction_uuid,
@@ -239,22 +269,29 @@ describe('EsewaService', () => {
         status: 'COMPLETE',
         ref_id: '0007G36',
       });
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
-        { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
-      ]); // conditional claim wins
-      tenantPrisma.query.mockResolvedValueOnce([
-        { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
-      ]); // fresh re-read
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ]) // conditional claim wins
+        .mockResolvedValueOnce([{ outstanding: '600.00' }]); // outstanding unchanged since initiate
 
       const first = await service.verify(baseTxnRow.transaction_uuid, { hint: true });
       expect(first.state).toBe('VERIFIED');
-      expect(paymentService.recordPaymentInTx).toHaveBeenCalledTimes(1);
-      expect(paymentService.recordPaymentInTx).toHaveBeenCalledWith(
+      expect(ledgerService.withStudentLock).toHaveBeenCalledTimes(1);
+      expect(ledgerService.withStudentLock).toHaveBeenCalledWith('student-1', expect.any(Function));
+      expect(billPaymentService.recordPaymentInTx).toHaveBeenCalledTimes(1);
+      expect(billPaymentService.recordPaymentInTx).toHaveBeenCalledWith(
         mockTx,
-        expect.objectContaining({ invoiceId: 'inv-1', amount: 600, method: 'ESEWA' }),
+        expect.objectContaining({
+          studentId: 'student-1',
+          academicYearId: 'year-1',
+          method: 'ESEWA',
+          allocationMode: 'MANUAL',
+          targets: [{ billInvoiceId: 'inv-1', amount: '600.00' }],
+        }),
         'parent-1',
       );
-      expect(paymentService.emitPaymentReceived).toHaveBeenCalledTimes(1);
+      expect(billPaymentService.recordPaymentInTx.mock.calls[0][1].amount.toDb()).toBe('600.00');
 
       // Replayed callback: row is already VERIFIED — no status-check, no credit
       tenantPrisma.query.mockResolvedValueOnce([
@@ -263,24 +300,83 @@ describe('EsewaService', () => {
       const second = await service.verify(baseTxnRow.transaction_uuid, { hint: true });
       expect(second.state).toBe('ALREADY_VERIFIED');
       expect(global.fetch).toHaveBeenCalledTimes(1); // still just the first check
-      expect(paymentService.recordPaymentInTx).toHaveBeenCalledTimes(1); // unchanged
+      expect(billPaymentService.recordPaymentInTx).toHaveBeenCalledTimes(1); // unchanged
+    });
+
+    it('outstanding shrank since initiate (e.g. a cash payment landed first): caps the MANUAL target, remainder becomes advance', async () => {
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
+      tenantPrisma.query
+        .mockResolvedValueOnce([{ ...baseTxnRow }]) // loadTransaction
+        .mockResolvedValueOnce([{ student_id: 'student-1', academic_year_id: 'year-1' }]) // bill_invoices lookup
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ]); // fresh re-read
+      mockFetchOnce({ total_amount: 600, status: 'COMPLETE', ref_id: '0007G36' });
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ]) // claim
+        .mockResolvedValueOnce([{ outstanding: '200.00' }]); // shrank: a cash payment already covered 400
+
+      const result = await service.verify(baseTxnRow.transaction_uuid);
+
+      expect(result.state).toBe('VERIFIED');
+      expect(billPaymentService.recordPaymentInTx).toHaveBeenCalledWith(
+        mockTx,
+        expect.objectContaining({
+          allocationMode: 'MANUAL',
+          targets: [{ billInvoiceId: 'inv-1', amount: '200.00' }],
+        }),
+        'parent-1',
+      );
+      // The full claimed amount (600) is still recorded on the payment — only
+      // 200 is allocated to the invoice; the remaining 400 lands as advance
+      // credit (B5-7: overpayment becomes advance, never rejected).
+      expect(billPaymentService.recordPaymentInTx.mock.calls[0][1].amount.toDb()).toBe('600.00');
+    });
+
+    it('invoice already fully settled by another channel by the time of credit: falls back to ADVANCE_ONLY for the full amount', async () => {
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
+      tenantPrisma.query
+        .mockResolvedValueOnce([{ ...baseTxnRow }])
+        .mockResolvedValueOnce([{ student_id: 'student-1', academic_year_id: 'year-1' }])
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ]);
+      mockFetchOnce({ total_amount: 600, status: 'COMPLETE', ref_id: '0007G36' });
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([
+          { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
+        ])
+        .mockResolvedValueOnce([{ outstanding: '0.00' }]); // fully settled already
+
+      const result = await service.verify(baseTxnRow.transaction_uuid);
+
+      expect(result.state).toBe('VERIFIED');
+      expect(billPaymentService.recordPaymentInTx).toHaveBeenCalledWith(
+        mockTx,
+        expect.objectContaining({ allocationMode: 'ADVANCE_ONLY', targets: undefined }),
+        'parent-1',
+      );
+      expect(billPaymentService.recordPaymentInTx.mock.calls[0][1].amount.toDb()).toBe('600.00');
     });
 
     it('concurrent race: losing claim records no payment', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
-      tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow }]);
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
+      tenantPrisma.query
+        .mockResolvedValueOnce([{ ...baseTxnRow }])
+        .mockResolvedValueOnce([{ student_id: 'student-1', academic_year_id: 'year-1' }])
+        .mockResolvedValueOnce([{ ...baseTxnRow, status: 'VERIFIED' }]);
       mockFetchOnce({ total_amount: 600, status: 'COMPLETE', ref_id: '0007G36' });
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([]); // claim lost the race
-      tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow, status: 'VERIFIED' }]);
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
       expect(result.state).toBe('ALREADY_VERIFIED');
-      expect(paymentService.recordPaymentInTx).not.toHaveBeenCalled();
-      expect(paymentService.emitPaymentReceived).not.toHaveBeenCalled();
+      expect(billPaymentService.recordPaymentInTx).not.toHaveBeenCalled();
     });
 
     it('COMPLETE with a mismatched amount fails the transaction and never credits', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow }]);
       mockFetchOnce({ total_amount: 599, status: 'COMPLETE', ref_id: '0007G36' });
       tenantPrisma.query.mockResolvedValueOnce([
@@ -289,7 +385,7 @@ describe('EsewaService', () => {
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
       expect(result.state).toBe('FAILED');
-      expect(paymentService.recordPaymentInTx).not.toHaveBeenCalled();
+      expect(billPaymentService.recordPaymentInTx).not.toHaveBeenCalled();
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining(`SET status = 'FAILED'`),
         baseTxnRow.id,
@@ -298,14 +394,14 @@ describe('EsewaService', () => {
     });
 
     it('PENDING leaves the row INITIATED', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow }]);
       mockFetchOnce({ total_amount: 600, status: 'PENDING', ref_id: null });
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
       expect(result.state).toBe('PENDING');
       expect(result.status).toBe('INITIATED');
-      expect(paymentService.recordPaymentInTx).not.toHaveBeenCalled();
+      expect(billPaymentService.recordPaymentInTx).not.toHaveBeenCalled();
     });
 
     it('NOT_FOUND within the grace window stays PENDING (payer may still be typing)', async () => {
@@ -320,7 +416,7 @@ describe('EsewaService', () => {
     });
 
     it('NOT_FOUND past the grace window expires the transaction', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([
         { ...baseTxnRow, created_at: new Date(Date.now() - 20 * 60_000) },
       ]);
@@ -328,7 +424,7 @@ describe('EsewaService', () => {
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
       expect(result.state).toBe('EXPIRED');
-      expect(paymentService.recordPaymentInTx).not.toHaveBeenCalled();
+      expect(billPaymentService.recordPaymentInTx).not.toHaveBeenCalled();
       expect(tenantPrisma.execute).toHaveBeenCalledWith(
         expect.stringContaining(`SET status = 'EXPIRED'`),
         baseTxnRow.id,
@@ -349,14 +445,14 @@ describe('EsewaService', () => {
     });
 
     it('unreachable status-check changes nothing (UNVERIFIED, retryable)', async () => {
-      const { service, tenantPrisma, paymentService } = await makeService(ENABLED_ENV);
+      const { service, tenantPrisma, billPaymentService } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([{ ...baseTxnRow }]);
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
       expect(result.state).toBe('UNVERIFIED');
       expect(result.status).toBe('INITIATED');
-      expect(paymentService.recordPaymentInTx).not.toHaveBeenCalled();
+      expect(billPaymentService.recordPaymentInTx).not.toHaveBeenCalled();
     });
   });
 

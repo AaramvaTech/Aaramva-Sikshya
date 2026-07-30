@@ -95,7 +95,8 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }]) // re-check line
       .mockResolvedValueOnce([{ sum: '5500.00' }]) // previous balance
       .mockResolvedValueOnce([{ value: BigInt(1) }]) // sequence upsert
-      .mockResolvedValueOnce([{ id: 'invoice-1' }]); // bill_invoices insert RETURNING id
+      .mockResolvedValueOnce([{ id: 'invoice-1' }]) // bill_invoices insert RETURNING id
+      .mockResolvedValueOnce([]); // B5-4 advance-consumption candidates: none
 
     ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-1' } as any);
 
@@ -178,7 +179,8 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
       .mockResolvedValueOnce([{ sum: '5500.00' }])
       .mockResolvedValueOnce([{ value: BigInt(1) }])
-      .mockResolvedValueOnce([{ id: 'invoice-1' }]);
+      .mockResolvedValueOnce([{ id: 'invoice-1' }])
+      .mockResolvedValueOnce([]); // B5-4 advance-consumption candidates: none
     ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-1' } as any);
 
     const result = await service.drainCurrentTenant();
@@ -235,7 +237,8 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
       .mockResolvedValueOnce([{ sum: '5500.00' }])
       .mockResolvedValueOnce([{ value: BigInt(1) }])
-      .mockResolvedValueOnce([{ id: 'invoice-1' }]);
+      .mockResolvedValueOnce([{ id: 'invoice-1' }])
+      .mockResolvedValueOnce([]); // B5-4 advance-consumption candidates: none
     ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-1' } as any);
 
     await service.drainCurrentTenant();
@@ -252,5 +255,62 @@ describe('BillRunPostRunnerService', () => {
     const [insertSql, invoiceNumberArg] = mockTx.$queryRawUnsafe.mock.calls[3];
     expect(insertSql).toEqual(expect.stringContaining('INSERT INTO bill_invoices'));
     expect(invoiceNumberArg).toMatch(/^BINV-R\d{4}-\d{6}$/);
+  });
+
+  it('posts a DRAFT line for a student holding advance credit: exactly one INVOICE entry (BILL-4 invariant unchanged), advance consumed via a new allocation row (capped at the invoice net, not the full advance), zero new ledger entries for the consumption itself', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }]) // re-check line
+      .mockResolvedValueOnce([{ sum: '-2000.00' }]) // previous balance: student has 2000 advance credit
+      .mockResolvedValueOnce([{ value: BigInt(2) }]) // sequence upsert
+      .mockResolvedValueOnce([{ id: 'invoice-2' }]) // bill_invoices insert
+      .mockResolvedValueOnce([{ id: 'pay-advance-1', remaining: '2000.00' }]); // unconsumed CLEARED payments, oldest-first
+
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-2' } as any);
+
+    const result = await service.drainCurrentTenant();
+
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    // BILL-4's own invariant: exactly one postEntryInTx call (the INVOICE entry) — advance consumption posts NONE.
+    expect(ledgerService.postEntryInTx).toHaveBeenCalledTimes(1);
+    expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({ entryType: 'INVOICE' }));
+    // totalReceivable = net(3000) + previousBalance(-2000) = 1000 — only 1000
+    // of the 2000 available advance gets consumed, correctly leaving 1000 of
+    // the original advance payment unconsumed for a future invoice.
+    expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO bill_payment_allocations'),
+      'pay-advance-1', 'invoice-2', '1000.00',
+    );
+  });
+
+  it('consumes nothing when total_receivable is already <= 0 (pre-existing advance exceeds this invoice charge) — no negative allocation attempted', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
+      .mockResolvedValueOnce([{ sum: '-5000.00' }]) // previous balance: 5000 advance, more than this 3000 charge
+      .mockResolvedValueOnce([{ value: BigInt(3) }])
+      .mockResolvedValueOnce([{ id: 'invoice-3' }])
+      .mockResolvedValueOnce([{ id: 'pay-advance-2', remaining: '5000.00' }]); // candidates ARE found...
+
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-3' } as any);
+
+    const result = await service.drainCurrentTenant();
+
+    // total_receivable = 3000 + (-5000) = -2000 <= 0 -> guarded, zero consumption attempted
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO bill_payment_allocations'),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
   });
 });

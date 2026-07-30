@@ -5,10 +5,12 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { LedgerService } from './ledger.service';
 import { BillLineResolverService } from './bill-line-resolver.service';
 import { FinanceSettingsService } from './finance-settings.service';
+import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { amountInWords } from '../../common/money/amount-in-words';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { buildInvoiceSequenceKey, buildInvoiceNumber, fiscalYearBs } from './bill-post.util';
+import { planAdvanceConsumption } from './bill-advance-consumption.util';
 import { BillRunRow } from './entities/bill-run.entity';
 
 /**
@@ -223,6 +225,68 @@ export class BillRunPostRunnerService {
         `UPDATE bill_invoices SET ledger_entry_id = $1::uuid WHERE id = $2::uuid`,
         ledgerEntry.id, invoice.id,
       );
+
+      // B5-4: advance auto-apply. Consumes existing unconsumed CLEARED
+      // payments (oldest-first) against this invoice's total_receivable.
+      // Deliberately posts ZERO new ledger entries — the money was already
+      // credited by its original DEPOSIT/PAYMENT entry; this is a pure
+      // bill_payment_allocations insert. BILL-4's own invariant (exactly one
+      // INVOICE entry per post) is untouched by construction: nothing above
+      // this comment changed, and this step never calls postEntryInTx.
+      const advanceCandidates = await tx.$queryRawUnsafe<{ id: string; remaining: string }[]>(
+        `SELECT bp.id, bp.amount - COALESCE(SUM(bpa.amount), 0) AS remaining
+         FROM bill_payments bp
+         LEFT JOIN bill_payment_allocations bpa ON bpa.bill_payment_id = bp.id
+         WHERE bp.student_id = $1::uuid AND bp.status = 'CLEARED' AND bp.deleted_at IS NULL
+         GROUP BY bp.id, bp.amount, bp.created_at
+         HAVING bp.amount - COALESCE(SUM(bpa.amount), 0) > 0
+         ORDER BY bp.created_at ASC`,
+        studentId,
+      );
+
+      // total_receivable = netAmount + previousBalance can itself already be
+      // <= 0 when a student's pre-existing advance exceeds this invoice's own
+      // charge (previousBalance negative and large) — BILL-4's own field,
+      // uncapped. Nothing to consume via THIS mechanism in that case (the
+      // negative figure already reflects the advance for display purposes);
+      // guarded here so planAdvanceConsumption is never handed a negative
+      // "invoiceOutstanding", which would otherwise attempt a negative
+      // bill_payment_allocations.amount and hit that table's CHECK (amount > 0).
+      if (advanceCandidates.length > 0 && totalReceivable.compare(Money.zero()) > 0) {
+        const plan = planAdvanceConsumption(
+          totalReceivable,
+          advanceCandidates.map((r) => ({ billPaymentId: r.id, remaining: toMoney(r.remaining) })),
+        );
+        for (const consumption of plan.consumptions) {
+          await tx.$executeRawUnsafe(
+            `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
+             VALUES ($1::uuid, $2::uuid, $3::numeric)`,
+            consumption.billPaymentId, invoice.id, consumption.amount.toDb(),
+          );
+        }
+        if (plan.consumptions.length > 0) {
+          await tx.$executeRawUnsafe(
+            `UPDATE bill_invoices SET
+               status = CASE
+                 WHEN total_receivable <= (
+                   SELECT COALESCE(SUM(bpa.amount), 0) FROM bill_payment_allocations bpa
+                   JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+                   WHERE bpa.bill_invoice_id = $1::uuid
+                 ) THEN 'SETTLED'
+                 WHEN (
+                   SELECT COALESCE(SUM(bpa.amount), 0) FROM bill_payment_allocations bpa
+                   JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+                   WHERE bpa.bill_invoice_id = $1::uuid
+                 ) > 0 THEN 'PARTIALLY_PAID'
+                 ELSE 'POSTED'
+               END,
+               updated_at = NOW()
+             WHERE id = $1::uuid`,
+            invoice.id,
+          );
+        }
+      }
+
       await tx.$executeRawUnsafe(
         `UPDATE bill_run_lines SET outcome = 'POSTED', bill_invoice_id = $2::uuid WHERE id = $1::uuid`,
         lineId, invoice.id,

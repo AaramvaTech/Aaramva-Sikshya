@@ -31,6 +31,8 @@ import { FinanceSettingsService } from './finance-settings.service';
 import { FinanceSettingsController } from './finance-settings.controller';
 import { BillInvoiceService } from './bill-invoice.service';
 import { BillInvoiceController } from './bill-invoice.controller';
+import { BillPaymentService } from './bill-payment.service';
+import { BillPaymentController } from './bill-payment.controller';
 import { LedgerController } from './ledger.controller';
 import { LedgerService } from './ledger.service';
 import { OpeningBalanceImportService } from './opening-balance-import.service';
@@ -50,6 +52,7 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     BillRunController,
     FinanceSettingsController,
     BillInvoiceController,
+    BillPaymentController,
     LedgerController,
     EsewaController,
     EsewaPublicController,
@@ -84,6 +87,7 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     BillRunPostPoller,
     FinanceSettingsService,
     BillInvoiceService,
+    BillPaymentService,
     LedgerService,
     OpeningBalanceImportService,
     EsewaService,
