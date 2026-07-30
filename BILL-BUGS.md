@@ -12,7 +12,17 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 **Proof invoice corrected directly** (fixture data I own): `amount_in_words_en/ne` updated to the correct 1,800 figure; `bill_invoice_items.item_name` also corrected from the fixture-test names ("BILL8-CKPTA Tuition"/"BILL8-CKPTA Route") to real-looking ones ("Tuition Fee"/"Transportation Fee"), same for the underlying `fee_heads`/`transport_routes` catalog rows.
 
-**Open, not decided unilaterally:** `tenant_demo` has **9 posted invoices total** with a nonzero `previous_balance` (all pre-existing BILL-4/5 proof/fixture data from earlier checkpoints, not real school data — confirmed zero elsewhere, no live tenant has real `bill_invoices` money yet). Only my own proof row above was corrected. Whether to backfill the other 8 is Srijan's call — low risk (still all proof data) but touches rows outside this checkpoint's own fixtures.
+**Ruling (Srijan, 2026-07-30): closed, won't-fix.** The other 8 `tenant_demo` invoices with the same stale words are fixture-only (zero real schools affected anywhere), and rewriting stored words on immutable posted invoices is a worse precedent than leaving fixture data imperfect. Not backfilled.
+
+**Flagging one consequence of that ruling, not deciding it:** as currently built, `BillDocumentService`/`BillPdfService` **read `amount_in_words_en/ne` straight from the stored column** — they do not recompute it from `totalReceivable` at render time. So the first time any of those 8 invoices is actually printed, it will still show the stale, pre-fix words (their own PDFs haven't been generated yet — no MinIO object exists for them, so this isn't merely academic). If the intent is that a render should always be internally self-consistent regardless of what a past bug baked into a stored column — the same "compute derived display values at render time, never trust/mutate the stored row" principle §2's footing fix already establishes for concession apportionment — the actual fix would be to compute the words from `totalReceivable` (itself already correct on every invoice, old and new) in the render path instead of reading the stored column at all. That would retroactively correct all 9 invoices' *printed* output for free, with no backfill and no stored-data rewrite. Not implemented — raising it, not deciding it.
+
+---
+
+## FIX-STORAGE-URL — StorageService public-URL builder double-appends the bucket (found during BILL-8 image wiring, logged as its own backlog item)
+
+**`StorageService.onModuleInit`'s `publicBase` construction (`` `${publicRoot}/${bucket}` ``) double-appends the bucket name when `S3_PUBLIC_URL` is already bucket-qualified** — which the documented `.env` convention (`S3_PUBLIC_URL=http://127.0.0.1:9000/aaramva-dev`, matching `CLAUDE.md`'s own "optional public base for school logos; defaults `{S3_ENDPOINT}/{S3_BUCKET}`") always is. Result: every `school-logo` upload through the real settings flow in this dev environment gets a `publicUrlFor()` URL shaped `.../aaramva-dev/aaramva-dev/tenant_<slug>/school-logo/<uuid>.jpg` — one `aaramva-dev` too many — which 403s. Confirmed live: `demo`'s pre-existing logo URL (from before this session, unrelated to BILL-8) had exactly this shape and 403'd; a correctly single-bucket-path URL to the same object 200'd.
+
+**Ruling (Srijan): real, live bug — breaks real logo uploads — but correctly out of BILL-8's scope. Logged as its own item, not fixed this phase.** My own fixture logo uses a hand-constructed correct-path URL as a workaround (`tenant_demo`'s `logoUrl` column only, no code touched) — left in place, not reverted.
 
 ---
 
