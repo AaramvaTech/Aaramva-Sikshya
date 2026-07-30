@@ -4,6 +4,18 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-8 B8-1 reversed: pdfkit, not headless Chromium (2026-07-30, Checkpoint A discovery, branch `feat/bill-8-printing`)
+
+**Locked ruling B8-1 ("HTML template → PDF via headless Chromium") reversed to pdfkit before any rendering code was written — this is exactly what the Checkpoint A discovery gate exists to catch.**
+
+Discovery found: (1) no Puppeteer/Playwright/headless-Chromium dependency exists anywhere in the codebase — the only PDF library is `pdfkit`, already used for report cards (`examination/pdf.service.ts`); (2) the deploy target is confirmed **KVM 1, 1 vCPU / 4GB RAM**, already documented in `DEPLOY-1-vps-deployment.md` as *"tight for 5 concurrent containers with zero headroom"*, with a swap file added purely as OOM-killer insurance — no container carries a memory limit; (3) `pdfkit` already embeds Noto Sans + Noto Sans Devanagari with a working per-string script-detection pattern (`pickFont`), proven in production on report cards — solving the Devanagari font trap (discovery item 4) as a side effect, for free.
+
+**Reasoning for the reversal:** headless Chromium is a real, non-trivial addition on this box — a net-new dependency (not a reuse, contrary to B8-1's own "or the codebase's existing renderer if one exists" escape hatch, since pdfkit doesn't qualify as that renderer), Dockerfile changes to install Chromium's Debian runtime libs, a mandatory shared-browser-instance pattern to avoid per-request launch cost, and a real OOM risk concentrated exactly at Checkpoint C's bulk-print job (a whole class rendered as one merged PDF is the worst-case memory spike). None of that risk is necessary: pdfkit produces correct, professional PDFs today (report cards prove it), needs zero new dependencies, and cannot take the VPS down. The trade-off accepted: pdfkit's coordinate-drawing layout is more tedious to write than HTML/CSS (every field is manually positioned, matching `pdf.service.ts`'s existing style — `field()`-style helpers, explicit `x`/`y`, `doc.y` cursor tracking) — but "more tedious to write" is a one-time cost paid once by the implementer, while "OOM risk on every bulk print" is a recurring production risk paid forever. Not close.
+
+**Consequence:** `apps/api/src/common/pdf/` is a new shared module — `examination/pdf.service.ts`'s font-loading + `pickFont` logic is extracted there (behavior-preserving refactor, not a rewrite) so `finance/bill-pdf.service.ts` reuses it verbatim rather than duplicating ~1.7MB of font binaries or reinventing script detection. `BILL-8-SPEC.md` B8-1 and §3 updated in place to record this as the closed, current ruling — not a footnote against the old one.
+
+---
+
 ## PAY-2-SANDBOX — open follow-up, non-blocking (logged 2026-07-30, from the BILL-5 merge decision)
 
 **Khalti's sandbox click-through (Checkpoint C plan Task 7) is deferred — does not block BILL-5's merge.** `KHALTI_SECRET_KEY` is still unset pending Srijan's `test-admin.khalti.com` merchant signup. Khalti's *code* is fully built and unit-tested in Checkpoint C (symmetric diff to eSewa, 20/20 passing) — only the live click-through proof is outstanding; nothing about the implementation is unfinished or gated on this. **Ruling: BILL-5 merges and closes on the eSewa sandbox proof alone (Task 6).** Once the signup lands and the boot log confirms `Khalti gateway enabled`, complete Task 7 the same way Task 6 was completed (fresh `bill_invoice` → initiate → Srijan's click-through → raw SELECT proof → cleanup) and delete this entry.
