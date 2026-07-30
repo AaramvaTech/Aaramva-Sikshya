@@ -4,6 +4,18 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-8-BUG-1 — amount_in_words fed net, not total_receivable (real content bug, found via round-2 visual review)
+
+**`bill-run-post-runner.service.ts` (BILL-4, predates BILL-8) called `amountInWords(netAmount, ...)` at invoice-post time — should be `totalReceivable` (= net + previous_balance).** For any invoice with a nonzero carry-forward, the printed amount-in-words disagreed with the printed Total Receivable — e.g. proof invoice BINV-2083-000027: Total Receivable Rs. 1,800 (net 1,350 + previous balance 450 Dr) but the stored words read "One Thousand Three Hundred Fifty," the net-only figure. Silent since BILL-4 shipped — nothing rendered `amount_in_words_en/ne` on a real document until BILL-8's bill PDF made it visible.
+
+**Fixed at the root** (`bill-run-post-runner.service.ts`): now feeds `totalReceivable`. Regression test added (`bill-run-post-runner.service.spec.ts`) asserting the words match `amountInWords(totalReceivable, ...)` and explicitly do NOT match `amountInWords(netAmount, ...)` when they'd otherwise differ. This only fixes invoices posted from here forward — `bill_invoices` rows are immutable by design (B8-3's whole premise), so already-posted rows keep their stale words unless individually corrected.
+
+**Proof invoice corrected directly** (fixture data I own): `amount_in_words_en/ne` updated to the correct 1,800 figure; `bill_invoice_items.item_name` also corrected from the fixture-test names ("BILL8-CKPTA Tuition"/"BILL8-CKPTA Route") to real-looking ones ("Tuition Fee"/"Transportation Fee"), same for the underlying `fee_heads`/`transport_routes` catalog rows.
+
+**Open, not decided unilaterally:** `tenant_demo` has **9 posted invoices total** with a nonzero `previous_balance` (all pre-existing BILL-4/5 proof/fixture data from earlier checkpoints, not real school data — confirmed zero elsewhere, no live tenant has real `bill_invoices` money yet). Only my own proof row above was corrected. Whether to backfill the other 8 is Srijan's call — low risk (still all proof data) but touches rows outside this checkpoint's own fixtures.
+
+---
+
 ## BILL-8 B8-1 reversed: pdfkit, not headless Chromium (2026-07-30, Checkpoint A discovery, branch `feat/bill-8-printing`)
 
 **Locked ruling B8-1 ("HTML template → PDF via headless Chromium") reversed to pdfkit before any rendering code was written — this is exactly what the Checkpoint A discovery gate exists to catch.**
