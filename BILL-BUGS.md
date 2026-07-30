@@ -4,6 +4,17 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## NEPALI-COPY-REVIEW — soft follow-up: second review before real-school go-live
+
+**Not a bug — a flagged follow-up.** The Devanagari amount-in-words + fixed print labels (`bill-print-labels.ts`) were reviewed by Srijan himself (2026-07-30) and confirmed correct — that review is what opened `NEPALI_PRINT_REVIEWED` (commit 063d654, BILL-8-CKPTB-FINDING-2's gate). Srijan's own framing was explicitly "correct for now," not a final/certified sign-off.
+
+**Good enough for:** the demo tenant and early real-school pilots.
+**Before broader real-school go-live:** get a second review from an actual school contact (native Nepali speaker, ideally an accountant/admin who'll read these words on real bills day to day) — administrative-register Nepali can have regional/institutional phrasing preferences a single reviewer might not catch. Track this the same way I18N-1 treats mobile translation quality: reviewed-and-shipped now, open to a follow-up correction pass, not something this session can self-certify either way.
+
+**Action if raised:** update the relevant `LABELS`/`amountInWords` string(s) in place — no schema change, no gate re-close needed (the gate is about "has any native speaker reviewed this," which stays true).
+
+---
+
 ## BILL-8-CKPTB-FINDING-1 — Devanagari text extracts blank from the generated PDFs; visual rendering unverified (raised, not resolved)
 
 **`pdftotext` extraction of every Devanagari string in the Checkpoint B PDFs (both bill and receipt) comes back blank** — not garbled, not "�", genuinely empty where the Nepali label/amount-in-words text should be. Investigated properly before raising this, not just noticed and shrugged off:
