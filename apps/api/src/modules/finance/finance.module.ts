@@ -51,6 +51,9 @@ import { BillPdfController } from './bill-pdf.controller';
 import { BillReceiptService } from './bill-receipt.service';
 import { BillReceiptDocumentService } from './bill-receipt-document.service';
 import { BillReceiptController } from './bill-receipt.controller';
+import { BillPrintJobService } from './bill-print-job.service';
+import { BillPrintRunnerService } from './bill-print-runner.service';
+import { BillPrintPoller } from './bill-print.poller';
 
 @Module({
   imports: [StorageModule, SuperAdminModule],
@@ -107,6 +110,9 @@ import { BillReceiptController } from './bill-receipt.controller';
     BillDocumentService,
     BillReceiptService,
     BillReceiptDocumentService,
+    BillPrintJobService,
+    BillPrintRunnerService,
+    BillPrintPoller,
   ],
   exports: [InvoiceService, PaymentService, LedgerService],
 })
