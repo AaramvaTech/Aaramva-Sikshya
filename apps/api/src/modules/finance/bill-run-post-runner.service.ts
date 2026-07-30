@@ -174,8 +174,14 @@ export class BillRunPostRunnerService {
       const taxAmount = toMoney(line.tax);
       const netAmount = toMoney(line.net);
       const totalReceivable = netAmount.add(previousBalance);
-      const amountEn = amountInWords(netAmount, 'en');
-      const amountNe = amountInWords(netAmount, 'ne');
+      // BILL-8 finding: this fed netAmount (pre-previous-balance) — silently
+      // wrong for any invoice with a carry-forward, since the printed
+      // amount-in-words then disagreed with the printed Total Receivable.
+      // Never caught before because nothing rendered amount_in_words_en/ne
+      // on a real document until BILL-8's bill PDF. The figure a payer
+      // actually owes, and the one the words must say, is totalReceivable.
+      const amountEn = amountInWords(totalReceivable, 'en');
+      const amountNe = amountInWords(totalReceivable, 'ne');
 
       const [invoice] = await tx.$queryRawUnsafe<{ id: string }[]>(
         `INSERT INTO bill_invoices

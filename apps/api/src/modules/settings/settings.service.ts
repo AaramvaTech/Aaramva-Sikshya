@@ -28,6 +28,7 @@ interface TenantProfileRow {
   principal_name: string | null;
   principal_signature_url: string | null;
   school_stamp_url: string | null;
+  brand_color: string | null;
   primary_foreground: string | null;
   color_source: string;
   logo_palette: Record<string, string> | null;
@@ -57,6 +58,7 @@ function toProfileResponse(row: TenantProfileRow) {
     principalName: row.principal_name,
     principalSignatureUrl: row.principal_signature_url,
     schoolStampUrl: row.school_stamp_url,
+    brandColor: row.brand_color,
     primaryForeground: row.primary_foreground,
     colorSource: row.color_source,
     logoPalette: row.logo_palette,
@@ -75,6 +77,7 @@ const PROFILE_SELECT = `id, name, slug,
   "principalName" AS principal_name,
   "principalSignatureUrl" AS principal_signature_url,
   "schoolStampUrl" AS school_stamp_url,
+  "brandColor" AS brand_color,
   "primaryForeground" AS primary_foreground,
   "colorSource" AS color_source,
   "logoPalette" AS logo_palette`;
@@ -161,6 +164,8 @@ export class SettingsService {
     if (dto.principalName !== undefined) { updates.push(`"principalName" = $${idx++}`); values.push(dto.principalName); }
     if (dto.principalSignatureUrl !== undefined) { updates.push(`"principalSignatureUrl" = $${idx++}`); values.push(dto.principalSignatureUrl); }
     if (dto.schoolStampUrl !== undefined) { updates.push(`"schoolStampUrl" = $${idx++}`); values.push(dto.schoolStampUrl); }
+    // BILL-8: already restricted to the curated set at the DTO layer (@IsIn).
+    if (dto.brandColor !== undefined) { updates.push(`"brandColor" = $${idx++}`); values.push(dto.brandColor); }
 
     if (updates.length === 0) return this.getProfile();
 

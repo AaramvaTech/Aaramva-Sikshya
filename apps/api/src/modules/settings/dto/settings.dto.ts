@@ -1,4 +1,5 @@
-import { IsEmail, IsHexColor, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEmail, IsHexColor, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { BILL_BRAND_COLORS } from '../../../common/tenant-brand-color';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -30,6 +31,12 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsHexColor()
   primaryColor?: string;
+
+  /** BILL-8: print-document accent — curated set only, unlike primaryColor's
+   *  free-form web branding. See common/tenant-brand-color.ts. */
+  @IsOptional()
+  @IsIn(BILL_BRAND_COLORS)
+  brandColor?: string;
 
   @IsOptional()
   @IsString()

@@ -5,6 +5,8 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
 import { BillLineResolverService } from '../bill-line-resolver.service';
 import { FinanceSettingsService } from '../finance-settings.service';
+import { amountInWords } from '../../../common/money/amount-in-words';
+import { Money } from '../../../common/money/money';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -255,6 +257,33 @@ describe('BillRunPostRunnerService', () => {
     const [insertSql, invoiceNumberArg] = mockTx.$queryRawUnsafe.mock.calls[3];
     expect(insertSql).toEqual(expect.stringContaining('INSERT INTO bill_invoices'));
     expect(invoiceNumberArg).toMatch(/^BINV-R\d{4}-\d{6}$/);
+  });
+
+  it('BILL-8 finding: amount_in_words reflects total_receivable, not just net — the figure a payer actually owes including any carried-forward balance', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '1350.00', concession: '0.00', tax: '0.00', net: '1350.00' }])
+      .mockResolvedValueOnce([{ sum: '450.00' }]) // previous balance: student owed 450 before this invoice (Dr)
+      .mockResolvedValueOnce([{ value: BigInt(5) }])
+      .mockResolvedValueOnce([{ id: 'invoice-5' }])
+      .mockResolvedValueOnce([]); // no unconsumed advance payments
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-5' } as any);
+
+    await service.drainCurrentTenant();
+
+    const insertArgs = mockTx.$queryRawUnsafe.mock.calls[3];
+    const [amountEnArg, amountNeArg] = insertArgs.slice(-3, -1); // amount_in_words_en, amount_in_words_ne ($17, $18)
+    // total_receivable = net(1350) + previousBalance(450) = 1800 — the words
+    // must say "One Thousand Eight Hundred", never the net-only "One
+    // Thousand Three Hundred Fifty" (which a payer clearing the invoice at
+    // that figure would still leave 450 outstanding).
+    expect(amountEnArg).toBe(amountInWords(Money.fromDb('1800.00'), 'en'));
+    expect(amountEnArg).not.toBe(amountInWords(Money.fromDb('1350.00'), 'en'));
+    expect(amountNeArg).toBe(amountInWords(Money.fromDb('1800.00'), 'ne'));
   });
 
   it('posts a DRAFT line for a student holding advance credit: exactly one INVOICE entry (BILL-4 invariant unchanged), advance consumed via a new allocation row (capped at the invoice net, not the full advance), zero new ledger entries for the consumption itself', async () => {

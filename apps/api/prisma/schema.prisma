@@ -48,6 +48,11 @@ model Tenant {
   tagline              String? // Short line printed on bill/invoice headers
   paymentInstructions  String? // Free text — bank details, "pay by X", etc.
   qrImageUrl           String? // Payment QR code image (eSewa/bank) for bill printing
+  // BILL-8: print-document accent color — deliberately separate from
+  // primaryColor (the web-UI branding field, arbitrary/logo-extracted).
+  // Restricted to a curated, print-tested-readable set — see
+  // common/tenant-brand-color.ts. Null = slate default.
+  brandColor           String?
   // BILL-4 R13: invoice-number reset policy. false (default) = CONTINUOUS
   // (counter never resets, matches every tenant's pre-existing behavior);
   // true = RESET (counter restarts each Nepali fiscal year, Shrawan-based).

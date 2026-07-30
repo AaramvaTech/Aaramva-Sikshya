@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { adToBs } from 'bs-calendar';
+import { loadPdfFonts, pickFont as pickPdfFont } from '../../common/pdf/pdf-fonts';
 
 // Structural shape of the report card the PDF renders. Mirrors the object
 // returned by ResultService.getReportCard() — kept as a local interface so
@@ -49,28 +48,17 @@ export interface ReportCardData {
   };
 }
 
-const FONT_DIR = join(__dirname, 'assets', 'fonts');
 const PRIMARY = '#0B6B43'; // Aaramva brand green
 const MUTED = '#6b7280';
 const BORDER = '#d1d5db';
-const DEVANAGARI = /[ऀ-ॿ]/;
 
 @Injectable()
 export class PdfService {
-  // Two families: Noto Sans (Latin) and Noto Sans Devanagari. The script-specific
-  // Noto builds are disjoint — Latin has no Devanagari glyphs and vice-versa — so
-  // the renderer picks the family per string (pickFont) to avoid tofu boxes for
-  // either English (names/marks) or Nepali (school name / प्रगति-पत्र / subjects).
-  private readonly fonts = {
-    latin: readFileSync(join(FONT_DIR, 'NotoSans-Regular.ttf')),
-    'latin-bold': readFileSync(join(FONT_DIR, 'NotoSans-Bold.ttf')),
-    deva: readFileSync(join(FONT_DIR, 'NotoSansDevanagari-Regular.ttf')),
-    'deva-bold': readFileSync(join(FONT_DIR, 'NotoSansDevanagari-Bold.ttf')),
-  };
+  // Shared embedded fonts + script detection — see common/pdf/pdf-fonts.ts.
+  private readonly fonts = loadPdfFonts();
 
   private pickFont(text: string, bold = false): string {
-    const script = DEVANAGARI.test(text) ? 'deva' : 'latin';
-    return bold ? `${script}-bold` : script;
+    return pickPdfFont(text, bold);
   }
 
   renderReportCard(rc: ReportCardData, opts: { schoolName: string }): Promise<Buffer> {

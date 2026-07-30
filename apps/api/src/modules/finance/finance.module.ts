@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
+import { SuperAdminModule } from '../super-admin/super-admin.module';
 import { FinanceController } from './finance.controller';
 import { BillCatalogController } from './bill-catalog.controller';
 import { BillAssignmentController } from './bill-assignment.controller';
@@ -43,8 +45,12 @@ import { KhaltiService } from './khalti/khalti.service';
 import { KhaltiController } from './khalti/khalti.controller';
 import { KhaltiPublicController } from './khalti/khalti-public.controller';
 import { PaymentGatewaysController } from './payment-gateways.controller';
+import { BillPdfService } from './bill-pdf.service';
+import { BillDocumentService } from './bill-document.service';
+import { BillPdfController } from './bill-pdf.controller';
 
 @Module({
+  imports: [StorageModule, SuperAdminModule],
   controllers: [
     FinanceController,
     BillCatalogController,
@@ -59,6 +65,7 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     KhaltiController,
     KhaltiPublicController,
     PaymentGatewaysController,
+    BillPdfController,
   ],
   providers: [
     FeeCategoryService,
@@ -92,6 +99,8 @@ import { PaymentGatewaysController } from './payment-gateways.controller';
     OpeningBalanceImportService,
     EsewaService,
     KhaltiService,
+    BillPdfService,
+    BillDocumentService,
   ],
   exports: [InvoiceService, PaymentService, LedgerService],
 })
