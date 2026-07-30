@@ -5,6 +5,7 @@ import { StorageService } from '../storage/storage.service';
 import { fetchImageBuffer } from '../branding/branding-color.service';
 import { Role } from '../common/enums/role.enum';
 import { Money } from '../../common/money/money';
+import { amountInWords } from '../../common/money/amount-in-words';
 import { BillInvoiceService } from './bill-invoice.service';
 import { BillInvoiceResponseDto } from './entities/bill-invoice.entity';
 import { apportionWholeBillConcession } from './bill-pdf.util';
@@ -164,7 +165,17 @@ export class BillDocumentService {
         netAmount: invoice.netAmount,
         previousBalance: invoice.previousBalance,
         totalReceivable: invoice.totalReceivable,
-        amountInWordsEn: invoice.amountInWordsEn,
+        // BILL-8-BUG-1 follow-up: computed from the invoice's own frozen
+        // total_receivable — the same snapshotted-at-post-time field §2's
+        // footing fix already trusts — never from the stored
+        // amount_in_words_en/ne column, which can carry a stale pre-fix
+        // value (or any future drift) that the printed figures no longer
+        // agree with. This is a render-time derivation matching §2's own
+        // "compute from immutable snapshot data, never trust/mutate the
+        // stored row" pattern, NOT a live balance lookup — a reprint next
+        // fiscal year still shows the words as posted, since
+        // total_receivable itself never changes after posting.
+        amountInWordsEn: amountInWords(Money.fromNumber(invoice.totalReceivable), 'en'),
       },
       items: lineItems,
     };

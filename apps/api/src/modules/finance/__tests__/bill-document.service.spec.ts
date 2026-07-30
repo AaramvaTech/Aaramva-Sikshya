@@ -6,6 +6,8 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
 import { BillPdfService } from '../bill-pdf.service';
 import { Role } from '../../common/enums/role.enum';
+import { amountInWords } from '../../../common/money/amount-in-words';
+import { Money } from '../../../common/money/money';
 
 const mockInvoice = {
   id: 'invoice-1',
@@ -146,5 +148,33 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
       0,
     );
     expect(printedNetSum).toBeCloseTo(invoiceWithWholeBillConcession.netAmount, 2);
+  });
+
+  it('BILL-8-BUG-1 follow-up: amount-in-words is computed at render time from total_receivable, overriding a stale stored value — never a live balance lookup', async () => {
+    const invoiceWithStaleStoredWords = {
+      ...mockInvoice,
+      netAmount: 1350,
+      previousBalance: 450, // Dr — carried forward from a prior invoice
+      totalReceivable: 1800, // net(1350) + previousBalance(450)
+      // Deliberately wrong/stale — simulates a pre-BILL-8-BUG-1-fix row.
+      // The render must ignore this and compute fresh from totalReceivable.
+      amountInWordsEn: 'One Thousand Three Hundred Fifty Rupees',
+    };
+    (billInvoiceService.findOne as jest.Mock).mockResolvedValueOnce(invoiceWithStaleStoredWords);
+    (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
+    (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{
+      name: 'Demo School', logo_url: null, pan_number: null, registration_number: null,
+      address: null, phone: null, website: null, tagline: null, payment_instructions: null,
+      qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
+    }]);
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
+
+    await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT);
+
+    const renderedData = (billPdfService.render as jest.Mock).mock.calls[0][0];
+    const expectedWords = amountInWords(Money.fromNumber(1800), 'en');
+    expect(renderedData.invoice.amountInWordsEn).toBe(expectedWords);
+    expect(renderedData.invoice.amountInWordsEn).not.toBe(invoiceWithStaleStoredWords.amountInWordsEn);
   });
 });
