@@ -1,5 +1,22 @@
 # Operations Runbook (OPS-1)
 
+## ⚠️ Before a real school goes live
+
+Open, must-do gates before any real school's data or money goes through a
+feature listed here. Not a general backlog — only items that would silently
+break or expose something in production if skipped. Close an item by fixing
+it and deleting its line here.
+
+- **PAY-UI-REPOINT** — `apps/mobile`'s parent Fees screen and `apps/web` still
+  target the pre-BILL-5 `invoices`/`payments` tables, not `bill_invoices`/
+  `bill_payments`. Do not cut a real school's billing over to the new tables
+  until this lands, or parents' "Pay with eSewa/Khalti" buttons silently
+  404. Full detail: `BILL-BUGS.md` → PAY-UI-REPOINT.
+- **Non-superuser Postgres role for prod** — the app connects as the
+  `postgres` superuser in dev (see `CLAUDE.md` dev notes); production must
+  run under a dedicated non-superuser role. Not yet actioned — no role or
+  rotation script exists for this yet.
+
 ## Backups
 
 ### Take a backup

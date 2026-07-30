@@ -4,6 +4,12 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## PAY-2-SANDBOX — open follow-up, non-blocking (logged 2026-07-30, from the BILL-5 merge decision)
+
+**Khalti's sandbox click-through (Checkpoint C plan Task 7) is deferred — does not block BILL-5's merge.** `KHALTI_SECRET_KEY` is still unset pending Srijan's `test-admin.khalti.com` merchant signup. Khalti's *code* is fully built and unit-tested in Checkpoint C (symmetric diff to eSewa, 20/20 passing) — only the live click-through proof is outstanding; nothing about the implementation is unfinished or gated on this. **Ruling: BILL-5 merges and closes on the eSewa sandbox proof alone (Task 6).** Once the signup lands and the boot log confirms `Khalti gateway enabled`, complete Task 7 the same way Task 6 was completed (fresh `bill_invoice` → initiate → Srijan's click-through → raw SELECT proof → cleanup) and delete this entry.
+
+---
+
 ## BILL-5 Checkpoint C — eSewa/Khalti re-pointed to bill_invoices/bill_payments (2026-07-29, branch `feat/bill-5-payments`)
 
 **`recordPaymentInTx` extraction — the third instance of the postEntry/postEntryInTx split in this codebase.** `BillPaymentService.recordPayment` (HTTP-facing: student/year existence checks, CASH/CHEQUE-only restriction, cheque-field requirements) now delegates to `recordPaymentInTx(tx, params, receivedById)`, a resolved-params primitive that participates in an already-open, already-locked transaction and does NOT re-validate the caller. `EsewaService`/`KhaltiService` call it directly with `method: ESEWA/KHALTI` — values `recordPayment()` itself would reject with a 400 — exactly the same trust relationship `LedgerService.postEntryInTx`/`reverseInTx` already have with their callers. All 24 pre-existing `recordPayment` tests passed unchanged (behavior-preserving extraction).
@@ -20,7 +26,7 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 **Suite counts:** eSewa 21/21 (was 19; +2), Khalti 20/20 (was 18; +2), full finance suite 309/309 (was 305 at Checkpoint B close), full api suite **959/959, 115 suites**, `tsc -p tsconfig.build.json --noEmit` clean. (Plain `npx tsc --noEmit` without `-p tsconfig.build.json` falsely reports `rootDir` errors on `scripts/prune-orphans.ts` and `test/app.e2e-spec.ts` — those files are legitimately outside `src/` and excluded from the real build; `tsconfig.build.json` is the correct check, consistent with `npm run build`.)
 
-**Live proof status:** eSewa sandbox proof (Task 6) and Khalti sandbox proof (Task 7, blocked on Srijan's `test-admin.khalti.com` signup — `KHALTI_SECRET_KEY` still empty as of this entry) are Srijan's own manual click-throughs, reported separately once the code lands.
+**Live proof status:** eSewa sandbox proof (Task 6) is Srijan's own manual click-through, reported separately once complete. Khalti sandbox proof (Task 7) is deferred and does **not** block this checkpoint's merge — see PAY-2-SANDBOX above.
 
 ---
 

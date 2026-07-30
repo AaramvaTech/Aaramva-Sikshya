@@ -536,6 +536,8 @@ git commit -m "feat(api): BILL-5 Checkpoint C — re-point KhaltiService to bill
 
 - [ ] Same shape as Task 6, using `POST /finance/payments/khalti/initiate` and the Khalti test payer credentials (`9800000000` / MPIN `1111` / OTP `987654`). **Only proceeds once `KHALTI_SECRET_KEY` is set and the boot log confirms `Khalti gateway enabled`.** If not ready when Tasks 1-6 complete, Checkpoint C's report states this explicitly as pending — not silently skipped, not blocking the rest of the checkpoint from being reported as otherwise done.
 
+**2026-07-30 ruling:** confirmed non-blocking — BILL-5 merges and closes on Task 6 (eSewa) alone. Logged as the open, non-blocking `PAY-2-SANDBOX` follow-up in `BILL-BUGS.md`. Complete this task and delete that entry once the signup lands.
+
 ---
 
 ## Self-Review Notes
