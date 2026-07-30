@@ -18,6 +18,18 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 **Cleanup:** the aborted Chrome profile directory and every intermediate screenshot/PDF from this investigation were deleted from the scratchpad; nothing persisted outside it. 18 orphaned headless `chrome.exe` processes I had spawned across several attempts were killed; the taskkill correctly could not (and did not attempt past permission boundaries to) touch pre-existing Chrome processes outside ones I spawned.
 
+**Resolved (Srijan, visual check):** the leading theory was right — Devanagari renders correctly across both documents (रसिद, बिल, विद्यार्थी, प्राप्त रकम, the amount-in-words all confirmed as proper glyphs by eye). `pdftotext`'s blank extraction was purely an extraction-tool limitation with Devanagari's complex glyph shaping, not a rendering bug — consistent with every signal already gathered here. This finding is closed; `pdftotext` should not be trusted for Devanagari verification in this codebase going forward, visual/native-reader check is authoritative. The same visual check surfaced a real, separate bug — logged next.
+
+---
+
+## BILL-8-CKPTB-FINDING-2 — mixed-script tofu on the "For: {School}" signature line, fixed at the root
+
+**Found live by Srijan during the visual check above**: the signature line's label rendered correctly but the school name rendered as tofu boxes, on both the bill and the receipt. Root cause and fix — full detail in the commit — `pickFont()` was picking one font from the translated label alone, then that single font got applied to the concatenated `${label}: ${tenant.name}` string; Latin and Devanagari Noto builds share zero glyph coverage, so the Latin school name tofu'd when the label was Devanagari.
+
+**Fixed at the root, not just the reported line**: audited every label+dynamic-value concatenation in both renderers and found four instances of the same bug class (signature line ×2, header registration-number line, header contact line) plus one related oversight (payment instructions hardcoded to `'latin'` instead of picking dynamically for tenant-entered free text). New `drawMixedText` helper (`common/pdf/pdf-fonts.ts`) draws each run with its own independently-picked font. 3 new tests using a real `PDFDocument` + font spy prove the mechanism (each run gets the right font; all-Latin input never regresses to picking Devanagari).
+
+**Live-verified the fix changed something real**, not just cosmetically: `pdftotext` extraction of "Demo School Nepal" at the signature line was *completely absent* before the fix (forced through a font with no Latin glyphs) and extracts correctly after, on both documents — while the Devanagari label portion is unaffected either way (FINDING-1's separate, already-resolved extraction limitation). Regenerated samples handed to Srijan for the still-pending native-speaker word review — gate stays closed until that lands.
+
 ---
 
 ## BILL-8-BUG-1 — amount_in_words fed net, not total_receivable (real content bug, found via round-2 visual review)
