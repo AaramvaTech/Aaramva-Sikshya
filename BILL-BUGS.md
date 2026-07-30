@@ -4,6 +4,22 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-8-CKPTB-FINDING-1 — Devanagari text extracts blank from the generated PDFs; visual rendering unverified (raised, not resolved)
+
+**`pdftotext` extraction of every Devanagari string in the Checkpoint B PDFs (both bill and receipt) comes back blank** — not garbled, not "�", genuinely empty where the Nepali label/amount-in-words text should be. Investigated properly before raising this, not just noticed and shrugged off:
+
+1. Confirmed the source strings in `bill-print-labels.ts` are correctly-encoded real Devanagari (read directly, codepoints in the U+0900–U+097F block).
+2. Confirmed `pickFont()` correctly detects them and returns `'deva'`/`'deva-bold'` (isolated script test).
+3. Confirmed the font FILE itself (`NotoSansDevanagari-Regular.ttf`) renders these exact strings correctly and legibly — proper conjuncts, proper matra reordering — via a plain HTML `@font-face` page screenshotted in headless Chrome. The font is intact; my strings are correct.
+4. **The same blank-extraction result also reproduces for `'प्रगति-पत्र'`** — the exact Devanagari string `examination/pdf.service.ts` has used for report cards since before this checkpoint, previously described in this codebase's history as proven working. Whatever this is, it isn't specific to Checkpoint B's new code.
+5. Tried to get a direct visual screenshot of the actual generated PDF (not just the font-file test) via headless Chrome's built-in PDF viewer — could not get a reliable render; headless Chrome's PDF-viewer path returned a blank placeholder every time regardless of flags tried, a known category of Chromium headless limitation, not informative either way. One attempt to force an isolated profile launched a real, visible, non-headless Chrome window instead (killed immediately; no scratch profile or side effects persisted — see cleanup note below).
+
+**What this means:** I cannot currently tell you with certainty whether the Devanagari glyphs visually render correctly in the PDFs or not. The leading explanation — blank Unicode round-trip in a font's `ToUnicode` CMap for a complex script (Devanagari's conjuncts/reordered matras) while the visual glyph rendering itself is completely correct — is a well-known, well-precedented category of PDF issue independent of pdfkit specifically, and every other signal here (font intact, strings correct, font-selection logic correct) points that direction. But I have no positive confirmation for the PDF-embedded case specifically, only for a different rendering path (plain HTML) using the same font file. **Do not treat the attached Nepali samples as "already visually verified" — open them yourself and look before doing the native-speaker review.** If the Nepali text is genuinely blank/boxes when you open them, that's a real, unresolved rendering bug blocking this checkpoint, not a review-content question, and I'd need to fix it (likely by tracing pdfkit/fontkit's Devanagari glyph-substitution path) before the gate could ever open. A proper rasterizer (`pdftoppm`/`mutool`, neither available in this environment) would resolve this definitively without needing your eyes at all — I can pursue getting one installed if useful.
+
+**Cleanup:** the aborted Chrome profile directory and every intermediate screenshot/PDF from this investigation were deleted from the scratchpad; nothing persisted outside it. 18 orphaned headless `chrome.exe` processes I had spawned across several attempts were killed; the taskkill correctly could not (and did not attempt past permission boundaries to) touch pre-existing Chrome processes outside ones I spawned.
+
+---
+
 ## BILL-8-BUG-1 — amount_in_words fed net, not total_receivable (real content bug, found via round-2 visual review)
 
 **`bill-run-post-runner.service.ts` (BILL-4, predates BILL-8) called `amountInWords(netAmount, ...)` at invoice-post time — should be `totalReceivable` (= net + previous_balance).** For any invoice with a nonzero carry-forward, the printed amount-in-words disagreed with the printed Total Receivable — e.g. proof invoice BINV-2083-000027: Total Receivable Rs. 1,800 (net 1,350 + previous balance 450 Dr) but the stored words read "One Thousand Three Hundred Fifty," the net-only figure. Silent since BILL-4 shipped — nothing rendered `amount_in_words_en/ne` on a real document until BILL-8's bill PDF made it visible.
