@@ -6,7 +6,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import type { AuthUser } from '../auth/auth.types';
 import { BillCorrectionService } from './bill-correction.service';
-import { BillCorrectionQueryDto, CreateCreditNoteDto, DecideCorrectionDto } from './dto/bill-correction.dto';
+import {
+  BillCorrectionQueryDto, CreateCreditNoteDto, CreateRefundDto, CreateWriteOffDto, DecideCorrectionDto,
+} from './dto/bill-correction.dto';
 
 const ACCOUNTANT_AND_ABOVE = [
   Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL,
@@ -15,11 +17,10 @@ const ACCOUNTANT_AND_ABOVE = [
 const OWNER_ONLY = [Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER];
 
 /**
- * BILL-6-SPEC.md §5 Checkpoint A. Requests are ACCOUNTANT_AND_ABOVE;
- * approve/reject/reverse are OWNER_ONLY (B6-4). Refund/write-off request
- * routes land in Checkpoint B — approve/reject/reverse here already handle
- * any type (BillCorrectionService.approve rejects non-CREDIT_NOTE types for
- * now), so this same controller extends cleanly without route churn.
+ * BILL-6-SPEC.md §5. Requests are ACCOUNTANT_AND_ABOVE; approve/reject/
+ * reverse are OWNER_ONLY (B6-4) and already handle all three types
+ * generically (BillCorrectionService.approve dispatches by
+ * correction.type) — no route churn needed between Checkpoint A and B.
  */
 @Controller('finance/corrections')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,6 +31,18 @@ export class BillCorrectionController {
   @Roles(...ACCOUNTANT_AND_ABOVE)
   requestCreditNote(@Body() dto: CreateCreditNoteDto, @CurrentUser('userId') userId: string) {
     return this.billCorrectionService.requestCreditNote(dto, userId);
+  }
+
+  @Post('refunds')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  requestRefund(@Body() dto: CreateRefundDto, @CurrentUser('userId') userId: string) {
+    return this.billCorrectionService.requestRefund(dto, userId);
+  }
+
+  @Post('write-offs')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  requestWriteOff(@Body() dto: CreateWriteOffDto, @CurrentUser('userId') userId: string) {
+    return this.billCorrectionService.requestWriteOff(dto, userId);
   }
 
   @Get()

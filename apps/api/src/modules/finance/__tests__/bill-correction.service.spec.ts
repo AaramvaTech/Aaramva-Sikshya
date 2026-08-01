@@ -6,7 +6,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
 import { FinanceSettingsService } from '../finance-settings.service';
 import { Role } from '../../common/enums/role.enum';
-import { CreateCreditNoteDto } from '../dto/bill-correction.dto';
+import { CreateCreditNoteDto, CreateRefundDto, CreateWriteOffDto, RefundMethod } from '../dto/bill-correction.dto';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -270,6 +270,207 @@ describe('BillCorrectionService', () => {
         expect.stringContaining('student_id IN (SELECT student_id FROM guardians WHERE user_id ='),
         'parent-1', 20, 0,
       );
+    });
+  });
+
+  // ─── Checkpoint B: refunds ──────────────────────────────────────────────
+
+  function baseRefundDto(overrides: Partial<CreateRefundDto> = {}): CreateRefundDto {
+    return {
+      studentId: 'student-1',
+      academicYearId: 'year-1',
+      amount: '2000.00',
+      reasonId: 'reason-1',
+      refundMethod: RefundMethod.CASH,
+      ...overrides,
+    } as CreateRefundDto;
+  }
+
+  function mockRefundPrelude() {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([{ id: 'year-1' }]) // academic year
+      .mockResolvedValueOnce([{ id: 'reason-1' }]); // reason
+  }
+
+  describe('requestRefund — validation', () => {
+    it('404s when the student does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.requestRefund(baseRefundDto(), 'accountant-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects a zero amount', async () => {
+      mockRefundPrelude();
+      await expect(service.requestRefund(baseRefundDto({ amount: '0.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('requires a refundReference for BANK_TRANSFER', async () => {
+      mockRefundPrelude();
+      await expect(
+        service.requestRefund(baseRefundDto({ refundMethod: RefundMethod.BANK_TRANSFER }), 'accountant-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('requestRefund — B6-3 always requires approval, B6-6 guard', () => {
+    it('always stays REQUESTED regardless of amount — never auto-posts', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ sum: '-2000.00' }]) // availableCredit: balance -2000 -> 2000 available
+        .mockResolvedValueOnce([{ value: BigInt(3) }]) // sequence
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, type: 'REFUND', amount: '2000.00', status: 'REQUESTED', requires_approval: true, refund_method: 'CASH' }]);
+
+      const result = await service.requestRefund(baseRefundDto({ amount: '2000.00' }), 'accountant-1');
+
+      expect(result.status).toBe('REQUESTED');
+      expect(result.requiresApproval).toBe(true);
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    });
+
+    it('rejects when amount exceeds available advance credit, posts nothing', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ sum: '-500.00' }]); // only 500 available
+
+      await expect(service.requestRefund(baseRefundDto({ amount: '2000.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the student owes money (zero available credit), posts nothing', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ sum: '1000.00' }]); // student OWES, no credit
+
+      await expect(service.requestRefund(baseRefundDto({ amount: '100.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── Checkpoint B: write-offs ───────────────────────────────────────────
+
+  function baseWriteOffDto(overrides: Partial<CreateWriteOffDto> = {}): CreateWriteOffDto {
+    return {
+      studentId: 'student-1',
+      academicYearId: 'year-1',
+      amount: '5000.00',
+      reasonId: 'reason-1',
+      ...overrides,
+    } as CreateWriteOffDto;
+  }
+
+  describe('requestWriteOff — validation', () => {
+    it('404s when the student does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.requestWriteOff(baseWriteOffDto(), 'accountant-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects a zero amount', async () => {
+      mockRefundPrelude();
+      await expect(service.requestWriteOff(baseWriteOffDto({ amount: '0.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('requestWriteOff — B6-3 always requires approval', () => {
+    it('balance-level write-off always stays REQUESTED, never auto-posts', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ sum: '5000.00' }]) // owedBalance
+        .mockResolvedValueOnce([{ value: BigInt(4) }]) // sequence
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, type: 'WRITE_OFF', target_invoice_id: null, amount: '5000.00', status: 'REQUESTED', requires_approval: true }]);
+
+      const result = await service.requestWriteOff(baseWriteOffDto({ amount: '5000.00' }), 'accountant-1');
+
+      expect(result.status).toBe('REQUESTED');
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    });
+
+    it('rejects a balance-level write-off exceeding the live balance, posts nothing', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ sum: '1000.00' }]); // only owes 1000
+
+      await expect(service.requestWriteOff(baseWriteOffDto({ amount: '5000.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the student holds advance credit (nothing owed), posts nothing', async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ sum: '-500.00' }]); // ADVANCE, nothing owed
+
+      await expect(service.requestWriteOff(baseWriteOffDto({ amount: '100.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('invoice-targeted write-off validates invoice ownership like a credit note', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-1' }])
+        .mockResolvedValueOnce([{ id: 'year-1' }])
+        .mockResolvedValueOnce([{ id: 'reason-1' }])
+        .mockResolvedValueOnce([{ id: 'invoice-1', student_id: 'someone-else', status: 'POSTED' }]);
+      await expect(
+        service.requestWriteOff(baseWriteOffDto({ targetInvoiceId: 'invoice-1' }), 'accountant-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── Checkpoint B: approve() dispatches by type ─────────────────────────
+
+  describe('approve — REFUND (B6-10 direction: debit against credit balance)', () => {
+    it('posts a debit entry consuming the advance and marks APPROVED', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, type: 'REFUND', amount: '2000.00', target_invoice_id: null, refund_method: 'CASH', refund_reference: null },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'REQUESTED' }]) // re-check under lock
+        .mockResolvedValueOnce([{ sum: '-2000.00' }]) // availableCredit re-check
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, type: 'REFUND', status: 'APPROVED', ledger_entry_id: 'ledger-refund-1' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-refund-1' } as any);
+
+      const result = await service.approve('corr-1', 'owner-1', {});
+
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'REFUND', debit: '2000.00', credit: '0', studentId: 'student-1',
+      }));
+      expect(result.status).toBe('APPROVED');
+    });
+
+    it('re-validates available credit at approval time — rejects and posts nothing if insufficient now', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, type: 'REFUND', amount: '2000.00', target_invoice_id: null },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'REQUESTED' }])
+        .mockResolvedValueOnce([{ sum: '-500.00' }]); // only 500 available now
+
+      await expect(service.approve('corr-1', 'owner-1', {})).rejects.toThrow(BadRequestException);
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('approve — WRITE_OFF (direction: credit, reduces owed balance)', () => {
+    it('posts a credit entry for a balance-level write-off and marks APPROVED', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, type: 'WRITE_OFF', amount: '5000.00', target_invoice_id: null },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'REQUESTED' }])
+        .mockResolvedValueOnce([{ sum: '5000.00' }]) // owedBalance re-check
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, type: 'WRITE_OFF', status: 'APPROVED', ledger_entry_id: 'ledger-wo-1' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-wo-1' } as any);
+
+      const result = await service.approve('corr-1', 'owner-1', {});
+
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'WRITE_OFF', debit: '0', credit: '5000.00', studentId: 'student-1',
+      }));
+      expect(result.status).toBe('APPROVED');
+    });
+
+    it('re-validates the balance cap at approval time — rejects and posts nothing if it now exceeds', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, type: 'WRITE_OFF', amount: '5000.00', target_invoice_id: null },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ status: 'REQUESTED' }])
+        .mockResolvedValueOnce([{ sum: '1000.00' }]); // only owes 1000 now
+
+      await expect(service.approve('corr-1', 'owner-1', {})).rejects.toThrow(BadRequestException);
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
     });
   });
 });

@@ -8,7 +8,9 @@ import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { buildCorrectionSequenceKey, buildCorrectionNumber } from './bill-correction.util';
-import { CreateCreditNoteDto, DecideCorrectionDto, BillCorrectionQueryDto } from './dto/bill-correction.dto';
+import {
+  CreateCreditNoteDto, CreateRefundDto, CreateWriteOffDto, DecideCorrectionDto, BillCorrectionQueryDto,
+} from './dto/bill-correction.dto';
 import {
   BillCorrectionRow, BillCorrectionResponseDto, toBillCorrectionResponse,
 } from './entities/bill-correction.entity';
@@ -16,13 +18,22 @@ import { LedgerEntryRow, LedgerEntryResponseDto, toLedgerEntryResponse } from '.
 import { Role } from '../common/enums/role.enum';
 
 /**
- * BILL-6-SPEC.md §3/§7 Checkpoint A — credit notes + the request→approve
- * workflow. No new ledger table: student_ledger_entries already permits
- * CREDIT_NOTE (0021_bill_ledger.sql); this service is the workflow + audit
- * wrapper around LedgerService's existing posting/reversal machinery.
+ * BILL-6-SPEC.md §3/§7 — credit notes (Checkpoint A), refunds + write-offs
+ * (Checkpoint B), all sharing one request→approve/reject/reverse workflow.
+ * No new ledger table: student_ledger_entries already permits CREDIT_NOTE/
+ * REFUND/WRITE_OFF (0021_bill_ledger.sql); this service is the workflow +
+ * audit wrapper around LedgerService's existing posting/reversal machinery.
  *
- * B6-10 direction: a credit note is a CREDIT (reduces what the student
- * owes) — every postEntryInTx call below posts credit=amount, debit='0'.
+ * B6-10 direction: credit notes and write-offs are CREDITs (reduce what the
+ * student owes — debit='0', credit=amount); a refund is a DEBIT against the
+ * student's credit balance (consumes their advance — debit=amount,
+ * credit='0'), never an increase to what they owe. approve() dispatches the
+ * direction and the re-validation cap by correction.type.
+ *
+ * B6-3: credit notes below the tenant's threshold auto-post at request time
+ * (requestCreditNote); refunds and write-offs ALWAYS require approval
+ * regardless of amount (requestRefund/requestWriteOff never take that
+ * branch — every row they insert starts REQUESTED).
  */
 @Injectable()
 export class BillCorrectionService {
@@ -88,17 +99,7 @@ export class BillCorrectionService {
       }
 
       const requiresApproval = amount.compare(threshold) >= 0;
-
-      const { slug } = this.tenantContext.getOrThrow();
-      const todayBs = adToBs(new Date(todayAdInNepal()));
-      const seqKey = buildCorrectionSequenceKey(slug);
-      const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
-        `INSERT INTO sequences (key, value) VALUES ($1, 1)
-         ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
-         RETURNING value`,
-        seqKey,
-      );
-      const correctionNumber = buildCorrectionNumber(todayBs.year, seqRow.value);
+      const correctionNumber = await this.nextCorrectionNumber(tx);
 
       const status = requiresApproval ? 'REQUESTED' : 'APPROVED';
       const decidedBy = requiresApproval ? null : requestedById;
@@ -138,6 +139,124 @@ export class BillCorrectionService {
     });
   }
 
+  /** B6-3: always requires approval, regardless of amount — never auto-posts
+   * (unlike credit notes below threshold). B6-6: draws only from available
+   * advance credit; rejected at validation if insufficient. */
+  async requestRefund(dto: CreateRefundDto, requestedById: string): Promise<BillCorrectionResponseDto> {
+    const studentRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`, dto.studentId,
+    );
+    if (!studentRows[0]) throw new NotFoundException(`Student ${dto.studentId} not found`);
+
+    const yearRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM academic_years WHERE id = $1::uuid`, dto.academicYearId,
+    );
+    if (!yearRows[0]) throw new NotFoundException(`Academic year ${dto.academicYearId} not found`);
+
+    const reasonRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM correction_reasons WHERE id = $1::uuid AND deleted_at IS NULL`, dto.reasonId,
+    );
+    if (!reasonRows[0]) throw new NotFoundException(`Correction reason ${dto.reasonId} not found`);
+
+    const amount = toMoney(dto.amount);
+    if (amount.compare(Money.zero()) <= 0) {
+      throw new BadRequestException('Refund amount must be greater than zero');
+    }
+    if (dto.refundMethod === 'BANK_TRANSFER' && !dto.refundReference) {
+      throw new BadRequestException('BANK_TRANSFER refunds require a refundReference');
+    }
+
+    return this.ledgerService.withStudentLock(dto.studentId, async (tx) => {
+      const available = await this.availableCredit(tx, dto.studentId);
+      if (amount.compare(available) > 0) {
+        throw new BadRequestException(
+          `Refund amount ${amount.toDb()} exceeds available advance credit of ${available.toDb()}`,
+        );
+      }
+
+      const correctionNumber = await this.nextCorrectionNumber(tx);
+
+      const [correction] = await tx.$queryRawUnsafe<BillCorrectionRow[]>(
+        `INSERT INTO bill_corrections
+           (correction_number, type, student_id, academic_year_id, amount, reason_id,
+            refund_method, refund_reference, status, requested_by, requires_approval)
+         VALUES ($1, 'REFUND', $2::uuid, $3::uuid, $4::numeric, $5::uuid,
+                 $6, $7, 'REQUESTED', $8::uuid, true)
+         RETURNING *`,
+        correctionNumber, dto.studentId, dto.academicYearId, amount.toDb(), dto.reasonId,
+        dto.refundMethod, dto.refundReference ?? null, requestedById,
+      );
+
+      return toBillCorrectionResponse(correction);
+    });
+  }
+
+  /** B6-3: always requires approval. Targets a specific invoice OR the
+   * student's overall balance (spec §3: "target invoice/balance exists and
+   * is outstanding"). */
+  async requestWriteOff(dto: CreateWriteOffDto, requestedById: string): Promise<BillCorrectionResponseDto> {
+    const studentRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`, dto.studentId,
+    );
+    if (!studentRows[0]) throw new NotFoundException(`Student ${dto.studentId} not found`);
+
+    const yearRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM academic_years WHERE id = $1::uuid`, dto.academicYearId,
+    );
+    if (!yearRows[0]) throw new NotFoundException(`Academic year ${dto.academicYearId} not found`);
+
+    const reasonRows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT id FROM correction_reasons WHERE id = $1::uuid AND deleted_at IS NULL`, dto.reasonId,
+    );
+    if (!reasonRows[0]) throw new NotFoundException(`Correction reason ${dto.reasonId} not found`);
+
+    if (dto.targetInvoiceId) {
+      const invoiceRows = await this.tenantPrisma.query<{ id: string; student_id: string; status: string }>(
+        `SELECT id, student_id, status FROM bill_invoices WHERE id = $1::uuid AND deleted_at IS NULL`,
+        dto.targetInvoiceId,
+      );
+      const invoice = invoiceRows[0];
+      if (!invoice) throw new NotFoundException(`Invoice ${dto.targetInvoiceId} not found`);
+      if (invoice.student_id !== dto.studentId) {
+        throw new BadRequestException(`Invoice ${dto.targetInvoiceId} does not belong to student ${dto.studentId}`);
+      }
+      if (invoice.status === 'VOIDED') {
+        throw new BadRequestException(`Cannot write off a voided invoice`);
+      }
+    }
+
+    const amount = toMoney(dto.amount);
+    if (amount.compare(Money.zero()) <= 0) {
+      throw new BadRequestException('Write-off amount must be greater than zero');
+    }
+
+    return this.ledgerService.withStudentLock(dto.studentId, async (tx) => {
+      const cap = dto.targetInvoiceId
+        ? await this.creditableAmount(tx, dto.targetInvoiceId, null)
+        : await this.owedBalance(tx, dto.studentId);
+      if (amount.compare(cap) > 0) {
+        throw new BadRequestException(
+          `Write-off amount ${amount.toDb()} exceeds the outstanding amount of ${cap.toDb()}`,
+        );
+      }
+
+      const correctionNumber = await this.nextCorrectionNumber(tx);
+
+      const [correction] = await tx.$queryRawUnsafe<BillCorrectionRow[]>(
+        `INSERT INTO bill_corrections
+           (correction_number, type, student_id, academic_year_id, target_invoice_id,
+            amount, reason_id, status, requested_by, requires_approval)
+         VALUES ($1, 'WRITE_OFF', $2::uuid, $3::uuid, $4::uuid,
+                 $5::numeric, $6::uuid, 'REQUESTED', $7::uuid, true)
+         RETURNING *`,
+        correctionNumber, dto.studentId, dto.academicYearId, dto.targetInvoiceId ?? null,
+        amount.toDb(), dto.reasonId, requestedById,
+      );
+
+      return toBillCorrectionResponse(correction);
+    });
+  }
+
   async approve(id: string, approverId: string, dto: DecideCorrectionDto): Promise<BillCorrectionResponseDto> {
     const rows = await this.tenantPrisma.query<BillCorrectionRow>(
       `SELECT * FROM bill_corrections WHERE id = $1::uuid AND deleted_at IS NULL`, id,
@@ -156,28 +275,52 @@ export class BillCorrectionService {
         throw new ConflictException(`Correction ${id} status changed concurrently (now ${current.status})`);
       }
 
-      if (correction.type !== 'CREDIT_NOTE') {
-        throw new BadRequestException(`Approval for type ${correction.type} is not yet supported`);
-      }
-
       const amount = toMoney(correction.amount);
+      let debit: string;
+      let credit: string;
+      let label: string;
+
       // Re-validated here, not just at request time — REQUESTED reserves
-      // nothing, so another write against the same invoice could have
-      // landed between request and approve.
-      const outstanding = await this.creditableAmount(tx, correction.target_invoice_id!, correction.target_invoice_item_id);
-      if (amount.compare(outstanding) > 0) {
-        throw new BadRequestException(
-          `Cannot approve — credit note amount ${amount.toDb()} now exceeds the outstanding-after-existing-credits amount of ${outstanding.toDb()}`,
-        );
+      // nothing, so another write against the same invoice/balance could
+      // have landed between request and approve.
+      if (correction.type === 'CREDIT_NOTE') {
+        const outstanding = await this.creditableAmount(tx, correction.target_invoice_id!, correction.target_invoice_item_id);
+        if (amount.compare(outstanding) > 0) {
+          throw new BadRequestException(
+            `Cannot approve — credit note amount ${amount.toDb()} now exceeds the outstanding-after-existing-credits amount of ${outstanding.toDb()}`,
+          );
+        }
+        debit = '0'; credit = amount.toDb(); label = 'Credit note';
+      } else if (correction.type === 'REFUND') {
+        // B6-10: a refund is a DEBIT against the student's credit balance —
+        // it consumes their advance, it does not increase what they owe.
+        const available = await this.availableCredit(tx, correction.student_id);
+        if (amount.compare(available) > 0) {
+          throw new BadRequestException(
+            `Cannot approve — refund amount ${amount.toDb()} now exceeds available advance credit of ${available.toDb()}`,
+          );
+        }
+        debit = amount.toDb(); credit = '0'; label = 'Refund';
+      } else {
+        // WRITE_OFF — a credit, same direction as a credit note.
+        const cap = correction.target_invoice_id
+          ? await this.creditableAmount(tx, correction.target_invoice_id, correction.target_invoice_item_id)
+          : await this.owedBalance(tx, correction.student_id);
+        if (amount.compare(cap) > 0) {
+          throw new BadRequestException(
+            `Cannot approve — write-off amount ${amount.toDb()} now exceeds the outstanding amount of ${cap.toDb()}`,
+          );
+        }
+        debit = '0'; credit = amount.toDb(); label = 'Write-off';
       }
 
       const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
         studentId: correction.student_id,
         academicYearId: correction.academic_year_id,
-        entryType: 'CREDIT_NOTE',
-        debit: '0',
-        credit: amount.toDb(),
-        narration: `Credit note ${correction.correction_number}`,
+        entryType: correction.type,
+        debit,
+        credit,
+        narration: `${label} ${correction.correction_number}`,
         refDocType: 'bill_correction',
         refDocId: correction.id,
         createdById: approverId,
@@ -297,14 +440,17 @@ export class BillCorrectionService {
 
   /** B6-2: amount ≤ the invoice's (or line's) outstanding-after-existing-credits.
    * Line-level caps against that item's net_amount minus its own prior
-   * APPROVED credit notes; invoice-level nets out CLEARED payments too
-   * (same "outstanding" definition BillPaymentService already uses). */
+   * APPROVED credits; invoice-level nets out CLEARED payments too (same
+   * "outstanding" definition BillPaymentService already uses). "credited"
+   * sums BOTH CREDIT_NOTE and WRITE_OFF — an approved invoice-scoped
+   * write-off shrinks the room left for a later credit note on the same
+   * invoice, and vice versa (BILL-BUGS.md CORRECTIONS-CAP-SHARED). */
   private async creditableAmount(tx: TenantTx, invoiceId: string, itemId: string | null): Promise<Money> {
     if (itemId) {
       const [row] = await tx.$queryRawUnsafe<{ net_amount: string; credited: string }[]>(
         `SELECT bii.net_amount,
                 COALESCE((SELECT SUM(bc.amount) FROM bill_corrections bc
-                          WHERE bc.target_invoice_item_id = bii.id AND bc.type = 'CREDIT_NOTE' AND bc.status = 'APPROVED'), 0) AS credited
+                          WHERE bc.target_invoice_item_id = bii.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'), 0) AS credited
          FROM bill_invoice_items bii WHERE bii.id = $1::uuid`,
         itemId,
       );
@@ -317,11 +463,45 @@ export class BillCorrectionService {
                         JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
                         WHERE bpa.bill_invoice_id = bi.id), 0) AS paid,
               COALESCE((SELECT SUM(bc.amount) FROM bill_corrections bc
-                        WHERE bc.target_invoice_id = bi.id AND bc.type = 'CREDIT_NOTE' AND bc.status = 'APPROVED'), 0) AS credited
+                        WHERE bc.target_invoice_id = bi.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'), 0) AS credited
        FROM bill_invoices bi WHERE bi.id = $1::uuid`,
       invoiceId,
     );
     return toMoney(row.total_receivable).sub(toMoney(row.paid)).sub(toMoney(row.credited));
+  }
+
+  /** B6-6: available advance credit — the magnitude of a negative (ADVANCE) balance. */
+  private async availableCredit(tx: TenantTx, studentId: string): Promise<Money> {
+    const balance = await this.liveBalance(tx, studentId);
+    return balance.compare(Money.zero()) < 0 ? balance.negate() : Money.zero();
+  }
+
+  /** Balance-level write-off cap — the magnitude of a positive (OWES) balance. */
+  private async owedBalance(tx: TenantTx, studentId: string): Promise<Money> {
+    const balance = await this.liveBalance(tx, studentId);
+    return balance.compare(Money.zero()) > 0 ? balance : Money.zero();
+  }
+
+  private async liveBalance(tx: TenantTx, studentId: string): Promise<Money> {
+    const [row] = await tx.$queryRawUnsafe<{ sum: string }[]>(
+      `SELECT COALESCE(SUM(debit)-SUM(credit),0) AS sum FROM student_ledger_entries WHERE student_id = $1::uuid`,
+      studentId,
+    );
+    return toMoney(row.sum);
+  }
+
+  /** R13 gapless correction numbering — shared by all three request paths. */
+  private async nextCorrectionNumber(tx: TenantTx): Promise<string> {
+    const { slug } = this.tenantContext.getOrThrow();
+    const todayBs = adToBs(new Date(todayAdInNepal()));
+    const seqKey = buildCorrectionSequenceKey(slug);
+    const [seqRow] = await tx.$queryRawUnsafe<{ value: bigint }[]>(
+      `INSERT INTO sequences (key, value) VALUES ($1, 1)
+       ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1
+       RETURNING value`,
+      seqKey,
+    );
+    return buildCorrectionNumber(todayBs.year, seqRow.value);
   }
 
   private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
