@@ -326,6 +326,46 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] Student mobile screens real-content (Session 22 + cleanup) — `app/(student)/index.tsx` (Dashboard: BS date in header via `todayBs`+`formatBs`, profile+enrollment, attendance summary card using shared STATUS_CONFIG, today's timetable with Saturday guard); `app/(student)/attendance.tsx` rewritten as BS-month calendar grid (`daysInBsMonth` for month length, `bsToAd` for weekday-of-first-day + AD date-range query, month nav with year-boundary handling, Saturday column amber, today cell highlighted, cells colored by STATUS_CONFIG, legend + monthly summary strip); `app/(student)/_layout.tsx` reduced to 2 tabs (Dashboard/index + Attendance); `lib/attendance.ts` — shared STATUS_CONFIG constant (PRESENT/ABSENT/LATE/LEAVE → label/color/bg/dot/shortCode/icon); `hooks/useStudentMe.ts` — added `useAttendanceHistory({ fromDate, toDate })` with paginated extraction (`data.data.data` + `data.data.meta`). Cleanup: deleted `app/(student)/home.tsx` (Session 21 content superseded by index.tsx; was creating phantom 3rd tab in expo-router v3), deleted unused template scaffold `components/ExternalLink.tsx` + `StyledText.tsx`. `npx tsc --noEmit` exits 0, no errors. **Pattern**: query hooks at `hooks/useStudentMe.ts`; shared attendance constants at `lib/attendance.ts`; all dates stored/queried as AD, converted to BS at display via `bs-calendar`.
 - [x] Teacher Backend A (Session 26) — 5 self-scoped read endpoints (no id params, all resolve from token): `GET /timetable/my` (delegates to getTeacherTimetable; timetable_slots.teacher_id = users.id confirmed), `GET /timetable/my/sections` (DISTINCT union: sections.class_teacher_id OR timetable_slots.teacher_id, deduplicated), `GET /attendance/staff/my/summary` (mirrors staff summary endpoint, TEACHER_AND_ABOVE), `GET /attendance/staff/my` (history, forces userId from token), `GET /hr/staff/me` (resolves staff_profiles by user_id). Write accountability already present: student_attendance.marked_by and marks.entered_by both exist and are set from user.userId — no migration needed. Soft-scope policy confirmed: bulkMark and bulkEnterMarks are permissive (no section/subject assignment check), cross-section writes allowed and recorded. 12 new tests — 251 total passing.
 
+- [x] BILL-8 — bill/receipt printing (`docs/api-contracts/BILL-8-SPEC.md`, `apps/api/src/modules/finance/bill-pdf.*`,
+  `bill-document.service.ts`, `bill-receipt*.ts`, `bill-print-*.ts`, `common/pdf/`) — three checkpoints, branch
+  `feat/bill-8-printing` (#39). **B8-1 reversed at Checkpoint A discovery, before any rendering code was written**
+  (`BILL-BUGS.md`): pdfkit, not headless Chromium — the deploy VPS (KVM 1, 1 vCPU/4GB, already flagged tight for
+  5 containers) made a new Chromium dependency + shared-browser-instance pattern a real OOM risk for zero benefit,
+  since pdfkit already existed (report cards) with a working Devanagari font path. `common/pdf/` extracted as a
+  shared module (font-loading + `pickFont` script detection, behavior-preserving refactor of `examination/
+  pdf.service.ts`) so `bill-pdf.service.ts` reuses it verbatim. **Checkpoint A**: A4 bill layout (pdfkit,
+  per-tenant `brandColor` accent, `Money.toDisplay` lakh-style thousands separators), `BillDocumentService`
+  orchestration + endpoint. **Checkpoint B**: bilingual EN/NE/BOTH + thermal receipt layout +
+  `NEPALI_PRINT_REVIEWED` gate (a native-speaker review must open it before NE/BOTH ship — matches I18N-1's
+  review-gate precedent). Two real findings fixed at the root during the visual review pass (full detail in
+  `BILL-BUGS.md`): mixed-script tofu on the "For: {School}" signature line (`pickFont()` was picking one font for
+  a concatenated label+dynamic-value string; new `drawMixedText` helper draws each run with its own font — 4
+  instances of the bug class found and fixed, not just the reported one) and `amount_in_words` fed `netAmount`
+  instead of `totalReceivable` (BILL-4-era bug, invisible until BILL-8 first rendered it; fixed at render time
+  from the invoice's own frozen `total_receivable`, retroactively correct for all already-posted invoices without
+  mutating immutable rows). **Checkpoint C**: bulk-print background job (run-scoped + class-scoped), poller-driven
+  like every other async job in this module. **Known open item**: `FIX-STORAGE-URL` — `StorageService`'s public-URL
+  builder double-appends the bucket when `S3_PUBLIC_URL` is already bucket-qualified (the documented `.env`
+  convention always is) — real bug, confirmed live, ruled out-of-scope for BILL-8, still open in `BILL-BUGS.md`.
+
+- [x] BILL-9 — read-only reporting + cashier daily-close (`docs/api-contracts/BILL-9-SPEC.md`,
+  `apps/api/migrations/tenant/0028_cashier_shifts.sql`, `apps/api/src/modules/finance/cashier*.ts`) — two
+  checkpoints (#42, #43). **Checkpoint A** (daybook, defaulters, aging, collection, statement): spec named these
+  at `GET /finance/reports/*`, but two of those paths collided with already-live old-rail routes
+  (`FinanceController`'s pre-BILL-4 `report.service.ts`, still backing shipped pages) — raised before writing
+  code, three options offered, Srijan's ruling was to mount all four under the pre-existing REP-1
+  `ReportsController` instead (`GET /reports/finance/daybook|defaulters|collection|aging`), zero collision, zero
+  regression risk (`BILL-BUGS.md` "BILL-9-CKPTA-DEVIATION-1"). Student statement stayed in the finance module as
+  spec'd (`GET /finance/students/:studentId/statement`, extends BILL-3's ledger endpoint with opening/closing
+  framing). **Checkpoint B**: cashier daily-close (`cashier_shifts`, open/close-shift with expected-vs-counted cash
+  reconciliation, `CashierController`). **Checkpoint C (printable export) deliberately skipped, closing BILL-9 at
+  B** — a locked "only if requested" gate per the spec, Srijan's call after Checkpoint B: the five JSON report
+  endpoints plus cashier close are enough for v1; BILL-8's pdfkit path is proven and reusable directly whenever a
+  printable report is actually asked for (`BILL-BUGS.md` "BILL-9-EXPORT"). *(CLAUDE.md drift note, added
+  2026-08-01: this bullet and the one above were reconciled from git history after being found missing from this
+  file on `main` — the underlying code, migrations, and module wiring were confirmed already live and tested; see
+  the `FIX-CLAUDEMD-DRIFT` commit.)*
+
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
