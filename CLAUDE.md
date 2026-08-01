@@ -326,6 +326,46 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] Student mobile screens real-content (Session 22 + cleanup) — `app/(student)/index.tsx` (Dashboard: BS date in header via `todayBs`+`formatBs`, profile+enrollment, attendance summary card using shared STATUS_CONFIG, today's timetable with Saturday guard); `app/(student)/attendance.tsx` rewritten as BS-month calendar grid (`daysInBsMonth` for month length, `bsToAd` for weekday-of-first-day + AD date-range query, month nav with year-boundary handling, Saturday column amber, today cell highlighted, cells colored by STATUS_CONFIG, legend + monthly summary strip); `app/(student)/_layout.tsx` reduced to 2 tabs (Dashboard/index + Attendance); `lib/attendance.ts` — shared STATUS_CONFIG constant (PRESENT/ABSENT/LATE/LEAVE → label/color/bg/dot/shortCode/icon); `hooks/useStudentMe.ts` — added `useAttendanceHistory({ fromDate, toDate })` with paginated extraction (`data.data.data` + `data.data.meta`). Cleanup: deleted `app/(student)/home.tsx` (Session 21 content superseded by index.tsx; was creating phantom 3rd tab in expo-router v3), deleted unused template scaffold `components/ExternalLink.tsx` + `StyledText.tsx`. `npx tsc --noEmit` exits 0, no errors. **Pattern**: query hooks at `hooks/useStudentMe.ts`; shared attendance constants at `lib/attendance.ts`; all dates stored/queried as AD, converted to BS at display via `bs-calendar`.
 - [x] Teacher Backend A (Session 26) — 5 self-scoped read endpoints (no id params, all resolve from token): `GET /timetable/my` (delegates to getTeacherTimetable; timetable_slots.teacher_id = users.id confirmed), `GET /timetable/my/sections` (DISTINCT union: sections.class_teacher_id OR timetable_slots.teacher_id, deduplicated), `GET /attendance/staff/my/summary` (mirrors staff summary endpoint, TEACHER_AND_ABOVE), `GET /attendance/staff/my` (history, forces userId from token), `GET /hr/staff/me` (resolves staff_profiles by user_id). Write accountability already present: student_attendance.marked_by and marks.entered_by both exist and are set from user.userId — no migration needed. Soft-scope policy confirmed: bulkMark and bulkEnterMarks are permissive (no section/subject assignment check), cross-section writes allowed and recorded. 12 new tests — 251 total passing.
 
+- [x] BILL-8 — bill/receipt printing (`docs/api-contracts/BILL-8-SPEC.md`, `apps/api/src/modules/finance/bill-pdf.*`,
+  `bill-document.service.ts`, `bill-receipt*.ts`, `bill-print-*.ts`, `common/pdf/`) — three checkpoints, branch
+  `feat/bill-8-printing` (#39). **B8-1 reversed at Checkpoint A discovery, before any rendering code was written**
+  (`BILL-BUGS.md`): pdfkit, not headless Chromium — the deploy VPS (KVM 1, 1 vCPU/4GB, already flagged tight for
+  5 containers) made a new Chromium dependency + shared-browser-instance pattern a real OOM risk for zero benefit,
+  since pdfkit already existed (report cards) with a working Devanagari font path. `common/pdf/` extracted as a
+  shared module (font-loading + `pickFont` script detection, behavior-preserving refactor of `examination/
+  pdf.service.ts`) so `bill-pdf.service.ts` reuses it verbatim. **Checkpoint A**: A4 bill layout (pdfkit,
+  per-tenant `brandColor` accent, `Money.toDisplay` lakh-style thousands separators), `BillDocumentService`
+  orchestration + endpoint. **Checkpoint B**: bilingual EN/NE/BOTH + thermal receipt layout +
+  `NEPALI_PRINT_REVIEWED` gate (a native-speaker review must open it before NE/BOTH ship — matches I18N-1's
+  review-gate precedent). Two real findings fixed at the root during the visual review pass (full detail in
+  `BILL-BUGS.md`): mixed-script tofu on the "For: {School}" signature line (`pickFont()` was picking one font for
+  a concatenated label+dynamic-value string; new `drawMixedText` helper draws each run with its own font — 4
+  instances of the bug class found and fixed, not just the reported one) and `amount_in_words` fed `netAmount`
+  instead of `totalReceivable` (BILL-4-era bug, invisible until BILL-8 first rendered it; fixed at render time
+  from the invoice's own frozen `total_receivable`, retroactively correct for all already-posted invoices without
+  mutating immutable rows). **Checkpoint C**: bulk-print background job (run-scoped + class-scoped), poller-driven
+  like every other async job in this module. **Known open item**: `FIX-STORAGE-URL` — `StorageService`'s public-URL
+  builder double-appends the bucket when `S3_PUBLIC_URL` is already bucket-qualified (the documented `.env`
+  convention always is) — real bug, confirmed live, ruled out-of-scope for BILL-8, still open in `BILL-BUGS.md`.
+
+- [x] BILL-9 — read-only reporting + cashier daily-close (`docs/api-contracts/BILL-9-SPEC.md`,
+  `apps/api/migrations/tenant/0028_cashier_shifts.sql`, `apps/api/src/modules/finance/cashier*.ts`) — two
+  checkpoints (#42, #43). **Checkpoint A** (daybook, defaulters, aging, collection, statement): spec named these
+  at `GET /finance/reports/*`, but two of those paths collided with already-live old-rail routes
+  (`FinanceController`'s pre-BILL-4 `report.service.ts`, still backing shipped pages) — raised before writing
+  code, three options offered, Srijan's ruling was to mount all four under the pre-existing REP-1
+  `ReportsController` instead (`GET /reports/finance/daybook|defaulters|collection|aging`), zero collision, zero
+  regression risk (`BILL-BUGS.md` "BILL-9-CKPTA-DEVIATION-1"). Student statement stayed in the finance module as
+  spec'd (`GET /finance/students/:studentId/statement`, extends BILL-3's ledger endpoint with opening/closing
+  framing). **Checkpoint B**: cashier daily-close (`cashier_shifts`, open/close-shift with expected-vs-counted cash
+  reconciliation, `CashierController`). **Checkpoint C (printable export) deliberately skipped, closing BILL-9 at
+  B** — a locked "only if requested" gate per the spec, Srijan's call after Checkpoint B: the five JSON report
+  endpoints plus cashier close are enough for v1; BILL-8's pdfkit path is proven and reusable directly whenever a
+  printable report is actually asked for (`BILL-BUGS.md` "BILL-9-EXPORT"). *(CLAUDE.md drift note, added
+  2026-08-01: this bullet and the one above were reconciled from git history after being found missing from this
+  file on `main` — the underlying code, migrations, and module wiring were confirmed already live and tested; see
+  the `FIX-CLAUDEMD-DRIFT` commit.)*
+
 **Dev notes:**
 - Prisma schema lives in `apps/api/prisma/` (not `packages/database/`) — pragmatic fix
   for a non-workspace monorepo; avoids Prisma generator output-location conflicts
@@ -1264,6 +1304,73 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - CLASS-audience notices are not visible in GET /notices to STUDENT/PARENT roles
   (ROLE_AUDIENCES gap) even though PUSH-1 now notifies class students+parents about them.
 - ~~Force-change-on-first-login for emailed temp passwords~~ — DONE in POL-1 T4.
+
+- [x] BILL-6 — corrections: credit notes, refunds, write-offs (`docs/api-contracts/BILL-6-SPEC.md`,
+  `apps/api/src/modules/finance/bill-correction.*`) — two checkpoints, one shared request→approve/
+  reject/reverse workflow. **No new ledger table** — `student_ledger_entries` already permitted
+  `CREDIT_NOTE`/`REFUND`/`WRITE_OFF` (0021_bill_ledger.sql); `bill_corrections`
+  (`0029_bill_corrections.sql`) is the workflow + audit wrapper, posting through the existing
+  `LedgerService.withStudentLock`/`postEntryInTx`/`reverse` unchanged. **Discovery decided**:
+  reason lookup is a NEW `correction_reasons` table, not a reuse of `discount_reasons` — different
+  domain (post-billing correction vs. pre-billing discount); same CRUD shape, wired into the
+  existing `BillCatalogController`. Threshold (`credit_note_approval_threshold`, default 5000)
+  lives on the public `tenants` row (Prisma migration `20260801125505_bill6_credit_note_
+  threshold`) — same home as `invoiceNumberingReset`, per precedent.
+
+  **B6-10 direction, the invariant that matters most:** credit notes and write-offs are CREDITs
+  (reduce what the student owes); a refund is a DEBIT against the student's credit balance
+  (consumes their advance — never increases what they owe). `approve()` dispatches both the
+  direction and the re-validation cap by `correction.type` — one method handles all three, since
+  request is the only genuinely type-specific step.
+
+  **Checkpoint A — credit notes:** below the tenant's threshold auto-posts at request time
+  (`requires_approval=false`, decider=requester, ledger entry in the same transaction); at/above
+  stays `REQUESTED` until an `OWNER_ONLY` approve. B6-2 over-credit guard caps a credit note at
+  the invoice's (or line's) `total_receivable − CLEARED payments − prior APPROVED credits`.
+
+  **Checkpoint B — refunds + write-offs:** B6-3 — both ALWAYS require approval regardless of
+  amount, never auto-post (unlike credit notes). Refund (B6-6) draws only from available advance
+  credit (`availableCredit` — the magnitude of a negative ledger balance); rejected at validation,
+  and again at approval time, if insufficient. Write-off targets a specific invoice (same
+  `creditableAmount` cap a credit note uses) OR the student's overall balance when no invoice is
+  given (`owedBalance` — capped at the live ledger balance, spec §3 "target invoice/balance").
+  **BILL-BUGS.md CORRECTIONS-CAP-SHARED (deviation, logged not blocking):** `creditableAmount`'s
+  "already credited" sum was widened from `CREDIT_NOTE`-only to `CREDIT_NOTE`+`WRITE_OFF` — an
+  approved invoice-scoped write-off must shrink the room left for a later credit note on the same
+  invoice (and vice versa), or the two correction types could combine to over-correct past an
+  invoice's real outstanding amount. Two more logged, non-blocking deviations cover why refund has
+  no invoice target and why write-off has no line-level (`targetInvoiceItemId`) option — both read
+  directly from the spec's own wording, not invented.
+
+  Reject (`OWNER_ONLY`, conditional UPDATE guards a concurrent double-decide) and reverse
+  (delegates entirely to the pre-existing `LedgerService.reverse` — the correction row stays
+  `APPROVED`, `ledger_entry_id` still points at the original entry, "both entries visible" is the
+  ledger's own `reverses_entry_id` chain surfaced by `findOne`'s audit trail) are fully generic
+  across all three types, unchanged between checkpoints. Gapless `correction_number` via the
+  existing `sequences` table, own doctype (`COR-<bsYear>-NNNNNN`, CONTINUOUS only). PARENT reads
+  (`GET /finance/corrections` + `/:id`) are object-scoped via `guardians`, same pattern as every
+  other finance endpoint.
+
+  **Live-proved against real Postgres both checkpoints** (crafted fixtures on demo students,
+  fully cleaned up after — every posted ledger entry reversed, never deleted per R3, so balances
+  net back to their pre-proof values; all scaffolding hard-deleted; shimmed passwords restored and
+  401-proven dead each time): **Checkpoint A** — direction invariant, owe 5,000 credit 1,200 →
+  balance **exactly 3,800.00**, one `CREDIT_NOTE` entry; threshold auto-post-vs-pending, accountant
+  approve 403; pending-posts-nothing; reversal to the exact prior value (10,000.00), both entries
+  visible; over-credit guard; cross-tenant 403; parent IDOR (200 own child + full audit trail, 403
+  cross-family on detail and list). **Checkpoint B** — refund: 2,000 advance → refund 2,000 →
+  balance **exactly 0.00**, one `REFUND` debit entry, method+reference recorded; refund guard
+  (zero available credit → rejected, nothing posts); write-off: owe 5,000 → write off 5,000 →
+  balance **exactly 0.00**, one `WRITE_OFF` credit entry; both types proven to always stay
+  `REQUESTED` regardless of amount (no threshold applies), accountant approve → 403, pending
+  posts nothing, **rejected posts nothing** (proven once live — `reject()` is fully type-blind
+  code, confirmed by inspection to hold identically for all three types); reversal of both an
+  approved refund and an approved write-off returned balance to the exact prior value, both
+  entries visible; cross-tenant probes on the new `/refunds` and `/write-offs` endpoints → 403;
+  parent IDOR on both new correction types (200 rightful parent + audit trail, 403 cross-family);
+  immutability trigger re-confirmed live on both a Checkpoint A and a Checkpoint B entry.
+  **1093 api tests total (+46 across both checkpoints), `nest build` clean.** Tenant migration
+  canary-applied to `demo` first, then rolled to all 8 tenants.
 
 > Update this checklist as modules are completed.
 

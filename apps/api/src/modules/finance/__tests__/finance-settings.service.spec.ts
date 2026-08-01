@@ -49,4 +49,33 @@ describe('FinanceSettingsService', () => {
       );
     });
   });
+
+  describe('getCreditNoteApprovalThreshold', () => {
+    it('reads the current tenant row via raw SQL against the public schema', async () => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([{ creditNoteApprovalThreshold: '7500.00' }]);
+      const result = await service.getCreditNoteApprovalThreshold();
+      expect(result).toEqual({ creditNoteApprovalThreshold: 7500 });
+      expect(prisma.$queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('FROM tenants'),
+        'tenant-1',
+      );
+    });
+
+    it('defaults to 5000 if somehow no row comes back', async () => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([]);
+      const result = await service.getCreditNoteApprovalThreshold();
+      expect(result).toEqual({ creditNoteApprovalThreshold: 5000 });
+    });
+  });
+
+  describe('setCreditNoteApprovalThreshold', () => {
+    it('updates the tenant row and returns the new value', async () => {
+      const result = await service.setCreditNoteApprovalThreshold('10000.00');
+      expect(result).toEqual({ creditNoteApprovalThreshold: 10000 });
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE tenants'),
+        '10000.00', 'tenant-1',
+      );
+    });
+  });
 });

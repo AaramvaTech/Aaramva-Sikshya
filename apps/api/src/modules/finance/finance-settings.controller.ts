@@ -22,13 +22,24 @@ export class FinanceSettingsController {
 
   @Get()
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  get() {
-    return this.financeSettingsService.getInvoiceNumberingReset();
+  async get() {
+    const [reset, threshold] = await Promise.all([
+      this.financeSettingsService.getInvoiceNumberingReset(),
+      this.financeSettingsService.getCreditNoteApprovalThreshold(),
+    ]);
+    return { ...reset, ...threshold };
   }
 
   @Patch()
   @Roles(...OWNER_ONLY)
-  update(@Body() dto: UpdateFinanceSettingsDto) {
-    return this.financeSettingsService.setInvoiceNumberingReset(dto.invoiceNumberingReset);
+  async update(@Body() dto: UpdateFinanceSettingsDto) {
+    const result: { invoiceNumberingReset?: boolean; creditNoteApprovalThreshold?: number } = {};
+    if (dto.invoiceNumberingReset !== undefined) {
+      Object.assign(result, await this.financeSettingsService.setInvoiceNumberingReset(dto.invoiceNumberingReset));
+    }
+    if (dto.creditNoteApprovalThreshold !== undefined) {
+      Object.assign(result, await this.financeSettingsService.setCreditNoteApprovalThreshold(dto.creditNoteApprovalThreshold));
+    }
+    return result;
   }
 }

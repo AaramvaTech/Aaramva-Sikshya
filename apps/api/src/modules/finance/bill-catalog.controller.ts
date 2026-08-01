@@ -9,6 +9,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import { FeeHeadService } from './fee-head.service';
 import { DiscountReasonService } from './discount-reason.service';
+import { CorrectionReasonService } from './correction-reason.service';
 import { TransportRouteService } from './transport-route.service';
 import { TaxRateService } from './tax-rate.service';
 import { LateFeeRuleService } from './late-fee-rule.service';
@@ -17,6 +18,9 @@ import { CreateFeeHeadDto, UpdateFeeHeadDto, FeeHeadQueryDto } from './dto/fee-h
 import {
   CreateDiscountReasonDto, UpdateDiscountReasonDto, DiscountReasonQueryDto,
 } from './dto/discount-reason.dto';
+import {
+  CreateCorrectionReasonDto, UpdateCorrectionReasonDto, CorrectionReasonQueryDto,
+} from './dto/correction-reason.dto';
 import {
   CreateTransportRouteDto, UpdateTransportRouteDto, TransportRouteQueryDto,
 } from './dto/transport-route.dto';
@@ -49,6 +53,7 @@ export class BillCatalogController {
   constructor(
     private readonly feeHeadService: FeeHeadService,
     private readonly discountReasonService: DiscountReasonService,
+    private readonly correctionReasonService: CorrectionReasonService,
     private readonly transportRouteService: TransportRouteService,
     private readonly taxRateService: TaxRateService,
     private readonly lateFeeRuleService: LateFeeRuleService,
@@ -107,6 +112,33 @@ export class BillCatalogController {
   @Roles(...OWNER_ONLY)
   deleteDiscountReason(@Param('id', ParseUUIDPipe) id: string) {
     return this.discountReasonService.softDelete(id);
+  }
+
+  // ─── Correction Reasons (BILL-6) ───────────────────────────────────────────
+
+  @Post('correction-reasons')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  createCorrectionReason(@Body() dto: CreateCorrectionReasonDto) {
+    return this.correctionReasonService.create(dto);
+  }
+
+  @Get('correction-reasons')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  listCorrectionReasons(@Query() query: CorrectionReasonQueryDto) {
+    return this.correctionReasonService.findAll(query);
+  }
+
+  @Patch('correction-reasons/:id')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  updateCorrectionReason(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCorrectionReasonDto) {
+    return this.correctionReasonService.update(id, dto);
+  }
+
+  @Delete('correction-reasons/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(...OWNER_ONLY)
+  deleteCorrectionReason(@Param('id', ParseUUIDPipe) id: string) {
+    return this.correctionReasonService.softDelete(id);
   }
 
   // ─── Transport Routes ──────────────────────────────────────────────────────

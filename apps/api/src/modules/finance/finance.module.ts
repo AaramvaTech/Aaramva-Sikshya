@@ -56,6 +56,9 @@ import { BillPrintRunnerService } from './bill-print-runner.service';
 import { BillPrintPoller } from './bill-print.poller';
 import { CashierController } from './cashier.controller';
 import { CashierShiftService } from './cashier-shift.service';
+import { CorrectionReasonService } from './correction-reason.service';
+import { BillCorrectionService } from './bill-correction.service';
+import { BillCorrectionController } from './bill-correction.controller';
 
 @Module({
   imports: [StorageModule, SuperAdminModule],
@@ -76,6 +79,7 @@ import { CashierShiftService } from './cashier-shift.service';
     BillPdfController,
     BillReceiptController,
     CashierController,
+    BillCorrectionController,
   ],
   providers: [
     FeeCategoryService,
@@ -117,6 +121,8 @@ import { CashierShiftService } from './cashier-shift.service';
     BillPrintRunnerService,
     BillPrintPoller,
     CashierShiftService,
+    CorrectionReasonService,
+    BillCorrectionService,
   ],
   exports: [InvoiceService, PaymentService, LedgerService],
 })
