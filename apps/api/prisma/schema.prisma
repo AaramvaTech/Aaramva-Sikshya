@@ -61,6 +61,11 @@ model Tenant {
   // (counter never resets, matches every tenant's pre-existing behavior);
   // true = RESET (counter restarts each Nepali fiscal year, Shrawan-based).
   invoiceNumberingReset Boolean @default(false)
+  // BILL-6 B6-3: two-tier credit-note approval threshold. Below this amount
+  // an accountant may auto-post a credit note; at/above it, an owner must
+  // approve. Same home as invoiceNumberingReset (public tenants row, not a
+  // per-tenant schema table) — a single tenant-wide config value.
+  creditNoteApprovalThreshold Decimal @default(5000) @db.Decimal(12, 2)
   isActive     Boolean   @default(true)
   // Onboarding wizard (OB1): set when the school owner finishes/dismisses guided
   // setup. Null = setup still in progress → owner is routed into the wizard.
