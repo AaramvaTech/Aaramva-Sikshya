@@ -4,6 +4,16 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-9-CKPTA-DEVIATION-1 — read-only reports mounted under /reports/finance/*, not the literal /finance/reports/* from BILL-9-SPEC.md §5 (raised before writing code, resolved)
+
+**BILL-9-SPEC.md §5 lists the four read-only reports (daybook, defaulters, aging, collection) at `GET /finance/reports/*`.** Two of those paths — `/finance/reports/collection` and `/finance/reports/defaulters` — collide exactly with existing live routes on `FinanceController` (`report.service.ts`, old-rail `invoices`/`payments` tables), which back `useCollectionReport`/`useDefaulters`/`useStudentLedger` in already-shipped pages: `finance/page.tsx`, `finance/reports/page.tsx`, `students/[id]/page.tsx`, and the WEB-P Phase 5 parent portal (`parent/fees/page.tsx`, `parent/page.tsx`).
+
+Raised to Srijan before writing any code, three options offered. **Decision: mount all four under the existing REP-1 `ReportsController` instead** (`GET /reports/finance/daybook`, `/defaulters`, `/collection`, and `/aging` extended in place) — zero collision, zero regression risk to the old-rail pages, and consistent with the spec's own instruction to "extend REP-1's existing aging endpoint." Student statement (`GET /finance/students/:studentId/statement`) and cashier-close (Checkpoint B) stay in the finance module as spec'd — neither collides with anything.
+
+The old `/finance/reports/collection` and `/finance/reports/defaulters` (report.service.ts) are untouched and still read old-rail data — a separate, unplanned "repoint the old-rail report hooks to the new bill_* rail" task exists as a real gap (the WEB-P Phase 5 parent fees screen currently shows stale/pre-BILL-4 data), flagged here but explicitly out of BILL-9 Checkpoint A's scope.
+
+---
+
 ## NEPALI-COPY-REVIEW — soft follow-up: second review before real-school go-live
 
 **Not a bug — a flagged follow-up.** The Devanagari amount-in-words + fixed print labels (`bill-print-labels.ts`) were reviewed by Srijan himself (2026-07-30) and confirmed correct — that review is what opened `NEPALI_PRINT_REVIEWED` (commit 063d654, BILL-8-CKPTB-FINDING-2's gate). Srijan's own framing was explicitly "correct for now," not a final/certified sign-off.

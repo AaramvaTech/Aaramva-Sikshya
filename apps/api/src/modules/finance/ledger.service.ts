@@ -7,6 +7,7 @@ import { bsOf, directionToDebitCredit } from './ledger.util';
 import { LedgerEntryRow, toLedgerEntryResponse, LedgerEntryResponseDto } from './entities/ledger.entity';
 import { LedgerAdjustmentDto, LedgerQueryDto } from './dto/ledger.dto';
 import { Role } from '../common/enums/role.enum';
+import { resolveRange } from '../reports/report.util';
 
 /** Distinct from tenant-migration's advisory-lock namespace (4271) — advisory
  * locks are instance-global, not schema-scoped, so a separate constant keeps
@@ -287,6 +288,103 @@ export class LedgerService {
       studentId,
       balance: balance.toNumber(),
       sign: cmp === 0 ? 'ZERO' : cmp > 0 ? 'OWES' : 'ADVANCE',
+    };
+  }
+
+  /**
+   * BILL-9 §3 — "extends BILL-3's ledger endpoint into a proper statement"
+   * (adds opening/closing framing and totals to getStudentLedger's plain
+   * entry list). Opening balance is the SQL SUM of everything strictly
+   * before `from`; the movements window then seeds its own running-balance
+   * window function with that opening figure, so every row's running
+   * balance is correct from the very first line — no JS accumulator.
+   * totalDebit/totalCredit are a second, independent SQL SUM (not derived
+   * from the movement rows) so an empty range still returns real zeros
+   * instead of undefined. When `to` defaults to today (resolveRange), this
+   * closing balance is the same SQL ledger sum getBalance()/B9-9 treat as
+   * truth — proven live against student_account_balances (spec §6 test 5).
+   */
+  async getStatement(
+    studentId: string,
+    query: { from?: string; to?: string },
+    callerId?: string,
+    callerRole?: Role,
+  ): Promise<{
+    student: { id: string; admissionNumber: string; fullName: string; className: string | null };
+    range: { from: string; to: string };
+    openingBalance: number;
+    closingBalance: number;
+    advanceCredit: number;
+    totalDebit: number;
+    totalCredit: number;
+    entries: LedgerEntryResponseDto[];
+  }> {
+    if (callerRole === Role.PARENT && callerId) {
+      await this.assertGuardianOwnsStudent(studentId, callerId);
+    }
+
+    const studentRows = await this.tenantPrisma.query<{
+      id: string;
+      admission_number: string;
+      first_name: string;
+      last_name: string;
+      class_name: string | null;
+    }>(
+      `SELECT id, student_id AS admission_number, first_name, last_name, class_name
+       FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+      studentId,
+    );
+    if (!studentRows[0]) throw new NotFoundException(`Student ${studentId} not found`);
+
+    const { from, to } = resolveRange(query.from, query.to);
+
+    const [openingRow] = await this.tenantPrisma.query<{ sum: string }>(
+      `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum
+       FROM student_ledger_entries WHERE student_id = $1::uuid AND entry_date < $2::date`,
+      studentId,
+      from,
+    );
+    const openingBalance = toMoney(openingRow?.sum ?? 0);
+
+    const [movementTotals] = await this.tenantPrisma.query<{ total_debit: string; total_credit: string }>(
+      `SELECT COALESCE(SUM(debit), 0) AS total_debit, COALESCE(SUM(credit), 0) AS total_credit
+       FROM student_ledger_entries
+       WHERE student_id = $1::uuid AND entry_date BETWEEN $2::date AND $3::date`,
+      studentId,
+      from,
+      to,
+    );
+    const totalDebit = toMoney(movementTotals?.total_debit ?? 0);
+    const totalCredit = toMoney(movementTotals?.total_credit ?? 0);
+    const closingBalance = openingBalance.add(totalDebit).sub(totalCredit);
+
+    const entryRows = await this.tenantPrisma.query<LedgerEntryRow>(
+      `SELECT *,
+              $4::numeric + SUM(debit - credit) OVER (ORDER BY entry_date, created_at ROWS UNBOUNDED PRECEDING) AS running_balance
+       FROM student_ledger_entries
+       WHERE student_id = $1::uuid AND entry_date BETWEEN $2::date AND $3::date
+       ORDER BY entry_date, created_at`,
+      studentId,
+      from,
+      to,
+      openingBalance.toDb(),
+    );
+
+    const s = studentRows[0];
+    return {
+      student: {
+        id: s.id,
+        admissionNumber: s.admission_number,
+        fullName: `${s.first_name} ${s.last_name}`,
+        className: s.class_name,
+      },
+      range: { from, to },
+      openingBalance: openingBalance.toNumber(),
+      closingBalance: closingBalance.toNumber(),
+      advanceCredit: closingBalance.compare(Money.zero()) < 0 ? closingBalance.negate().toNumber() : 0,
+      totalDebit: totalDebit.toNumber(),
+      totalCredit: totalCredit.toNumber(),
+      entries: entryRows.map(toLedgerEntryResponse),
     };
   }
 
