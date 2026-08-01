@@ -118,29 +118,65 @@ export class BillPdfService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
-
-      const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-      const left = doc.page.margins.left;
-      const GAP = 24;
-      const { accentColor, accentTint } = data.tenant;
-      const lang = data.language;
-
-      this.renderHeader(doc, data.tenant, left, pageW, accentColor, accentTint, lang);
-      doc.y += GAP;
-      this.renderInvoiceTitleRow(doc, data.invoice, left, pageW, accentColor, lang);
-      doc.y += GAP;
-      this.renderMetaPanel(doc, data.invoice, left, pageW, lang);
-      doc.y += GAP;
-      this.renderItemsTable(doc, data.items, left, pageW, lang);
-      doc.y += GAP;
-      const wholeBillConcession = data.items.reduce((acc, i) => acc + i.apportionedConcession, 0);
-      this.renderBottomSplit(doc, data, wholeBillConcession, left, pageW, accentColor, lang);
-      doc.y += GAP * 0.8;
-      this.renderSignature(doc, data.tenant, left, pageW, lang);
+      this.registerFonts(doc);
+      this.drawBill(doc, data);
 
       doc.end();
     });
+  }
+
+  /**
+   * BILL-8 Checkpoint C (B8-9): renders N invoices into ONE PDFDocument, one
+   * page-set per invoice, instead of N separate documents. Reuses drawBill
+   * verbatim per invoice — same footing, color, language, and font logic as
+   * the single-document path, just called once per invoice onto a shared doc
+   * instead of once into its own doc. No PDF-merge library needed: pdfkit
+   * already supports multi-page documents via addPage(), which also resets
+   * doc.x/doc.y to the page margins, so each invoice starts fresh at the top
+   * exactly like a standalone render would.
+   */
+  renderMerged(dataList: BillPdfData[]): Promise<Buffer> {
+    if (dataList.length === 0) throw new Error('renderMerged requires at least one invoice');
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      this.registerFonts(doc);
+      dataList.forEach((data, i) => {
+        if (i > 0) doc.addPage();
+        this.drawBill(doc, data);
+      });
+
+      doc.end();
+    });
+  }
+
+  private registerFonts(doc: PDFKit.PDFDocument): void {
+    for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
+  }
+
+  private drawBill(doc: PDFKit.PDFDocument, data: BillPdfData): void {
+    const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const left = doc.page.margins.left;
+    const GAP = 24;
+    const { accentColor, accentTint } = data.tenant;
+    const lang = data.language;
+
+    this.renderHeader(doc, data.tenant, left, pageW, accentColor, accentTint, lang);
+    doc.y += GAP;
+    this.renderInvoiceTitleRow(doc, data.invoice, left, pageW, accentColor, lang);
+    doc.y += GAP;
+    this.renderMetaPanel(doc, data.invoice, left, pageW, lang);
+    doc.y += GAP;
+    this.renderItemsTable(doc, data.items, left, pageW, lang);
+    doc.y += GAP;
+    const wholeBillConcession = data.items.reduce((acc, i) => acc + i.apportionedConcession, 0);
+    this.renderBottomSplit(doc, data, wholeBillConcession, left, pageW, accentColor, lang);
+    doc.y += GAP * 0.8;
+    this.renderSignature(doc, data.tenant, left, pageW, lang);
   }
 
   private label(key: Parameters<typeof printLabel>[0], lang: PrintLanguage): string {

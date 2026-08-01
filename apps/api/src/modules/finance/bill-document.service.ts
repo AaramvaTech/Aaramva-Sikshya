@@ -14,7 +14,7 @@ import { apportionWholeBillConcession } from './bill-pdf.util';
 import { BillPdfService, BillPdfData, BillPdfLineItem } from './bill-pdf.service';
 import { bsOf } from './ledger.util';
 
-interface TenantHeaderRow {
+export interface TenantHeaderRow {
   name: string;
   logo_url: string | null;
   pan_number: string | null;
@@ -98,7 +98,11 @@ export class BillDocumentService {
     return { presignedUrl: await this.storageService.presignRead(key), generated: true };
   }
 
-  private async loadTenantHeader(): Promise<TenantHeaderRow> {
+  /** Public: BILL-8 Checkpoint C's BillPrintRunnerService loads the tenant
+   *  header once per bulk-print job and reuses it across every invoice in
+   *  the job (a job is always single-tenant), instead of refetching it once
+   *  per invoice the way the single-document path implicitly does. */
+  async loadTenantHeader(): Promise<TenantHeaderRow> {
     const { tenantId } = this.tenantContext.getOrThrow();
     const rows = await this.publicPrisma.query<TenantHeaderRow>(
       `SELECT ${TENANT_HEADER_SELECT} FROM tenants WHERE id = $1`,
@@ -107,7 +111,8 @@ export class BillDocumentService {
     return rows[0];
   }
 
-  private async buildPdfData(
+  /** Public for the same Checkpoint C reuse reason as loadTenantHeader. */
+  async buildPdfData(
     invoice: BillInvoiceResponseDto,
     tenant: TenantHeaderRow,
     language: PrintLanguage,

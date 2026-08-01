@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe,
   Patch, Post, Query, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -9,6 +9,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import { StudentFeeStructureAssignmentService } from './student-fee-structure-assignment.service';
 import { BulkAssignJobService } from './bulk-assign-job.service';
+import { BillPrintJobService } from './bill-print-job.service';
 import { StudentFeeOverrideService } from './student-fee-override.service';
 import { StudentConcessionService } from './student-concession.service';
 import { StudentTransportAssignmentService } from './student-transport-assignment.service';
@@ -58,6 +59,7 @@ export class BillAssignmentController {
   constructor(
     private readonly assignmentService: StudentFeeStructureAssignmentService,
     private readonly bulkAssignJobService: BulkAssignJobService,
+    private readonly billPrintJobService: BillPrintJobService,
     private readonly overrideService: StudentFeeOverrideService,
     private readonly concessionService: StudentConcessionService,
     private readonly transportAssignmentService: StudentTransportAssignmentService,
@@ -87,10 +89,19 @@ export class BillAssignmentController {
     return this.bulkAssignJobService.create(id, dto, userId);
   }
 
+  /** BILL-8 Checkpoint C reuses this endpoint (spec §5) for bill-print job
+   *  status rather than adding a second one — bulk-assign and bill-print
+   *  jobs are separate tables/services, so a miss on one is tried against
+   *  the other before giving up with a real 404. */
   @Get('jobs/:id')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  getJob(@Param('id', ParseUUIDPipe) id: string) {
-    return this.bulkAssignJobService.findOne(id);
+  async getJob(@Param('id', ParseUUIDPipe) id: string) {
+    try {
+      return await this.bulkAssignJobService.findOne(id);
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) throw err;
+      return this.billPrintJobService.findOne(id);
+    }
   }
 
   // ─── Fee overrides ──────────────────────────────────────────────────────────
