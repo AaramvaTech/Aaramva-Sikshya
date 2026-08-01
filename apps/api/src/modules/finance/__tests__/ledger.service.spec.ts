@@ -237,6 +237,59 @@ describe('LedgerService', () => {
     });
   });
 
+  describe('getStatement', () => {
+    it('rejects a PARENT who does not own the student', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'someone-else' }]);
+      await expect(
+        service.getStatement('student-1', {}, 'parent-1', Role.PARENT),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('404s when the student does not exist', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // student lookup, empty
+      await expect(service.getStatement('student-1', {}, 'accountant-1', Role.ACCOUNTANT)).rejects.toThrow(NotFoundException);
+    });
+
+    it('opening + movements = closing exactly, running balance seeded from the SQL opening sum', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-1', admission_number: 'STU-1', first_name: 'Ram', last_name: 'Thapa', class_name: 'G9' }])
+        .mockResolvedValueOnce([{ sum: '1000.00' }]) // opening balance (before `from`)
+        .mockResolvedValueOnce([{ total_debit: '500.00', total_credit: '200.00' }]) // movement totals in range
+        .mockResolvedValueOnce([
+          { ...makeEntryRow(), debit: '500.00', credit: '0.00', running_balance: '1500.00' },
+          { ...makeEntryRow(), id: 'entry-2', debit: '0.00', credit: '200.00', running_balance: '1300.00' },
+        ]);
+
+      const result = await service.getStatement('student-1', { from: '2026-07-01', to: '2026-07-31' }, 'accountant-1', Role.ACCOUNTANT);
+
+      expect(result.openingBalance).toBe(1000);
+      expect(result.totalDebit).toBe(500);
+      expect(result.totalCredit).toBe(200);
+      expect(result.closingBalance).toBe(1300); // 1000 + 500 - 200, exactly
+      expect(result.advanceCredit).toBe(0); // OWES, not an advance
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries[1].runningBalance).toBe(1300);
+
+      // running-balance window is seeded with the SQL-computed opening sum, not a JS accumulator
+      const entriesSql = (tenantPrisma.query as jest.Mock).mock.calls[3][0] as string;
+      expect(entriesSql).toContain('$4::numeric + SUM(debit - credit) OVER');
+      expect((tenantPrisma.query as jest.Mock).mock.calls[3].slice(1)).toEqual(['student-1', '2026-07-01', '2026-07-31', '1000.00']);
+    });
+
+    it('reports advanceCredit when the closing balance goes negative', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-1', admission_number: 'STU-1', first_name: 'Ram', last_name: 'Thapa', class_name: 'G9' }])
+        .mockResolvedValueOnce([{ sum: '0.00' }])
+        .mockResolvedValueOnce([{ total_debit: '0.00', total_credit: '300.00' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getStatement('student-1', {}, 'accountant-1', Role.ACCOUNTANT);
+
+      expect(result.closingBalance).toBe(-300);
+      expect(result.advanceCredit).toBe(300);
+    });
+  });
+
   describe('reconcile', () => {
     it('corrects and reports drift when the cache disagrees with the SQL sum', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'student-1' }]);

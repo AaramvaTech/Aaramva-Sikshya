@@ -74,4 +74,16 @@ export class LedgerController {
   getStudentBalance(@Param('studentId', ParseUUIDPipe) studentId: string, @CurrentUser() user: AuthUser) {
     return this.ledgerService.getBalance(studentId, user.userId, user.role);
   }
+
+  /** BILL-9 B9-4: ACCOUNTANT_AND_ABOVE, or PARENT object-scoped to their own child (assertGuardianOwnsStudent). */
+  @Get('students/:studentId/statement')
+  @Roles(...ACCOUNTANT_AND_ABOVE, Role.PARENT)
+  getStudentStatement(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ledgerService.getStatement(studentId, { from, to }, user.userId, user.role);
+  }
 }

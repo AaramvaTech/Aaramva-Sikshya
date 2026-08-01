@@ -6,6 +6,9 @@ import { Role } from '../common/enums/role.enum';
 import { AttendanceReportService } from './attendance-report.service';
 import { ExamReportService } from './exam-report.service';
 import { FeeAgingReportService } from './fee-aging-report.service';
+import { DaybookReportService } from './daybook-report.service';
+import { DefaultersReportService } from './defaulters-report.service';
+import { CollectionReportService } from './collection-report.service';
 
 /** REP-1 roles (spec-fixed): attendance + exams → principal tier + academic
  *  coordinator; fee aging additionally opens to ACCOUNTANT. */
@@ -24,6 +27,9 @@ export class ReportsController {
     private readonly attendanceReports: AttendanceReportService,
     private readonly examReports: ExamReportService,
     private readonly feeAgingReports: FeeAgingReportService,
+    private readonly daybookReports: DaybookReportService,
+    private readonly defaultersReports: DefaultersReportService,
+    private readonly collectionReports: CollectionReportService,
   ) {}
 
   // ─── T1 Attendance ──────────────────────────────────────────────────────────
@@ -112,5 +118,41 @@ export class ReportsController {
   @Roles(...FINANCE_REPORT_ROLES)
   getFeeAging(@Query('asOf') asOf?: string, @Query('classId') classId?: string) {
     return this.feeAgingReports.getAging({ asOf, classId });
+  }
+
+  // ─── BILL-9 Checkpoint A ─────────────────────────────────────────────────────
+  // B9-4: daybook + collection are "operational reports" (ACCOUNTANT_AND_ABOVE);
+  // defaulters joins aging under the same finance-report roles. Both role sets
+  // are identical (PLATFORM_ADMIN/SCHOOL_OWNER/PRINCIPAL/ACADEMIC_COORDINATOR/
+  // ACCOUNTANT) — FINANCE_REPORT_ROLES already names it. Mounted here, not on
+  // FinanceController, to avoid colliding with that controller's existing
+  // old-rail /finance/reports/collection and /finance/reports/defaulters
+  // routes (report.service.ts, still live for finance/page.tsx et al) —
+  // logged in BILL-BUGS.md.
+
+  @Get('finance/daybook')
+  @Roles(...FINANCE_REPORT_ROLES)
+  getDaybook(@Query('bsDate') bsDate?: string) {
+    return this.daybookReports.getDaybook({ bsDate });
+  }
+
+  @Get('finance/defaulters')
+  @Roles(...FINANCE_REPORT_ROLES)
+  getFinanceDefaulters(
+    @Query('classId') classId?: string,
+    @Query('minBalance') minBalance?: string,
+    @Query('sort') sort?: string,
+  ) {
+    return this.defaultersReports.getDefaulters({ classId, minBalance, sort });
+  }
+
+  @Get('finance/collection')
+  @Roles(...FINANCE_REPORT_ROLES)
+  getCollectionSummary(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('groupBy') groupBy?: string,
+  ) {
+    return this.collectionReports.getCollection({ from, to, groupBy });
   }
 }
