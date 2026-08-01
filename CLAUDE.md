@@ -1305,46 +1305,72 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   (ROLE_AUDIENCES gap) even though PUSH-1 now notifies class students+parents about them.
 - ~~Force-change-on-first-login for emailed temp passwords~~ — DONE in POL-1 T4.
 
-- [x] BILL-6 Checkpoint A — credit notes + approval workflow (`docs/api-contracts/BILL-6-SPEC.md`,
-  `apps/api/src/modules/finance/bill-correction.*`) — corrections (credit notes now; refunds/
-  write-offs are Checkpoint B). **No new ledger table** — `student_ledger_entries` already
-  permitted `CREDIT_NOTE`/`REFUND`/`WRITE_OFF` (0021_bill_ledger.sql); `bill_corrections`
+- [x] BILL-6 — corrections: credit notes, refunds, write-offs (`docs/api-contracts/BILL-6-SPEC.md`,
+  `apps/api/src/modules/finance/bill-correction.*`) — two checkpoints, one shared request→approve/
+  reject/reverse workflow. **No new ledger table** — `student_ledger_entries` already permitted
+  `CREDIT_NOTE`/`REFUND`/`WRITE_OFF` (0021_bill_ledger.sql); `bill_corrections`
   (`0029_bill_corrections.sql`) is the workflow + audit wrapper, posting through the existing
   `LedgerService.withStudentLock`/`postEntryInTx`/`reverse` unchanged. **Discovery decided**:
-  reason lookup is a NEW `correction_reasons` table, not a reuse of `discount_reasons` — that
-  table is scoped to fee discounts/concessions at billing time, a different domain from
-  post-billing corrections; same CRUD shape, wired into the existing `BillCatalogController`.
-  Threshold (`credit_note_approval_threshold`, default 5000) lives on the public `tenants` row
-  (Prisma migration `20260801125505_bill6_credit_note_threshold`) — same home as
-  `invoiceNumberingReset`, per precedent. **Workflow**: request → below threshold auto-posts
+  reason lookup is a NEW `correction_reasons` table, not a reuse of `discount_reasons` — different
+  domain (post-billing correction vs. pre-billing discount); same CRUD shape, wired into the
+  existing `BillCatalogController`. Threshold (`credit_note_approval_threshold`, default 5000)
+  lives on the public `tenants` row (Prisma migration `20260801125505_bill6_credit_note_
+  threshold`) — same home as `invoiceNumberingReset`, per precedent.
+
+  **B6-10 direction, the invariant that matters most:** credit notes and write-offs are CREDITs
+  (reduce what the student owes); a refund is a DEBIT against the student's credit balance
+  (consumes their advance — never increases what they owe). `approve()` dispatches both the
+  direction and the re-validation cap by `correction.type` — one method handles all three, since
+  request is the only genuinely type-specific step.
+
+  **Checkpoint A — credit notes:** below the tenant's threshold auto-posts at request time
   (`requires_approval=false`, decider=requester, ledger entry in the same transaction); at/above
-  stays `REQUESTED` until an `OWNER_ONLY` approve (re-validates the over-credit guard again at
-  approval time, since a `REQUESTED` row reserves nothing); reject (`OWNER_ONLY`, conditional
-  UPDATE guards a concurrent double-decide); reverse delegates entirely to the pre-existing
-  `LedgerService.reverse` (correction row stays `APPROVED`, `ledger_entry_id` still points at the
-  original entry — "both entries visible" is the ledger's own `reverses_entry_id` chain, surfaced
-  by `findOne`'s audit-trail join). B6-2 over-credit guard: a credit note is capped at the
-  invoice's (or line's) `total_receivable − CLEARED payments − prior APPROVED credit notes`.
-  Gapless `correction_number` via the existing `sequences` table, own doctype (`COR-<bsYear>-
-  NNNNNN`, CONTINUOUS only — no fiscal-year-reset variant this checkpoint, not asked for). PARENT
-  reads (`GET /finance/corrections` + `/:id`) are object-scoped via `guardians`, same pattern as
-  every other finance endpoint. **Live-proved against real Postgres** (crafted fixtures on three
-  demo students, cleaned up after): direction invariant B6-10 — owe 5,000, credit 1,200 → balance
-  **exactly 3,800.00**, one `CREDIT_NOTE` credit entry; threshold — 1,200 auto-posted, 5,000 (at
-  threshold) stayed `REQUESTED`, accountant approve attempt → 403, owner approve → posted;
-  pending-posts-nothing (balance unmoved while `REQUESTED`); reversal — balance returned to the
-  exact prior value (10,000.00), both entries visible, original never deleted (immutability
-  trigger re-confirmed live on a BILL-6-posted entry); over-credit guard rejected with balance/row
-  count unchanged; cross-tenant probe (different tenant header, same JWT) → 403; parent IDOR —
-  rightful parent 200 (+ ledger audit trail via `findOne`), a different family's parent → 403 on
-  both the detail and the list endpoint (list correctly scopes to an empty set, never errors).
-  Every posted ledger entry from the proof was reversed afterward (never deleted, per R3) so
-  balances net back to their pre-proof values; all scaffolding (crafted invoices/runs/corrections/
-  reason, a throwaway guardian+login provisioned via the real admin API for the IDOR probe) was
-  hard-deleted; three shimmed passwords restored and 401-proven dead. **1077 api tests total (+30
-  new this checkpoint: correction-reason 5, finance-settings threshold 3, bill-correction util 4,
-  bill-correction service 18), `nest build` clean.** Tenant migration canary-applied to `demo`
-  first, then rolled to all 8 tenants. No refunds/write-offs yet — Checkpoint B.
+  stays `REQUESTED` until an `OWNER_ONLY` approve. B6-2 over-credit guard caps a credit note at
+  the invoice's (or line's) `total_receivable − CLEARED payments − prior APPROVED credits`.
+
+  **Checkpoint B — refunds + write-offs:** B6-3 — both ALWAYS require approval regardless of
+  amount, never auto-post (unlike credit notes). Refund (B6-6) draws only from available advance
+  credit (`availableCredit` — the magnitude of a negative ledger balance); rejected at validation,
+  and again at approval time, if insufficient. Write-off targets a specific invoice (same
+  `creditableAmount` cap a credit note uses) OR the student's overall balance when no invoice is
+  given (`owedBalance` — capped at the live ledger balance, spec §3 "target invoice/balance").
+  **BILL-BUGS.md CORRECTIONS-CAP-SHARED (deviation, logged not blocking):** `creditableAmount`'s
+  "already credited" sum was widened from `CREDIT_NOTE`-only to `CREDIT_NOTE`+`WRITE_OFF` — an
+  approved invoice-scoped write-off must shrink the room left for a later credit note on the same
+  invoice (and vice versa), or the two correction types could combine to over-correct past an
+  invoice's real outstanding amount. Two more logged, non-blocking deviations cover why refund has
+  no invoice target and why write-off has no line-level (`targetInvoiceItemId`) option — both read
+  directly from the spec's own wording, not invented.
+
+  Reject (`OWNER_ONLY`, conditional UPDATE guards a concurrent double-decide) and reverse
+  (delegates entirely to the pre-existing `LedgerService.reverse` — the correction row stays
+  `APPROVED`, `ledger_entry_id` still points at the original entry, "both entries visible" is the
+  ledger's own `reverses_entry_id` chain surfaced by `findOne`'s audit trail) are fully generic
+  across all three types, unchanged between checkpoints. Gapless `correction_number` via the
+  existing `sequences` table, own doctype (`COR-<bsYear>-NNNNNN`, CONTINUOUS only). PARENT reads
+  (`GET /finance/corrections` + `/:id`) are object-scoped via `guardians`, same pattern as every
+  other finance endpoint.
+
+  **Live-proved against real Postgres both checkpoints** (crafted fixtures on demo students,
+  fully cleaned up after — every posted ledger entry reversed, never deleted per R3, so balances
+  net back to their pre-proof values; all scaffolding hard-deleted; shimmed passwords restored and
+  401-proven dead each time): **Checkpoint A** — direction invariant, owe 5,000 credit 1,200 →
+  balance **exactly 3,800.00**, one `CREDIT_NOTE` entry; threshold auto-post-vs-pending, accountant
+  approve 403; pending-posts-nothing; reversal to the exact prior value (10,000.00), both entries
+  visible; over-credit guard; cross-tenant 403; parent IDOR (200 own child + full audit trail, 403
+  cross-family on detail and list). **Checkpoint B** — refund: 2,000 advance → refund 2,000 →
+  balance **exactly 0.00**, one `REFUND` debit entry, method+reference recorded; refund guard
+  (zero available credit → rejected, nothing posts); write-off: owe 5,000 → write off 5,000 →
+  balance **exactly 0.00**, one `WRITE_OFF` credit entry; both types proven to always stay
+  `REQUESTED` regardless of amount (no threshold applies), accountant approve → 403, pending
+  posts nothing, **rejected posts nothing** (proven once live — `reject()` is fully type-blind
+  code, confirmed by inspection to hold identically for all three types); reversal of both an
+  approved refund and an approved write-off returned balance to the exact prior value, both
+  entries visible; cross-tenant probes on the new `/refunds` and `/write-offs` endpoints → 403;
+  parent IDOR on both new correction types (200 rightful parent + audit trail, 403 cross-family);
+  immutability trigger re-confirmed live on both a Checkpoint A and a Checkpoint B entry.
+  **1093 api tests total (+46 across both checkpoints), `nest build` clean.** Tenant migration
+  canary-applied to `demo` first, then rolled to all 8 tenants.
 
 > Update this checklist as modules are completed.
 

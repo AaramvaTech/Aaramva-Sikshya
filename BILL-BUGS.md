@@ -4,6 +4,24 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-6-CKPTB-DEVIATION-3 — write-off request DTO: no `targetInvoiceItemId` (raised, not blocking)
+
+**BILL-6-SPEC.md §3 says write-off targets "invoice/balance," never mentions a line-level write-off** the way B6-2 explicitly calls out for credit notes ("optionally a specific invoice line, e.g. only the transport item"). `CreateWriteOffDto` therefore only exposes `targetInvoiceId` (optional) — no `targetInvoiceItemId`. The underlying `bill_corrections.target_invoice_item_id` column is still nullable and generic across all three types, so a line-level write-off could be added later without a migration if ever asked for; `approve()`'s WRITE_OFF branch already passes `correction.target_invoice_item_id` through to `creditableAmount` defensively (always `null` for now, since nothing can set it via the request DTO). Not raised as a question mid-build per this checkpoint's "don't stop to ask" instruction — the spec's own silence on this point reads as "invoice or balance only," and adding the line-level option unasked would be scope creep in the other direction.
+
+---
+
+## BILL-6-CKPTB-DEVIATION-2 — refund has no invoice target; write-off's is optional (raised, not blocking)
+
+**B6-6 describes a refund as drawing purely from "the student's available advance credit / overpayment"** — never from a specific invoice — so `CreateRefundDto` has no `targetInvoiceId` field at all; `bill_corrections.target_invoice_id` stays `NULL` for every `REFUND` row (the column is nullable specifically to accommodate this, per the spec's own DDL comment "credit note (and write-off of an invoice)" — refund is conspicuously absent from that comment). Write-off's spec wording ("target invoice/balance") is read literally: `CreateWriteOffDto.targetInvoiceId` is optional — when omitted, the cap is the student's live ledger balance (`owedBalance`, capped at 0 if the student doesn't actually owe anything, i.e. holds advance credit instead); when given, the cap reuses the exact same invoice-level `creditableAmount` a credit note uses. This reuse is itself the next entry.
+
+---
+
+## BILL-6-CKPTB-DEVIATION-1 — CORRECTIONS-CAP-SHARED: `creditableAmount`'s "already credited" sum now spans CREDIT_NOTE + WRITE_OFF (raised, not blocking)
+
+**Checkpoint A's `creditableAmount` (the B6-2 over-credit guard) only summed prior `APPROVED` rows of `type = 'CREDIT_NOTE'`** when computing an invoice's remaining outstanding-after-existing-credits. Checkpoint B introduces invoice-scoped write-offs, which are money-wise identical in effect to a credit note (both post a `CREDIT` entry that reduces the invoice's remaining collectible amount) — so an invoice with a $2,000 approved write-off has only $3,000 of real room left for a *subsequent* $5,000 credit note, not the full $5,000 Checkpoint A's narrower query would have (wrongly) still reported. Widened the `credited` subquery in both branches (invoice-level and line-level) of `creditableAmount` to `type IN ('CREDIT_NOTE','WRITE_OFF')`. This is a correctness fix to Checkpoint A's own guard, not a new invariant — no test in Checkpoint A's own suite exercised a credit-note-after-write-off (or vice versa) sequence, so nothing there could have depended on the narrower behavior; all 18 of Checkpoint A's original tests still pass unchanged. Not raised as a mid-build question per this checkpoint's "don't stop, log deviations" instruction — the alternative (two independent, un-aware-of-each-other caps) would let an invoice be over-corrected past its actual outstanding amount by combining one of each type, which is a real money-safety gap the spec's own B6-2 wording ("Cannot over-credit an invoice") reads as clearly out of bounds regardless of which correction *type* did the crediting.
+
+---
+
 ## BILL-9-EXPORT — soft follow-up: printable (PDF/Excel) report export, skipped at v1
 
 **Not a bug — a locked gate decision.** BILL-9-SPEC.md §7 named Checkpoint C (printable export of the reports) as "only if requested," to be decided at the Checkpoint B gate. Decision (Srijan, after Checkpoint B approved): skip it — the five JSON report endpoints plus cashier daily-close are enough for v1. A school reads everything through the web UI; printable reports are a when-a-real-school-actually-asks feature, not something worth building ahead of demand. BILL-9 closes at Checkpoint B.
