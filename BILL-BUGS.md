@@ -4,6 +4,14 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-9-EXPORT — soft follow-up: printable (PDF/Excel) report export, skipped at v1
+
+**Not a bug — a locked gate decision.** BILL-9-SPEC.md §7 named Checkpoint C (printable export of the reports) as "only if requested," to be decided at the Checkpoint B gate. Decision (Srijan, after Checkpoint B approved): skip it — the five JSON report endpoints plus cashier daily-close are enough for v1. A school reads everything through the web UI; printable reports are a when-a-real-school-actually-asks feature, not something worth building ahead of demand. BILL-9 closes at Checkpoint B.
+
+**If raised later:** BILL-8's pdfkit path (`BillPdfService`/`BillDocumentService`, per-tenant header/branding, bilingual EN/NE labels, Devanagari font handling) is already built and proven — reusable directly for whichever specific report needs a printable form. No new rendering infrastructure required, just report-specific layout work.
+
+---
+
 ## BILL-9-CKPTA-DEVIATION-1 — read-only reports mounted under /reports/finance/*, not the literal /finance/reports/* from BILL-9-SPEC.md §5 (raised before writing code, resolved)
 
 **BILL-9-SPEC.md §5 lists the four read-only reports (daybook, defaulters, aging, collection) at `GET /finance/reports/*`.** Two of those paths — `/finance/reports/collection` and `/finance/reports/defaulters` — collide exactly with existing live routes on `FinanceController` (`report.service.ts`, old-rail `invoices`/`payments` tables), which back `useCollectionReport`/`useDefaulters`/`useStudentLedger` in already-shipped pages: `finance/page.tsx`, `finance/reports/page.tsx`, `students/[id]/page.tsx`, and the WEB-P Phase 5 parent portal (`parent/fees/page.tsx`, `parent/page.tsx`).
