@@ -4,6 +4,20 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-7-CKPTB-FINDING-1 — `/super-admin/jobs/*` 500s (not 403) for a tenant-scoped JWT (found, out of scope, not fixed)
+
+**Found live while proving Checkpoint B's RBAC boundary** (`POST /super-admin/jobs/late-fee-accrual`, `PLATFORM_ADMIN`-only): hitting any `/super-admin/jobs/*` route with a valid tenant-level JWT (any role — tested `SCHOOL_OWNER` and `ACCOUNTANT`) returns `500 INTERNAL_ERROR` with a leaked stack trace (`Error: No tenant context in scope. Is TenantMiddleware applied to this route?`), not the expected clean `403`.
+
+**Root cause, confirmed by reading the stack trace:** `PasswordChangeRequiredGuard.canActivate` runs globally (ahead of `RolesGuard` in the guard chain) and unconditionally calls `TenantPrismaService.query(...)` to check `must_change_password` for the authenticated user. `TenantMiddleware` explicitly excludes `/super-admin/` paths from tenant resolution (correct — platform routes need no tenant), so no tenant context is ever bound on this path. For a `PLATFORM_ADMIN` token this apparently never gets far enough to matter; for a tenant-scoped token, `PasswordChangeRequiredGuard` throws before `RolesGuard` ever gets to reject the wrong role, and the unhandled exception surfaces as a 500.
+
+**Confirmed pre-existing, not introduced by BILL-7:** reproduced the identical 500 on the already-shipped `POST /super-admin/jobs/recalculate-fines` (OPS-1 T4) using the same tenant token — this affects every `/super-admin/jobs/*` route, not just the new one.
+
+**Confirmed NOT a security hole, only a bad error surface:** cross-checked `bill_fine_runs` immediately after both failing calls — no new row was created for either attempt, confirming the guard chain aborted the request before the controller method (and therefore the job) ever executed. A tenant-scoped actor cannot actually trigger a platform job this way; they just get an ugly, stack-trace-leaking 500 instead of a clean 403.
+
+**Not fixed here:** this is a pre-existing bug in `PasswordChangeRequiredGuard` (POL-1 T4) interacting with an unrelated, already-shipped route-exclusion list, not something Checkpoint B's scope touches. Fixing it properly means either scoping `PasswordChangeRequiredGuard` to skip tenant-context-excluded paths, or having it degrade gracefully when `TenantContextService.getOrThrow()` throws — a real, valuable fix, but a separate one.
+
+---
+
 ## BILL-6-CKPTB-DEVIATION-3 — write-off request DTO: no `targetInvoiceItemId` (raised, not blocking)
 
 **BILL-6-SPEC.md §3 says write-off targets "invoice/balance," never mentions a line-level write-off** the way B6-2 explicitly calls out for credit notes ("optionally a specific invoice line, e.g. only the transport item"). `CreateWriteOffDto` therefore only exposes `targetInvoiceId` (optional) — no `targetInvoiceItemId`. The underlying `bill_corrections.target_invoice_item_id` column is still nullable and generic across all three types, so a line-level write-off could be added later without a migration if ever asked for; `approve()`'s WRITE_OFF branch already passes `correction.target_invoice_item_id` through to `creditableAmount` defensively (always `null` for now, since nothing can set it via the request DTO). Not raised as a question mid-build per this checkpoint's "don't stop to ask" instruction — the spec's own silence on this point reads as "invoice or balance only," and adding the line-level option unasked would be scope creep in the other direction.
