@@ -9,6 +9,7 @@ import { FeeAgingReportService } from './fee-aging-report.service';
 import { DaybookReportService } from './daybook-report.service';
 import { DefaultersReportService } from './defaulters-report.service';
 import { CollectionReportService } from './collection-report.service';
+import { FinesReportService } from './fines-report.service';
 
 /** REP-1 roles (spec-fixed): attendance + exams → principal tier + academic
  *  coordinator; fee aging additionally opens to ACCOUNTANT. */
@@ -30,6 +31,7 @@ export class ReportsController {
     private readonly daybookReports: DaybookReportService,
     private readonly defaultersReports: DefaultersReportService,
     private readonly collectionReports: CollectionReportService,
+    private readonly finesReports: FinesReportService,
   ) {}
 
   // ─── T1 Attendance ──────────────────────────────────────────────────────────
@@ -154,5 +156,19 @@ export class ReportsController {
     @Query('groupBy') groupBy?: string,
   ) {
     return this.collectionReports.getCollection({ from, to, groupBy });
+  }
+
+  // ─── BILL-7 Checkpoint B ─────────────────────────────────────────────────────
+  // Spec names GET /finance/reports/fines; mounted here instead (same
+  // BILL-9-CKPTA-DEVIATION-1 precedent) to keep one finance-reports home.
+
+  @Get('finance/fines')
+  @Roles(...FINANCE_REPORT_ROLES)
+  getFines(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.finesReports.getFines({ from, to, classId });
   }
 }

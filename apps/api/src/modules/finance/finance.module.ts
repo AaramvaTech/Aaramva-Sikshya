@@ -128,6 +128,6 @@ import { BillFineController } from './bill-fine.controller';
     BillCorrectionService,
     BillFineService,
   ],
-  exports: [InvoiceService, PaymentService, LedgerService],
+  exports: [InvoiceService, PaymentService, LedgerService, BillFineService],
 })
 export class FinanceModule {}
