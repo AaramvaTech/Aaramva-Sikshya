@@ -134,8 +134,9 @@ export class BillFineService {
     const rows = await this.tenantPrisma.query<{
       id: string; scope: string; fee_head_id: string | null; type: string;
       value: string; grace_days: number; cap_amount: string | null;
+      effective_from: Date | string;
     }>(
-      `SELECT id, scope, fee_head_id, type, value, grace_days, cap_amount
+      `SELECT id, scope, fee_head_id, type, value, grace_days, cap_amount, effective_from
        FROM late_fee_rules
        WHERE is_enabled = true AND deleted_at IS NULL
          AND effective_from <= $1::date
@@ -150,11 +151,7 @@ export class BillFineService {
       value: toMoney(r.value),
       graceDays: r.grace_days,
       capAmount: r.cap_amount != null ? toMoney(r.cap_amount) : null,
-      // Only used to break a GLOBAL/FEE_HEAD tie deterministically when
-      // several enabled rules match the same invoice — today's date is a
-      // fine, stable proxy since effective_from <= today is already a
-      // precondition for every row this method returns.
-      effectiveFrom: today,
+      effectiveFrom: r.effective_from instanceof Date ? r.effective_from.toISOString().split('T')[0] : r.effective_from,
     }));
   }
 
