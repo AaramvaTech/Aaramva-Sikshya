@@ -4,6 +4,63 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## INC-4 — psql multi-statement capture silently corrupted two password-hash restores, one a real user account (2026-08-04, BILL-7 Checkpoints A+B live proof)
+
+**Severity: two accounts were left unable to log in with EITHER their temp probe password OR their real original password — one of them `pradhansrijan07@gmail.com` on `motherland-school`, a real account, not a synthetic demo fixture.** Both are now fixed and byte-verified (table below). Recorded as its own incident, not folded into a checkpoint summary, because the same live-proof ritual (shim a password to probe a role, then restore it) runs in nearly every session that touches this codebase, and the failure mode here is subtle enough to recur silently unless the two rules below are actually followed next time.
+
+**What happened, mechanically.** The established shim-and-restore ritual captures a user's current `password_hash` before overwriting it, so it can be put back afterward. The capture command combined two SQL statements in one `psql -c` invocation:
+
+```
+psql -t -A -c "
+SET search_path TO tenant_demo, public;
+SELECT password_hash FROM users WHERE email = 'pay1-verify@demo.school';
+" > accountant-orig-hash.txt
+```
+
+`-t`/`--tuples-only` (with `-A`, unaligned) suppresses column headers and row-count footers around SELECT-produced *rows* — but it does **not** suppress the plain completion tag (`SET`) psql prints for a companion non-SELECT statement in the same invocation. The resulting file held two lines, not one:
+
+```
+SET
+$2b$10$JUHIlzbv.iBcyeeT7vT.x.I61RLk4xPKePfbJ1JnzkN98S6zRc3k6
+```
+
+This looks like a hash at a glance and was never actually inspected before reuse. Later, restoring the password did `$(cat accountant-orig-hash.txt)` straight into an `UPDATE ... SET password_hash = '$ORIG_HASH' ...` string. Bash command substitution preserves embedded newlines (it only strips *trailing* ones), so the variable held the literal two-line value. Postgres string literals can legally contain embedded newlines, so the `UPDATE` did not error — it silently stored `SET\r\n$2b$10$JUHIlzbv...` (65 characters) as the password_hash instead of the intended 60-character hash. Nothing about the `UPDATE 1` response looked wrong.
+
+**Why the intended safeguard — "log in with the temp password afterward, expect 401" — did not catch this.** `bcrypt.compare(plaintext, hash)` returns "no match" for *any* hash that isn't the plaintext's real one. A correctly-restored hash (the real original, an unknown-to-me password) and a corrupted, unusable hash string produce the exact same observable result: the temp password fails to log in. The check is necessary (it does prove the shim itself is no longer active) but was never capable of distinguishing "restored correctly" from "corrupted into different garbage" — both outcomes are indistinguishable from that vantage point. That is the specific sense in which the verification was not independent of the bug: they shared the same blind spot, so passing the check was never evidence the restore had actually worked.
+
+**Caught by:** not the intended safeguard above — by chance, while re-reading a saved capture file for an unrelated reason later in the session, its first line read `SET`, which prompted checking every other saved capture file and then the live database state directly, which is where the corruption on both accounts was actually found.
+
+**Recovery.** For both accounts, reconstructed the true original hash from the *second* line only of the polluted capture file (discarding the corrupted "SET\r" first line), then verified the restored value against that reference with a direct `SELECT length(password_hash), password_hash` — a byte-level comparison, not a login-based proxy:
+
+| Account | Before (corrupted, observed live) | Reference (from the pre-shim capture, line 2 only) | After (fresh `SELECT`, just now) |
+|---|---|---|---|
+| `pay1-verify@demo.school` (`tenant_demo`) | len 65 — `SET\r\n$2b$10$JUHIlzbv.iBcyeeT7vT.x.I61RLk4xPKePfbJ1JnzkN98S6zRc3k6` | `$2b$10$JUHIlzbv.iBcyeeT7vT.x.I61RLk4xPKePfbJ1JnzkN98S6zRc3k6` (len 60) | len 60 — `$2b$10$JUHIlzbv.iBcyeeT7vT.x.I61RLk4xPKePfbJ1JnzkN98S6zRc3k6` — **matches reference exactly** |
+| `pradhansrijan07@gmail.com` (`tenant_motherland_school`, real account) | len 65 — `SET\r\n$2b$10$nrekTH3PIzYOJNXuYV9FMOpXjmTm4OaZY2KyQ9aclytY5mII.QgBi` | `$2b$10$nrekTH3PIzYOJNXuYV9FMOpXjmTm4OaZY2KyQ9aclytY5mII.QgBi` (len 60) | len 60 — `$2b$10$nrekTH3PIzYOJNXuYV9FMOpXjmTm4OaZY2KyQ9aclytY5mII.QgBi` — **matches reference exactly** |
+
+**Root cause, two independent layers — both had to hold for the corruption to survive:**
+1. **Capture:** combining `SET search_path` with a value-capturing `SELECT` in one `-c` invocation redirected to a file. `-t`/`-A` format SELECT-produced tuples only; they don't touch a companion statement's own completion tag.
+2. **Restore + verify:** interpolating a captured value into a live `UPDATE` without validating its shape first, then relying solely on a login-based check that cannot discriminate a correct restore from a corrupted one.
+
+**Fix going forward — closes both layers, not just "be more careful":**
+1. **Never combine `SET search_path` (or any non-SELECT statement) with a single-value SELECT being captured to a file.** Schema-qualify the target table directly instead — `SELECT password_hash FROM tenant_x.users WHERE email = '...'` — one statement, one line of output, nothing else can leak in. (This is what the later captures in this same session had already switched to, independently, which is exactly why they came out clean — the fix was discovered mid-session, before this incident writeup, just not yet generalized into a rule.)
+2. **Password-hash restoration must be verified by a direct byte-level comparison** (length + exact string, via a raw `SELECT`) of the live column against the originally captured reference — never by a login-based side effect alone. A login check remains a reasonable *additional* sanity check (it does confirm the shim is inert), but is never sufficient by itself for exactly the reason above.
+
+---
+
+## FIX-SUPERADMIN-JOBS-403 — `/super-admin/jobs/*` 500s (not 403) for a tenant-scoped JWT (found during BILL-7 Checkpoint B, logged as its own backlog item)
+
+**Found live while proving Checkpoint B's RBAC boundary** (`POST /super-admin/jobs/late-fee-accrual`, `PLATFORM_ADMIN`-only): hitting any `/super-admin/jobs/*` route with a valid tenant-level JWT (any role — tested `SCHOOL_OWNER` and `ACCOUNTANT`) returns `500 INTERNAL_ERROR` with a leaked stack trace (`Error: No tenant context in scope. Is TenantMiddleware applied to this route?`), not the expected clean `403`.
+
+**Root cause, confirmed by reading the stack trace:** `PasswordChangeRequiredGuard.canActivate` runs globally (ahead of `RolesGuard` in the guard chain) and unconditionally calls `TenantPrismaService.query(...)` to check `must_change_password` for the authenticated user. `TenantMiddleware` explicitly excludes `/super-admin/` paths from tenant resolution (correct — platform routes need no tenant), so no tenant context is ever bound on this path. For a `PLATFORM_ADMIN` token this apparently never gets far enough to matter; for a tenant-scoped token, `PasswordChangeRequiredGuard` throws before `RolesGuard` ever gets to reject the wrong role, and the unhandled exception surfaces as a 500.
+
+**Confirmed pre-existing, not introduced by BILL-7:** reproduced the identical 500 on the already-shipped `POST /super-admin/jobs/recalculate-fines` (OPS-1 T4) using the same tenant token — this affects every `/super-admin/jobs/*` route, not just the new one.
+
+**Confirmed NOT a security hole, only a bad error surface:** cross-checked `bill_fine_runs` immediately after both failing calls — no new row was created for either attempt, confirming the guard chain aborted the request before the controller method (and therefore the job) ever executed. A tenant-scoped actor cannot actually trigger a platform job this way; they just get an ugly, stack-trace-leaking 500 instead of a clean 403.
+
+**Not fixed here — this checkpoint's scope was BILL-7, not this.** This is a pre-existing bug in `PasswordChangeRequiredGuard` (POL-1 T4) interacting with an unrelated, already-shipped route-exclusion list. Fixing it properly means either scoping `PasswordChangeRequiredGuard` to skip tenant-context-excluded paths, or having it degrade gracefully when `TenantContextService.getOrThrow()` throws — a real, valuable fix, but a separate piece of work for Srijan to prioritize independently, same as `FIX-STORAGE-URL`/`FIX-QUERY-DTO`.
+
+---
+
 ## BILL-6-CKPTB-DEVIATION-3 — write-off request DTO: no `targetInvoiceItemId` (raised, not blocking)
 
 **BILL-6-SPEC.md §3 says write-off targets "invoice/balance," never mentions a line-level write-off** the way B6-2 explicitly calls out for credit notes ("optionally a specific invoice line, e.g. only the transport item"). `CreateWriteOffDto` therefore only exposes `targetInvoiceId` (optional) — no `targetInvoiceItemId`. The underlying `bill_corrections.target_invoice_item_id` column is still nullable and generic across all three types, so a line-level write-off could be added later without a migration if ever asked for; `approve()`'s WRITE_OFF branch already passes `correction.target_invoice_item_id` through to `creditableAmount` defensively (always `null` for now, since nothing can set it via the request DTO). Not raised as a question mid-build per this checkpoint's "don't stop to ask" instruction — the spec's own silence on this point reads as "invoice or balance only," and adding the line-level option unasked would be scope creep in the other direction.

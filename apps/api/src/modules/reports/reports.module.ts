@@ -6,10 +6,11 @@ import { FeeAgingReportService } from './fee-aging-report.service';
 import { DaybookReportService } from './daybook-report.service';
 import { DefaultersReportService } from './defaulters-report.service';
 import { CollectionReportService } from './collection-report.service';
+import { FinesReportService } from './fines-report.service';
 
-/** REP-1 + BILL-9 Checkpoint A — read-only cross-module analytics. No
- *  tables, no migrations (BILL-9's own cashier-close storage lives in the
- *  finance module, Checkpoint B). */
+/** REP-1 + BILL-9 Checkpoint A + BILL-7 Checkpoint B — read-only cross-module
+ *  analytics. No tables, no migrations here (reads bill_fine_accruals, which
+ *  BILL-7 Checkpoint A already created). */
 @Module({
   controllers: [ReportsController],
   providers: [
@@ -19,6 +20,7 @@ import { CollectionReportService } from './collection-report.service';
     DaybookReportService,
     DefaultersReportService,
     CollectionReportService,
+    FinesReportService,
   ],
 })
 export class ReportsModule {}
