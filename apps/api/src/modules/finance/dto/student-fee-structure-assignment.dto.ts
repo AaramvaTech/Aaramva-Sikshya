@@ -5,6 +5,16 @@ export class AssignFeeStructureDto {
   @IsDateString() effectiveFrom: string;
 }
 
+/**
+ * GET .../fee-structure — deliberately NOT paginated, unlike overrides/
+ * concessions/transport-assignments' query DTOs (see UI-2-SPEC.md §2):
+ * this is a single student's assignment history, bounded to a handful of
+ * rows in practice, not an admin-wide filterable list.
+ */
+export class StudentFeeStructureAssignmentQueryDto {
+  @IsOptional() @IsUUID() academicYearId?: string;
+}
+
 export enum BulkAssignScopeType {
   CLASS = 'CLASS',
   STUDENT_LIST = 'STUDENT_LIST',

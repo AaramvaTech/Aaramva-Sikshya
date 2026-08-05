@@ -87,6 +87,7 @@ const navItems: NavItem[] = [
     name: 'Billing',
     subItems: [
       { name: 'Fee Catalog', path: '/finance/bill/catalog' },
+      { name: 'Assignment', path: '/finance/bill/assignment' },
     ],
   },
   {

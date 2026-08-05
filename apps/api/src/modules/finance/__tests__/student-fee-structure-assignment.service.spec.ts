@@ -109,6 +109,44 @@ describe('StudentFeeStructureAssignmentService', () => {
     expect(result).toBeNull();
   });
 
+  describe('findAllForStudent', () => {
+    it('lists every assignment for the student ordered newest-first, no academicYearId filter', async () => {
+      const closedRow = { ...mockAssignmentRow, id: 'sfsa-0', effective_to: '2026-04-13' };
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockAssignmentRow, closedRow]);
+
+      const result = await service.findAllForStudent('student-1');
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('ORDER BY effective_from DESC'),
+        'student-1',
+      );
+      expect(tenantPrisma.query).not.toHaveBeenCalledWith(expect.stringContaining('academic_year_id = $2'), expect.anything());
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('sfsa-1');
+      expect(result[0].effectiveTo).toBeNull();
+      expect(result[1].effectiveTo).toBe('2026-04-13');
+    });
+
+    it('filters by academicYearId when given', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockAssignmentRow]);
+
+      const result = await service.findAllForStudent('student-1', 'year-1');
+
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('academic_year_id = $2::uuid'),
+        'student-1',
+        'year-1',
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    it('returns an empty array for a student with no assignment history', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      const result = await service.findAllForStudent('student-1');
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('findAssignmentOverlappingPeriod', () => {
     it('finds an assignment whose effective_from starts mid-period (BILL-4 proration)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockAssignmentRow]);

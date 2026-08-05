@@ -53,15 +53,19 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
+import { StudentBillingTab } from '@/components/finance/student-billing-tab';
+import { canSeeBillingTab } from '@/lib/billing-tab-access';
 import type { FeeAssignment, StudentDocument } from '@/types/api.types';
 
-type Tab = 'overview' | 'enrollment' | 'documents' | 'fees';
+type Tab = 'overview' | 'enrollment' | 'documents' | 'fees' | 'billing';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'enrollment', label: 'Enrollment' },
   { key: 'documents', label: 'Documents' },
   { key: 'fees', label: 'Fees' },
+  { key: 'billing', label: 'Billing' },
 ];
 
 function initials(name: string) {
@@ -213,6 +217,10 @@ export default function StudentProfilePage() {
   const { data: student, isLoading } = useStudent(id);
   const { data: currentYear } = useCurrentAcademicYear();
 
+  const role = useAuthStore((s) => s.user?.role);
+  const canSeeBilling = canSeeBillingTab(role);
+  const visibleTabs = TABS.filter((t) => t.key !== 'billing' || canSeeBilling);
+
   const { data: documents, isLoading: docsLoading } = useQuery({
     queryKey: ['student-documents', id],
     queryFn: () => studentsApi.getDocuments(id).then((r) => r.data.data),
@@ -280,7 +288,7 @@ export default function StudentProfilePage() {
           </div>
         </div>
         <div className="flex gap-1 border-b border-gray-200 mb-6">
-          {TABS.map((t) => <Skeleton key={t.key} className="h-9 w-24" />)}
+          {visibleTabs.map((t) => <Skeleton key={t.key} className="h-9 w-24" />)}
         </div>
         <div className="space-y-4">
           <Skeleton className="h-44 rounded-lg" />
@@ -322,7 +330,7 @@ export default function StudentProfilePage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-stroke dark:border-strokedark mb-6">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => { setActiveTab(tab.key); setShowEnrollForm(false); }}
@@ -671,9 +679,14 @@ export default function StudentProfilePage() {
         </div>
       )}
 
-      {/* ── Fees ──────────────────────────────────────────────────── */}
+      {/* ── Fees (old rail) ──────────────────────────────────────────── */}
       {activeTab === 'fees' && (
         <FeesTab studentId={id} />
+      )}
+
+      {/* ── Billing (new rail, UI-2) ─────────────────────────────────── */}
+      {activeTab === 'billing' && canSeeBilling && (
+        <StudentBillingTab studentId={id} />
       )}
 
       {/* Photo upload dialog */}

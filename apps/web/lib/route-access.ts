@@ -80,6 +80,9 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // listed separately since it cites a different backend controller
   // (BillCatalogController, not the old rail's FinanceController).
   { prefix: '/finance/bill/catalog', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-heads' },
+  // UI-2 — bulk-assign page. Same tier as catalog above, citing
+  // BillAssignmentController's own write guard.
+  { prefix: '/finance/bill/assignment', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/fee-structures/:id/bulk-assign' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for
