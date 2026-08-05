@@ -4,6 +4,12 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## UI-1-SPEC-DRIFT — "hide delete for non-owners" was specified but never built (found during UI-2 discovery, 2026-08-05)
+
+`docs/api-contracts/UI-1-SPEC.md` §5.1 said OWNER_ONLY delete actions on the Fee Catalog tabs would be "hidden client-side for non-owner viewers." Reading the shipped `app/(school)/finance/bill/catalog/page.tsx` and `components/shared/config-section.tsx` directly while researching UI-2: no such gating exists anywhere in either file — `ConfigRow`'s delete button renders unconditionally for every viewer, and the backend's 403 is the only real gate today. Not a live bug (delete still correctly fails server-side for non-owners), just a spec claim that was never implemented and never caught. UI-2 uses the actual working precedent instead (`useAuthStore((s) => s.user?.role)`, verified live in `app/(school)/reports/page.tsx:459`) rather than repeating the unbuilt UI-1 description. Logged so this drift doesn't resurface a third time — if the Fee Catalog tabs' delete buttons are ever revisited, add the same role check there too.
+
+---
+
 ## FIX-DARKMODE-CONTRAST — `dark:bg-boxdark`/`bg-white` pairing bug on 32 existing files (found during UI-1 Catalog discovery, logged as its own backlog item)
 
 **Pre-existing, dormant (not live), not fixed here — this checkpoint's scope was UI-1's own new screens, not this.** `apps/web/app/globals.css` carries its own dated comment (added 2026-07-16, when the Tailwind v4 migration dropped `tailwind.config.js` and TailAdmin's legacy tokens had to be manually restored as CSS custom properties):
