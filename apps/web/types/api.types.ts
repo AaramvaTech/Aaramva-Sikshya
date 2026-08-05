@@ -1680,3 +1680,157 @@ export interface FeeAgingReport {
   byClass: ({ className: string; total: number } & Record<string, number | string>)[];
   invoices: AgingInvoiceRow[];
 }
+
+// ─── UI-1: Fee Catalog ──────────────────────────────────────────────────────
+
+export type FeeHeadRecurrence = 'MONTHLY' | 'QUARTERLY' | 'TERM' | 'ANNUAL' | 'ONE_TIME' | 'ON_DEMAND';
+export type ProrationPolicy = 'NONE' | 'MONTHLY';
+
+export interface FeeHead {
+  id: string;
+  name: string;
+  code: string;
+  recurrence: FeeHeadRecurrence;
+  isTaxable: boolean;
+  isRefundable: boolean;
+  prorationPolicy: ProrationPolicy;
+  glAccountCode: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+export interface CreateFeeHeadData {
+  name: string;
+  code: string;
+  recurrence: FeeHeadRecurrence;
+  isTaxable?: boolean;
+  isRefundable?: boolean;
+  prorationPolicy?: ProrationPolicy;
+  glAccountCode?: string;
+  displayOrder?: number;
+}
+export type UpdateFeeHeadData = Partial<CreateFeeHeadData> & { isActive?: boolean };
+
+export interface DiscountReason {
+  id: string;
+  name: string;
+  code: string;
+  glAccountCode: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+export interface CreateDiscountReasonData { name: string; code: string; glAccountCode?: string }
+export type UpdateDiscountReasonData = Partial<CreateDiscountReasonData> & { isActive?: boolean };
+
+export interface CorrectionReason {
+  id: string;
+  name: string;
+  code: string;
+  glAccountCode: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+export interface CreateCorrectionReasonData { name: string; code: string; glAccountCode?: string }
+export type UpdateCorrectionReasonData = Partial<CreateCorrectionReasonData> & { isActive?: boolean };
+
+export interface TransportRoute {
+  id: string;
+  name: string;
+  code: string;
+  monthlyAmount: number;
+  isActive: boolean;
+  createdAt: string;
+}
+export interface CreateTransportRouteData { name: string; code: string; monthlyAmount: string }
+export type UpdateTransportRouteData = Partial<CreateTransportRouteData> & { isActive?: boolean };
+
+export type TaxAppliesTo = 'ALL' | 'TAXABLE_HEADS';
+export interface TaxRate {
+  id: string;
+  name: string;
+  rate: number;
+  appliesTo: TaxAppliesTo;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface CreateTaxRateData {
+  name: string;
+  rate: number;
+  appliesTo?: TaxAppliesTo;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+export interface UpdateTaxRateData { name?: string; effectiveFrom?: string; effectiveTo?: string }
+
+export type LateFeeRuleScope = 'GLOBAL' | 'FEE_HEAD';
+export type LateFeeRuleType = 'FLAT' | 'PER_DAY' | 'PERCENT';
+export interface LateFeeRule {
+  id: string;
+  scope: LateFeeRuleScope;
+  feeHeadId: string | null;
+  type: LateFeeRuleType;
+  value: number;
+  graceDays: number;
+  capAmount: number | null;
+  isEnabled: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  createdAt: string;
+}
+export interface CreateLateFeeRuleData {
+  scope: LateFeeRuleScope;
+  feeHeadId?: string;
+  type: LateFeeRuleType;
+  value: string;
+  graceDays?: number;
+  capAmount?: string;
+  isEnabled?: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+export interface UpdateLateFeeRuleData {
+  value?: string;
+  graceDays?: number;
+  capAmount?: string;
+  isEnabled?: boolean;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+}
+
+export interface BillFeeStructureItem {
+  id: string;
+  feeHeadId: string;
+  feeHeadName?: string;
+  amount: number;
+  recurrenceOverride: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+export interface BillFeeStructure {
+  id: string;
+  academicYearId: string;
+  classId: string;
+  sectionId: string | null;
+  name: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  items?: BillFeeStructureItem[];
+}
+export interface BillFeeStructureItemInput {
+  feeHeadId: string;
+  amount: string;
+  recurrenceOverride?: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+export interface CreateBillFeeStructureData {
+  academicYearId: string;
+  classId: string;
+  sectionId?: string;
+  name: string;
+  items: BillFeeStructureItemInput[];
+}
+export interface UpdateBillFeeStructureItemsData { items: BillFeeStructureItemInput[] }

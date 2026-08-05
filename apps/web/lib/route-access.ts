@@ -74,6 +74,12 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // (PLATFORM_ADMIN/SCHOOL_OWNER/PRINCIPAL/ACADEMIC_COORDINATOR/TEACHER).
   { prefix: '/assignments', roles: TEACHER_TIER, endpoint: 'POST /assignments' },
   { prefix: '/finance', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-structures' },
+  // UI-1 — the new BILL-rail admin UI, a separate top-level "Billing" nav
+  // section (Srijan's ruling) but still under /finance/bill/... on the URL,
+  // mirroring the backend's own path split. Same role tier as the row above;
+  // listed separately since it cites a different backend controller
+  // (BillCatalogController, not the old rail's FinanceController).
+  { prefix: '/finance/bill/catalog', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /finance/fee-heads' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for
