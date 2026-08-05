@@ -221,61 +221,74 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
 
             {errors.items?.root && <p className="text-xs text-error-600 mb-2">{errors.items.root.message}</p>}
 
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_100px_120px_140px_140px_36px] gap-2 text-xs font-medium text-gray-500 px-1">
-                <span>Fee Head</span>
-                <span>Amount (Rs.)</span>
-                <span>Recurrence Override</span>
-                <span>Effective From</span>
-                <span>Effective To</span>
-                <span />
-              </div>
-
+            <div className="space-y-3">
               {fields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-[1fr_100px_120px_140px_140px_36px] gap-2 items-start">
-                  <div>
-                    <Select
-                      value={watch(`items.${index}.feeHeadId`)}
-                      onValueChange={(v) => setValue(`items.${index}.feeHeadId`, v ?? '', { shouldValidate: true })}
-                    >
-                      <SelectTrigger className="h-9">
-                        <span className={watch(`items.${index}.feeHeadId`) ? '' : 'text-muted-foreground'}>
-                          {watch(`items.${index}.feeHeadId`)
-                            ? (feeHeads?.find((h) => h.id === watch(`items.${index}.feeHeadId`))?.name ?? 'Loading…')
-                            : 'Fee head'}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {feeHeads?.map((h) => <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {errors.items?.[index]?.feeHeadId && (
-                      <p className="text-xs text-error-600 mt-0.5">{errors.items[index]?.feeHeadId?.message}</p>
-                    )}
+                <div key={field.id} className="rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <div className="flex-1 min-w-[180px] space-y-1.5">
+                      <Label className="text-xs text-gray-500">Fee Head</Label>
+                      <Select
+                        value={watch(`items.${index}.feeHeadId`)}
+                        onValueChange={(v) => setValue(`items.${index}.feeHeadId`, v ?? '', { shouldValidate: true })}
+                      >
+                        <SelectTrigger className="h-9">
+                          <span className={watch(`items.${index}.feeHeadId`) ? '' : 'text-muted-foreground'}>
+                            {watch(`items.${index}.feeHeadId`)
+                              ? (feeHeads?.find((h) => h.id === watch(`items.${index}.feeHeadId`))?.name ?? 'Loading…')
+                              : 'Fee head'}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {feeHeads?.map((h) => <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {errors.items?.[index]?.feeHeadId && (
+                        <p className="text-xs text-error-600">{errors.items[index]?.feeHeadId?.message}</p>
+                      )}
+                    </div>
+
+                    <div className="w-28 shrink-0 space-y-1.5">
+                      <Label className="text-xs text-gray-500">Amount (Rs.)</Label>
+                      <Input type="number" step="0.01" className="h-9" placeholder="0" {...register(`items.${index}.amount`, { valueAsNumber: true })} />
+                    </div>
+
+                    <div className="w-36 shrink-0 space-y-1.5">
+                      <Label className="text-xs text-gray-500">Recurrence Override</Label>
+                      <Input className="h-9" placeholder="—" {...register(`items.${index}.recurrenceOverride`)} />
+                    </div>
+
+                    <div className="shrink-0 space-y-1.5">
+                      <Label className="text-xs text-gray-500 invisible">Remove</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-gray-400 hover:text-error-600"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
 
-                  <Input type="number" step="0.01" className="h-9" placeholder="0" {...register(`items.${index}.amount`, { valueAsNumber: true })} />
-                  <Input className="h-9" placeholder="—" {...register(`items.${index}.recurrenceOverride`)} />
-
-                  <BsDateInput
-                    value={watch(`items.${index}.effectiveFrom`)}
-                    onChange={(ad) => setValue(`items.${index}.effectiveFrom`, ad, { shouldValidate: true })}
-                  />
-                  <BsDateInput
-                    value={watch(`items.${index}.effectiveTo`)}
-                    onChange={(ad) => setValue(`items.${index}.effectiveTo`, ad)}
-                  />
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 text-gray-400 hover:text-error-600"
-                    onClick={() => remove(index)}
-                    disabled={fields.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="space-y-3">
+                    <div>
+                      <BsDateInput
+                        label="Effective From *"
+                        value={watch(`items.${index}.effectiveFrom`)}
+                        onChange={(ad) => setValue(`items.${index}.effectiveFrom`, ad, { shouldValidate: true })}
+                      />
+                      {errors.items?.[index]?.effectiveFrom && (
+                        <p className="text-xs text-error-600 mt-0.5">{errors.items[index]?.effectiveFrom?.message}</p>
+                      )}
+                    </div>
+                    <BsDateInput
+                      label="Effective To (optional)"
+                      value={watch(`items.${index}.effectiveTo`)}
+                      onChange={(ad) => setValue(`items.${index}.effectiveTo`, ad)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

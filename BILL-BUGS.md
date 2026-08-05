@@ -6,13 +6,23 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ## FIX-DARKMODE-CONTRAST — `dark:bg-boxdark`/`bg-white` pairing bug on 32 existing files (found during UI-1 Catalog discovery, logged as its own backlog item)
 
-**Pre-existing, confirmed still live, not fixed here — this checkpoint's scope was UI-1's own new screens, not this.** `apps/web/app/globals.css` carries its own dated comment (added 2026-07-16, when the Tailwind v4 migration dropped `tailwind.config.js` and TailAdmin's legacy tokens had to be manually restored as CSS custom properties):
+**Pre-existing, dormant (not live), not fixed here — this checkpoint's scope was UI-1's own new screens, not this.** `apps/web/app/globals.css` carries its own dated comment (added 2026-07-16, when the Tailwind v4 migration dropped `tailwind.config.js` and TailAdmin's legacy tokens had to be manually restored as CSS custom properties):
 
 > `dark:bg-boxdark` (32 files) — the bad one: those cards pair it with `bg-white`, so in dark mode the card stays WHITE while `dark:text-white` applies on top = white text on a white card.
 
-Found while researching `docs/api-contracts/UI-1-SPEC.md` (the design-language section, §2) — not a new discovery, but re-confirmed live and flagged as its own trackable item rather than left as a comment only the next person to open `globals.css` would ever see. `next-themes` is wired app-wide (`app/providers.tsx`) with no explicit toggle found in the layout, so a user's OS-level dark-mode preference can trigger this on the existing app right now, without anyone touching a switch.
+Found while researching `docs/api-contracts/UI-1-SPEC.md` (the design-language section, §2) — not a new discovery, but re-confirmed live and flagged as its own trackable item rather than left as a comment only the next person to open `globals.css` would ever see.
 
-**Confirmed UI-1's own new files avoid the pairing** (`components/shared/config-section.tsx`, the fee-catalog page, and the fee-structure dialog all use one consistent card treatment, never `bg-white` + `dark:bg-boxdark` together) — verified by direct read, not just by not-having-copied the pattern. **Fixing the 32 pre-existing files remains open** — a real, separate cleanup pass (find every file pairing the two classes, pick one consistent card treatment, apply it) — logged here for Srijan to prioritize, not attempted as part of this phase.
+**CORRECTION (2026-08-05, prompted by a direct ask to verify whether this is actually reachable):** the claim above that OS dark-mode preference "can trigger this on the existing app right now" was written without reading `app/providers.tsx` and is wrong. That file forces light mode app-wide:
+
+```tsx
+<ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
+```
+
+and carries its own dated comment (also 2026-07-16 — the same day the tokens above were restored) explaining why: dark mode was deliberately killed as a stopgap for this exact white-on-white bug, once it was discovered that the Tailwind v4 migration had left `dark:bg-boxdark` generating no CSS at all (worse than this pairing bug — a total no-op) and that even after the tokens were restored, this pairing bug would have surfaced. The header's dark-mode toggle was removed at the same time, so there is currently **no manual switch either** — `next-themes` is present and configured, but `forcedTheme` makes it permanently inert. `.dark` is never applied to `<html>`, regardless of OS preference, so **this bug cannot currently trigger for any user, by any path.**
+
+**Priority implication:** this is dormant, not live — nobody is seeing white-on-white today. It only becomes reachable again if/when someone deletes `forcedTheme` and restores the toggle, at which point this 32-file sweep becomes a hard prerequisite (re-enabling dark mode without it reintroduces the original bug immediately). Downgraded from an active-bug backlog item to a **prerequisite-for-re-enabling-dark-mode** item — no user-facing urgency until that re-enablement is actually planned.
+
+**Confirmed UI-1's own new files avoid the pairing** (`components/shared/config-section.tsx`, the fee-catalog page, and the fee-structure dialog all use one consistent card treatment, never `bg-white` + `dark:bg-boxdark` together) — verified by direct read, not just by not-having-copied the pattern. **Fixing the 32 pre-existing files remains open** — a real, separate cleanup pass (find every file pairing the two classes, pick one consistent card treatment, apply it), bundled with dark-mode re-enablement whenever that's prioritized, not attempted as part of this phase.
 
 ---
 
