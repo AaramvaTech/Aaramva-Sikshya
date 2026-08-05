@@ -10,6 +10,7 @@ import {
   LayoutDashboard, Users, CheckSquare, BookOpen,
   CreditCard, FileText, UserCog, Library,
   MessageSquare, ChevronDown, Settings, Rocket,
+  Receipt,
 } from 'lucide-react';
 import { useSidebar } from '@/context/sidebar-context';
 import { useTenantStore } from '@/store/tenant.store';
@@ -74,6 +75,18 @@ const navItems: NavItem[] = [
       { name: 'Invoices', path: '/finance/invoices' },
       { name: 'Fee Structures', path: '/finance/fee-structures' },
       { name: 'Reports', path: '/finance/reports' },
+    ],
+  },
+  {
+    // UI-1 — a new top-level section, not nested under the old-rail "Finance"
+    // dropdown above (Srijan's ruling: the new BILL-rail UI needs its own home,
+    // visually separate from the old rail, matching the backend's own
+    // /finance/bill/... vs /finance/... split). More sub-items land here as
+    // later phases (Assignment, Bill Runs, Payment Counter, ...) ship.
+    icon: <Receipt className="w-5 h-5" />,
+    name: 'Billing',
+    subItems: [
+      { name: 'Fee Catalog', path: '/finance/bill/catalog' },
     ],
   },
   {
