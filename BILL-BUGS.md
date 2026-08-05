@@ -4,6 +4,18 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## UI-2-CLASS-SCOPE — fee-structure picker on the Billing tab is scoped by academic year only, not class (found + accepted during UI-2 build, 2026-08-05)
+
+`docs/api-contracts/UI-2-SPEC.md` §5.1.A assumed the Fee Structure Assignment panel's picker could be scoped by `useFeeStructures({ academicYearId, classId })`, reading the student's `classId` off the page's already-loaded `student` object. Building it, that assumption didn't hold: `StudentDetail` (the real response shape `useStudent()` returns, `types/api.types.ts`) only carries a `className` string — no `classId`, unlike the `Enrollment` type used elsewhere in the same file, which does. Rather than widen `StudentDetail` mid-task for one picker, the panel (`components/finance/fee-structure-assignment-panel.tsx`) filters by `academicYearId` only — a real precision loss (an accountant picking a fee structure for a Grade 9 student currently sees every structure for the year, not just Grade 9's), not a functional blocker (the structure's own name is expected to carry class context, matching UI-1's catalog naming convention). Confirmed live-acceptable at eyeball review. **Follow-up, small and deferred:** if/when `StudentDetail` gains a `classId` (or an equivalent enrollment reference) for some other reason, thread it into this picker's `useFeeStructures` call to restore the class-scoping the spec originally intended.
+
+---
+
+## UI-1-SPEC-DRIFT — "hide delete for non-owners" was specified but never built (found during UI-2 discovery, 2026-08-05)
+
+`docs/api-contracts/UI-1-SPEC.md` §5.1 said OWNER_ONLY delete actions on the Fee Catalog tabs would be "hidden client-side for non-owner viewers." Reading the shipped `app/(school)/finance/bill/catalog/page.tsx` and `components/shared/config-section.tsx` directly while researching UI-2: no such gating exists anywhere in either file — `ConfigRow`'s delete button renders unconditionally for every viewer, and the backend's 403 is the only real gate today. Not a live bug (delete still correctly fails server-side for non-owners), just a spec claim that was never implemented and never caught. UI-2 uses the actual working precedent instead (`useAuthStore((s) => s.user?.role)`, verified live in `app/(school)/reports/page.tsx:459`) rather than repeating the unbuilt UI-1 description. Logged so this drift doesn't resurface a third time — if the Fee Catalog tabs' delete buttons are ever revisited, add the same role check there too.
+
+---
+
 ## FIX-DARKMODE-CONTRAST — `dark:bg-boxdark`/`bg-white` pairing bug on 32 existing files (found during UI-1 Catalog discovery, logged as its own backlog item)
 
 **Pre-existing, dormant (not live), not fixed here — this checkpoint's scope was UI-1's own new screens, not this.** `apps/web/app/globals.css` carries its own dated comment (added 2026-07-16, when the Tailwind v4 migration dropped `tailwind.config.js` and TailAdmin's legacy tokens had to be manually restored as CSS custom properties):

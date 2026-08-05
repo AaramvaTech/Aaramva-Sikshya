@@ -1834,3 +1834,170 @@ export interface CreateBillFeeStructureData {
   items: BillFeeStructureItemInput[];
 }
 export interface UpdateBillFeeStructureItemsData { items: BillFeeStructureItemInput[] }
+
+// ── UI-2 — Assignment & concessions (BILL-2) ────────────────────────────────
+// feeStructureId/transportRouteId are bare (no joined name) on the backend —
+// resolved client-side against useFeeStructures()/useTransportRoutes(), per
+// UI-2-SPEC.md §4.
+
+export interface StudentFeeStructureAssignment {
+  id: string;
+  studentId: string;
+  feeStructureId: string;
+  academicYearId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  assignedBy: string;
+  createdAt: string;
+}
+export interface AssignFeeStructureData {
+  feeStructureId: string;
+  effectiveFrom: string;
+}
+
+export interface StudentFeeOverride {
+  id: string;
+  studentId: string;
+  feeHeadId: string;
+  feeHeadName?: string;
+  academicYearId: string;
+  overrideAmount: number;
+  reason: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface CreateStudentFeeOverrideData {
+  studentId: string;
+  feeHeadId: string;
+  academicYearId: string;
+  overrideAmount: string;
+  reason?: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+export interface UpdateStudentFeeOverrideData {
+  overrideAmount?: string;
+  reason?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+}
+
+export type ConcessionType = 'PERCENT' | 'AMOUNT';
+export interface StudentConcession {
+  id: string;
+  studentId: string;
+  feeHeadId: string | null;
+  feeHeadName?: string;
+  academicYearId: string;
+  type: ConcessionType;
+  value: number;
+  capAmount: number | null;
+  discountReasonId: string;
+  discountReasonName?: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface CreateStudentConcessionData {
+  studentId: string;
+  feeHeadId?: string;
+  academicYearId: string;
+  type: ConcessionType;
+  value: string;
+  capAmount?: string;
+  discountReasonId: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  notes?: string;
+}
+export interface UpdateStudentConcessionData {
+  type?: ConcessionType;
+  value?: string;
+  capAmount?: string;
+  discountReasonId?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  notes?: string;
+}
+
+export interface StudentTransportAssignment {
+  id: string;
+  studentId: string;
+  transportRouteId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  assignedBy: string;
+  createdAt: string;
+}
+export interface CreateStudentTransportAssignmentData {
+  studentId: string;
+  transportRouteId: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+export interface UpdateStudentTransportAssignmentData {
+  transportRouteId?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+}
+
+export type BulkAssignScopeType = 'CLASS' | 'STUDENT_LIST';
+export interface BulkAssignData {
+  scopeType: BulkAssignScopeType;
+  classId?: string;
+  sectionId?: string;
+  studentIds?: string[];
+  effectiveFrom: string;
+}
+export type BulkAssignJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+export interface BulkAssignJob {
+  id: string;
+  feeStructureId: string;
+  academicYearId: string;
+  scopeType: BulkAssignScopeType;
+  scopeClassId: string | null;
+  scopeSectionId: string | null;
+  effectiveFrom: string;
+  status: BulkAssignJobStatus;
+  total: number;
+  processed: number;
+  failedCount: number;
+  failures: { studentId: string; error: string }[];
+  createdBy: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface FeePreviewConcessionLine {
+  concessionId: string;
+  discountReasonId: string;
+  type: ConcessionType;
+  amount: number;
+}
+export interface FeePreviewHeadLine {
+  feeHeadId: string;
+  feeHeadName: string;
+  grossAmount: number;
+  overrideAmount: number | null;
+  effectiveBase: number;
+  concessions: FeePreviewConcessionLine[];
+  netAmount: number;
+}
+export interface FeePreview {
+  studentId: string;
+  feeStructureId: string;
+  feeStructureName: string;
+  academicYearId: string;
+  asOfDate: string;
+  heads: FeePreviewHeadLine[];
+  transport: { transportRouteId: string; transportRouteName: string; amount: number } | null;
+  wholeBillConcessions: FeePreviewConcessionLine[];
+  grossTotal: number;
+  concessionTotal: number;
+  netTotal: number;
+}

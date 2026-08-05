@@ -15,7 +15,9 @@ import { StudentConcessionService } from './student-concession.service';
 import { StudentTransportAssignmentService } from './student-transport-assignment.service';
 import { FeePreviewService } from './fee-preview.service';
 import { ConcessionRegisterReportService } from './concession-register-report.service';
-import { AssignFeeStructureDto, BulkAssignDto } from './dto/student-fee-structure-assignment.dto';
+import {
+  AssignFeeStructureDto, BulkAssignDto, StudentFeeStructureAssignmentQueryDto,
+} from './dto/student-fee-structure-assignment.dto';
 import {
   CreateStudentFeeOverrideDto, UpdateStudentFeeOverrideDto, StudentFeeOverrideQueryDto,
 } from './dto/student-fee-override.dto';
@@ -77,6 +79,18 @@ export class BillAssignmentController {
     @CurrentUser('userId') userId: string,
   ) {
     return this.assignmentService.assign(studentId, dto, userId);
+  }
+
+  /** UI-2 §2 — the read endpoint this resource was missing (overrides/
+   *  concessions/transport-assignments all already had one). Not paginated,
+   *  see StudentFeeStructureAssignmentQueryDto's own comment. */
+  @Get('students/:studentId/fee-structure')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  listFeeStructureAssignments(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Query() query: StudentFeeStructureAssignmentQueryDto,
+  ) {
+    return this.assignmentService.findAllForStudent(studentId, query.academicYearId);
   }
 
   @Post('bill/fee-structures/:id/bulk-assign')

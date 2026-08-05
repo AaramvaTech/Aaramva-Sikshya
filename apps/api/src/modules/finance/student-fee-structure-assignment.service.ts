@@ -63,6 +63,33 @@ export class StudentFeeStructureAssignmentService {
   }
 
   /**
+   * UI-2 §2 — the read endpoint overrides/concessions/transport-assignments
+   * already had and this resource didn't. Full history (or one academic
+   * year's worth, filtered), newest-first; the row(s) with effective_to
+   * NULL are "current" — assign() always closes the prior open row before
+   * inserting a new one, so there's at most one per academic year.
+   */
+  async findAllForStudent(
+    studentId: string,
+    academicYearId?: string,
+  ): Promise<StudentFeeStructureAssignmentResponseDto[]> {
+    const conditions = ['student_id = $1::uuid', 'deleted_at IS NULL'];
+    const params: unknown[] = [studentId];
+    if (academicYearId) {
+      conditions.push(`academic_year_id = $${params.length + 1}::uuid`);
+      params.push(academicYearId);
+    }
+
+    const rows = await this.tenantPrisma.query<StudentFeeStructureAssignmentRow>(
+      `SELECT * FROM student_fee_structure_assignments
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY effective_from DESC`,
+      ...params,
+    );
+    return rows.map(toStudentFeeStructureAssignmentResponse);
+  }
+
+  /**
    * The single row FeePreviewService (and the bulk-assign job runner) needs:
    * the assignment covering `asOfDate` for a student in a given year.
    */

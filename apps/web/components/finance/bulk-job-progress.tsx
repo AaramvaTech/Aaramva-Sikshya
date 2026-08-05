@@ -1,0 +1,118 @@
+'use client';
+
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useBulkAssignJob } from '@/lib/hooks/use-bill-assignment';
+
+interface BulkJobProgressProps {
+  jobId: string;
+  /** Resolves a failed row's studentId to a display name. Falls back to the
+   * raw id when the caller doesn't have the roster on hand (e.g. a CLASS-
+   * scoped job never separately fetches the class roster client-side —
+   * see UI-2-SPEC.md §5.2's known gap). */
+  resolveStudentName?: (studentId: string) => string;
+}
+
+/**
+ * Shared job-progress UI (UI-2-SPEC.md §5.2) — deliberately generic over
+ * `jobId` so a future BILL-8 bulk-print screen can reuse it verbatim, since
+ * the backend's own `GET /finance/jobs/:id` is already shared between the
+ * two job types.
+ *
+ * The server drains PENDING/RUNNING jobs every 10s (bulk-assign.poller.ts)
+ * and — for a typical class-sized job — processes every chunk to COMPLETED
+ * within that single drain tick, so `processed` can jump straight from 0 to
+ * `total` with no visible partial-progress frame at all. A static "0%" bar
+ * during the PENDING wait reads as frozen/broken, so PENDING (and RUNNING
+ * with nothing processed yet) get their own reassuring "queued" state
+ * instead of the progress bar.
+ */
+export function BulkJobProgress({ jobId, resolveStudentName }: BulkJobProgressProps) {
+  const { data: job, isLoading, isError } = useBulkAssignJob(jobId);
+
+  if (isLoading || !job) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-6 text-gray-500">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Loading job status…</span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="py-6 text-center text-sm text-red-500">
+        Couldn&apos;t check the job&apos;s status. It may still be running — refresh to check again.
+      </div>
+    );
+  }
+
+  const isQueued = job.status === 'PENDING' || (job.status === 'RUNNING' && job.processed === 0);
+  const isDone = job.status === 'COMPLETED';
+  const isFailed = job.status === 'FAILED';
+  const pct = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
+
+  return (
+    <div className="space-y-3 py-2">
+      {isQueued && (
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-brand-500" />
+          <div>
+            <p className="text-sm font-medium text-gray-800 dark:text-white">Queued — starting…</p>
+            <p className="text-xs text-gray-400">This can take up to 10 seconds before work begins.</p>
+          </div>
+        </div>
+      )}
+
+      {!isQueued && !isFailed && (
+        <>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-gray-800 dark:text-white">
+              {isDone ? 'Complete' : 'Assigning…'}
+            </span>
+            <span className="text-gray-500">{job.processed} / {job.total}</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-success-500' : 'bg-brand-500'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </>
+      )}
+
+      {isFailed && (
+        <div className="flex items-center gap-2 text-red-500">
+          <XCircle className="h-5 w-5 shrink-0" />
+          <span className="text-sm font-medium">The job failed to run. Try again.</span>
+        </div>
+      )}
+
+      {isDone && job.failedCount === 0 && (
+        <div className="flex items-center gap-2 text-success-600">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span className="text-xs">All {job.total} student{job.total === 1 ? '' : 's'} assigned successfully.</span>
+        </div>
+      )}
+
+      {isDone && job.failedCount > 0 && (
+        <div className="mt-2 overflow-hidden rounded-sm border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
+          <div className="px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+            {job.failedCount} student{job.failedCount === 1 ? '' : 's'} skipped
+          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {job.failures.map((f) => (
+                <tr key={f.studentId} className="border-t border-amber-100 dark:border-amber-900">
+                  <td className="px-3 py-1.5 font-mono text-gray-600 dark:text-gray-300">
+                    {resolveStudentName?.(f.studentId) ?? f.studentId}
+                  </td>
+                  <td className="px-3 py-1.5 text-gray-500">{f.error}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
