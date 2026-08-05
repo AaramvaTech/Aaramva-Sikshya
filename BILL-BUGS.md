@@ -1,6 +1,18 @@
 # BILL-BUGS
 
-Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, logged per §8 ("Any deviation from this spec is logged in BILL-BUGS.md and raised, never decided unilaterally"). Newest first.
+Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, logged per §8 ("Any deviation from this spec is logged in BILL-BUGS.md and raised, never decided unilaterally"). Also the home for general engineering backlog items found while working in this codebase (`FIX-STORAGE-URL`, `FIX-SUPERADMIN-JOBS-403`, ...), regardless of whether the finding is BILL-rail-specific. Newest first.
+
+---
+
+## FIX-DARKMODE-CONTRAST — `dark:bg-boxdark`/`bg-white` pairing bug on 32 existing files (found during UI-1 Catalog discovery, logged as its own backlog item)
+
+**Pre-existing, confirmed still live, not fixed here — this checkpoint's scope was UI-1's own new screens, not this.** `apps/web/app/globals.css` carries its own dated comment (added 2026-07-16, when the Tailwind v4 migration dropped `tailwind.config.js` and TailAdmin's legacy tokens had to be manually restored as CSS custom properties):
+
+> `dark:bg-boxdark` (32 files) — the bad one: those cards pair it with `bg-white`, so in dark mode the card stays WHITE while `dark:text-white` applies on top = white text on a white card.
+
+Found while researching `docs/api-contracts/UI-1-SPEC.md` (the design-language section, §2) — not a new discovery, but re-confirmed live and flagged as its own trackable item rather than left as a comment only the next person to open `globals.css` would ever see. `next-themes` is wired app-wide (`app/providers.tsx`) with no explicit toggle found in the layout, so a user's OS-level dark-mode preference can trigger this on the existing app right now, without anyone touching a switch.
+
+**Confirmed UI-1's own new files avoid the pairing** (`components/shared/config-section.tsx`, the fee-catalog page, and the fee-structure dialog all use one consistent card treatment, never `bg-white` + `dark:bg-boxdark` together) — verified by direct read, not just by not-having-copied the pattern. **Fixing the 32 pre-existing files remains open** — a real, separate cleanup pass (find every file pairing the two classes, pick one consistent card treatment, apply it) — logged here for Srijan to prioritize, not attempted as part of this phase.
 
 ---
 
