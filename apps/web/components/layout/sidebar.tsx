@@ -89,6 +89,7 @@ const navItems: NavItem[] = [
       { name: 'Fee Catalog', path: '/finance/bill/catalog' },
       { name: 'Assignment', path: '/finance/bill/assignment' },
       { name: 'Bill Runs', path: '/finance/bill/runs' },
+      { name: 'Payments', path: '/finance/bill/payments' },
     ],
   },
   {

@@ -30,6 +30,8 @@ const mockInvoiceRow = {
   created_at: new Date('2026-07-26'),
   updated_at: new Date('2026-07-26'),
   deleted_at: null,
+  paid_amount: '0.00',
+  balance: '8500.00',
 };
 
 describe('BillInvoiceService', () => {
@@ -65,6 +67,24 @@ describe('BillInvoiceService', () => {
       );
       expect(result.data).toHaveLength(1);
     });
+
+    it('UI-4 §2: query joins bill_payment_allocations, CLEARED payments only', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await service.findAll({});
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringMatching(/bill_payment_allocations[\s\S]*'CLEARED'/),
+        20, 0,
+      );
+    });
+
+    it("UI-4 §2: maps paidAmount/balance from the row's own aliases", async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockInvoiceRow, paid_amount: '3000.00', balance: '5500.00', total_count: '1' },
+      ]);
+      const result = await service.findAll({});
+      expect(result.data[0].paidAmount).toBe(3000);
+      expect(result.data[0].balance).toBe(5500);
+    });
   });
 
   describe('findOne', () => {
@@ -81,6 +101,8 @@ describe('BillInvoiceService', () => {
       const result = await service.findOne('invoice-1');
       expect(result.items).toHaveLength(1);
       expect(result.totalReceivable).toBe(8500);
+      expect(result.paidAmount).toBe(0);
+      expect(result.balance).toBe(8500);
     });
 
     it('403s a PARENT who does not own the invoice student', async () => {
