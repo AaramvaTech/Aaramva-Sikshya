@@ -41,6 +41,8 @@ export interface BillRunLineRow {
   created_at: Date | string;
   student_name?: string;
   admission_number?: string;
+  class_name?: string | null;
+  section_name?: string | null;
   total_count?: string;
 }
 
@@ -73,6 +75,8 @@ export interface BillRunLineResponseDto {
   studentId: string;
   studentName?: string;
   admissionNumber?: string;
+  className?: string | null;
+  sectionName?: string | null;
   outcome: string;
   skipReason: string | null;
   billInvoiceId: string | null;
@@ -141,6 +145,8 @@ export function toBillRunLineResponse(row: BillRunLineRow): BillRunLineResponseD
     studentId: row.student_id,
     studentName: row.student_name,
     admissionNumber: row.admission_number,
+    className: row.class_name,
+    sectionName: row.section_name,
     outcome: row.outcome,
     skipReason: row.skip_reason,
     billInvoiceId: row.bill_invoice_id,

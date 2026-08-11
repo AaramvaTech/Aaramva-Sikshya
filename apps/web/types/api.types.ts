@@ -2001,3 +2001,65 @@ export interface FeePreview {
   concessionTotal: number;
   netTotal: number;
 }
+
+// ── UI-3 — Bill Runs (BILL-4) ───────────────────────────────────────────────
+
+export type BillRunScope = 'CLASS' | 'WHOLE_SCHOOL';
+export type BillRunStatus = 'DRAFT' | 'POSTING' | 'POSTED' | 'VOIDED';
+export type BillRunLineOutcome =
+  | 'DRAFT' | 'POSTED' | 'SKIPPED_NO_ASSIGNMENT' | 'SKIPPED_ALREADY_BILLED' | 'EXCLUDED' | 'FAILED';
+
+export interface BillRunSummary {
+  id: string;
+  academicYearId: string;
+  bsYear: number;
+  bsMonth: number;
+  scope: BillRunScope;
+  classId: string | null;
+  status: BillRunStatus;
+  issueDate: string;
+  dueDate: string;
+  totalStudents: number;
+  totalGross: number;
+  totalConcession: number;
+  totalTax: number;
+  totalNet: number;
+  createdBy: string;
+  postedBy: string | null;
+  postedAt: string | null;
+  createdAt: string;
+}
+export type BillRunOutcomeSummary = Partial<Record<BillRunLineOutcome, number>>;
+export interface BillRunLine {
+  id: string;
+  billRunId: string;
+  studentId: string;
+  studentName?: string;
+  admissionNumber?: string;
+  className?: string | null;
+  sectionName?: string | null;
+  outcome: BillRunLineOutcome;
+  skipReason: string | null;
+  billInvoiceId: string | null;
+  gross: number;
+  concession: number;
+  tax: number;
+  net: number;
+  createdAt: string;
+}
+export interface BillRunDetail extends BillRunSummary {
+  lines: BillRunLine[];
+  outcomeSummary: BillRunOutcomeSummary;
+}
+export interface CreateBillRunData {
+  academicYearId: string;
+  scope: BillRunScope;
+  classId?: string;
+  bsYear: number;
+  bsMonth: number;
+  issueDate?: string;
+  dueDate?: string;
+}
+export interface ExcludeBillRunLinesData {
+  studentIds: string[];
+}
