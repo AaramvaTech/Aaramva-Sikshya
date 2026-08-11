@@ -85,6 +85,11 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   { prefix: '/finance/bill/assignment', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/fee-structures/:id/bulk-assign' },
   // UI-3 — bill runs (draft/review/post). Same tier, citing BillRunController's own guard.
   { prefix: '/finance/bill/runs', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/runs' },
+  // UI-4 — payment counter. Same tier, citing BillPaymentController's own base
+  // guard; MANUAL allocation's narrower PRINCIPAL-tier gate and void's OWNER_ONLY
+  // gate are enforced in-page, not at the route level (same as UI-2's OWNER_ONLY
+  // delete buttons).
+  { prefix: '/finance/bill/payments', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/payments' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for

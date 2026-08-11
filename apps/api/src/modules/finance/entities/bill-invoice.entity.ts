@@ -32,6 +32,8 @@ export interface BillInvoiceRow {
   student_name?: string;
   admission_number?: string;
   class_name?: string;
+  paid_amount?: string | number;
+  balance?: string | number;
 }
 
 export interface BillInvoiceItemRow {
@@ -72,6 +74,8 @@ export interface BillInvoiceResponseDto {
   netAmount: number;
   previousBalance: number;
   totalReceivable: number;
+  paidAmount: number;
+  balance: number;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
   status: string;
@@ -135,6 +139,8 @@ export function toBillInvoiceResponse(
     netAmount: toMoney(row.net_amount).toNumber(),
     previousBalance: toMoney(row.previous_balance).toNumber(),
     totalReceivable: toMoney(row.total_receivable).toNumber(),
+    paidAmount: toMoney(row.paid_amount ?? 0).toNumber(),
+    balance: toMoney(row.balance ?? row.total_receivable).toNumber(),
     amountInWordsEn: row.amount_in_words_en,
     amountInWordsNe: row.amount_in_words_ne,
     status: row.status,

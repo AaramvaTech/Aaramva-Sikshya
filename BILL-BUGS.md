@@ -4,6 +4,26 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-5-METHOD-GAP — `BillPaymentMethod` lists `BANK_TRANSFER`/`ESEWA`/`KHALTI` but `BillPaymentService.recordPayment` only implements `CASH`/`CHEQUE` (found live, UI-4 Checkpoint A proof, 2026-08-11)
+
+**Not caught during UI-4 discovery or spec** — both read `CreateBillPaymentDto`'s `@IsEnum(BillPaymentMethod)` and the DTO's own field list, but neither traced `recordPayment`'s full method body far enough to see the runtime guard. Found live, mid-Checkpoint-A-proof, recording a `BANK_TRANSFER` test payment: `400 BAD_REQUEST — "Method BANK_TRANSFER is not yet supported — BILL-5 Checkpoint B records CASH and CHEQUE payments only"` (`bill-payment.service.ts:76-80`). The service's own doc comment confirms this is deliberate, not a bug in the engine: *"CASH and CHEQUE only (Checkpoint B). BANK_TRANSFER (architecturally identical to CASH — also born CLEARED per spec §4) remains deliberately deferred; ESEWA/KHALTI need Checkpoint C's gateway re-pointing."*
+
+**Impact on UI-4:** the spec's ruled payment-counter method list (`CASH\|CHEQUE\|BANK_TRANSFER`, excluding only ESEWA/KHALTI) would have let a cashier submit a payment the backend rejects. Fixed before shipping — `COUNTER_PAYMENT_METHODS` (`apps/web/lib/bill-payment-form.ts`) is `['CASH', 'CHEQUE']` only, not the three originally spec'd. No backend change needed or attempted; this is BILL-5's own already-decided phasing, not a bug to fix.
+
+**Also found in the same pass, smaller:** the CHEQUE-required-fields check in `recordPayment` requires `chequeBank`, `chequeDate`, **and `reference`** (the cheque number) together — the spec's field list named `reference` as CASH-optional/non-cash-conditionally-required in general (matching `payment-form.tsx`'s old-rail precedent) but didn't call out that CHEQUE specifically needs all three. `canSubmitBillPayment` (`bill-payment-form.ts`) updated to match.
+
+Logged so `apps/mobile`'s eventual Checkpoint B work (and any future UI-4 method-list widening) checks the real service body, not just the DTO enum, before assuming a method is live.
+
+---
+
+## UI-6-SCOPE-CASHIER-UI — cashier daily-close has a real backend (BILL-9) and zero web UI, ruled UI-6 Reports scope (found during UI-4 Checkpoint A discovery, 2026-08-11)
+
+`CashierController`/`cashier-shift.service.ts` (BILL-9 Checkpoint B — shift open/close, expected-vs-counted cash reconciliation) ship backend-only; confirmed live by grep, `apps/web` has zero reference to "cashier" anywhere. Adjacent to UI-4's payment-counter (same cash-handling domain — a cashier who just recorded payments all day is the same person who closes the shift), so it was flagged rather than silently bundled into or dropped from that checkpoint's scope.
+
+**Ruled: UI-6 Reports, not UI-4.** Daily-close is reconciliation (does counted cash match what the system expected, at the end of a shift) — a report/audit action, not a payment-recording one. It belongs with BILL-9's other reporting endpoints (daybook, defaulters, aging, collection), which UI-6 already owns. Logged here so it's tracked when UI-6 gets speced, not lost between phases.
+
+---
+
 ## BILL-4-ZERONET-CRASH — posting a fully-concessioned (or heavily-prorated-plus-concessioned) invoice crashed with a Postgres 23514 on `student_ledger_entries_check2` (found live, UI-3 eyeball pass, 2026-08-10) — FIXED, two root causes, both real
 
 **Found by Srijan clicking through UI-3's own review screen** — a real bill run (`Shrawan 2083 — Grade 10`, `motherland-school`) posted 6/7 chargeable students and FAILED one, "Aarav Sharma," with a raw Postgres constraint violation surfaced verbatim in the line's `skipReason`. **Confirmed pre-existing BILL-4 engine bugs, not a UI-3 regression** — UI-3's own diff never touches `bill-line-resolver.service.ts`, `fee-preview.service.ts`, or `bill-run-post-runner.service.ts`; the same crash was reachable via a raw `curl` against `BillRunController` before UI-3 existed. UI-3's review screen gets credit for being the first surface that made the failure *visible and legible* (the whole point of building it) — not for causing it.

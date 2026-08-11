@@ -2063,3 +2063,122 @@ export interface CreateBillRunData {
 export interface ExcludeBillRunLinesData {
   studentIds: string[];
 }
+
+// ── UI-4 — Payment Counter (BILL-5) ─────────────────────────────────────────
+
+export interface BillInvoiceItem {
+  id: string;
+  feeHeadId: string | null;
+  transportRouteId: string | null;
+  itemName: string;
+  recurrence: string | null;
+  grossAmount: number;
+  concessionAmount: number;
+  isTaxable: boolean;
+  netAmount: number;
+  prorationNote: string | null;
+  createdAt: string;
+}
+export interface BillInvoice {
+  id: string;
+  invoiceNumber: string | null;
+  studentId: string;
+  studentName?: string;
+  admissionNumber?: string;
+  className?: string;
+  academicYearId: string;
+  billRunId: string;
+  bsYear: number;
+  bsMonth: number;
+  issueDate: string;
+  dueDate: string;
+  grossAmount: number;
+  concessionAmount: number;
+  taxableBase: number;
+  taxRate: number | null;
+  taxAmount: number;
+  netAmount: number;
+  previousBalance: number;
+  totalReceivable: number;
+  paidAmount: number;
+  balance: number;
+  amountInWordsEn: string | null;
+  amountInWordsNe: string | null;
+  status: string;
+  ledgerEntryId: string | null;
+  createdBy: string;
+  createdAt: string;
+  items?: BillInvoiceItem[];
+}
+
+export type BillPaymentMethod = 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'ESEWA' | 'KHALTI';
+export type BillPaymentAllocationMode = 'AUTO_FIFO' | 'MANUAL' | 'ADVANCE_ONLY';
+export type BillPaymentStatus = 'CLEARED' | 'PENDING' | 'BOUNCED' | 'VOIDED';
+
+export interface BillPaymentAllocation {
+  id: string;
+  billInvoiceId: string;
+  amount: number;
+  createdAt: string;
+}
+export interface BillPayment {
+  id: string;
+  receiptNumber: string;
+  studentId: string;
+  studentName?: string;
+  admissionNumber?: string;
+  academicYearId: string;
+  amount: number;
+  method: BillPaymentMethod;
+  status: BillPaymentStatus;
+  receivedDate: string;
+  receivedBs: { year: number; month: number; day: number } | null;
+  reference: string | null;
+  chequeBank: string | null;
+  chequeDate: string | null;
+  allocationMode: BillPaymentAllocationMode;
+  ledgerEntryId: string | null;
+  gatewayTxnRef: string | null;
+  notes: string | null;
+  receivedBy: string;
+  createdAt: string;
+  clearedAt: string | null;
+  clearedBy: string | null;
+  bouncedAt: string | null;
+  bouncedBy: string | null;
+  bounceReason: string | null;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
+  allocations?: BillPaymentAllocation[];
+}
+
+export interface ManualAllocationTarget {
+  billInvoiceId: string;
+  amount: string;
+}
+export interface CreateBillPaymentData {
+  studentId: string;
+  academicYearId: string;
+  amount: string;
+  method: BillPaymentMethod;
+  allocationMode: BillPaymentAllocationMode;
+  targets?: ManualAllocationTarget[];
+  receivedDate?: string;
+  reference?: string;
+  notes?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+}
+export interface UpdateChequeStatusData {
+  status: 'CLEARED' | 'BOUNCED';
+  reason?: string;
+}
+export interface VoidPaymentData {
+  reason?: string;
+}
+export interface StudentBalance {
+  studentId: string;
+  balance: number;
+  sign: 'OWES' | 'ADVANCE' | 'ZERO';
+}
