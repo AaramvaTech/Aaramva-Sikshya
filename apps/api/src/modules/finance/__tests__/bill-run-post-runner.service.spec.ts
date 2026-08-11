@@ -228,6 +228,38 @@ describe('BillRunPostRunnerService', () => {
     expect(ledgerService.withStudentLock).not.toHaveBeenCalled();
   });
 
+  it('BILL-4-ZERO-NET: posts a zero-net invoice (e.g. a full concession) WITHOUT a ledger entry — student_ledger_entries_check2 rejects any debit=0/credit=0 row, so postLine must never attempt one', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce({
+      ...mockResolved, gross: 100, concession: 100, net: 0,
+      items: [{ ...mockResolved.items[0], grossAmount: 100, concessionAmount: 100, netAmount: 0 }],
+    } as any);
+
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '100.00', concession: '100.00', tax: '0.00', net: '0.00' }]) // re-check line
+      .mockResolvedValueOnce([{ sum: '0.00' }]) // previous balance: none
+      .mockResolvedValueOnce([{ value: BigInt(1) }]) // sequence upsert
+      .mockResolvedValueOnce([{ id: 'invoice-zero' }]) // bill_invoices insert RETURNING id
+      .mockResolvedValueOnce([]); // advance-consumption candidates: none
+
+    const result = await service.drainCurrentTenant();
+
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE bill_invoices SET ledger_entry_id'),
+      expect.anything(), expect.anything(),
+    );
+    // the invoice + line still complete normally — a $0 invoice is a real, valid outcome, not a failure
+    expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining("outcome = 'POSTED'"),
+      'line-1', 'invoice-zero',
+    );
+  });
+
   it('uses the RESET-mode fiscal-year key when the tenant setting is enabled', async () => {
     financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: true });
     (tenantPrisma.query as jest.Mock)

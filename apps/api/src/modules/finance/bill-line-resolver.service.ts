@@ -183,8 +183,16 @@ export class BillLineResolverService {
       : null;
     const items: ResolvedInvoiceItem[] = transportItem ? [...feeHeadItems, transportItem] : feeHeadItems;
 
+    // Prorated by the same `fraction` as per-head MONTHLY amounts (BILL-BUGS.md
+    // BILL-4-WHOLEBILL-CONCESSION-PRORATION). FeePreviewService computes this
+    // amount against the UNPRORATED head totals — it has no concept of this
+    // resolver's own day-fraction. Left unscaled, an assignment starting near
+    // the end of the period (gross prorated down close to zero) could still
+    // have a whole-bill concession applied at FULL strength, clamping net to
+    // (wrongly) zero — exactly the same `fraction` already used for MONTHLY
+    // heads above keeps the concession consistent with the gross it discounts.
     const wholeBillConcessionTotal = preview.wholeBillConcessions.reduce(
-      (acc, c) => acc.add(toMoney(c.amount)), Money.zero(),
+      (acc, c) => acc.add(toMoney(c.amount).mul(fraction)), Money.zero(),
     );
 
     const grossFinal = grossHeadTotal.add(transportAmount);

@@ -215,22 +215,33 @@ export class BillRunPostRunnerService {
         );
       }
 
-      const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
-        studentId,
-        academicYearId: run.academic_year_id,
-        entryType: 'INVOICE',
-        debit: netAmount.toDb(),
-        credit: '0',
-        narration: `Invoice ${invoiceNumber}`,
-        refDocType: 'bill_invoice',
-        refDocId: invoice.id,
-        createdById: postedBy,
-      });
+      // BILL-4-ZERO-NET: a zero-net invoice (e.g. a full concession/waiver)
+      // is a real, valid outcome — but student_ledger_entries' own CHECK
+      // constraint (debit > 0 OR credit > 0) correctly refuses a
+      // debit=0/credit=0 row, since a ledger entry that moves no money isn't
+      // a movement at all. The invoice itself still gets created and posted
+      // (net_amount=0, previous_balance/total_receivable carried through
+      // unaffected); only the ledger write — which would have no financial
+      // effect anyway — is skipped, leaving ledger_entry_id NULL (nullable
+      // by design).
+      if (!netAmount.isZero()) {
+        const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
+          studentId,
+          academicYearId: run.academic_year_id,
+          entryType: 'INVOICE',
+          debit: netAmount.toDb(),
+          credit: '0',
+          narration: `Invoice ${invoiceNumber}`,
+          refDocType: 'bill_invoice',
+          refDocId: invoice.id,
+          createdById: postedBy,
+        });
 
-      await tx.$executeRawUnsafe(
-        `UPDATE bill_invoices SET ledger_entry_id = $1::uuid WHERE id = $2::uuid`,
-        ledgerEntry.id, invoice.id,
-      );
+        await tx.$executeRawUnsafe(
+          `UPDATE bill_invoices SET ledger_entry_id = $1::uuid WHERE id = $2::uuid`,
+          ledgerEntry.id, invoice.id,
+        );
+      }
 
       // B5-4: advance auto-apply. Consumes existing unconsumed CLEARED
       // payments (oldest-first) against this invoice's total_receivable.

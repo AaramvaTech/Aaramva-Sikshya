@@ -201,6 +201,31 @@ describe('BillLineResolverService', () => {
     expect(result.items.every((i) => i.transportRouteId === null)).toBe(true);
   });
 
+  it('mid-period join: a whole-bill concession is prorated by the same day fraction as MONTHLY heads (not applied at full, unprorated strength)', async () => {
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment(MID_EFFECTIVE_FROM));
+    feePreviewService.preview.mockResolvedValueOnce(makePreview(
+      [{ feeHeadId: 'fh-monthly', feeHeadName: 'Tuition', grossAmount: DAYS_IN_MONTH * 100, overrideAmount: null, effectiveBase: DAYS_IN_MONTH * 100, concessions: [], netAmount: DAYS_IN_MONTH * 100 }],
+      null,
+      [{ amount: DAYS_IN_MONTH * 10 }], // FeePreviewService's own unprorated whole-bill concession amount
+    ) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'fh-monthly', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'MONTHLY' }])
+      .mockResolvedValueOnce([]); // no active tax rate
+
+    const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+
+    const expectedProratedGross = (DAYS_IN_MONTH * 100 * EXPECTED_DAYS_BILLED) / DAYS_IN_MONTH;
+    const expectedProratedConcession = (DAYS_IN_MONTH * 10 * EXPECTED_DAYS_BILLED) / DAYS_IN_MONTH;
+
+    expect(result.gross).toBeCloseTo(expectedProratedGross, 2);
+    expect(result.concession).toBeCloseTo(expectedProratedConcession, 2);
+    // The bug this pins: an UNPRORATED concession (fixed at DAYS_IN_MONTH*10, e.g. far
+    // larger than a heavily-prorated gross near the period's end) must never be applied
+    // at full strength against a prorated gross — net must reflect the SAME fraction on
+    // both sides, not swing to (wrongly) clamped-zero.
+    expect(result.net).toBeCloseTo(expectedProratedGross - expectedProratedConcession, 2);
+  });
+
   it('MUST-RESOLVE-BEFORE-BILL-8: whole-bill concession + transport together — header net is correct, but item nets do not sum to it (simple version, not apportioned)', async () => {
     assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
     feePreviewService.preview.mockResolvedValueOnce(makePreview(
