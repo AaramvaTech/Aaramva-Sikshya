@@ -20,6 +20,16 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-4-REGENERATE-DRIFT — spec'd `POST /finance/bill/runs/:id/regenerate` was never implemented (found during UI-3 spec discovery, 2026-08-10)
+
+`docs/api-contracts/BILL-4-SPEC.md` §3 named `POST /finance/bill/runs/:id/regenerate` ("rebuild draft lines, picks up override/concession edits made since draft") as part of the "Preview / adjust" step. It was never built. `BillRunController`'s own doc comment (`apps/api/src/modules/finance/bill-run.controller.ts:20-24`) says so directly: *"No regenerate endpoint (not named as required by any checkpoint's live proof — draft edits happen via a fresh draft after voiding)."* Only `exclude`, `post`, and `void` (delete) exist on that controller.
+
+Not caught until UI-3 discovery went looking for it to spec the review screen's "adjust" step — the third spec-vs-reality gap found in this arc (after [[UI-1-SPEC-DRIFT]]'s unbuilt delete-button hiding and UI-2's fee-structure-assignment read-endpoint gap, both above). Srijan's ruling on hearing it: **use exclude + void-and-redraft, do not build a new regenerate endpoint** — void-and-redraft reaches the same outcome with already-proven machinery (both endpoints live, both already tested), and adding a new write-path endpoint is scope creep for what's meant to be a UI-only phase. Revisit only if void-and-redraft feels genuinely clunky at eyeball time on `docs/api-contracts/UI-3-SPEC.md`'s review screen.
+
+Logged so a later phase (or the BILL-4-SPEC.md text itself, if anyone reads it as ground truth) doesn't trip on the same unbuilt-endpoint assumption a third time.
+
+---
+
 ## UI-2-CLASS-SCOPE — fee-structure picker on the Billing tab is scoped by academic year only, not class (found + accepted during UI-2 build, 2026-08-05)
 
 `docs/api-contracts/UI-2-SPEC.md` §5.1.A assumed the Fee Structure Assignment panel's picker could be scoped by `useFeeStructures({ academicYearId, classId })`, reading the student's `classId` off the page's already-loaded `student` object. Building it, that assumption didn't hold: `StudentDetail` (the real response shape `useStudent()` returns, `types/api.types.ts`) only carries a `className` string — no `classId`, unlike the `Enrollment` type used elsewhere in the same file, which does. Rather than widen `StudentDetail` mid-task for one picker, the panel (`components/finance/fee-structure-assignment-panel.tsx`) filters by `academicYearId` only — a real precision loss (an accountant picking a fee structure for a Grade 9 student currently sees every structure for the year, not just Grade 9's), not a functional blocker (the structure's own name is expected to carry class context, matching UI-1's catalog naming convention). Confirmed live-acceptable at eyeball review. **Follow-up, small and deferred:** if/when `StudentDetail` gains a `classId` (or an equivalent enrollment reference) for some other reason, thread it into this picker's `useFeeStructures` call to restore the class-scoping the spec originally intended.

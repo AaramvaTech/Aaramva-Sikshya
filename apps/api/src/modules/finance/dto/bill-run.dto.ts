@@ -49,6 +49,7 @@ export class BillRunLineQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
   @IsOptional() @IsEnum(LINE_OUTCOMES) outcome?: string;
+  @IsOptional() @IsUUID() classId?: string;
 }
 
 export class ExcludeBillRunLinesDto {

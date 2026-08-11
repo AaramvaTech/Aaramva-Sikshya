@@ -218,6 +218,37 @@ describe('BillRunService', () => {
       expect(result.lines).toHaveLength(1);
       expect(result.outcomeSummary).toEqual({ DRAFT: 2, SKIPPED_NO_ASSIGNMENT: 1 });
     });
+
+    it('maps class and section name onto each line from the joined query', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([mockRunRow]) // run row
+        .mockResolvedValueOnce([{ outcome: 'DRAFT', count: '1' }]) // outcome summary
+        .mockResolvedValueOnce([
+          {
+            id: 'line-1', bill_run_id: 'run-1', student_id: 'student-1', outcome: 'DRAFT',
+            skip_reason: null, bill_invoice_id: null, gross: '5000', concession: '500', tax: '0', net: '4500',
+            created_at: new Date('2026-07-16'), student_name: 'Test Student', admission_number: 'STU-001',
+            class_name: 'Grade 9', section_name: 'A', total_count: '1',
+          },
+        ]);
+
+      const result = await service.findOne('run-1');
+      expect(result.lines[0].className).toBe('Grade 9');
+      expect(result.lines[0].sectionName).toBe('A');
+    });
+
+    it('filters lines by classId when given', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([mockRunRow]) // run row
+        .mockResolvedValueOnce([]) // outcome summary
+        .mockResolvedValueOnce([]); // lines page
+
+      await service.findOne('run-1', { classId: 'class-9' });
+
+      const lineCall = (tenantPrisma.query as jest.Mock).mock.calls[2];
+      expect(lineCall[0]).toContain('s.class_id =');
+      expect(lineCall).toContain('class-9');
+    });
   });
 
   describe('findAll', () => {

@@ -172,12 +172,18 @@ export class BillRunService {
     const params: unknown[] = [id];
     let idx = 2;
     if (lineQuery.outcome) { conditions.push(`brl.outcome = $${idx++}`); params.push(lineQuery.outcome); }
+    if (lineQuery.classId) { conditions.push(`s.class_id = $${idx++}::uuid`); params.push(lineQuery.classId); }
     params.push(limit, offset);
 
+    // LEFT JOIN (not JOIN) — a student with no class_id set shouldn't drop
+    // the line, just come back with a null class_name/section_name.
     const lineRows = await this.tenantPrisma.query<BillRunLineRow>(
-      `SELECT brl.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number
+      `SELECT brl.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number,
+              c.name AS class_name, sec.name AS section_name
        FROM bill_run_lines brl
        JOIN students s ON s.id = brl.student_id
+       LEFT JOIN classes c ON c.id = s.class_id
+       LEFT JOIN sections sec ON sec.id = s.section_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY s.student_id
        LIMIT $${idx++} OFFSET $${idx}`,

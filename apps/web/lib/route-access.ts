@@ -83,6 +83,8 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // UI-2 — bulk-assign page. Same tier as catalog above, citing
   // BillAssignmentController's own write guard.
   { prefix: '/finance/bill/assignment', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/fee-structures/:id/bulk-assign' },
+  // UI-3 — bill runs (draft/review/post). Same tier, citing BillRunController's own guard.
+  { prefix: '/finance/bill/runs', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/runs' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for
