@@ -117,10 +117,16 @@ export function PaymentResult({ kind }: { kind: 'success' | 'failure' }) {
         </dl>
       )}
 
-      <div className="mt-8 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+      <a
+        href="aaramva://"
+        className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 font-medium text-white transition hover:bg-opacity-90"
+      >
         <Smartphone className="h-4 w-4" />
-        <span>You can close this page and return to the app — it refreshes automatically.</span>
-      </div>
+        Return to the app
+      </a>
+      <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+        Your balance refreshes automatically once you&apos;re back in the app.
+      </p>
     </div>
   );
 }

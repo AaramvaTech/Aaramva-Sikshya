@@ -10,6 +10,7 @@ import type {
   ReportCard,
   StudentLedger,
 } from '../types';
+import { mapBillInvoicesToLedger, type BillInvoiceApi } from '../lib/billInvoiceMapping';
 
 // ─── Guardian profile (POL-2 T5) ───────────────────────────────────────────────
 
@@ -196,21 +197,27 @@ export function useChildReportCard(childId: string) {
   });
 }
 
-// Fee billing for a child. The ledger is the single source of payment status:
-// it returns the child's invoices (each with status / amount / paid / balance /
-// dueDate) plus a roll-up summary. `academicYearId` is required by the endpoint
-// (omitting it 404s on the year lookup), so the query stays disabled until known.
+// Fee billing for a child. UI-4 Checkpoint B (PAY-UI-REPOINT-discovery.md):
+// repointed from the OLD `invoices` rail (GET /finance/reports/student/:id)
+// to the NEW `bill_invoices` rail (GET /finance/students/:id/bill/invoices) —
+// the rail the payment-initiate endpoints (useEsewaPayment/usePayments)
+// actually query, so a mapped Invoice.id here is now a real bill_invoices.id
+// and Pay no longer 404s. Response is paginated (limit capped at 100 by the
+// DTO); a school year's invoice count is well under that. `academicYearId`
+// stays required so the query doesn't fire before the child's enrollment
+// year is known.
 export function useChildLedger(
   childId: string,
   academicYearId: string | null | undefined,
 ) {
   return useQuery<StudentLedger>({
-    queryKey: ['parent', 'child', childId, 'ledger', academicYearId],
+    queryKey: ['parent', 'child', childId, 'bill-ledger', academicYearId],
     queryFn: async () => {
-      const res = await api.get(`/finance/reports/student/${childId}`, {
-        params: { academicYearId },
+      const res = await api.get('/finance/students/' + childId + '/bill/invoices', {
+        params: { academicYearId, limit: 100 },
       });
-      return res.data.data as StudentLedger;
+      const apiInvoices = res.data.data.data as BillInvoiceApi[];
+      return mapBillInvoicesToLedger(childId, academicYearId as string, apiInvoices);
     },
     enabled: !!childId && !!academicYearId,
   });
