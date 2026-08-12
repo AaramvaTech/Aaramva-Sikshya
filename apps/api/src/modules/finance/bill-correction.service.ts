@@ -378,33 +378,39 @@ export class BillCorrectionService {
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions = ['deleted_at IS NULL'];
+    const conditions = ['bc.deleted_at IS NULL'];
     const params: unknown[] = [];
     let idx = 1;
 
     if (callerRole === Role.PARENT && callerId) {
       if (query.studentId) {
         await this.assertGuardianOwnsStudent(query.studentId, callerId);
-        conditions.push(`student_id = $${idx++}::uuid`);
+        conditions.push(`bc.student_id = $${idx++}::uuid`);
         params.push(query.studentId);
       } else {
-        conditions.push(`student_id IN (SELECT student_id FROM guardians WHERE user_id = $${idx++}::uuid)`);
+        conditions.push(`bc.student_id IN (SELECT student_id FROM guardians WHERE user_id = $${idx++}::uuid)`);
         params.push(callerId);
       }
     } else if (query.studentId) {
-      conditions.push(`student_id = $${idx++}::uuid`);
+      conditions.push(`bc.student_id = $${idx++}::uuid`);
       params.push(query.studentId);
     }
 
-    if (query.type) { conditions.push(`type = $${idx++}`); params.push(query.type); }
-    if (query.status) { conditions.push(`status = $${idx++}`); params.push(query.status); }
+    if (query.type) { conditions.push(`bc.type = $${idx++}`); params.push(query.type); }
+    if (query.status) { conditions.push(`bc.status = $${idx++}`); params.push(query.status); }
 
     params.push(limit, offset);
+    // UI-5 (BILL-BUGS.md UI5-STUDENTNAME-JOIN): bc.* alone has no display name —
+    // list/detail need one, unlike approve/reject/reverse's internal status
+    // checks below, which stay a bare SELECT *.
     const rows = await this.tenantPrisma.query<BillCorrectionRow & { total_count: string }>(
-      `SELECT *, COUNT(*) OVER() AS total_count
-       FROM bill_corrections
+      `SELECT bc.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number,
+              cr.name AS reason_name, COUNT(*) OVER() AS total_count
+       FROM bill_corrections bc
+       LEFT JOIN students s ON s.id = bc.student_id
+       LEFT JOIN correction_reasons cr ON cr.id = bc.reason_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY created_at DESC
+       ORDER BY bc.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,
       ...params,
     );
@@ -417,7 +423,12 @@ export class BillCorrectionService {
     id: string, callerId?: string, callerRole?: Role,
   ): Promise<BillCorrectionResponseDto & { ledgerEntries: LedgerEntryResponseDto[] }> {
     const rows = await this.tenantPrisma.query<BillCorrectionRow>(
-      `SELECT * FROM bill_corrections WHERE id = $1::uuid AND deleted_at IS NULL`, id,
+      `SELECT bc.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number,
+              cr.name AS reason_name
+       FROM bill_corrections bc
+       LEFT JOIN students s ON s.id = bc.student_id
+       LEFT JOIN correction_reasons cr ON cr.id = bc.reason_id
+       WHERE bc.id = $1::uuid AND bc.deleted_at IS NULL`, id,
     );
     const correction = rows[0];
     if (!correction) throw new NotFoundException(`Correction ${id} not found`);

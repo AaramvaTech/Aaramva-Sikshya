@@ -38,6 +38,12 @@ export interface BillCorrectionRow {
   updated_at: Date | string;
   deleted_at: Date | string | null;
   total_count?: string;
+  /** UI-5: only present on findAll/findOne's LEFT JOIN — absent (undefined)
+   * on the bare `SELECT * FROM bill_corrections` rows approve/reject/reverse
+   * fetch for their own internal status checks. */
+  student_name?: string;
+  admission_number?: string;
+  reason_name?: string | null;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -73,6 +79,10 @@ export interface BillCorrectionResponseDto {
   ledgerEntryId: string | null;
   requiresApproval: boolean;
   createdAt: string;
+  /** UI-5: display-only, only populated by findAll/findOne (see BillCorrectionRow). */
+  studentName?: string;
+  admissionNumber?: string;
+  reasonName?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -119,5 +129,8 @@ export function toBillCorrectionResponse(row: BillCorrectionRow): BillCorrection
     ledgerEntryId: row.ledger_entry_id,
     requiresApproval: row.requires_approval,
     createdAt: toIso(row.created_at),
+    ...(row.student_name !== undefined ? { studentName: row.student_name } : {}),
+    ...(row.admission_number !== undefined ? { admissionNumber: row.admission_number } : {}),
+    ...(row.reason_name !== undefined ? { reasonName: row.reason_name } : {}),
   };
 }

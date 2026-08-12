@@ -2182,3 +2182,88 @@ export interface StudentBalance {
   balance: number;
   sign: 'OWES' | 'ADVANCE' | 'ZERO';
 }
+
+// ── UI-5 — Corrections (BILL-6) ─────────────────────────────────────────────
+
+export type BillCorrectionType = 'CREDIT_NOTE' | 'REFUND' | 'WRITE_OFF';
+export type BillCorrectionStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED';
+export type RefundMethod = 'CASH' | 'BANK_TRANSFER';
+
+export interface BillCorrection {
+  id: string;
+  correctionNumber: string;
+  type: BillCorrectionType;
+  studentId: string;
+  studentName?: string;
+  admissionNumber?: string;
+  academicYearId: string;
+  targetInvoiceId: string | null;
+  targetInvoiceItemId: string | null;
+  amount: number;
+  reasonId: string;
+  reasonName?: string | null;
+  refundMethod: RefundMethod | null;
+  refundReference: string | null;
+  status: BillCorrectionStatus;
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  ledgerEntryId: string | null;
+  requiresApproval: boolean;
+  createdAt: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  studentId: string;
+  academicYearId: string;
+  entryDate: string;
+  entryBs: { year: number; month: number; day: number } | null;
+  entryType: string;
+  debit: number;
+  credit: number;
+  refDocType: string | null;
+  refDocId: string | null;
+  narration: string | null;
+  reversesEntryId: string | null;
+  createdBy: string;
+  createdAt: string;
+  runningBalance?: number;
+}
+
+export interface BillCorrectionDetail extends BillCorrection {
+  ledgerEntries: LedgerEntry[];
+}
+
+export interface CreateCreditNoteData {
+  studentId: string;
+  academicYearId: string;
+  targetInvoiceId: string;
+  targetInvoiceItemId?: string;
+  amount: string;
+  reasonId: string;
+}
+export interface CreateRefundData {
+  studentId: string;
+  academicYearId: string;
+  amount: string;
+  reasonId: string;
+  refundMethod: RefundMethod;
+  refundReference?: string;
+}
+export interface CreateWriteOffData {
+  studentId: string;
+  academicYearId: string;
+  targetInvoiceId?: string;
+  amount: string;
+  reasonId: string;
+}
+export interface DecideCorrectionData {
+  note?: string;
+}
+export interface FinanceSettings {
+  invoiceNumberingReset: boolean;
+  creditNoteApprovalThreshold: number;
+}
