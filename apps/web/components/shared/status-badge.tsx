@@ -14,6 +14,7 @@ const statusStyles: Record<string, string> = {
   LATE:      'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
   PARTIAL:   'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
   PENDING:   'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
+  REQUESTED: 'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
   LEAVE:     'bg-brand-50 text-brand-700 dark:bg-brand-500/[0.12] dark:text-brand-400',
   RETURNED:  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   INACTIVE:  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',

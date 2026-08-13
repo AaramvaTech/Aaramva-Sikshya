@@ -90,6 +90,10 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // gate are enforced in-page, not at the route level (same as UI-2's OWNER_ONLY
   // delete buttons).
   { prefix: '/finance/bill/payments', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/bill/payments' },
+  // UI-5 — corrections (credit notes/refunds/write-offs). Same tier, citing
+  // BillCorrectionController's own request-side guard; OWNER_ONLY approve/
+  // reject/reverse enforced in-page (same split UI-4's void button uses).
+  { prefix: '/finance/bill/corrections', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/corrections/credit-notes' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for

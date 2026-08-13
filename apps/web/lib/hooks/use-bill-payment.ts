@@ -25,6 +25,17 @@ export function useStudentBalance(studentId: string | null) {
   });
 }
 
+/** UI-5 §3.2 — line-item credit notes. `billInvoiceApi.get` has existed
+ * since UI-4 with zero consumers; this is its first hook. */
+export function useBillInvoiceDetail(invoiceId: string | null) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['bill-invoice', invoiceId],
+    queryFn: () => billInvoiceApi.get(invoiceId as string).then((r) => r.data.data),
+    enabled: !!slug && !!invoiceId,
+  });
+}
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export function useBillPayments(

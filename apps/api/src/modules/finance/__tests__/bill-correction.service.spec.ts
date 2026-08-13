@@ -273,6 +273,35 @@ describe('BillCorrectionService', () => {
     });
   });
 
+  describe('findAll/findOne — display fields (UI5-STUDENTNAME-JOIN)', () => {
+    it('findAll joins students + correction_reasons and maps display fields to camelCase', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, student_name: 'Aashna Gurung', admission_number: 'ADM-2083-0001', reason_name: 'Sibling discount error', total_count: '1' },
+      ]);
+
+      const result = await service.findAll({});
+
+      const calledSql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(calledSql).toContain('LEFT JOIN students s ON s.id = bc.student_id');
+      expect(calledSql).toContain('LEFT JOIN correction_reasons cr ON cr.id = bc.reason_id');
+      expect(result.data[0].studentName).toBe('Aashna Gurung');
+      expect(result.data[0].admissionNumber).toBe('ADM-2083-0001');
+      expect(result.data[0].reasonName).toBe('Sibling discount error');
+    });
+
+    it('findOne joins students + correction_reasons and maps display fields to camelCase', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockCorrectionRow, student_name: 'Aashna Gurung', admission_number: 'ADM-2083-0001', reason_name: 'Sibling discount error' },
+      ]);
+
+      const result = await service.findOne('corr-1');
+
+      expect(result.studentName).toBe('Aashna Gurung');
+      expect(result.admissionNumber).toBe('ADM-2083-0001');
+      expect(result.reasonName).toBe('Sibling discount error');
+    });
+  });
+
   // ─── Checkpoint B: refunds ──────────────────────────────────────────────
 
   function baseRefundDto(overrides: Partial<CreateRefundDto> = {}): CreateRefundDto {
