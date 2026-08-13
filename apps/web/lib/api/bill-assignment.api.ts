@@ -16,6 +16,7 @@ import type {
   BulkAssignData,
   BulkAssignJob,
   FeePreview,
+  ConcessionRegisterEntry,
 } from '@/types/api.types';
 
 /** UI-2 — one client module for the BILL-2 assignment surface, mirroring
@@ -68,5 +69,11 @@ export const billAssignmentApi = {
   feePreview: {
     get: (studentId: string, params: { academicYearId: string; asOfDate?: string }) =>
       api.get<ApiResponse<FeePreview>>(`/finance/students/${studentId}/fee-preview`, { params }),
+  },
+
+  // UI-6 §4.8 — Concession Register tab (BillAssignmentController's own "Reports & preview" section)
+  reports: {
+    concessionRegister: (params: { page?: number; limit?: number; academicYearId?: string; classId?: string; discountReasonId?: string } = {}) =>
+      api.get<ApiResponse<PaginatedResponse<ConcessionRegisterEntry>>>('/finance/reports/concession-register', { params }),
   },
 };

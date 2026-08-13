@@ -25,6 +25,10 @@ function shiftRow(over: Record<string, unknown> = {}) {
     variance: null,
     status: 'OPEN',
     notes: null,
+    cashier_first_name: 'Ram',
+    cashier_last_name: 'Shrestha',
+    closed_by_first_name: null,
+    closed_by_last_name: null,
     ...over,
   };
 }
@@ -159,6 +163,49 @@ describe('CashierShiftService', () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
       await service.listShifts({ cashierId: 'cashier-1', date: '2026-07-29' });
       expect((tenantPrisma.query as jest.Mock).mock.calls[0].slice(1)).toEqual(['cashier-1', '2026-07-29']);
+    });
+
+    it('JOINs users for the cashier and closed-by display names (UI-6 §2.1)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([shiftRow()]);
+      const [result] = await service.listShifts({});
+      expect(result.cashierName).toBe('Ram Shrestha');
+      expect(result.closedByName).toBeNull();
+      const sql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(sql).toContain('JOIN users cu ON cu.id = cs.cashier_user_id');
+      expect(sql).toContain('LEFT JOIN users cb ON cb.id = cs.closed_by');
+    });
+  });
+
+  describe('cashier/closed-by name join (UI-6 §2.1)', () => {
+    it('openShift returns cashierName from the joined users row', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([]) // no existing OPEN shift
+        .mockResolvedValueOnce([shiftRow()]);
+
+      const result = await service.openShift({ academicYearId: 'year-1', openingFloat: '2000.00' }, 'cashier-1');
+
+      expect(result.cashierName).toBe('Ram Shrestha');
+      expect(result.closedByName).toBeNull();
+      const insertSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
+      expect(insertSql).toContain('JOIN users cu ON cu.id = inserted.cashier_user_id');
+    });
+
+    it('closeShift returns both cashierName and closedByName from the joined rows', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([shiftRow()])
+        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([shiftRow({
+          status: 'CLOSED',
+          closed_by_first_name: 'Gita', closed_by_last_name: 'KC',
+        })]);
+
+      const result = await service.closeShift('shift-1', { countedCash: '2000.00' }, 'staff-1');
+
+      expect(result.shift.cashierName).toBe('Ram Shrestha');
+      expect(result.shift.closedByName).toBe('Gita KC');
+      const updateSql = mockTx.$queryRawUnsafe.mock.calls[3][0] as string;
+      expect(updateSql).toContain('LEFT JOIN users cb ON cb.id = updated.closed_by');
     });
   });
 });

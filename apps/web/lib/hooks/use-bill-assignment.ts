@@ -181,3 +181,14 @@ export function useFeePreview(studentId: string, academicYearId: string, asOfDat
     retry: false,
   });
 }
+
+// ─── UI-6 §4.8 — Concession Register ────────────────────────────────────────
+
+export function useConcessionRegister(
+  params: { page?: number; limit?: number; academicYearId?: string; classId?: string; discountReasonId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'concession-register', params],
+    queryFn: () => billAssignmentApi.reports.concessionRegister(params).then((r) => r.data.data),
+  });
+}

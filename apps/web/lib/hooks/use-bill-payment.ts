@@ -39,7 +39,10 @@ export function useBillInvoiceDetail(invoiceId: string | null) {
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export function useBillPayments(
-  params: { page?: number; limit?: number; studentId?: string; method?: string; status?: string; dateFrom?: string; dateTo?: string } = {},
+  params: {
+    page?: number; limit?: number; studentId?: string; method?: string; status?: string;
+    dateFrom?: string; dateTo?: string; receivedBy?: string;
+  } = {},
 ) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
@@ -89,5 +92,16 @@ export function useVoidPayment() {
       queryClient.invalidateQueries({ queryKey: ['bill-payments'] });
       queryClient.invalidateQueries({ queryKey: ['bill-payment', id] });
     },
+  });
+}
+
+// ─── UI-6 §4.9 — Student Statement ──────────────────────────────────────────
+
+export function useStudentStatement(studentId: string | null, params: { from?: string; to?: string } = {}) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['student-statement', studentId, params],
+    queryFn: () => billPaymentApi.getStatement(studentId as string, params).then((r) => r.data.data),
+    enabled: !!slug && !!studentId,
   });
 }

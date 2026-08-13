@@ -9,6 +9,10 @@ import type {
   PublishedExam,
   SectionComparisonRow,
   StaffAttendanceRow,
+  DaybookReport,
+  FinanceDefaultersReport,
+  CollectionSummaryReport,
+  FinesReport,
 } from '@/types/api.types';
 
 // Simple (non-paginated) responses → .data.data throughout.
@@ -88,5 +92,38 @@ export function useFeeAging(params: { asOf?: string; classId?: string }) {
   return useQuery({
     queryKey: ['reports', 'fee-aging', params],
     queryFn: async () => (await reportsApi.feeAging(params)).data.data as FeeAgingReport,
+  });
+}
+
+// ── UI-6 — Billing Reports page (§4.3-4.7 of UI-6-SPEC.md) ─────────────────
+// Named `useFinanceDefaulters`/`useCollectionSummary`, not `useDefaulters`/
+// `useCollectionReport` — those names are already taken by the old-rail
+// hooks in `use-finance.ts`, which must keep working unmodified.
+
+export function useDaybook(params: { bsDate?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'daybook', params],
+    queryFn: async () => (await reportsApi.daybook(params)).data.data as DaybookReport,
+  });
+}
+
+export function useFinanceDefaulters(params: { classId?: string; minBalance?: string; sort?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'finance-defaulters', params],
+    queryFn: async () => (await reportsApi.financeDefaulters(params)).data.data as FinanceDefaultersReport,
+  });
+}
+
+export function useCollectionSummary(params: { from?: string; to?: string; groupBy?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'collection-summary', params],
+    queryFn: async () => (await reportsApi.collectionSummary(params)).data.data as CollectionSummaryReport,
+  });
+}
+
+export function useFines(params: { from?: string; to?: string; classId?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'fines', params],
+    queryFn: async () => (await reportsApi.fines(params)).data.data as FinesReport,
   });
 }

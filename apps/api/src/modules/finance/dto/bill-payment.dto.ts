@@ -71,4 +71,6 @@ export class BillPaymentQueryDto {
   @IsOptional() @IsEnum(PAYMENT_STATUSES) status?: string;
   @IsOptional() @IsDateString() dateFrom?: string;
   @IsOptional() @IsDateString() dateTo?: string;
+  /** UI-6 §2.2 — the cashier-shift payments drill-down; no existing caller sends this. */
+  @IsOptional() @IsUUID() receivedBy?: string;
 }

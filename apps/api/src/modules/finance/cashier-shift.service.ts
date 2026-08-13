@@ -67,10 +67,15 @@ export class CashierShiftService {
 
     const bs = todayBs();
     const [row] = await this.tenantPrisma.query<CashierShiftRow>(
-      `INSERT INTO cashier_shifts
-         (cashier_user_id, academic_year_id, opened_bs_year, opened_bs_month, opened_bs_day, opening_float, notes)
-       VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::numeric, $7)
-       RETURNING *`,
+      `WITH inserted AS (
+         INSERT INTO cashier_shifts
+           (cashier_user_id, academic_year_id, opened_bs_year, opened_bs_month, opened_bs_day, opening_float, notes)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::numeric, $7)
+         RETURNING *
+       )
+       SELECT inserted.*, cu.first_name AS cashier_first_name, cu.last_name AS cashier_last_name
+       FROM inserted
+       JOIN users cu ON cu.id = inserted.cashier_user_id`,
       cashierId,
       dto.academicYearId,
       bs.year,
@@ -136,12 +141,19 @@ export class CashierShiftService {
       );
 
       const [updated] = await tx.$queryRawUnsafe<CashierShiftRow[]>(
-        `UPDATE cashier_shifts SET
-           status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2::uuid,
-           counted_cash = $3::numeric, expected_cash = $4::numeric, variance = $5::numeric,
-           notes = COALESCE($6, notes), updated_at = NOW()
-         WHERE id = $7::uuid
-         RETURNING *`,
+        `WITH updated AS (
+           UPDATE cashier_shifts SET
+             status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2::uuid,
+             counted_cash = $3::numeric, expected_cash = $4::numeric, variance = $5::numeric,
+             notes = COALESCE($6, notes), updated_at = NOW()
+           WHERE id = $7::uuid
+           RETURNING *
+         )
+         SELECT updated.*, cu.first_name AS cashier_first_name, cu.last_name AS cashier_last_name,
+                cb.first_name AS closed_by_first_name, cb.last_name AS closed_by_last_name
+         FROM updated
+         JOIN users cu ON cu.id = updated.cashier_user_id
+         LEFT JOIN users cb ON cb.id = updated.closed_by`,
         closeTimestamp,
         staffId,
         dto.countedCash,
@@ -174,10 +186,14 @@ export class CashierShiftService {
       throw new BadRequestException('date must be an AD date in YYYY-MM-DD form.');
     }
     const rows = await this.tenantPrisma.query<CashierShiftRow>(
-      `SELECT * FROM cashier_shifts
-       WHERE ($1::uuid IS NULL OR cashier_user_id = $1::uuid)
-         AND ($2::date IS NULL OR opened_at::date = $2::date)
-       ORDER BY opened_at DESC`,
+      `SELECT cs.*, cu.first_name AS cashier_first_name, cu.last_name AS cashier_last_name,
+              cb.first_name AS closed_by_first_name, cb.last_name AS closed_by_last_name
+       FROM cashier_shifts cs
+       JOIN users cu ON cu.id = cs.cashier_user_id
+       LEFT JOIN users cb ON cb.id = cs.closed_by
+       WHERE ($1::uuid IS NULL OR cs.cashier_user_id = $1::uuid)
+         AND ($2::date IS NULL OR cs.opened_at::date = $2::date)
+       ORDER BY cs.opened_at DESC`,
       params.cashierId ?? null,
       params.date ?? null,
     );

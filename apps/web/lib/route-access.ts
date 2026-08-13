@@ -94,6 +94,11 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   // BillCorrectionController's own request-side guard; OWNER_ONLY approve/
   // reject/reverse enforced in-page (same split UI-4's void button uses).
   { prefix: '/finance/bill/corrections', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /finance/corrections/credit-notes' },
+  // UI-6 — Billing Reports page (daybook/defaulters/aging/collection/fines/
+  // concession-register/statement/cashier). One row covers all eight tabs:
+  // every endpoint behind this page shares the identical five-role
+  // FINANCE_REPORT_ROLES/ACCOUNTANT_AND_ABOVE set (UI-6-SPEC.md §1/§3).
+  { prefix: '/finance/bill/reports', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'GET /reports/finance/daybook' },
   { prefix: '/exams', roles: EXAM_COMMS_TIER, endpoint: 'GET /exams/types' },
   // REP-1 reports — fee aging opens to ACCOUNTANT (GET /reports/finance/aging);
   // the attendance/exam tabs are coordinator-tier and hidden in-page for
