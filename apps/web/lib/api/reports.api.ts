@@ -25,4 +25,13 @@ export const reportsApi = {
 
   feeAging: (params: { asOf?: string; classId?: string }) =>
     api.get('/reports/finance/aging', { params }),
+
+  // UI-6 — Billing Reports page (§4.3-4.7 of UI-6-SPEC.md)
+  daybook: (params: { bsDate?: string }) => api.get('/reports/finance/daybook', { params }),
+  financeDefaulters: (params: { classId?: string; minBalance?: string; sort?: string }) =>
+    api.get('/reports/finance/defaulters', { params }),
+  collectionSummary: (params: { from?: string; to?: string; groupBy?: string }) =>
+    api.get('/reports/finance/collection', { params }),
+  fines: (params: { from?: string; to?: string; classId?: string }) =>
+    api.get('/reports/finance/fines', { params }),
 };

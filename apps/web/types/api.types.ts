@@ -2267,3 +2267,150 @@ export interface FinanceSettings {
   invoiceNumberingReset: boolean;
   creditNoteApprovalThreshold: number;
 }
+
+// ── UI-6 — Reports (BILL-9 suite + cashier close + concession register) ────
+
+export interface DaybookEntry {
+  id: string;
+  time: string;
+  entryType: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  debit: number;
+  credit: number;
+  narration: string | null;
+  invoiceNumber: string | null;
+  paymentMethod: string | null;
+  receiptNumber: string | null;
+}
+export interface DaybookReport {
+  bsDate: { year: number; month: number; day: number };
+  adDate: string;
+  entries: DaybookEntry[];
+  byMethod: { method: string; total: number }[];
+  totals: { totalInvoiced: number; totalCollected: number; totalRefunded: number; netMovement: number };
+}
+
+export interface FinanceDefaulterStudent {
+  studentId: string;
+  admissionNumber: string;
+  fullName: string;
+  classId: string | null;
+  className: string | null;
+  sectionName: string | null;
+  balance: number;
+  overdueInvoices: number;
+  oldestDueDate: string | null;
+}
+export interface FinanceDefaultersReport {
+  asOf: string;
+  totalDefaulters: number;
+  totalOutstanding: number;
+  students: FinanceDefaulterStudent[];
+}
+
+export interface CollectionSummaryBreakdownRow {
+  key: string;
+  label: string;
+  total: number;
+  count?: number;
+}
+export interface CollectionSummaryReport {
+  range: { from: string; to: string };
+  groupBy: 'method' | 'feehead';
+  totalCollected: number;
+  breakdown: CollectionSummaryBreakdownRow[];
+}
+
+export interface FineAccrual {
+  id: string;
+  accruedThrough: string;
+  daysOverdue: number;
+  amount: number;
+  ruleType: string | null;
+  ruleValue: number | null;
+  reversed: boolean;
+  invoiceId: string;
+  invoiceNumber: string;
+  studentId: string;
+  admissionNumber: string;
+  fullName: string;
+  classId: string | null;
+  className: string | null;
+  sectionName: string | null;
+}
+export interface FinesReport {
+  range: { from: string; to: string };
+  count: number;
+  totalFined: number;
+  accruals: FineAccrual[];
+}
+
+export interface ConcessionRegisterEntry {
+  concessionId: string;
+  studentId: string;
+  studentAdmissionNumber: string;
+  studentName: string;
+  className: string | null;
+  feeHeadId: string | null;
+  feeHeadName: string | null;
+  type: ConcessionType;
+  value: number;
+  capAmount: number | null;
+  discountReasonId: string;
+  discountReasonName: string;
+  appliedBy: string;
+  appliedAt: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+export interface StudentStatement {
+  student: { id: string; admissionNumber: string; fullName: string; className: string | null };
+  range: { from: string; to: string };
+  openingBalance: number;
+  closingBalance: number;
+  advanceCredit: number;
+  totalDebit: number;
+  totalCredit: number;
+  entries: LedgerEntry[];
+}
+
+export type CashierShiftStatus = 'OPEN' | 'CLOSED';
+export interface CashierShift {
+  id: string;
+  cashierUserId: string;
+  cashierName: string;
+  academicYearId: string;
+  openedAt: string;
+  openedBs: { year: number; month: number; day: number } | null;
+  openingFloat: number;
+  closedAt: string | null;
+  closedBy: string | null;
+  closedByName: string | null;
+  countedCash: number | null;
+  expectedCash: number | null;
+  variance: number | null;
+  status: CashierShiftStatus;
+  notes: string | null;
+}
+export interface OpenShiftData {
+  academicYearId: string;
+  openingFloat: string;
+  notes?: string;
+}
+export interface CloseShiftData {
+  countedCash: string;
+  notes?: string;
+}
+export interface CashierCloseResult {
+  shift: CashierShift;
+  openingFloat: number;
+  countedCash: number;
+  expectedCash: number;
+  variance: number;
+  cashCollected: number;
+  chequeTotal: number;
+  gatewayTotal: number;
+  byMethod: { method: string; total: number; count: number }[];
+}

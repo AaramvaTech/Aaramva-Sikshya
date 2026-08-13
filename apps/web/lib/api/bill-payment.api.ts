@@ -7,6 +7,7 @@ import type {
   UpdateChequeStatusData,
   VoidPaymentData,
   StudentBalance,
+  StudentStatement,
 } from '@/types/api.types';
 
 /** UI-4 — one client module for the BILL-5 payment surface, mirroring
@@ -17,7 +18,7 @@ export const billPaymentApi = {
   list: (
     params: {
       page?: number; limit?: number; studentId?: string; method?: string; status?: string;
-      dateFrom?: string; dateTo?: string;
+      dateFrom?: string; dateTo?: string; receivedBy?: string;
     } = {},
   ) => api.get<ApiResponse<PaginatedResponse<BillPayment>>>('/finance/bill/payments', { params }),
 
@@ -32,4 +33,8 @@ export const billPaymentApi = {
   /** Ledger's general balance endpoint — `sign: 'ADVANCE'` is available credit. */
   getStudentBalance: (studentId: string) =>
     api.get<ApiResponse<StudentBalance>>(`/finance/students/${studentId}/balance`),
+
+  /** UI-6 §4.9 — student statement (LedgerController's `.../statement`). */
+  getStatement: (studentId: string, params: { from?: string; to?: string } = {}) =>
+    api.get<ApiResponse<StudentStatement>>(`/finance/students/${studentId}/statement`, { params }),
 };

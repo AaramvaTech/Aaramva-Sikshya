@@ -250,6 +250,7 @@ export class BillPaymentService {
     if (query.status) { conditions.push(`bp.status = $${idx++}`); params.push(query.status); }
     if (query.dateFrom) { conditions.push(`bp.received_date >= $${idx++}::date`); params.push(query.dateFrom); }
     if (query.dateTo) { conditions.push(`bp.received_date <= $${idx++}::date`); params.push(query.dateTo); }
+    if (query.receivedBy) { conditions.push(`bp.received_by = $${idx++}::uuid`); params.push(query.receivedBy); }
 
     params.push(limit, offset);
     const rows = await this.tenantPrisma.query<BillPaymentRow>(

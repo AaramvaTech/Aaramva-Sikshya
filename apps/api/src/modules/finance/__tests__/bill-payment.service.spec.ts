@@ -452,4 +452,36 @@ describe('BillPaymentService', () => {
       await expect(service.findOne('payment-1', 'parent-1', Role.PARENT)).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('findAll — receivedBy filter (UI-6 §2.2, cashier-shift payments drill-down)', () => {
+    it('adds a received_by condition, bound as its own param, when receivedBy is passed', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, total_count: '1' }]);
+
+      const result = await service.findAll({ receivedBy: 'user-1' });
+
+      expect(result.data).toHaveLength(1);
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('bp.received_by = $1::uuid'),
+        'user-1', 20, 0,
+      );
+    });
+
+    it('omits the received_by condition when not passed', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await service.findAll({});
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.not.stringContaining('received_by'),
+        20, 0,
+      );
+    });
+
+    it('combines with existing filters (studentId + receivedBy), each its own bound param', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await service.findAll({ studentId: 'student-1', receivedBy: 'user-1' });
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('bp.student_id = $1::uuid'),
+        'student-1', 'user-1', 20, 0,
+      );
+    });
+  });
 });
