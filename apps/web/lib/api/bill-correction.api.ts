@@ -9,6 +9,7 @@ import type {
   CreateWriteOffData,
   DecideCorrectionData,
   FinanceSettings,
+  UpdateFinanceSettingsData,
 } from '@/types/api.types';
 
 /** UI-5 — one client module for the BILL-6 corrections surface, mirroring
@@ -39,8 +40,11 @@ export const billCorrectionApi = {
     api.post<ApiResponse<BillCorrection>>(`/finance/corrections/${id}/reverse`),
 };
 
-/** UI-5 §0/ruling 1 — read-only this phase, feeds the New Correction cap
- * preview. Editing the threshold is UI-7 (Settings) scope. */
+/** UI-5 §0/ruling 1 — read-only that phase, fed the New Correction cap
+ * preview. UI-7 adds the write half — OWNER_ONLY on the backend
+ * (FinanceSettingsController), gated in-page (settings/page.tsx). */
 export const financeSettingsApi = {
   get: () => api.get<ApiResponse<FinanceSettings>>('/finance/settings'),
+  update: (data: UpdateFinanceSettingsData) =>
+    api.patch<ApiResponse<FinanceSettings>>('/finance/settings', data),
 };

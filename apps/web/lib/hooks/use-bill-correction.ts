@@ -3,6 +3,7 @@ import { billCorrectionApi, financeSettingsApi } from '@/lib/api/bill-correction
 import { useTenantStore } from '@/store/tenant.store';
 import type {
   CreateCreditNoteData, CreateRefundData, CreateWriteOffData, DecideCorrectionData,
+  UpdateFinanceSettingsData,
 } from '@/types/api.types';
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
@@ -26,13 +27,22 @@ export function useBillCorrection(id: string | null) {
   });
 }
 
-/** UI-5 ruling 1 — read-only threshold, feeds the New Correction cap preview. */
+/** UI-5 ruling 1 — read-only threshold, feeds the New Correction cap preview.
+ * UI-7 adds the write half below. */
 export function useFinanceSettings() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['finance-settings'],
     queryFn: () => financeSettingsApi.get().then((r) => r.data.data),
     enabled: !!slug,
+  });
+}
+
+export function useUpdateFinanceSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateFinanceSettingsData) => financeSettingsApi.update(data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finance-settings'] }),
   });
 }
 

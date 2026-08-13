@@ -128,4 +128,20 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   schoolStampUrl?: string;
+
+  /** UI-7 — real tenants columns since BILL-1, rendered on every printed bill,
+   *  previously exposed nowhere in this DTO (read or write). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  paymentInstructions?: string;
+
+  @IsOptional()
+  @IsString()
+  qrImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  qrImageFileKey?: string;
 }

@@ -7,6 +7,7 @@ export type FileKind =
   | 'school-logo'
   | 'principal-signature'
   | 'school-stamp'
+  | 'qr-image'
   | 'staff-document'
   | 'assignment-attachment'
   | 'submission-file';

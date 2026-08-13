@@ -1339,6 +1339,12 @@ export interface SchoolProfile {
   principalName: string | null;
   principalSignatureUrl: string | null;
   schoolStampUrl: string | null;
+  /** UI-7 — curated print-accent set (common/tenant-brand-color.ts), distinct
+   *  from primaryColor's free-form web branding. */
+  brandColor: string | null;
+  printLanguage: 'EN' | 'NE' | 'BOTH' | null;
+  paymentInstructions: string | null;
+  qrImageUrl: string | null;
 }
 
 export interface UpdateProfileData {
@@ -1366,6 +1372,11 @@ export interface UpdateProfileData {
   logoFileKey?: string;
   principalSignatureFileKey?: string;
   schoolStampFileKey?: string;
+  brandColor?: string;
+  printLanguage?: 'EN' | 'NE' | 'BOTH';
+  paymentInstructions?: string;
+  qrImageUrl?: string;
+  qrImageFileKey?: string;
 }
 
 // ── Dashboard Module ─────────────────────────────────────────────────────────
@@ -2266,6 +2277,10 @@ export interface DecideCorrectionData {
 export interface FinanceSettings {
   invoiceNumberingReset: boolean;
   creditNoteApprovalThreshold: number;
+}
+export interface UpdateFinanceSettingsData {
+  invoiceNumberingReset?: boolean;
+  creditNoteApprovalThreshold?: string;
 }
 
 // ── UI-6 — Reports (BILL-9 suite + cashier close + concession register) ────
