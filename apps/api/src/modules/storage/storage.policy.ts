@@ -80,6 +80,15 @@ export const FILE_KIND_POLICIES = {
     uploadRoles: SETTINGS_EDITORS,
     publicRead: false,
   },
+  // UI-7 — bill payment QR code (eSewa/bank). Modeled directly on
+  // principal-signature/school-stamp: private (read via presigned GET at
+  // render time, same as those two), not public like school-logo.
+  'qr-image': {
+    maxBytes: 1 * MB,
+    contentTypes: IMAGE_TYPES,
+    uploadRoles: SETTINGS_EDITORS,
+    publicRead: false,
+  },
   'staff-document': {
     maxBytes: 10 * MB,
     contentTypes: { ...IMAGE_TYPES, 'application/pdf': 'pdf' },

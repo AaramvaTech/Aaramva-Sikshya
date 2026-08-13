@@ -34,6 +34,8 @@ interface TenantProfileRow {
   primary_foreground: string | null;
   color_source: string;
   logo_palette: Record<string, string> | null;
+  payment_instructions: string | null;
+  qr_image_url: string | null;
 }
 
 function toProfileResponse(row: TenantProfileRow) {
@@ -65,6 +67,8 @@ function toProfileResponse(row: TenantProfileRow) {
     primaryForeground: row.primary_foreground,
     colorSource: row.color_source,
     logoPalette: row.logo_palette,
+    paymentInstructions: row.payment_instructions,
+    qrImageUrl: row.qr_image_url,
   };
 }
 
@@ -84,7 +88,9 @@ const PROFILE_SELECT = `id, name, slug,
   "printLanguage" AS print_language,
   "primaryForeground" AS primary_foreground,
   "colorSource" AS color_source,
-  "logoPalette" AS logo_palette`;
+  "logoPalette" AS logo_palette,
+  "paymentInstructions" AS payment_instructions,
+  "qrImageUrl" AS qr_image_url`;
 
 @Injectable()
 export class SettingsService {
@@ -138,10 +144,15 @@ export class SettingsService {
       await this.storage.verifyConfirmedKey(dto.schoolStampFileKey, 'school-stamp', slug);
       dto.schoolStampUrl = dto.schoolStampFileKey;
     }
+    if (dto.qrImageFileKey !== undefined) {
+      await this.storage.verifyConfirmedKey(dto.qrImageFileKey, 'qr-image', slug);
+      dto.qrImageUrl = dto.qrImageFileKey;
+    }
     for (const [field, value] of [
       ['logoUrl', dto.logoFileKey === undefined ? dto.logoUrl : undefined],
       ['principalSignatureUrl', dto.principalSignatureFileKey === undefined ? dto.principalSignatureUrl : undefined],
       ['schoolStampUrl', dto.schoolStampFileKey === undefined ? dto.schoolStampUrl : undefined],
+      ['qrImageUrl', dto.qrImageFileKey === undefined ? dto.qrImageUrl : undefined],
     ] as const) {
       if (value?.startsWith('data:')) {
         this.logger.warn(
@@ -183,6 +194,8 @@ export class SettingsService {
     if (dto.brandColor !== undefined) { updates.push(`"brandColor" = $${idx++}`); values.push(dto.brandColor); }
     // BILL-8: gate-checked above; safe to persist unconditionally here.
     if (dto.printLanguage !== undefined) { updates.push(`"printLanguage" = $${idx++}`); values.push(dto.printLanguage); }
+    if (dto.paymentInstructions !== undefined) { updates.push(`"paymentInstructions" = $${idx++}`); values.push(dto.paymentInstructions); }
+    if (dto.qrImageUrl !== undefined) { updates.push(`"qrImageUrl" = $${idx++}`); values.push(dto.qrImageUrl); }
 
     if (updates.length === 0) return this.getProfile();
 

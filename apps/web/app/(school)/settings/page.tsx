@@ -5,10 +5,12 @@ import { toast } from 'sonner';
 import {
   Building2,
   Edit2,
+  Landmark,
   Loader2,
   MapPin,
   Palette,
   PenLine,
+  QrCode,
   ScrollText,
   Stamp,
   Upload,
@@ -21,13 +23,39 @@ import { extractApiErrors } from '@/lib/api-errors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useSchoolProfile, useUpdateSchoolProfile } from '@/lib/hooks/use-settings';
+import { useFinanceSettings, useUpdateFinanceSettings } from '@/lib/hooks/use-bill-correction';
 import { uploadFile } from '@/lib/upload';
 import { useFileUrl } from '@/lib/hooks/use-file-url';
 import { useTenantStore } from '@/store/tenant.store';
+import { useAuthStore } from '@/store/auth.store';
 import type { SchoolProfile, UpdateProfileData } from '@/types/api.types';
 import { cn } from '@/lib/utils';
+
+// UI-7 — the curated bill/receipt print-accent set (common/tenant-brand-color.ts
+// on the backend). Deliberately not the free-hex primaryColor above — print
+// media has no runtime contrast enforcement, so the choices are pre-vetted.
+const BILL_BRAND_COLORS: { value: string; name: string }[] = [
+  { value: '#475569', name: 'Slate' },
+  { value: '#0f6e56', name: 'Green' },
+  { value: '#1e5aa8', name: 'Blue' },
+  { value: '#9a2c2c', name: 'Maroon' },
+  { value: '#6b3fa0', name: 'Purple' },
+  { value: '#b45309', name: 'Amber' },
+  { value: '#0e7490', name: 'Teal' },
+  { value: '#a1306e', name: 'Rose' },
+];
+
+const PRINT_LANGUAGES = [
+  { value: 'EN', label: 'English' },
+  { value: 'NE', label: 'Nepali' },
+  { value: 'BOTH', label: 'Both (bilingual)' },
+] as const;
+
+const OWNER_ROLES = ['SCHOOL_OWNER', 'PLATFORM_ADMIN'];
 
 type FormState = Record<string, string>;
 
@@ -37,6 +65,7 @@ const EMPTY: FormState = {
   panNumber: '', registrationNumber: '', affiliationBoard: '', affiliationNumber: '',
   principalName: '', logoUrl: '', primaryColor: '#2563EB',
   principalSignatureUrl: '', schoolStampUrl: '',
+  brandColor: '#475569', printLanguage: 'EN', paymentInstructions: '', qrImageUrl: '',
 };
 
 function fromProfile(p: SchoolProfile): FormState {
@@ -49,6 +78,8 @@ function fromProfile(p: SchoolProfile): FormState {
     affiliationNumber: p.affiliationNumber ?? '', principalName: p.principalName ?? '',
     logoUrl: p.logoUrl ?? '', primaryColor: p.primaryColor ?? '#2563EB',
     principalSignatureUrl: p.principalSignatureUrl ?? '', schoolStampUrl: p.schoolStampUrl ?? '',
+    brandColor: p.brandColor ?? '#475569', printLanguage: p.printLanguage ?? 'EN',
+    paymentInstructions: p.paymentInstructions ?? '', qrImageUrl: p.qrImageUrl ?? '',
   };
 }
 
@@ -60,7 +91,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editing, setEditing] = useState(false);
   // FILE-1: files picked while editing — uploaded via presign on Save.
-  const [pendingFiles, setPendingFiles] = useState<{ logo?: File; signature?: File; stamp?: File }>({});
+  const [pendingFiles, setPendingFiles] = useState<{ logo?: File; signature?: File; stamp?: File; qr?: File }>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   function startEdit() {
@@ -88,6 +119,14 @@ export default function SettingsPage() {
       primaryColor: t(form.primaryColor),
       // Image fields: send raw so they can be cleared.
       logoUrl: form.logoUrl, principalSignatureUrl: form.principalSignatureUrl, schoolStampUrl: form.schoolStampUrl,
+      // UI-7: brandColor/printLanguage always have a concrete value (the
+      // picker/select default to the backend's own fallback, never blank);
+      // paymentInstructions is free text, omitted when empty like the other
+      // text fields above. qrImageUrl sent raw so it can be cleared.
+      brandColor: form.brandColor,
+      printLanguage: form.printLanguage as UpdateProfileData['printLanguage'],
+      paymentInstructions: t(form.paymentInstructions),
+      qrImageUrl: form.qrImageUrl,
     };
     try {
       // FILE-1: presign→PUT each picked file; the verified key replaces the
@@ -98,6 +137,7 @@ export default function SettingsPage() {
         ['logo', 'school-logo', 'logoFileKey', 'logoUrl'],
         ['signature', 'principal-signature', 'principalSignatureFileKey', 'principalSignatureUrl'],
         ['stamp', 'school-stamp', 'schoolStampFileKey', 'schoolStampUrl'],
+        ['qr', 'qr-image', 'qrImageFileKey', 'qrImageUrl'],
       ] as const;
       for (const [slot, kind, keyField, urlField] of kinds) {
         const file = pendingFiles[slot];
@@ -257,6 +297,39 @@ export default function SettingsPage() {
         </Grid>
       </Section>
 
+      {/* 5. UI-7 — bill/receipt print settings. Same edit session, same
+          EDITOR_ROLES tier as every section above (backend confirmed:
+          brandColor/printLanguage/paymentInstructions/qrImageUrl all live on
+          PATCH /settings/profile, not the owner-only finance/settings). */}
+      <Section icon={<Palette className="h-4 w-4" />} title="Billing Documents" subtitle="Printed on every bill and receipt">
+        <Grid>
+          <BrandColorPicker editing={editing} value={form.brandColor} display={profile?.brandColor} onChange={(v) => set('brandColor', v)} />
+          <PrintLanguageField editing={editing} value={form.printLanguage} display={profile?.printLanguage} onChange={(v) => set('printLanguage', v)} />
+          <div className="sm:col-span-2">
+            <FieldTextarea label="Payment Instructions" editing={editing} value={form.paymentInstructions} display={profile?.paymentInstructions} onChange={(v) => set('paymentInstructions', v)} placeholder="Bank details, eSewa ID, or how a parent should pay" />
+          </div>
+          <div className="sm:col-span-2">
+            <ImageField
+              label="Payment QR Code"
+              hint="eSewa/bank QR image (max 1 MB)"
+              editing={editing}
+              value={editing ? form.qrImageUrl : (profile?.qrImageUrl ?? '')}
+              onChange={(v) => set('qrImageUrl', v)}
+              onFile={(f) => setPendingFiles((p) => ({ ...p, qr: f }))}
+              boxClass="h-24 w-24 rounded-md"
+              fallback={<QrCode className="h-6 w-6" />}
+            />
+          </div>
+        </Grid>
+      </Section>
+
+      {/* 6. UI-7 — owner-only billing policy. A separate resource
+          (PATCH /finance/settings) and a separate, stricter role tier —
+          deliberately its own self-contained edit session (like
+          ChangePasswordCard below), not folded into the page-wide toggle
+          above, which only ever writes /settings/profile. */}
+      <BillingPolicyCard />
+
       {/* MAIL-1 T4: account security */}
       <ChangePasswordCard onChange={(data) => authApi.changePassword(data)} />
     </div>
@@ -401,6 +474,187 @@ function ImageField({
               )}
             </div>
             {hint && <p className="text-xs text-gray-400">{hint}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// UI-7 — the curated 8-swatch picker (not a hex input — the set is
+// pre-vetted for print, see BILL_BRAND_COLORS above). Exported for its own
+// focused test rather than mounting the whole page.
+export function BrandColorPicker({
+  value, display, onChange, editing,
+}: { value: string; display?: string | null; onChange: (v: string) => void; editing: boolean }) {
+  if (!editing) {
+    const current = BILL_BRAND_COLORS.find((c) => c.value === display) ?? BILL_BRAND_COLORS[0];
+    return (
+      <div>
+        <span className="text-xs text-gray-500">Bill Print Accent</span>
+        <div className="mt-1 flex items-center gap-2">
+          <div className="h-5 w-5 rounded-full border border-gray-200" style={{ background: current.value }} />
+          <span className="text-sm font-medium text-black dark:text-white">{current.name}</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label>Bill Print Accent</Label>
+      <div className="flex flex-wrap gap-2">
+        {BILL_BRAND_COLORS.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            title={c.name}
+            aria-label={c.name}
+            aria-pressed={value === c.value}
+            onClick={() => onChange(c.value)}
+            className={cn(
+              'h-8 w-8 rounded-full border-2 transition-transform',
+              value === c.value ? 'scale-110 border-black dark:border-white' : 'border-transparent',
+            )}
+            style={{ background: c.value }}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-gray-400">Print only — separate from the web Brand Color above.</p>
+    </div>
+  );
+}
+
+function PrintLanguageField({
+  value, display, onChange, editing,
+}: { value: string; display?: string | null; onChange: (v: string) => void; editing: boolean }) {
+  const label = (v: string | null | undefined) => PRINT_LANGUAGES.find((l) => l.value === v)?.label ?? 'English';
+  if (!editing) {
+    return (
+      <div>
+        <span className="text-xs text-gray-500">Print Language</span>
+        <p className="mt-0.5 text-sm font-medium text-black dark:text-white">{label(display)}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label>Print Language</Label>
+      <Select value={value} onValueChange={(v) => v && onChange(v)}>
+        <SelectTrigger className="w-full"><span>{label(value)}</span></SelectTrigger>
+        <SelectContent>
+          {PRINT_LANGUAGES.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// UI-7 — a separate resource (PATCH /finance/settings, OWNER_ONLY) and a
+// separate role tier from everything above (PATCH /settings/profile,
+// PRINCIPAL-inclusive) — its own self-contained edit session, same shape as
+// ChangePasswordCard. Ruling: visible but disabled for a non-owner, with a
+// short explanation — not hidden.
+export function canEditBillingPolicy(role: string | undefined): boolean {
+  return !!role && OWNER_ROLES.includes(role);
+}
+
+function BillingPolicyCard() {
+  const role = useAuthStore((s) => s.user?.role);
+  const isOwner = canEditBillingPolicy(role);
+  const { data: settings, isLoading } = useFinanceSettings();
+  const update = useUpdateFinanceSettings();
+
+  const [editing, setEditing] = useState(false);
+  const [reset, setReset] = useState(false);
+  const [threshold, setThreshold] = useState('');
+
+  function startEdit() {
+    if (!settings) return;
+    setReset(settings.invoiceNumberingReset);
+    setThreshold(String(settings.creditNoteApprovalThreshold));
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    const amount = Number(threshold);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error('Threshold must be a non-negative number');
+      return;
+    }
+    try {
+      await update.mutateAsync({ invoiceNumberingReset: reset, creditNoteApprovalThreshold: threshold });
+      toast.success('Billing policy updated');
+      setEditing(false);
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to update billing policy').join(' • '));
+    }
+  }
+
+  return (
+    <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+      <div className="flex items-center gap-3 border-b border-stroke px-6 py-4 dark:border-strokedark">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-500 dark:bg-brand-500/10">
+          <Landmark className="h-4 w-4" />
+        </span>
+        <div>
+          <h4 className="font-semibold text-black dark:text-white">Billing Policy</h4>
+          <p className="text-xs text-gray-500">Invoice numbering and correction approval</p>
+        </div>
+      </div>
+      <div className="p-6">
+        {!isOwner && (
+          <p className="mb-4 rounded-sm border border-warning-200 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-400">
+            Owner-only — contact your school&apos;s owner to change these settings.
+          </p>
+        )}
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : (
+          <div className="space-y-5">
+            <Grid>
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  checked={editing ? reset : (settings?.invoiceNumberingReset ?? false)}
+                  onCheckedChange={(c) => setReset(!!c)}
+                  disabled={!editing || !isOwner}
+                />
+                <div>
+                  <p className="text-sm font-medium text-black dark:text-white">Reset invoice numbering each fiscal year</p>
+                  <p className="text-xs text-gray-500">Off = numbering runs continuous across years.</p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Credit Note Approval Threshold (Rs)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editing ? threshold : String(settings?.creditNoteApprovalThreshold ?? 5000)}
+                  onChange={(e) => setThreshold(e.target.value)}
+                  disabled={!editing || !isOwner}
+                  className="font-mono"
+                />
+                <p className="text-xs text-gray-400">Credit notes below this amount auto-post; at or above requires owner approval.</p>
+              </div>
+            </Grid>
+            {isOwner && (
+              <div className="flex justify-end gap-2">
+                {!editing ? (
+                  <Button variant="outline" size="sm" onClick={startEdit}>
+                    <Edit2 className="mr-1.5 h-4 w-4" />
+                    Edit
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+                    <Button size="sm" className="bg-brand-500 hover:bg-brand-600 text-white" onClick={handleSave} disabled={update.isPending}>
+                      {update.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      Save
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
