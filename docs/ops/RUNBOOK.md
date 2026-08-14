@@ -13,10 +13,17 @@ it and deleting its line here.
   via `useParentChild.ts`. `apps/web` never had a payment-initiation UI to
   repoint (WEB-P Phase 5 deliberately excluded checkout) — nothing left
   there. Full detail: `BILL-BUGS.md` → PAY-UI-REPOINT.
-- **Non-superuser Postgres role for prod** — the app connects as the
-  `postgres` superuser in dev (see `CLAUDE.md` dev notes); production must
-  run under a dedicated non-superuser role. Not yet actioned — no role or
-  rotation script exists for this yet.
+- ~~**Non-superuser Postgres role for prod**~~ — closed 2026-08-14. Both dev
+  and production now run the app as `aaramva_app`, a plain non-superuser role
+  (confirmed via `\du` on both — no elevated attributes). Production's old
+  role was never literally named `postgres` (bootstrapped as `aaramva_prod`,
+  itself a full superuser) — discovered live, not assumed, during the cutover.
+  Live-proved with a real `register-school` call (the one path that actually
+  exercises `CREATE SCHEMA` at runtime), cleaned up and read-back confirmed.
+  `aaramva_prod`'s own password is deliberately left untouched and unrotated
+  for now — kept as the rollback fallback through the post-cutover monitoring
+  window; rotating it is a separate, later decision. Full detail:
+  `docs/ops/DB-ROLE-HARDENING-discovery.md`, `scripts/db-role-hardening.sql`.
 
 ## Backups
 
