@@ -12,10 +12,17 @@ it and deleting its line here.
   `bill_payments`. Do not cut a real school's billing over to the new tables
   until this lands, or parents' "Pay with eSewa/Khalti" buttons silently
   404. Full detail: `BILL-BUGS.md` → PAY-UI-REPOINT.
-- **Non-superuser Postgres role for prod** — the app connects as the
-  `postgres` superuser in dev (see `CLAUDE.md` dev notes); production must
-  run under a dedicated non-superuser role. Not yet actioned — no role or
-  rotation script exists for this yet.
+- ~~**Non-superuser Postgres role for prod**~~ — closed 2026-08-14. Both dev
+  and production now run the app as `aaramva_app`, a plain non-superuser role
+  (confirmed via `\du` on both — no elevated attributes). Production's old
+  role was never literally named `postgres` (bootstrapped as `aaramva_prod`,
+  itself a full superuser) — discovered live, not assumed, during the cutover.
+  Live-proved with a real `register-school` call (the one path that actually
+  exercises `CREATE SCHEMA` at runtime), cleaned up and read-back confirmed.
+  `aaramva_prod`'s own password is deliberately left untouched and unrotated
+  for now — kept as the rollback fallback through the post-cutover monitoring
+  window; rotating it is a separate, later decision. Full detail:
+  `docs/ops/DB-ROLE-HARDENING-discovery.md`, `scripts/db-role-hardening.sql`.
 
 ## Backups
 
