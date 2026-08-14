@@ -10,7 +10,7 @@ import { BsDate } from '@/components/shared/bs-date';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
 import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
-import { useStudentLedger } from '@/lib/hooks/use-finance';
+import { useStudentBalance } from '@/lib/hooks/use-bill-payment';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
 import { useMyChildrenAssignments } from '@/lib/hooks/use-assignments';
 import { useNotices } from '@/lib/hooks/use-communication';
@@ -33,10 +33,13 @@ type ChildAssignmentRow = MyChildAssignments['assignments'][number] & { studentN
  * and add a nav item for what is fundamentally a dashboard sub-section.
  *
  * Async-gate note: `academicYearId` is derived from useCurrentAcademicYear()
- * and passed down as `currentYear?.id ?? ''`. Every per-child attendance/
- * ledger hook below is already `enabled: !!studentId && !!academicYearId`
- * -gated at the hook level (confirmed in use-attendance.ts/use-finance.ts),
- * so an empty academicYearId never fires a request — it just renders '—'
+ * and passed down as `currentYear?.id ?? ''`. Every per-child attendance
+ * hook below is already `enabled: !!studentId && !!academicYearId`-gated at
+ * the hook level (confirmed in use-attendance.ts); the fee-balance hook
+ * (BILLING-CUTOVER Phase 4: `useStudentBalance`, Billing's whole-account
+ * balance — not year-scoped, so it needs no academicYearId at all) is
+ * `enabled: !!studentId`-gated the same way. An empty academicYearId never
+ * fires an attendance request — it just renders '—'
  * until the year resolves. `yearLoading` is threaded through in addition so
  * that brief window renders a skeleton instead of a premature '—'.
  */
@@ -152,11 +155,7 @@ export default function ParentDashboardPage() {
                 <tr>
                   <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">Fee Balance</td>
                   {children.map((c) => (
-                    <ComparisonFeeCell
-                      key={c.id}
-                      studentId={c.id}
-                      academicYearId={academicYearId}
-                    />
+                    <ComparisonFeeCell key={c.id} studentId={c.id} />
                   ))}
                 </tr>
               </tbody>
@@ -250,12 +249,12 @@ function ChildOverviewCard({
     child.id,
     academicYearId || undefined,
   );
-  const { data: ledger, isLoading: ledgerLoading } = useStudentLedger(child.id, academicYearId);
+  const { data: balanceData, isLoading: balanceLoading } = useStudentBalance(child.id);
 
   const attendancePercent = attendance?.attendancePercent ?? null;
-  const balance = ledger?.summary?.totalBalance ?? null;
+  const balance = balanceData?.balance ?? null;
   const showAttendanceSkeleton = yearLoading || attendanceLoading;
-  const showFeeSkeleton = yearLoading || ledgerLoading;
+  const showFeeSkeleton = balanceLoading;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
@@ -346,15 +345,9 @@ function ComparisonAttendanceCell({
   );
 }
 
-function ComparisonFeeCell({
-  studentId,
-  academicYearId,
-}: {
-  studentId: string;
-  academicYearId: string;
-}) {
-  const { data, isLoading } = useStudentLedger(studentId, academicYearId);
-  const balance = data?.summary?.totalBalance ?? null;
+function ComparisonFeeCell({ studentId }: { studentId: string }) {
+  const { data, isLoading } = useStudentBalance(studentId);
+  const balance = data?.balance ?? null;
   return (
     <td className="py-3 px-4 font-medium text-gray-800 dark:text-white">
       {isLoading ? <Skeleton className="h-4 w-16" /> : balance !== null ? <AmountDisplay amount={balance} /> : '—'}

@@ -1,8 +1,10 @@
 # BILLING-CUTOVER — Discovery Doc
 
-**Status:** Spec, not yet built. Claude Code implements only after this is reviewed and approved.
+**Status:** DONE — all five phases complete, old Finance module fully retired. See
+`BILLING-CUTOVER-phase-0-*` through `-phase-4-hard-retirement.md` for the per-phase record
+(Phase 0 was folded into the Phase 0 commit directly; Phases 1-4 each have their own doc).
 **Decision owner:** Srijan
-**Type:** One-way door (old Finance module is deleted, not deprecated-in-place)
+**Type:** One-way door (old Finance module is deleted, not deprecated-in-place) — door closed.
 
 ## Context
 

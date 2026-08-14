@@ -16,16 +16,15 @@ import {
   TrendingUp,
   User,
   Wallet,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStudent, useAcademicYears, useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { useStudent, useCurrentAcademicYear } from '@/lib/hooks/use-students';
 import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
-import { useStudentLedger } from '@/lib/hooks/use-finance';
+import { useStudentBalance, useStudentBillInvoices } from '@/lib/hooks/use-bill-payment';
+import { sumInvoiceTotals } from '@/lib/invoice-totals';
 import { studentsApi } from '@/lib/api/students.api';
 import { uploadFile } from '@/lib/upload';
 import { useFileUrl } from '@/lib/hooks/use-file-url';
-import { useStudentAssignments, useSetStudentAssignment } from '@/lib/hooks/use-finance';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
@@ -35,8 +34,6 @@ import { LoginAccountsCard } from '@/components/students/login-accounts-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -44,27 +41,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { StudentBillingTab } from '@/components/finance/student-billing-tab';
 import { canSeeBillingTab } from '@/lib/billing-tab-access';
-import type { FeeAssignment, StudentDocument } from '@/types/api.types';
+import type { StudentDocument } from '@/types/api.types';
 
-type Tab = 'overview' | 'enrollment' | 'documents' | 'fees' | 'billing';
+// BILLING-CUTOVER Phase 4: the old 'fees' tab (FeesTab/AssignmentRow, old
+// Finance's per-student-item override editor) is removed — 'billing' below
+// already covers the exact same ground (assignment/overrides/concessions/
+// transport/preview) for the same role tier, per BILLING_TAB_ROLES.
+type Tab = 'overview' | 'enrollment' | 'documents' | 'billing';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'enrollment', label: 'Enrollment' },
   { key: 'documents', label: 'Documents' },
-  { key: 'fees', label: 'Fees' },
   { key: 'billing', label: 'Billing' },
 ];
 
@@ -136,14 +129,21 @@ function OverviewStats({ studentId, academicYearId }: { studentId: string; acade
     studentId,
     academicYearId || undefined,
   );
-  const { data: ledger, isLoading: ledgerLoading } = useStudentLedger(studentId, academicYearId);
+  // BILLING-CUTOVER Phase 4: rewired off old Finance's useStudentLedger.
+  // totalPaid sums the year's bill_invoices via sumInvoiceTotals (never
+  // totalReceivable/balance — double-counts previousBalance carry-forward,
+  // see that helper's docblock); totalBalance is the separate, authoritative
+  // whole-account /balance figure, same split Phase 1 established.
+  const { data: invoicesData, isLoading: invoicesLoading } = useStudentBillInvoices(studentId, academicYearId || null);
+  const { data: balanceData, isLoading: balanceLoading } = useStudentBalance(studentId);
 
   const attendanceRate = attendance?.attendancePercent ?? null;
   const presentDays = attendance?.present ?? null;
   const totalDays = attendance?.totalWorkingDays ?? null;
 
-  const totalBalance = ledger?.summary?.totalBalance ?? null;
-  const totalPaid = ledger?.summary?.totalPaid ?? null;
+  const ledgerLoading = invoicesLoading || balanceLoading;
+  const totalBalance = balanceData?.balance ?? null;
+  const totalPaid = invoicesData ? sumInvoiceTotals(invoicesData).totalPaid : null;
 
   const attendanceColor: 'green' | 'orange' | 'red' =
     attendanceRate === null ? 'green'
@@ -431,14 +431,16 @@ export default function StudentProfilePage() {
                     )}
                   </div>
                   <div className="flex gap-2 mt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => setActiveTab('fees')}
-                    >
-                      View Fees
-                    </Button>
+                    {canSeeBilling && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => setActiveTab('billing')}
+                      >
+                        View Fees
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -679,11 +681,6 @@ export default function StudentProfilePage() {
         </div>
       )}
 
-      {/* ── Fees (old rail) ──────────────────────────────────────────── */}
-      {activeTab === 'fees' && (
-        <FeesTab studentId={id} />
-      )}
-
       {/* ── Billing (new rail, UI-2) ─────────────────────────────────── */}
       {activeTab === 'billing' && canSeeBilling && (
         <StudentBillingTab studentId={id} />
@@ -752,230 +749,6 @@ export default function StudentProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// ─── Fee Assignment Row ────────────────────────────────────────────────────────
-
-function AssignmentRow({
-  item,
-  studentId,
-  academicYearId,
-}: {
-  item: FeeAssignment;
-  studentId: string;
-  academicYearId: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [customAmount, setCustomAmount] = useState<string>(
-    item.customAmount != null ? String(item.customAmount) : '',
-  );
-  const [discountPercent, setDiscountPercent] = useState<string>(
-    item.discountPercent > 0 ? String(item.discountPercent) : '',
-  );
-  const [discountReason, setDiscountReason] = useState(item.discountReason ?? '');
-  const [isWaived, setIsWaived] = useState(item.isWaived);
-  const setAssignment = useSetStudentAssignment();
-
-  function openEdit() {
-    setCustomAmount(item.customAmount != null ? String(item.customAmount) : '');
-    setDiscountPercent(item.discountPercent > 0 ? String(item.discountPercent) : '');
-    setDiscountReason(item.discountReason ?? '');
-    setIsWaived(item.isWaived);
-    setEditing(true);
-  }
-
-  async function save() {
-    try {
-      await setAssignment.mutateAsync({
-        studentId,
-        data: {
-          feeStructureItemId: item.feeStructureItemId,
-          academicYearId,
-          customAmount: customAmount ? Number(customAmount) : undefined,
-          discountPercent: discountPercent ? Number(discountPercent) : 0,
-          discountReason: discountReason || undefined,
-          isWaived,
-        },
-      });
-      toast.success('Fee assignment updated');
-      setEditing(false);
-    } catch {
-      toast.error('Failed to update fee assignment');
-    }
-  }
-
-  return (
-    <div className="border-b border-stroke dark:border-strokedark last:border-0">
-      <div className="flex items-center justify-between py-3 px-5">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-black dark:text-white">{item.feeCategoryName}</p>
-          <div className="flex gap-3 text-xs text-gray-400 mt-0.5">
-            <span>Original: <AmountDisplay amount={item.originalAmount} className="inline" /></span>
-            {item.isWaived && <Badge className="text-xs px-1.5 py-0 bg-blue-100 text-blue-700 border-0">Waived</Badge>}
-            {item.discountPercent > 0 && (
-              <span className="text-orange-500">{item.discountPercent}% off</span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <AmountDisplay
-            amount={item.effectiveAmount}
-            className={cn(
-              'font-semibold text-sm',
-              item.isWaived ? 'line-through text-gray-400' : 'text-black dark:text-white',
-            )}
-          />
-          <button onClick={openEdit} className="text-gray-400 hover:text-brand-500 p-1">
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {editing && (
-        <div className="bg-gray-50 dark:bg-white/5 px-5 py-4 space-y-3 border-t border-stroke dark:border-strokedark">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Custom Amount (Rs.)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder={`Default: ${item.originalAmount}`}
-                value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
-                className="h-8 text-sm"
-              />
-              <p className="text-xs text-gray-400">Leave blank to use structure amount</p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Discount %</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step={0.01}
-                placeholder="0"
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Discount Reason</Label>
-            <Input
-              placeholder="e.g. Staff child, merit scholarship"
-              value={discountReason}
-              onChange={(e) => setDiscountReason(e.target.value)}
-              className="h-8 text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={isWaived}
-              onCheckedChange={(v) => setIsWaived(!!v)}
-              id={`waived-${item.feeStructureItemId}`}
-            />
-            <Label htmlFor={`waived-${item.feeStructureItemId}`} className="text-xs cursor-pointer">
-              Waive this fee entirely
-            </Label>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button
-              size="sm"
-              className="bg-brand-500 hover:bg-brand-600 text-white"
-              onClick={save}
-              disabled={setAssignment.isPending}
-            >
-              {setAssignment.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Save
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              <X className="h-3.5 w-3.5 mr-1" /> Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Fees Tab ──────────────────────────────────────────────────────────────────
-
-function FeesTab({ studentId }: { studentId: string }) {
-  const { data: currentYear } = useCurrentAcademicYear();
-  const { data: allYears } = useAcademicYears();
-  const [selectedYearId, setSelectedYearId] = useState('');
-
-  const academicYearId = selectedYearId || currentYear?.id || '';
-
-  const { data: assignments, isLoading } = useStudentAssignments(studentId, academicYearId);
-
-  const total = assignments?.reduce((sum, a) => sum + (a.isWaived ? 0 : a.effectiveAmount), 0) ?? 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Select value={academicYearId} onValueChange={(v) => setSelectedYearId(v ?? '')}>
-          <SelectTrigger className="w-48">
-            <span className={academicYearId ? '' : 'text-muted-foreground'}>
-              {academicYearId
-                ? (() => {
-                    const y = allYears?.find((y) => y.id === academicYearId);
-                    return y ? `${y.name}${y.isCurrent ? ' (Current)' : ''}` : 'Loading…';
-                  })()
-                : 'Select year'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            {allYears?.map((y) => (
-              <SelectItem key={y.id} value={y.id}>
-                {y.name} {y.isCurrent && '(Current)'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-gray-400">Override amounts are per-student per-year</p>
-      </div>
-
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-        <div className="border-b border-stroke px-5 py-4 dark:border-strokedark flex items-center justify-between">
-          <h4 className="font-semibold text-black dark:text-white">Fee Assignments</h4>
-          {!isLoading && assignments && assignments.length > 0 && (
-            <div className="text-sm text-gray-500">
-              Total payable:{' '}
-              <AmountDisplay amount={total} className="font-semibold text-black dark:text-white" />
-            </div>
-          )}
-        </div>
-
-        {isLoading ? (
-          <div className="p-5 space-y-2">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-          </div>
-        ) : !assignments || assignments.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-sm text-gray-400">
-              No fee structure found for this student in the selected academic year.
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Make sure the student is enrolled in a class that has a fee structure.
-            </p>
-          </div>
-        ) : (
-          <div>
-            {assignments.map((item) => (
-              <AssignmentRow
-                key={item.feeStructureItemId}
-                item={item}
-                studentId={studentId}
-                academicYearId={academicYearId}
-              />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
