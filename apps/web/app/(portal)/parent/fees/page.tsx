@@ -8,11 +8,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { AmountDisplay } from '@/components/finance/amount-display';
+import { FeePreviewPanel } from '@/components/finance/fee-preview-panel';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
-import { useStudentLedger, useStudentAssignments } from '@/lib/hooks/use-finance';
+import { useStudentLedger } from '@/lib/hooks/use-finance';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
-import type { InvoiceDetail, FeeAssignment } from '@/types/api.types';
+import type { InvoiceDetail } from '@/types/api.types';
 
 /**
  * WEB-P Phase 5 Task 9 — parent's per-child fee ledger, view-only.
@@ -21,9 +22,10 @@ import type { InvoiceDetail, FeeAssignment } from '@/types/api.types';
  * (totalInvoiced/totalPaid/totalBalance) as three stat cards, then
  * `invoices[]` as a card list (invoice number, due date via <BsDate>,
  * status via the shared <StatusBadge>, totalAmount/paidAmount/balance via
- * <AmountDisplay>). Per the locked spec, this list IS the invoice detail —
- * there is no invoice-detail-by-id endpoint reachable by PARENT and this
- * file deliberately has no detail route/page/expand-per-invoice-items UI.
+ * <AmountDisplay>). Per the locked spec, this list stands in for invoice
+ * detail — `GET /finance/bill/invoices/:id` IS PARENT-reachable and
+ * object-scoped (live-confirmed, BILLING-CUTOVER Phase 1), but no
+ * per-invoice detail/expand UI was speced for v1, so none is built here.
  *
  * HARD EXCLUSION (this phase's Global Constraints, applies to this screen
  * specifically because it's the one place a "Pay Now" button would
@@ -36,11 +38,15 @@ import type { InvoiceDetail, FeeAssignment } from '@/types/api.types';
  * scope for v1. See the finance-security audit doc referenced in this
  * task's commit message.
  *
- * Secondary "Fee structure" section (via `useStudentAssignments`) is called
- * out as optional in the brief; included here as brief, clearly-labeled
- * read-only context (what's assigned, at what amount) so it reads as a
- * distinct concept from the invoice/payment history above it, not a
- * duplicate of it.
+ * Secondary "Fee structure" section reuses the admin's `FeePreviewPanel`
+ * as-is (BILLING-CUTOVER Phase 1 — same reuse pattern as WEB-P Phase 4's
+ * parent `ReportCardView`). It was originally built against old Finance's
+ * `GET /finance/students/:studentId/assignments` via `useStudentAssignments`;
+ * that endpoint has no Billing equivalent reachable by PARENT
+ * (`GET .../fee-structure` is ACCOUNTANT_AND_ABOVE-only), but Billing's
+ * `GET .../fee-preview` already is PARENT-allowed and object-scoped, and
+ * returns a strict superset (structure name + per-head gross/override/
+ * concession/net breakdown) of what the old section showed.
  *
  * Guard shape: identical to every other per-child screen in this phase —
  * children loading -> children error -> empty roster -> the one-tick
@@ -108,74 +114,6 @@ function InvoiceCard({ invoice: inv }: { invoice: InvoiceDetail }) {
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Optional secondary section: fee STRUCTURE assignment (not homework
-// assignments — see module docblock). Read-only, own query/error/empty
-// states, distinct from the invoice list above. ─────────────────────────────
-export function FeeStructureSection({
-  studentId,
-  academicYearId,
-}: {
-  studentId: string;
-  academicYearId: string;
-}) {
-  const {
-    data: assignments,
-    isLoading,
-    isError,
-    refetch,
-  } = useStudentAssignments(studentId, academicYearId || undefined);
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-      <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-white">Fee structure</h3>
-      <p className="mb-4 text-theme-xs text-gray-500 dark:text-gray-400">
-        What&apos;s assigned to this child and at what amount — separate from the billing history above
-      </p>
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      ) : isError ? (
-        <QueryErrorState onRetry={() => refetch()} message="Couldn't load the fee structure." />
-      ) : !assignments || assignments.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-          No fee categories assigned yet.
-        </p>
-      ) : (
-        <div className="divide-y divide-gray-100 dark:divide-gray-800">
-          {assignments.map((a: FeeAssignment) => (
-            <div key={a.feeStructureItemId} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm text-gray-700 dark:text-gray-200">{a.feeCategoryName}</p>
-                {(a.isWaived || a.discountPercent > 0) && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {a.isWaived ? 'Waived' : `${a.discountPercent}% discount`}
-                    {a.discountReason ? ` · ${a.discountReason}` : ''}
-                  </p>
-                )}
-              </div>
-              <div className="flex-shrink-0 text-right">
-                {(a.isWaived || a.customAmount !== null) && (
-                  <AmountDisplay
-                    amount={a.originalAmount}
-                    className="mr-2 text-xs text-gray-400 line-through dark:text-gray-500"
-                  />
-                )}
-                <AmountDisplay
-                  amount={a.effectiveAmount}
-                  className="text-sm font-semibold text-gray-800 dark:text-white"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -330,7 +268,7 @@ export default function ParentFeesPage() {
         </>
       )}
 
-      <FeeStructureSection studentId={selectedChildId} academicYearId={academicYearId} />
+      <FeePreviewPanel studentId={selectedChildId} academicYearId={academicYearId} />
     </div>
   );
 }
