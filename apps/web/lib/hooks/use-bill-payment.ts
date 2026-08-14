@@ -36,6 +36,25 @@ export function useBillInvoiceDetail(invoiceId: string | null) {
   });
 }
 
+/** BILLING-CUTOVER Phase 1 — a student's full invoice history for one
+ * academic year (all statuses, not just POSTED — unlike
+ * useStudentOutstandingInvoices above, which is the payment counter's
+ * "what still needs collecting" view). Bounded the same way
+ * (limit 100, same precedent), scoped to a year so it never grows
+ * unbounded. PARENT-safe: hits `billInvoiceApi.listByStudent`, the
+ * findByStudent route, not the ACCOUNTANT_AND_ABOVE-only `list`. */
+export function useStudentBillInvoices(studentId: string | null, academicYearId: string | null) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['bill-invoices-by-student', studentId, academicYearId],
+    queryFn: () =>
+      billInvoiceApi
+        .listByStudent(studentId as string, { academicYearId: academicYearId as string, limit: 100 })
+        .then((r) => r.data.data.data),
+    enabled: !!slug && !!studentId && !!academicYearId,
+  });
+}
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export function useBillPayments(

@@ -1,8 +1,7 @@
 # BILLING-CUTOVER Phase 1 — Parent completeness audit
 
-**Status:** Audit complete, one finding open for a scope decision (see §1). Per the discovery
-doc's Phase 1 checkpoint, this is a report — no gap has been closed beyond the fee-structure
-section swap that was already in flight when this phase started.
+**Status:** Audit complete, all findings closed. §1 (wrong-rail data source) has been fixed and
+live-verified; §3 remains a deliberate, documented descope for v1 (no parity requirement).
 
 **Method:** Live HTTP against the running dev API (`localhost:3001`) as a real demo PARENT
 (`parent@demo.school`, password temporarily shimmed/verified/401-restored), cross-checked against
@@ -43,52 +42,89 @@ decorator. **Billing's parent surface is a strict superset of old Finance's** �
 a proper statement never existed for parents on the old rail at all. Per the discovery doc's own
 framing ("what Finance had for parents that Billing doesn't yet cover"), there is no backend gap.
 
-## §1 — The one real finding: the parent Fees page reads the wrong rail
+## §1 — RESOLVED: the parent Fees page was reading the wrong rail
 
-`apps/web/app/(portal)/parent/fees/page.tsx`'s summary cards and invoice list are wired to
+`apps/web/app/(portal)/parent/fees/page.tsx`'s summary cards and invoice list were wired to
 `useStudentLedger()` (`lib/hooks/use-finance.ts:234`), which calls
 `financeApi.getStudentLedger` → **`GET /finance/reports/student/:studentId`** — the **old Finance
-rail**, reading straight from the `invoices` table. Billing's own equivalent,
-`GET /finance/students/:studentId/ledger` (+ `/statement`, `/balance`), reads from
+rail**, reading straight from the `invoices` table. Billing's own equivalent reads from
 `bill_invoices` / `student_ledger_entries` — a completely separate table, per the discovery doc's
 "no data migration" premise.
 
-**Confirmed live, same child (Binod Gurung), same moment:**
+**Confirmed live, same child (Binod Gurung), same moment, before the fix:**
 
-| | Old rail (`reports/student/:id`) — currently wired | Billing rail (`students/:id/ledger`) — not wired |
+| | Old rail (`reports/student/:id`) — was wired | Billing rail — not wired |
 |---|---|---|
 | Invoices shown | 1 | 2 |
 | Total invoiced | Rs. 100 | Rs. 3,260 (gross across both invoices) |
 | Balance | Rs. 0 | Rs. 2,260 owed |
 | Activity | none | 2 invoices, a payment, a reversal, a second payment |
 
-Postgres confirms the scale of the gap tenant-wide, not just for this one student:
+Postgres confirmed the scale of the gap tenant-wide, not just for this one student:
 
 ```
 tenant_demo:  old `invoices` table = 2 rows   |  `bill_invoices` = 19 rows
               old `payments` table = 1 row    |  `bill_payments` = 23 rows
 ```
 
-A parent logging into the portal today sees almost nothing — the real, current billing activity
-(the 19-invoice, 23-payment, 99-ledger-entry picture Billing actually holds) is invisible to them.
+### The fix
 
-**Why this isn't a one-line hook swap** (scoping note for whoever picks this up):
+Rewired onto three separate Billing endpoints, deliberately not a single swap, because no single
+endpoint carries everything the old summary cards + invoice list needed:
 
-- `InvoiceDetail` (old Finance shape: `subtotal`/`discountAmount`/`fineAmount`/`items`/`payments`)
-  and Billing's invoice shape (`grossAmount`/`concessionAmount`/`taxAmount`/`netAmount`/
-  `previousBalance`/`totalReceivable`, status `POSTED`/`SETTLED`/…) are structurally different — a
-  new type + a new `InvoiceCard` rendering, not a drop-in.
-- `StatusBadge` only has color mappings for old Finance's statuses (`PAID`/`UNPAID`/`OVERDUE`/
-  `PENDING`); Billing's invoice status enum needs its own mapping added.
-- The natural target isn't a single endpoint — `GET /finance/students/:studentId/bill/invoices`
-  for the list, plus either `/ledger` or `/statement` for the summary numbers (statement adds
-  opening/closing framing the current summary cards don't have).
+- **Invoice list**: `GET /finance/students/:studentId/bill/invoices` (`BillInvoiceController
+  #findByStudent` — not `#findAll`, which is ACCOUNTANT_AND_ABOVE-only and would 403 a parent). New
+  client method `billInvoiceApi.listByStudent` + hook `useStudentBillInvoices` (year-scoped,
+  `limit: 100`, same bound `useStudentOutstandingInvoices` already uses for the payment counter).
+- **Balance Due**: `GET /finance/students/:studentId/balance` via the already-existing
+  `useStudentBalance` (built for UI-4, zero new code) — the single authoritative ledger-SQL sum,
+  not derived from the invoice list. This matters: an invoice's own `balance` field includes its
+  `previousBalance` carry-forward from the prior invoice in the same billing chain, so summing
+  `balance` across a student's invoices double-counts every carry-forward. Confirmed live on this
+  exact data: summing per-invoice `balance` gives Rs. 3,260, but the true, authoritative balance
+  (and what `/balance` correctly returns) is Rs. 2,260.
+- **Total Invoiced / Total Paid**: summed client-side from the same invoice list via a new pure
+  helper, `sumInvoiceTotals` (`lib/invoice-totals.ts`) — `netAmount` (this invoice's own charge,
+  not `totalReceivable`, for the same double-counting reason as balance) and `paidAmount`
+  respectively. Pinned with a regression test (`lib/__tests__/invoice-totals.test.ts`) using this
+  exact live data, including a case that would fail if the double-counting trap were reintroduced.
 
-This is exactly the kind of thing Phase 1 exists to catch. Per the discovery doc's own checkpoint
-("report gap list before deciding whether to close gaps now or descope"), this fix was **not**
-applied as part of this session — it's a materially bigger, separate change from the fee-structure
-section swap that was already in flight, and needs an explicit go-ahead given it touches the
-page's primary content, not just a secondary panel.
+**Type/status handling, not a shim:**
+- `BillInvoice.status` was `string` in `types/api.types.ts`; narrowed to the real union
+  (`'POSTED' | 'SETTLED' | 'PARTIALLY_PAID' | 'VOIDED'`) — zero other consumers existed yet, so this
+  was a safe tightening, not a breaking change.
+- New `BillInvoiceStatusBadge` component (`components/finance/bill-invoice-status-badge.tsx`),
+  typed to that union, mirroring the exact established pattern of its siblings
+  (`InvoiceStatusBadge` for old Finance's enum, `BillPaymentStatusBadge` for payment status) — not
+  an extension of the old `StatusBadge`/`InvoiceStatusBadge`, which are typed to old Finance's
+  different status set (`PAID`/`PARTIAL`/`UNPAID`/`OVERDUE`/`WAIVED`).
+- `InvoiceCard` now takes a `BillInvoice` (not `InvoiceDetail`) and renders `totalReceivable` (the
+  full amount the invoice carries, matching what "Total" meant on the old rail) /`paidAmount`
+  /`balance` — all real fields on the new shape, no field renamed or coerced.
+
+**Live-verified after the fix, same child, same endpoints the page now calls (PARENT,
+`parent@demo.school`, shimmed/verified/401-restored):**
+
+```
+GET /finance/students/:id/bill/invoices?academicYearId=...&limit=100
+  BINV-2083-000005: netAmount 2260, totalReceivable 3260, paidAmount 0,    balance 3260, POSTED
+  BINV-2083-000003: netAmount 1000, totalReceivable 1000, paidAmount 1000, balance 0,    SETTLED
+  -> Total Invoiced = 3260, Total Paid = 1000
+
+GET /finance/students/:id/balance
+  {"balance": 2260, "sign": "OWES"}  -> Balance Due = Rs. 2,260
+```
+
+Postgres read-back (direct query against `bill_invoices` joined to `bill_payment_allocations`
+filtered to `bill_payments.status = 'CLEARED'` — the reversed Rs. 2,000 payment is `VOIDED` and
+correctly excluded) reproduces both invoice rows and both sums exactly. The ledger's own
+`SUM(debit) - SUM(credit)` independently reproduces the Rs. 2,260 balance exactly. All three numbers
+the page now shows are independently confirmed against raw Postgres, not just trusted from the API.
+
+Cross-family probe (Om Subedi, not this parent's child) on both newly-wired endpoints: 403.
+
+The old rail's Rs. 0 balance / 1 invoice is now Rs. 2,260 owed / 2 invoices — matching what Billing
+actually holds. This closes the finding; no further data-source work needed before Phase 4.
 
 ## §2 — Fee-structure section swap (completed this session)
 
@@ -97,7 +133,8 @@ via `useStudentAssignments`) replaced with the admin's existing `FeePreviewPanel
 Billing's `GET /finance/students/:studentId/fee-preview` — already PARENT-allowed and
 object-scoped (`fee-preview.service.ts:92`, `assertGuardianOwnsStudent`).
 
-- `apps/web/app/(portal)/parent/fees/page.tsx`: tsc clean, 528/528 web vitest passing.
+- `apps/web/app/(portal)/parent/fees/page.tsx`: tsc clean, 528/528 web vitest passing at the time
+  (531/531 after §1's fix added `invoice-totals.test.ts`).
 - Live proof (PARENT, own child, after a temporary crafted assignment — see below): `GET
   /finance/students/:studentId/fee-preview` returned a real per-head breakdown (`Tuition Fee`,
   gross 1200, net 1200) matching a direct Postgres read of `bill_fee_structure_items` +
@@ -130,11 +167,9 @@ v1" going into this phase).
 
 ## Recommendation
 
-1. **§1 (wrong-rail data source) needs an explicit decision**: fix now as a Phase-1 fast-follow
-   (bigger diff than this session's swap, touches the page's primary content and needs a new
-   invoice type + status mapping), or track it as a named follow-up before Phase 4 (hard
-   retirement) — it must be resolved before Phase 4 deletes the `invoices`/`payments` tables this
-   page currently reads from, or the page will 500/break outright at that point regardless.
+1. **§1 is closed** — the parent Fees page is fully off the old Finance rail (no remaining
+   `use-finance.ts` imports in `fees/page.tsx`), so nothing on this page depends on the
+   `invoices`/`payments` tables Phase 4 will delete.
 2. §3 items (receipt/PDF/statement UI) are safe to descope for v1 — no parity requirement, purely
    additive value.
 3. No other parent-facing gap found. Billing's backend surface for PARENT is otherwise a strict

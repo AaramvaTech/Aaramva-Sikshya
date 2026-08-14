@@ -2115,7 +2115,7 @@ export interface BillInvoice {
   balance: number;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
-  status: string;
+  status: 'POSTED' | 'SETTLED' | 'PARTIALLY_PAID' | 'VOIDED';
   ledgerEntryId: string | null;
   createdBy: string;
   createdAt: string;
