@@ -1,12 +1,18 @@
 -- DB-ROLE-HARDENING — creates aaramva_app (non-superuser) and reassigns
 -- ownership of every app object to it. See docs/ops/DB-ROLE-HARDENING-discovery.md.
 --
--- Run as the existing postgres superuser, connected to the TARGET database
--- (not the default `postgres` database — schema/table ownership is
--- per-database). Idempotent-ish: CREATE ROLE will error if aaramva_app
--- already exists cluster-wide (expected on a second database in the same
--- cluster — see the scratch-backup-stage note below) and can be skipped in
--- that case; everything else is safe to re-run.
+-- Run as the existing superuser (whatever it's actually named — 'postgres'
+-- in dev, 'aaramva_prod' in this project's own production cluster; never
+-- assume the name), connected to the TARGET database (not the cluster's
+-- default database — schema/table ownership is per-database). Idempotent-ish:
+-- CREATE ROLE will error if aaramva_app already exists cluster-wide (expected
+-- on a second database in the same cluster — see the scratch-backup-stage
+-- note below) and can be skipped in that case; everything else is safe to
+-- re-run.
+--
+-- Required -v variables: aaramva_app_password, target_db, old_owner_name
+-- (the role that owns everything today — see §3 below for why this must
+-- never be hardcoded).
 --
 -- Proven approach, not the naive one: a blanket `REASSIGN OWNED BY postgres
 -- TO aaramva_app` fails with "cannot reassign ownership of objects owned by
@@ -66,11 +72,20 @@ BEGIN
   END LOOP;
 END $$;
 
--- 3. Verification — must return zero rows.
-SELECT 'table' AS kind, schemaname, tablename AS name FROM pg_tables WHERE (schemaname LIKE 'tenant_%' OR schemaname='public') AND tableowner='postgres'
+-- 3. Verification — must return zero rows. Pass -v old_owner_name=<the
+--    role that owned everything BEFORE this script ran>. Do not assume
+--    'postgres' — this project's own production cluster was bootstrapped
+--    with POSTGRES_USER=aaramva_prod, and 'postgres' does not exist there
+--    at all. A hardcoded 'postgres' here was a real bug, caught before it
+--    ran against production: it would have reported false success on any
+--    cluster where the pre-existing superuser has a different name, since
+--    nothing would ever match a hardcoded 'postgres' check trivially —
+--    the check would pass even if the reassignment above had silently
+--    failed entirely.
+SELECT 'table' AS kind, schemaname, tablename AS name FROM pg_tables WHERE (schemaname LIKE 'tenant_%' OR schemaname='public') AND tableowner=:'old_owner_name'
 UNION ALL
-SELECT 'sequence', schemaname, sequencename FROM pg_sequences WHERE (schemaname LIKE 'tenant_%' OR schemaname='public') AND sequenceowner='postgres'
+SELECT 'sequence', schemaname, sequencename FROM pg_sequences WHERE (schemaname LIKE 'tenant_%' OR schemaname='public') AND sequenceowner=:'old_owner_name'
 UNION ALL
-SELECT 'type', n.nspname, t.typname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e' AND t.typowner::regrole::text='postgres'
+SELECT 'type', n.nspname, t.typname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e' AND t.typowner::regrole::text=:'old_owner_name'
 UNION ALL
-SELECT 'function', n.nspname, p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE (n.nspname LIKE 'tenant_%' OR n.nspname='public') AND p.proowner::regrole::text='postgres';
+SELECT 'function', n.nspname, p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE (n.nspname LIKE 'tenant_%' OR n.nspname='public') AND p.proowner::regrole::text=:'old_owner_name';
