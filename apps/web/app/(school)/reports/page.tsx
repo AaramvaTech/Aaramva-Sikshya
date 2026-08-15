@@ -362,7 +362,7 @@ function FeesTab() {
         </Select>
         <p className="pb-2 text-xs text-gray-400">
           Who owes overall lives in the{' '}
-          <Link href="/finance/reports" className="text-brand-500 hover:underline">defaulters report</Link>
+          <Link href="/finance/bill/reports" className="text-brand-500 hover:underline">defaulters report</Link>
           {' '}— aging adds how long it has been owed.
         </p>
       </div>

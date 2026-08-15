@@ -1,15 +1,9 @@
 import { Module } from '@nestjs/common';
 import { StorageModule } from '../storage/storage.module';
 import { SuperAdminModule } from '../super-admin/super-admin.module';
-import { FinanceController } from './finance.controller';
 import { BillCatalogController } from './bill-catalog.controller';
 import { BillAssignmentController } from './bill-assignment.controller';
 import { BillRunController } from './bill-run.controller';
-import { FeeCategoryService } from './fee-category.service';
-import { FeeStructureService } from './fee-structure.service';
-import { InvoiceService } from './invoice.service';
-import { PaymentService } from './payment.service';
-import { ReportService } from './report.service';
 import { FeeHeadService } from './fee-head.service';
 import { DiscountReasonService } from './discount-reason.service';
 import { TransportRouteService } from './transport-route.service';
@@ -65,7 +59,6 @@ import { BillFineController } from './bill-fine.controller';
 @Module({
   imports: [StorageModule, SuperAdminModule],
   controllers: [
-    FinanceController,
     BillCatalogController,
     BillAssignmentController,
     BillRunController,
@@ -85,11 +78,6 @@ import { BillFineController } from './bill-fine.controller';
     BillFineController,
   ],
   providers: [
-    FeeCategoryService,
-    FeeStructureService,
-    InvoiceService,
-    PaymentService,
-    ReportService,
     FeeHeadService,
     DiscountReasonService,
     TransportRouteService,
@@ -128,6 +116,6 @@ import { BillFineController } from './bill-fine.controller';
     BillCorrectionService,
     BillFineService,
   ],
-  exports: [InvoiceService, PaymentService, LedgerService, BillFineService],
+  exports: [LedgerService, BillFineService],
 })
 export class FinanceModule {}

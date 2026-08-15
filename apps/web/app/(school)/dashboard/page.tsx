@@ -97,7 +97,7 @@ export default function DashboardPage() {
           Send Notice
         </Link>
         <Link
-          href="/finance/invoices"
+          href="/finance/bill/payments/new"
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
         >
           <DollarSign className="h-4 w-4" />

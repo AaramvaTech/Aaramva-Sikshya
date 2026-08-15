@@ -4,11 +4,13 @@
  * Unlike seed-motherland.ts this tenant already went through the onboarding
  * wizard: 15 classes (Nursery..Grade 12) x 2 sections, 11 subjects, and the
  * current academic year already exist — this script only ADDS to that
- * structure (HR, students, fees, exams, attendance, branding + photos), it
- * never creates classes/sections/subjects/academic years.
+ * structure (HR, students, exams, attendance, branding + photos), it
+ * never creates classes/sections/subjects/academic years. BILLING-CUTOVER
+ * Phase 4: no longer seeds fees/invoices/payments (old Finance's tables) —
+ * use the real admin UI against this tenant for fee/billing dev data.
  *
- * Idempotent: departments/designations/fee categories/grading scale/exam
- * type are name-keyed (skip if present); students top up each section to
+ * Idempotent: departments/designations/grading scale/exam type are
+ * name-keyed (skip if present); students top up each section to
  * STUDENTS_PER_SECTION; staff are keyed by email; attendance/marks use
  * ON CONFLICT DO NOTHING.
  *
@@ -66,11 +68,6 @@ function ageBaseFor(className: string): number {
   const map: Record<string, number> = { Nursery: 3, 'L.K.G.': 4, 'U.K.G.': 5 };
   if (map[className] !== undefined) return map[className];
   return (gradeNumberOf(className) ?? 8) + 5;
-}
-function tuitionLevelOf(className: string): number {
-  const order = ['Nursery', 'L.K.G.', 'U.K.G.', ...Array.from({ length: 12 }, (_, i) => `Grade ${i + 1}`)];
-  const idx = order.indexOf(className);
-  return idx === -1 ? 6 : idx;
 }
 const BAND_SUBJECTS: Record<string, string[]> = {
   PRE: ['English', 'Nepali', 'Mathematics', 'H.P.E.E.'],
@@ -143,14 +140,6 @@ const DEPARTMENTS = [
   ...Array.from(new Set(TEACHER_CLUSTERS.map((c) => c.dept))),
 ];
 const DESIGNATIONS = ['Principal', 'Vice Principal', 'HOD', 'Senior Teacher', 'Teacher', 'Accountant', 'Librarian'];
-
-const FEE_CATS = [
-  { name: 'Admission Fee', type: 'ONE_TIME' },
-  { name: 'Monthly Tuition', type: 'MONTHLY' },
-  { name: 'Exam Fee', type: 'EXAM' },
-  { name: 'Library Fee', type: 'ANNUALLY' },
-  { name: 'Computer Fee', type: 'MONTHLY' },
-];
 
 async function main(): Promise<void> {
   const today = new Date();
@@ -428,106 +417,11 @@ async function main(): Promise<void> {
       }
       log.push(`attendance — student: +${studentAttendance}, staff: +${staffAttendance}`);
 
-      // ── 9. FEES ─────────────────────────────────────────────────────────────
-      const catIds: Record<string, string> = {};
-      for (const c of FEE_CATS) {
-        const [ex] = await q<{ id: string }>(`SELECT id FROM fee_categories WHERE name = $1 AND deleted_at IS NULL`, c.name);
-        if (ex) { catIds[c.name] = ex.id; continue; }
-        const [row] = await q<{ id: string }>(
-          `INSERT INTO fee_categories (name, type, is_active) VALUES ($1, $2, true) RETURNING id`,
-          c.name, c.type,
-        );
-        catIds[c.name] = row.id;
-      }
-      const structureItemsByClass: Record<string, { itemId: string; cat: string; amount: number }[]> = {};
-      for (const cls of classes) {
-        let [structure] = await q<{ id: string }>(
-          `SELECT id FROM fee_structures WHERE class_id = $1::uuid AND academic_year_id = $2::uuid AND deleted_at IS NULL`,
-          cls.id, ay.id,
-        );
-        if (!structure) {
-          [structure] = await q<{ id: string }>(
-            `INSERT INTO fee_structures (class_id, academic_year_id, created_by) VALUES ($1::uuid, $2::uuid, $3::uuid) RETURNING id`,
-            cls.id, ay.id, ownerId,
-          );
-        }
-        const tuition = 1200 + tuitionLevelOf(cls.name) * 180;
-        const items = [
-          { cat: 'Monthly Tuition', amount: tuition, due_day: 10, fine: 10 },
-          { cat: 'Exam Fee', amount: 700, due_day: 15, fine: 0 },
-          { cat: 'Library Fee', amount: 900, due_day: 20, fine: 0 },
-          { cat: 'Computer Fee', amount: 400, due_day: 10, fine: 5 },
-        ];
-        structureItemsByClass[cls.name] = [];
-        for (const it of items) {
-          const [ex] = await q<{ id: string }>(
-            `SELECT id FROM fee_structure_items WHERE fee_structure_id = $1::uuid AND fee_category_id = $2::uuid`,
-            structure.id, catIds[it.cat],
-          );
-          let itemId = ex?.id;
-          if (!itemId) {
-            const [row] = await q<{ id: string }>(
-              `INSERT INTO fee_structure_items (fee_structure_id, fee_category_id, amount, due_day_of_month, fine_per_day, grace_period_days)
-               VALUES ($1::uuid, $2::uuid, $3, $4, $5, 5) RETURNING id`,
-              structure.id, catIds[it.cat], it.amount, it.due_day, it.fine,
-            );
-            itemId = row.id;
-          }
-          structureItemsByClass[cls.name].push({ itemId, cat: it.cat, amount: it.amount });
-        }
-      }
-      log.push(`fee categories: ${Object.keys(catIds).length}, structures: ${classes.length}`);
-
-      // ── 10. INVOICES + PAYMENTS (first 2 students of each section) ────────
-      const dueDate = iso(new Date(today.getFullYear(), today.getMonth() + 1, 10));
-      const invoiceSubset = sections.flatMap((sec) =>
-        allStudents.filter((s) => s.section_id === sec.id).slice(0, 2),
-      );
-      let invoiceCount = 0, paymentCount = 0;
-      for (let idx = 0; idx < invoiceSubset.length; idx++) {
-        const st = invoiceSubset[idx];
-        const [hasInv] = await q<{ id: string }>(
-          `SELECT id FROM invoices WHERE student_id = $1::uuid AND academic_year_id = $2::uuid AND deleted_at IS NULL LIMIT 1`,
-          st.id, ay.id,
-        );
-        if (hasInv) continue;
-        const items = (structureItemsByClass[st.class_name] ?? []).filter((it) => ['Monthly Tuition', 'Exam Fee'].includes(it.cat));
-        const subtotal = items.reduce((s, it) => s + it.amount, 0);
-        const [seqRow] = await q<{ value: bigint }>(
-          `INSERT INTO sequences (key, value) VALUES ('invoice_seq', 1) ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1 RETURNING value`,
-        );
-        const invNo = `INV-${BS_YEAR}-${String(Number(seqRow.value)).padStart(6, '0')}`;
-        const mode = idx % 3; // 0 paid, 1 partial, 2 unpaid
-        const paid = mode === 0 ? subtotal : mode === 1 ? Math.round(subtotal / 2) : 0;
-        const status = mode === 0 ? 'PAID' : mode === 1 ? 'PARTIAL' : 'UNPAID';
-        const [inv] = await q<{ id: string }>(
-          `INSERT INTO invoices (invoice_number, student_id, academic_year_id, due_date, status, subtotal, discount_amount, fine_amount, total_amount, paid_amount, created_by)
-           VALUES ($1, $2::uuid, $3::uuid, $4::date, $5, $6, 0, 0, $6, $7, $8::uuid) RETURNING id`,
-          invNo, st.id, ay.id, dueDate, status, subtotal, paid, ownerId,
-        );
-        for (const it of items) {
-          await e(
-            `INSERT INTO invoice_items (invoice_id, fee_category_id, fee_category_name, original_amount, discount_percent, discounted_amount, fine_per_day, grace_period_days)
-             VALUES ($1::uuid, $2::uuid, $3, $4, 0, $4, 0, 5)`,
-            inv.id, catIds[it.cat], it.cat, it.amount,
-          );
-        }
-        invoiceCount++;
-        if (paid > 0) {
-          const [pSeq] = await q<{ value: bigint }>(
-            `INSERT INTO sequences (key, value) VALUES ('payment_seq', 1) ON CONFLICT (key) DO UPDATE SET value = sequences.value + 1 RETURNING value`,
-          );
-          const payNo = `PAY-${BS_YEAR}-${String(Number(pSeq.value)).padStart(6, '0')}`;
-          const method = ['CASH', 'ESEWA', 'KHALTI', 'BANK_TRANSFER'][idx % 4];
-          await e(
-            `INSERT INTO payments (payment_number, invoice_id, student_id, amount, method, received_by)
-             VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6::uuid)`,
-            payNo, inv.id, st.id, paid, method, ownerId,
-          );
-          paymentCount++;
-        }
-      }
-      log.push(`invoices: +${invoiceCount}, payments: +${paymentCount}`);
+      // BILLING-CUTOVER Phase 4: this script used to seed old Finance's
+      // fee_categories/fee_structures/invoices/payments here (sections 9-10).
+      // Those tables are dropped — Billing rail fee/invoice/payment seeding
+      // isn't reproduced here; use the real admin UI (Fee Catalog, Bill Runs,
+      // Payment Counter) against this tenant if fee/billing dev data is needed.
 
       // ── 11. EXAMS (grading scale, one exam type, sample schedules + marks) ─
       let [scale] = await q<{ id: string }>(`SELECT id FROM grading_scales WHERE name = 'NEB Grading System' AND deleted_at IS NULL`);
