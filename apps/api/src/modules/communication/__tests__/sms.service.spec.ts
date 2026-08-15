@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { SmsService, normaliseNepalPhone } from '../sms.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -44,6 +45,7 @@ describe('normaliseNepalPhone()', () => {
 describe('SmsService', () => {
   let service: SmsService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianService: jest.Mocked<GuardianService>;
 
   const originalEnv = process.env;
 
@@ -61,11 +63,13 @@ describe('SmsService', () => {
             execute: jest.fn(),
           },
         },
+        { provide: GuardianService, useValue: { getPrimaryGuardianPhones: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(SmsService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianService = module.get(GuardianService) as jest.Mocked<GuardianService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -129,12 +133,16 @@ describe('SmsService', () => {
 
   describe('bulkSend()', () => {
     it('deduplicates phone numbers and returns correct counts', async () => {
-      // collectPhones() uses tenantPrisma.query; send() uses tenantPrisma.run → mockTx
+      // collectPhones() scopes student ids via tenantPrisma.query, then resolves
+      // phones via GuardianService; send() uses tenantPrisma.run → mockTx
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
-        { phone: '9841234567' },
-        { phone: '9841234567' }, // duplicate
-        { phone: '9851234567' },
+        { id: 's1' }, { id: 's2' }, { id: 's3' },
       ]);
+      guardianService.getPrimaryGuardianPhones.mockResolvedValueOnce(new Map([
+        ['s1', '9841234567'],
+        ['s2', '9841234567'], // duplicate phone (different guardians, same number)
+        ['s3', '9851234567'],
+      ]));
       // For each unique phone, send() calls run → $queryRawUnsafe (INSERT) then $executeRawUnsafe (UPDATE)
       mockTx.$queryRawUnsafe.mockResolvedValue([{ id: 'log-x' }]);
       mockTx.$executeRawUnsafe.mockResolvedValue(undefined);
@@ -151,10 +159,11 @@ describe('SmsService', () => {
     });
 
     it('returns sent count equal to unique phone numbers when all succeed', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
-        { phone: '9841234567' },
-        { phone: '9851234567' },
-      ]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 's1' }, { id: 's2' }]);
+      guardianService.getPrimaryGuardianPhones.mockResolvedValueOnce(new Map([
+        ['s1', '9841234567'],
+        ['s2', '9851234567'],
+      ]));
       mockTx.$queryRawUnsafe.mockResolvedValue([{ id: 'log-x' }]);
       mockTx.$executeRawUnsafe.mockResolvedValue(undefined);
 

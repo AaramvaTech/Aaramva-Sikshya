@@ -4,6 +4,7 @@ import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { ROLE_AUDIENCES } from '../notice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 export interface NoticePostedEvent {
   tenantSlug: string;
@@ -37,6 +38,7 @@ export class NoticeListener {
     private readonly notificationService: NotificationService,
     private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   @OnEvent('notice.posted')
@@ -70,22 +72,23 @@ export class NoticeListener {
   private async resolveAudience(payload: NoticePostedEvent): Promise<string[]> {
     if (payload.audience === 'CLASS') {
       if (!payload.classId) return [];
-      const rows = await this.tenantPrisma.query<{ id: string }>(
+      const scoped = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT s.id
+         FROM students s
+         JOIN sections sec ON sec.id = s.section_id AND sec.class_id = $1::uuid
+         WHERE s.deleted_at IS NULL`,
+        payload.classId,
+      );
+      const studentUserRows = await this.tenantPrisma.query<{ id: string }>(
         `SELECT DISTINCT u.id
          FROM students s
          JOIN sections sec ON sec.id = s.section_id AND sec.class_id = $1::uuid
          JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
-         WHERE s.deleted_at IS NULL
-         UNION
-         SELECT DISTINCT u.id
-         FROM students s
-         JOIN sections sec ON sec.id = s.section_id AND sec.class_id = $1::uuid
-         JOIN guardians g ON g.student_id = s.id
-         JOIN users u ON u.id = g.user_id AND u.role = 'PARENT' AND u.deleted_at IS NULL
          WHERE s.deleted_at IS NULL`,
         payload.classId,
       );
-      return rows.map((r) => r.id);
+      const parentUserIds = await this.guardianService.getActiveParentUserIds(scoped.map((s) => s.id));
+      return Array.from(new Set([...studentUserRows.map((r) => r.id), ...parentUserIds]));
     }
 
     const roles = Object.entries(ROLE_AUDIENCES)

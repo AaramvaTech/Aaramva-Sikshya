@@ -4,6 +4,7 @@ import { SmsService } from '../sms.service';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 /**
  * Fixture DB: two unrelated families. The listener must resolve the audience
@@ -28,6 +29,7 @@ describe('AttendanceListener', () => {
   let notificationService: jest.Mocked<NotificationService>;
   let pushService: jest.Mocked<PushService>;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianService: jest.Mocked<GuardianService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -44,6 +46,13 @@ describe('AttendanceListener', () => {
         },
         { provide: PushService, useValue: { sendToRecipients: jest.fn().mockResolvedValue(undefined) } },
         { provide: TenantPrismaService, useValue: { query: jest.fn(), run: jest.fn(), execute: jest.fn() } },
+        {
+          provide: GuardianService,
+          useValue: {
+            getPrimaryGuardianPhones: jest.fn(),
+            getActiveParentUserIds: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -52,16 +61,28 @@ describe('AttendanceListener', () => {
     notificationService = module.get(NotificationService) as jest.Mocked<NotificationService>;
     pushService = module.get(PushService) as jest.Mocked<PushService>;
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianService = module.get(GuardianService) as jest.Mocked<GuardianService>;
 
     (tenantPrisma.query as jest.Mock).mockImplementation(async (sql: string, ...args: unknown[]) => {
       const studentId = args[0] as string;
       if (sql.includes('FROM students')) {
         return STUDENTS[studentId] ? [STUDENTS[studentId]] : [];
       }
-      if (sql.includes('JOIN users')) return PARENT_USERS[studentId] ?? [];
-      if (sql.includes('FROM guardians')) return PHONES[studentId] ?? [];
       return [];
     });
+    (guardianService.getPrimaryGuardianPhones as jest.Mock).mockImplementation(
+      async (studentIds: string[]) => {
+        const map = new Map<string, string>();
+        for (const id of studentIds) {
+          const phone = PHONES[id]?.[0]?.phone;
+          if (phone) map.set(id, phone);
+        }
+        return map;
+      },
+    );
+    (guardianService.getActiveParentUserIds as jest.Mock).mockImplementation(
+      async (studentIds: string[]) => studentIds.flatMap((id) => (PARENT_USERS[id] ?? []).map((p) => p.id)),
+    );
   });
 
   afterEach(() => jest.clearAllMocks());

@@ -4,6 +4,7 @@ import { SmsService } from '../sms.service';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 interface AttendanceAbsentEvent {
   tenantSlug: string;
@@ -26,6 +27,7 @@ export class AttendanceListener {
     private readonly notificationService: NotificationService,
     private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   @OnEvent('attendance.absent')
@@ -40,36 +42,26 @@ export class AttendanceListener {
         const studentName = `${students[0].first_name} ${students[0].last_name}`;
 
         // SMS to the primary-preferred guardian phone (same rule as FinanceListener).
-        const phones = await this.tenantPrisma.query<{ phone: string | null }>(
-          `SELECT phone FROM guardians
-           WHERE student_id = $1::uuid AND phone IS NOT NULL
-           ORDER BY is_primary DESC, created_at ASC
-           LIMIT 1`,
-          studentId,
-        );
-        if (phones[0]?.phone) {
+        const phones = await this.guardianService.getPrimaryGuardianPhones([studentId]);
+        const phone = phones.get(studentId);
+        if (phone) {
           const message = `Aaramva Shikshya: ${studentName} was absent on ${payload.date}. Contact school for details.`;
           try {
-            await this.smsService.send(phones[0].phone, message, 'ATTENDANCE_ABSENT', studentId);
+            await this.smsService.send(phone, message, 'ATTENDANCE_ABSENT', studentId);
           } catch {
             // Silently swallow — a failed SMS must not crash the attendance request
           }
         }
 
         // In-app rows + push for ALL of this student's linked PARENT accounts.
-        const parents = await this.tenantPrisma.query<{ id: string }>(
-          `SELECT DISTINCT u.id FROM guardians g
-           JOIN users u ON u.id = g.user_id
-           WHERE g.student_id = $1::uuid AND u.role = 'PARENT' AND u.deleted_at IS NULL`,
-          studentId,
-        );
-        if (parents.length === 0) continue;
+        const parentIds = await this.guardianService.getActiveParentUserIds([studentId]);
+        if (parentIds.length === 0) continue;
 
         const title = 'Absence Recorded';
         const body = `${studentName} was marked absent on ${payload.date}.`;
         const data = { studentId, date: payload.date, route: 'attendance' };
         const created = await this.notificationService.createNotificationsBulk(
-          parents.map((p) => p.id),
+          parentIds,
           title,
           body,
           'ATTENDANCE',

@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 export interface AssignmentPublishedEvent {
   tenantSlug: string;
@@ -39,35 +40,39 @@ export class AssignmentListener {
     private readonly notificationService: NotificationService,
     private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   @OnEvent('assignment.published')
   async handleAssignmentPublished(payload: AssignmentPublishedEvent): Promise<void> {
     try {
-      const rows = await this.tenantPrisma.query<{ id: string }>(
-        `SELECT DISTINCT u.id
+      const scoped = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT s.id
          FROM students s
-         JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
-         WHERE s.deleted_at IS NULL AND s.status = 'ACTIVE'
-           AND s.class_id = $1::uuid
-           AND ($2::uuid IS NULL OR s.section_id = $2::uuid)
-         UNION
-         SELECT DISTINCT u.id
-         FROM students s
-         JOIN guardians g ON g.student_id = s.id
-         JOIN users u ON u.id = g.user_id AND u.role = 'PARENT' AND u.deleted_at IS NULL
          WHERE s.deleted_at IS NULL AND s.status = 'ACTIVE'
            AND s.class_id = $1::uuid
            AND ($2::uuid IS NULL OR s.section_id = $2::uuid)`,
         payload.classId,
         payload.sectionId,
       );
-      if (rows.length === 0) return;
+      const studentUserRows = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT DISTINCT u.id
+         FROM students s
+         JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
+         WHERE s.deleted_at IS NULL AND s.status = 'ACTIVE'
+           AND s.class_id = $1::uuid
+           AND ($2::uuid IS NULL OR s.section_id = $2::uuid)`,
+        payload.classId,
+        payload.sectionId,
+      );
+      const parentUserIds = await this.guardianService.getActiveParentUserIds(scoped.map((s) => s.id));
+      const userIds = Array.from(new Set([...studentUserRows.map((r) => r.id), ...parentUserIds]));
+      if (userIds.length === 0) return;
 
       const title = `New assignment: ${payload.title}`;
       const body = `${payload.subjectName} — due ${payload.dueDate}`;
       const created = await this.notificationService.createNotificationsBulk(
-        rows.map((r) => r.id),
+        userIds,
         title,
         body,
         'ASSIGNMENT',
@@ -88,17 +93,15 @@ export class AssignmentListener {
   @OnEvent('submission.reviewed')
   async handleSubmissionReviewed(payload: SubmissionReviewedEvent): Promise<void> {
     try {
-      const rows = await this.tenantPrisma.query<{ id: string }>(
+      const studentUserRows = await this.tenantPrisma.query<{ id: string }>(
         `SELECT u.id FROM students s
          JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
-         WHERE s.id = $1::uuid
-         UNION
-         SELECT u.id FROM guardians g
-         JOIN users u ON u.id = g.user_id AND u.role = 'PARENT' AND u.deleted_at IS NULL
-         WHERE g.student_id = $1::uuid`,
+         WHERE s.id = $1::uuid`,
         payload.studentId,
       );
-      if (rows.length === 0) return;
+      const parentUserIds = await this.guardianService.getActiveParentUserIds([payload.studentId]);
+      const userIds = Array.from(new Set([...studentUserRows.map((r) => r.id), ...parentUserIds]));
+      if (userIds.length === 0) return;
 
       const title = `Assignment reviewed: ${payload.assignmentTitle}`;
       const body =
@@ -106,7 +109,7 @@ export class AssignmentListener {
           ? `Marks: ${payload.marks} — feedback is available.`
           : 'Feedback is available.';
       const created = await this.notificationService.createNotificationsBulk(
-        rows.map((r) => r.id),
+        userIds,
         title,
         body,
         'ASSIGNMENT',

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { GuardianService } from '../student/guardian.service';
 import type { BulkSmsDto } from './dto/sms.dto';
 
 export function normaliseNepalPhone(phone: string): string | null {
@@ -60,7 +61,10 @@ function toSmsLogResponse(row: {
 
 @Injectable()
 export class SmsService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
+  ) {}
 
   async send(
     to: string,
@@ -247,21 +251,14 @@ export class SmsService {
 
     if (dto.audience === 'ALL_PARENTS') {
       // FIX-1B: resolve one contact per student from the normalized `guardians`
-      // table — the primary-flagged guardian, else the earliest by created_at.
-      // The legacy students.guardians JSONB is deprecated and no longer read
-      // (its snake_case `is_primary` filter never matched the camelCase
-      // `isPrimary` keys, silently resolving zero recipients).
-      const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT d.phone FROM (
-           SELECT DISTINCT ON (g.student_id) g.phone
-           FROM guardians g
-           JOIN students s ON s.id = g.student_id
-           WHERE s.deleted_at IS NULL
-           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
-         ) d
-         WHERE d.phone IS NOT NULL`,
+      // table via the shared CL helper (primary-flagged, else earliest —
+      // and now filtered to ACTIVE guardian links). The legacy
+      // students.guardians JSONB is deprecated and no longer read.
+      const rows = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM students WHERE deleted_at IS NULL`,
       );
-      return rows.map((r) => r.phone);
+      const phones = await this.guardianService.getPrimaryGuardianPhones(rows.map((r) => r.id));
+      return [...phones.values()];
     }
 
     if (dto.audience === 'ALL_TEACHERS') {
@@ -273,37 +270,24 @@ export class SmsService {
 
     if (dto.audience === 'CLASS' && dto.classId) {
       // Same normalized primary-else-earliest rule as ALL_PARENTS, scoped to a class.
-      const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT d.phone FROM (
-           SELECT DISTINCT ON (g.student_id) g.phone
-           FROM guardians g
-           JOIN students s ON s.id = g.student_id
-           JOIN enrollments e ON e.student_id = s.id
-           WHERE e.class_id = $1::uuid
-             AND s.deleted_at IS NULL
-           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
-         ) d
-         WHERE d.phone IS NOT NULL`,
+      const rows = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT s.id FROM students s
+         JOIN enrollments e ON e.student_id = s.id
+         WHERE e.class_id = $1::uuid AND s.deleted_at IS NULL`,
         dto.classId,
       );
-      return rows.map((r) => r.phone);
+      const phones = await this.guardianService.getPrimaryGuardianPhones(rows.map((r) => r.id));
+      return [...phones.values()];
     }
 
     if (dto.audience === 'SECTION' && dto.sectionId) {
       // Same normalized primary-else-earliest rule as ALL_PARENTS, scoped to a section.
-      const rows = await this.tenantPrisma.query<{ phone: string }>(
-        `SELECT d.phone FROM (
-           SELECT DISTINCT ON (g.student_id) g.phone
-           FROM guardians g
-           JOIN students s ON s.id = g.student_id
-           WHERE s.section_id = $1::uuid
-             AND s.deleted_at IS NULL
-           ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
-         ) d
-         WHERE d.phone IS NOT NULL`,
+      const rows = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM students WHERE section_id = $1::uuid AND deleted_at IS NULL`,
         dto.sectionId,
       );
-      return rows.map((r) => r.phone);
+      const phones = await this.guardianService.getPrimaryGuardianPhones(rows.map((r) => r.id));
+      return [...phones.values()];
     }
 
     return [];
