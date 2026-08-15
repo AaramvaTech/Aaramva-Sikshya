@@ -1,4 +1,5 @@
 import { adToBs } from 'bs-calendar';
+import { Money } from '../../../common/money/money';
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
@@ -324,9 +325,14 @@ export function toDateField(d: Date | string): BsAdDate {
   return { ad: toAdString(d), bs: toBsString(d) };
 }
 
+/** BILL-0-style row-field → Money, consistent with finance.entity.ts's toMoney. */
+export function toMoney(v: string | number | null | undefined): Money {
+  if (v == null) return Money.zero();
+  return typeof v === 'number' ? Money.fromNumber(v) : Money.fromDb(v);
+}
+
 export function toNum(v: string | number | null | undefined): number {
-  if (v == null) return 0;
-  return typeof v === 'number' ? v : parseFloat(v);
+  return toMoney(v).toNumber();
 }
 
 function toIsoString(d: Date | string): string {

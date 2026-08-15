@@ -115,6 +115,31 @@ describe('PayrollService', () => {
       expect(result[0].payrollMonthId).toBe('month-1');
     });
 
+    it('MON-1: computes allowance/deduction totals to the cent via Money, not float reduce', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseDraftMonthRow]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseActiveStaffRow]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseSlipRow]);
+
+      await service.generatePayroll('month-1', {
+        overrides: [{
+          userId: 'user-staff-1',
+          additionalAllowances: [
+            { name: 'Transport', amount: 1250.75 },
+            { name: 'Meal', amount: 899.25 },
+          ],
+          additionalDeductions: [{ name: 'Advance', amount: 500.5 }],
+        }],
+      });
+
+      const insertCall = (tenantPrisma.query as jest.Mock).mock.calls.find(
+        ([sql]: [string]) => sql?.includes('INSERT INTO salary_slips'),
+      );
+      // params: [sql, monthId, userId, staffId, baseSalary, allowanceTotal, allowancesJson, deductionTotal, ...]
+      expect(insertCall[5]).toBe(2150); // 1250.75 + 899.25, exact to the cent
+      expect(insertCall[7]).toBe(500.5);
+    });
+
     it('is idempotent — skips staff who already have a slip', async () => {
       // Payroll month lookup
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseDraftMonthRow]);
@@ -166,6 +191,24 @@ describe('PayrollService', () => {
       await expect(
         service.adjustSlip('month-1', 'slip-1', { allowances: [] }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('MON-1: leave deduction (base_salary/30*days) rounds to the cent via Money, not float division', async () => {
+      // 29000/30 = 966.6666...repeating; *7 days = 6766.6666...repeating -> 6766.67
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseDraftMonthRow]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...baseSlipRow,
+        base_salary: '29000.00',
+      }]);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseSlipRow]);
+
+      await service.adjustSlip('month-1', 'slip-1', { unpaidLeaveDays: 7 });
+
+      const updateCall = (tenantPrisma.query as jest.Mock).mock.calls.find(
+        ([sql]: [string]) => sql?.includes('UPDATE salary_slips'),
+      );
+      // params: [sql, allowancesJson, allowanceTotal, deductionsJson, deductionTotal, unpaidLeaveDays, leaveDeduction, ...]
+      expect(updateCall[6]).toBe(6766.67);
     });
   });
 
