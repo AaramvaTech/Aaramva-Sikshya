@@ -113,15 +113,26 @@ export class DashboardService {
       const academicYearId = academicYearRows[0].id;
       const fiscalYear = getCurrentFiscalYear();
 
+      // BILLING-CUTOVER Phase 4: rewired off old Finance's `invoices` table
+      // onto Billing's bill_invoices/bill_payment_allocations. `invoiced` is
+      // net_amount (this invoice's own charge, not total_receivable, which
+      // would double-count each invoice's carried-forward previous_balance
+      // — see lib/invoice-totals.ts on the web side for the same rule).
+      // `collected` is only CLEARED payment allocations, mirroring
+      // BillInvoiceService's own paid_amount computation.
       const feeRows = await this.tenantPrisma.query<{
         invoiced: string;
         collected: string;
       }>(
         `SELECT
-           COALESCE(SUM(i.total_amount), 0) AS invoiced,
-           COALESCE(SUM(i.paid_amount), 0) AS collected
-         FROM invoices i
-         WHERE i.academic_year_id = $1::uuid AND i.deleted_at IS NULL`,
+           (SELECT COALESCE(SUM(net_amount), 0) FROM bill_invoices
+            WHERE academic_year_id = $1::uuid AND deleted_at IS NULL) AS invoiced,
+           (SELECT COALESCE(SUM(bpa.amount), 0)
+            FROM bill_payment_allocations bpa
+            JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id
+            JOIN bill_payments bp ON bp.id = bpa.bill_payment_id
+            WHERE bi.academic_year_id = $1::uuid AND bi.deleted_at IS NULL
+              AND bp.status = 'CLEARED') AS collected`,
         academicYearId,
       );
 
@@ -246,7 +257,9 @@ export class DashboardService {
        ORDER BY created_at DESC LIMIT 5`,
     );
 
-    // Recent payments
+    // Recent payments — BILLING-CUTOVER Phase 4: rewired off old Finance's
+    // `payments` table onto Billing's bill_payments (no deleted_at column;
+    // status='CLEARED' is the equivalent "really happened" filter).
     const paymentRows = await this.tenantPrisma.query<{
       id: string;
       student_first: string;
@@ -254,12 +267,12 @@ export class DashboardService {
       amount: string;
       created_at: Date | string;
     }>(
-      `SELECT p.id, s.first_name AS student_first, s.last_name AS student_last,
-              p.amount, p.created_at
-       FROM payments p
-       JOIN students s ON s.id = p.student_id
-       WHERE p.deleted_at IS NULL
-       ORDER BY p.created_at DESC LIMIT 5`,
+      `SELECT bp.id, s.first_name AS student_first, s.last_name AS student_last,
+              bp.amount, bp.created_at
+       FROM bill_payments bp
+       JOIN students s ON s.id = bp.student_id
+       WHERE bp.status = 'CLEARED'
+       ORDER BY bp.created_at DESC LIMIT 5`,
     );
 
     // Recent notices

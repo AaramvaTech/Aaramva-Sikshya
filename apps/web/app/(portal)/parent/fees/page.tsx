@@ -5,25 +5,39 @@ import { PageHeader } from '@/components/shared/page-header';
 import { QueryErrorState } from '@/components/shared/query-error-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
 import { AmountDisplay } from '@/components/finance/amount-display';
+import { FeePreviewPanel } from '@/components/finance/fee-preview-panel';
+import { BillInvoiceStatusBadge } from '@/components/finance/bill-invoice-status-badge';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/lib/hooks/use-selected-child';
-import { useStudentLedger, useStudentAssignments } from '@/lib/hooks/use-finance';
+import { useStudentBalance, useStudentBillInvoices } from '@/lib/hooks/use-bill-payment';
+import { sumInvoiceTotals } from '@/lib/invoice-totals';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
-import type { InvoiceDetail, FeeAssignment } from '@/types/api.types';
+import type { BillInvoice } from '@/types/api.types';
 
 /**
  * WEB-P Phase 5 Task 9 — parent's per-child fee ledger, view-only.
+ * BILLING-CUTOVER Phase 1 (§1 of the parent audit doc) — rewired off old
+ * Finance's `reports/student/:id` onto Billing throughout: the invoice list
+ * is `GET /finance/students/:studentId/bill/invoices` (`useStudentBillInvoices`,
+ * year-bounded, limit 100 — same bound `useStudentOutstandingInvoices`
+ * already uses for the payment counter), Balance Due is the separate,
+ * authoritative `GET /finance/students/:studentId/balance`
+ * (`useStudentBalance`, already built for UI-4). Total Invoiced/Total Paid
+ * are summed client-side from the invoice list via `sumInvoiceTotals` —
+ * NEVER Balance Due, which would double-count each invoice's carried-forward
+ * `previousBalance` if summed the same way (see that helper's docblock and
+ * its regression test). `BillInvoice.status` (POSTED/SETTLED/
+ * PARTIALLY_PAID/VOIDED) is a different enum from old Finance's
+ * `InvoiceSummary.status` (PAID/PARTIAL/UNPAID/OVERDUE/WAIVED) that the
+ * shared `<StatusBadge>` rendered — `<BillInvoiceStatusBadge>` is its own
+ * component for this rail, not a shim over the old one.
  *
- * Renders `useStudentLedger()`'s response directly: `summary`
- * (totalInvoiced/totalPaid/totalBalance) as three stat cards, then
- * `invoices[]` as a card list (invoice number, due date via <BsDate>,
- * status via the shared <StatusBadge>, totalAmount/paidAmount/balance via
- * <AmountDisplay>). Per the locked spec, this list IS the invoice detail —
- * there is no invoice-detail-by-id endpoint reachable by PARENT and this
- * file deliberately has no detail route/page/expand-per-invoice-items UI.
+ * Per the locked spec, this list stands in for invoice detail —
+ * `GET /finance/bill/invoices/:id` IS PARENT-reachable and object-scoped
+ * (live-confirmed, BILLING-CUTOVER Phase 1), but no per-invoice
+ * detail/expand UI was speced for v1, so none is built here.
  *
  * HARD EXCLUSION (this phase's Global Constraints, applies to this screen
  * specifically because it's the one place a "Pay Now" button would
@@ -36,11 +50,15 @@ import type { InvoiceDetail, FeeAssignment } from '@/types/api.types';
  * scope for v1. See the finance-security audit doc referenced in this
  * task's commit message.
  *
- * Secondary "Fee structure" section (via `useStudentAssignments`) is called
- * out as optional in the brief; included here as brief, clearly-labeled
- * read-only context (what's assigned, at what amount) so it reads as a
- * distinct concept from the invoice/payment history above it, not a
- * duplicate of it.
+ * Secondary "Fee structure" section reuses the admin's `FeePreviewPanel`
+ * as-is (BILLING-CUTOVER Phase 1 — same reuse pattern as WEB-P Phase 4's
+ * parent `ReportCardView`). It was originally built against old Finance's
+ * `GET /finance/students/:studentId/assignments` via `useStudentAssignments`;
+ * that endpoint has no Billing equivalent reachable by PARENT
+ * (`GET .../fee-structure` is ACCOUNTANT_AND_ABOVE-only), but Billing's
+ * `GET .../fee-preview` already is PARENT-allowed and object-scoped, and
+ * returns a strict superset (structure name + per-head gross/override/
+ * concession/net breakdown) of what the old section showed.
  *
  * Guard shape: identical to every other per-child screen in this phase —
  * children loading -> children error -> empty roster -> the one-tick
@@ -76,13 +94,15 @@ function StatCard({
   );
 }
 
-function InvoiceCard({ invoice: inv }: { invoice: InvoiceDetail }) {
+function InvoiceCard({ invoice: inv }: { invoice: BillInvoice }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-sm text-gray-600 dark:text-gray-300">{inv.invoiceNumber}</span>
-          <StatusBadge status={inv.status} />
+          <span className="font-mono text-sm text-gray-600 dark:text-gray-300">
+            {inv.invoiceNumber ?? '—'}
+          </span>
+          <BillInvoiceStatusBadge status={inv.status} />
         </div>
         <span className="text-xs text-gray-400 dark:text-gray-500">
           Due <BsDate date={inv.dueDate} />
@@ -91,7 +111,13 @@ function InvoiceCard({ invoice: inv }: { invoice: InvoiceDetail }) {
       <div className="mt-3 grid grid-cols-3 gap-3">
         <div>
           <p className="text-[10px] uppercase text-gray-400 dark:text-gray-500">Total</p>
-          <AmountDisplay amount={inv.totalAmount} className="text-sm font-semibold text-gray-800 dark:text-white" />
+          {/* totalReceivable, not netAmount — the full amount this invoice carries
+              (its own charge plus any previousBalance carry-forward), matching
+              what "Total" meant on the old rail. */}
+          <AmountDisplay
+            amount={inv.totalReceivable}
+            className="text-sm font-semibold text-gray-800 dark:text-white"
+          />
         </div>
         <div>
           <p className="text-[10px] uppercase text-gray-400 dark:text-gray-500">Paid</p>
@@ -112,74 +138,6 @@ function InvoiceCard({ invoice: inv }: { invoice: InvoiceDetail }) {
   );
 }
 
-// ─── Optional secondary section: fee STRUCTURE assignment (not homework
-// assignments — see module docblock). Read-only, own query/error/empty
-// states, distinct from the invoice list above. ─────────────────────────────
-export function FeeStructureSection({
-  studentId,
-  academicYearId,
-}: {
-  studentId: string;
-  academicYearId: string;
-}) {
-  const {
-    data: assignments,
-    isLoading,
-    isError,
-    refetch,
-  } = useStudentAssignments(studentId, academicYearId || undefined);
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-      <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-white">Fee structure</h3>
-      <p className="mb-4 text-theme-xs text-gray-500 dark:text-gray-400">
-        What&apos;s assigned to this child and at what amount — separate from the billing history above
-      </p>
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      ) : isError ? (
-        <QueryErrorState onRetry={() => refetch()} message="Couldn't load the fee structure." />
-      ) : !assignments || assignments.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-          No fee categories assigned yet.
-        </p>
-      ) : (
-        <div className="divide-y divide-gray-100 dark:divide-gray-800">
-          {assignments.map((a: FeeAssignment) => (
-            <div key={a.feeStructureItemId} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm text-gray-700 dark:text-gray-200">{a.feeCategoryName}</p>
-                {(a.isWaived || a.discountPercent > 0) && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {a.isWaived ? 'Waived' : `${a.discountPercent}% discount`}
-                    {a.discountReason ? ` · ${a.discountReason}` : ''}
-                  </p>
-                )}
-              </div>
-              <div className="flex-shrink-0 text-right">
-                {(a.isWaived || a.customAmount !== null) && (
-                  <AmountDisplay
-                    amount={a.originalAmount}
-                    className="mr-2 text-xs text-gray-400 line-through dark:text-gray-500"
-                  />
-                )}
-                <AmountDisplay
-                  amount={a.effectiveAmount}
-                  className="text-sm font-semibold text-gray-800 dark:text-white"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ParentFeesPage() {
   const {
     children,
@@ -192,16 +150,22 @@ export default function ParentFeesPage() {
   const { data: currentYear, isLoading: yearLoading } = useCurrentAcademicYear();
   const academicYearId = currentYear?.id ?? '';
 
-  // Guard: never let this fire with an empty studentId — useStudentLedger is
-  // already `enabled: !!studentId && !!academicYearId`-gated at the hook
-  // level (see use-finance.ts), same discipline as every other per-child
+  // Guard: never let these fire with an empty studentId/academicYearId —
+  // both hooks are already `enabled: !!studentId && ...`-gated at the hook
+  // level (use-bill-payment.ts), same discipline as every other per-child
   // screen in this phase.
   const {
-    data: ledger,
-    isLoading: ledgerLoading,
-    isError: ledgerError,
-    refetch: refetchLedger,
-  } = useStudentLedger(selectedChildId ?? '', academicYearId);
+    data: invoicesData,
+    isLoading: invoicesLoading,
+    isError: invoicesError,
+    refetch: refetchInvoices,
+  } = useStudentBillInvoices(selectedChildId, academicYearId || null);
+  const {
+    data: balance,
+    isLoading: balanceLoading,
+    isError: balanceError,
+    refetch: refetchBalance,
+  } = useStudentBalance(selectedChildId);
 
   const header = (
     <PageHeader
@@ -267,40 +231,57 @@ export default function ParentFeesPage() {
     );
   }
 
-  const showSummarySkeleton = yearLoading || ledgerLoading;
-  const invoices = ledger?.invoices ?? [];
+  const showSummarySkeleton = yearLoading || invoicesLoading || balanceLoading;
+  const invoices = invoicesData ?? [];
+  const hasError = invoicesError || balanceError;
+
+  // Total Invoiced/Total Paid are summed client-side from the invoice list
+  // (sumInvoiceTotals — never totalReceivable/balance, see its docblock).
+  // Balance Due comes from the separate, authoritative /balance endpoint,
+  // NOT summed from invoices, which would double-count each invoice's
+  // carried-forward previousBalance.
+  const { totalInvoiced, totalPaid } = sumInvoiceTotals(invoices);
+  const isAdvance = balance?.sign === 'ADVANCE';
+  const balanceLabel = isAdvance ? 'Advance Credit' : 'Balance Due';
+  const balanceValue = balance ? Math.abs(balance.balance) : undefined;
 
   return (
     <div className="space-y-5">
       {header}
 
-      {ledgerError ? (
-        <QueryErrorState onRetry={() => refetchLedger()} message="Couldn't load the fee ledger." />
+      {hasError ? (
+        <QueryErrorState
+          onRetry={() => {
+            refetchInvoices();
+            refetchBalance();
+          }}
+          message="Couldn't load the fee ledger."
+        />
       ) : (
         <>
-          {/* Summary stat cards — sourced directly from useStudentLedger()'s
-              `summary`, never recomputed client-side. */}
+          {/* Summary stat cards — Total Invoiced/Total Paid summed from the
+              invoice list, Balance Due read straight from /balance. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               label="Total Invoiced"
-              value={ledger?.summary.totalInvoiced}
+              value={showSummarySkeleton ? undefined : totalInvoiced}
               isLoading={showSummarySkeleton}
               icon={Wallet}
               valueClassName="text-gray-700 dark:text-gray-200"
             />
             <StatCard
               label="Total Paid"
-              value={ledger?.summary.totalPaid}
+              value={showSummarySkeleton ? undefined : totalPaid}
               isLoading={showSummarySkeleton}
               icon={CheckCircle2}
               valueClassName="text-success-700 dark:text-success-400"
             />
             <StatCard
-              label="Balance Due"
-              value={ledger?.summary.totalBalance}
+              label={balanceLabel}
+              value={balanceValue}
               isLoading={showSummarySkeleton}
               icon={AlertTriangle}
-              valueClassName="text-error-700 dark:text-error-400"
+              valueClassName={isAdvance ? 'text-success-700 dark:text-success-400' : 'text-error-700 dark:text-error-400'}
             />
           </div>
 
@@ -330,7 +311,7 @@ export default function ParentFeesPage() {
         </>
       )}
 
-      <FeeStructureSection studentId={selectedChildId} academicYearId={academicYearId} />
+      <FeePreviewPanel studentId={selectedChildId} academicYearId={academicYearId} />
     </div>
   );
 }

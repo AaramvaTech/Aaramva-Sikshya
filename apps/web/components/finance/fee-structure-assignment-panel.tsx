@@ -34,7 +34,10 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
   const { data: assignments, isLoading } = useStudentFeeStructureAssignments(studentId, academicYearId);
   const { data: structuresResponse } = useFeeStructures({ academicYearId });
   const structures = structuresResponse?.data ?? [];
-  const structureName = (id: string) => structures.find((s) => s.id === id)?.name ?? id;
+  // BILLING-CUTOVER Phase 0: an assignment can reference a since-deleted
+  // structure (the list here is deleted_at-filtered) — fall back to a
+  // readable label, not the raw UUID (BILL-STUDENT-PROFILE-BUG).
+  const structureName = (id: string) => structures.find((s) => s.id === id)?.name ?? 'Fee structure (deleted)';
 
   const assign = useAssignFeeStructure();
   const [showForm, setShowForm] = useState(false);
