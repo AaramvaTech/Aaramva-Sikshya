@@ -372,6 +372,18 @@ describe('StudentService', () => {
 
       await expect(service.findOne('unknown')).rejects.toThrow(NotFoundException);
     });
+
+    // CL Phase 4 — fetchGuardians (the student profile/list guardian display
+    // source) must exclude removed guardian-student links.
+    it('fetchGuardians excludes soft-deleted guardians (deleted_at IS NULL)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockStudentRow]);
+
+      await service.findOne('sid-1');
+
+      const guardiansSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
+      expect(guardiansSql).toMatch(/FROM guardians/);
+      expect(guardiansSql).toMatch(/deleted_at IS NULL/);
+    });
   });
 
   describe('updateStudent()', () => {
