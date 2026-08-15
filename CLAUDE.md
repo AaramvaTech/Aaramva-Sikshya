@@ -110,6 +110,8 @@ Subdomain routing: `schoolname.yourdomain.com` → tenant slug = `schoolname`
 
 Found live 2026-07-29 (BILL-5 Checkpoint A): used twice as an ad-hoc fallback alongside `Monitor` for background waits (waiting on a dev-server recompile, then a bill-run poller drain). The second call replayed its saved prompt into the conversation as a new turn *after* the real `Monitor` notification had already resolved the wait and the checkpoint had moved on — indistinguishable from a genuine user message, and exactly the kind of unrequested, timer-driven resumption this rule exists to prevent.
 
+Recurred 2026-08-15 (CAL-1 Phase 1): called twice while waiting on two backgrounded research forks (Nepal govt-holiday source investigation) even though a fork's completion already delivers an automatic task-notification — there was nothing the wakeup added. The stray wakeup fired *after* the forks had already completed, the findings had been used to write and commit the migration, and the live proof was reported — it replayed its saved prompt as a new turn asking to redo already-finished work, and it carried the internal fork agentId in its text (a value never meant to reach the user), which is what made it identifiable as the artifact rather than a real request. Forks and other harness-tracked background work always notify on their own; there is still no case in this project for scheduling a self-wakeup on top of that.
+
 ---
 
 ## Module build order (follow this sequence)
