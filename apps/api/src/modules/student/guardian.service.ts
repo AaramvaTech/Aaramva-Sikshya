@@ -446,6 +446,95 @@ export class GuardianService {
     };
   }
 
+  // ── CL Phase 0 — audience/fan-out helpers ────────────────────────────────
+  // Replaces ~12 copy-pasted call sites (5 notification listeners,
+  // sms.service.ts ×3, submission.service.ts) that each independently
+  // resolved "this student's guardians" without filtering deleted_at.
+  // Return shapes vary because callers genuinely need different things
+  // (a phone, a user id, a full student row) — see
+  // docs/api-contracts/CL-guardian-removal-spec.md Phase 0.
+
+  /**
+   * ALL active (non-deleted) linked PARENT user ids for the given students —
+   * every guardian gets notified, not just one representative. Used by the
+   * push/in-app fan-out listeners (attendance/assignment/notice/examination).
+   */
+  async getActiveParentUserIds(studentIds: string[]): Promise<string[]> {
+    if (studentIds.length === 0) return [];
+    const rows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT DISTINCT u.id
+       FROM guardians g
+       JOIN users u ON u.id = g.user_id AND u.role = 'PARENT' AND u.deleted_at IS NULL
+       WHERE g.student_id = ANY($1::uuid[]) AND g.deleted_at IS NULL`,
+      studentIds,
+    );
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Primary-preferred (else earliest) active guardian's phone, one per given
+   * student — the SMS broadcast rule (ALL_PARENTS/class/section, and the
+   * single-student absence/overdue alerts). Only students with a phone on
+   * file appear in the returned map.
+   */
+  async getPrimaryGuardianPhones(studentIds: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (studentIds.length === 0) return result;
+    const rows = await this.tenantPrisma.query<{ student_id: string; phone: string }>(
+      `SELECT d.student_id, d.phone FROM (
+         SELECT DISTINCT ON (g.student_id) g.student_id, g.phone
+         FROM guardians g
+         WHERE g.student_id = ANY($1::uuid[]) AND g.deleted_at IS NULL AND g.phone IS NOT NULL
+         ORDER BY g.student_id, g.is_primary DESC, g.created_at ASC
+       ) d`,
+      studentIds,
+    );
+    for (const r of rows) result.set(r.student_id, r.phone);
+    return result;
+  }
+
+  /**
+   * Primary-preferred (else earliest) active guardian's linked PARENT user id
+   * for ONE student — used where exactly one representative contact is
+   * wanted (FinanceListener's payment/overdue push+in-app), not the whole
+   * family (contrast getActiveParentUserIds).
+   */
+  async getPrimaryGuardianUserId(studentId: string): Promise<string | null> {
+    const rows = await this.tenantPrisma.query<{ id: string }>(
+      `SELECT u.id FROM guardians g
+       JOIN users u ON u.id = g.user_id
+       WHERE g.student_id = $1::uuid AND g.deleted_at IS NULL
+         AND u.role = 'PARENT' AND u.deleted_at IS NULL
+       ORDER BY g.is_primary DESC, g.created_at ASC
+       LIMIT 1`,
+      studentId,
+    );
+    return rows[0]?.id ?? null;
+  }
+
+  /**
+   * This parent's actively-linked children, enriched with class/section for
+   * audience scoping (EDU-1 assignment listing — which of my children are
+   * enrolled in the class an assignment was posted to).
+   */
+  async getActiveChildStudents(userId: string): Promise<
+    Array<{ id: string; classId: string | null; sectionId: string | null; firstName: string; lastName: string }>
+  > {
+    const rows = await this.tenantPrisma.query<{
+      id: string; class_id: string | null; section_id: string | null; first_name: string; last_name: string;
+    }>(
+      `SELECT DISTINCT s.id, s.class_id, s.section_id, s.first_name, s.last_name
+       FROM students s
+       JOIN guardians g ON g.student_id = s.id AND g.deleted_at IS NULL
+       WHERE g.user_id = $1::uuid AND s.deleted_at IS NULL AND s.status = 'ACTIVE'`,
+      userId,
+    );
+    return rows.map((r) => ({
+      id: r.id, classId: r.class_id, sectionId: r.section_id,
+      firstName: r.first_name, lastName: r.last_name,
+    }));
+  }
+
   async getMyChildren(userId: string) {
     const rows = await this.tenantPrisma.query<
       StudentRow & { relation: string; section_id: string | null; academic_year_id: string | null; academic_year_name: string | null }

@@ -311,6 +311,75 @@ describe('GuardianService', () => {
     });
   });
 
+  // ── CL Phase 0 — audience/fan-out helpers ─────────────────────────────────
+
+  describe('getActiveParentUserIds', () => {
+    it('returns empty array without querying when given no students', async () => {
+      const result = await service.getActiveParentUserIds([]);
+      expect(result).toEqual([]);
+      expect(mockTenantPrisma.query).not.toHaveBeenCalled();
+    });
+
+    it('returns distinct active PARENT user ids and filters deleted_at IS NULL', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([{ id: 'parent-1' }, { id: 'parent-2' }]);
+      const result = await service.getActiveParentUserIds(['stu-1', 'stu-2']);
+      expect(result).toEqual(['parent-1', 'parent-2']);
+      const [sql, ids] = mockTenantPrisma.query.mock.calls[0];
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+      expect(ids).toEqual(['stu-1', 'stu-2']);
+    });
+  });
+
+  describe('getPrimaryGuardianPhones', () => {
+    it('returns empty map without querying when given no students', async () => {
+      const result = await service.getPrimaryGuardianPhones([]);
+      expect(result.size).toBe(0);
+      expect(mockTenantPrisma.query).not.toHaveBeenCalled();
+    });
+
+    it('maps each student to its primary-preferred phone and filters deleted_at IS NULL', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([
+        { student_id: 'stu-1', phone: '9800000001' },
+        { student_id: 'stu-2', phone: '9800000002' },
+      ]);
+      const result = await service.getPrimaryGuardianPhones(['stu-1', 'stu-2']);
+      expect(result.get('stu-1')).toBe('9800000001');
+      expect(result.get('stu-2')).toBe('9800000002');
+      const sql = mockTenantPrisma.query.mock.calls[0][0] as string;
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+    });
+  });
+
+  describe('getPrimaryGuardianUserId', () => {
+    it('returns the primary-preferred active guardian user id', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([{ id: 'parent-1' }]);
+      const result = await service.getPrimaryGuardianUserId('stu-1');
+      expect(result).toBe('parent-1');
+      const sql = mockTenantPrisma.query.mock.calls[0][0] as string;
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+    });
+
+    it('returns null when the student has no active linked guardian', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      const result = await service.getPrimaryGuardianUserId('stu-1');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getActiveChildStudents', () => {
+    it('returns the parent’s actively-linked children with class/section, filtering deleted_at IS NULL', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([
+        { id: 'stu-1', class_id: 'class-1', section_id: 'section-1', first_name: 'Aarav', last_name: 'Shrestha' },
+      ]);
+      const result = await service.getActiveChildStudents('parent-1');
+      expect(result).toEqual([
+        { id: 'stu-1', classId: 'class-1', sectionId: 'section-1', firstName: 'Aarav', lastName: 'Shrestha' },
+      ]);
+      const sql = mockTenantPrisma.query.mock.calls[0][0] as string;
+      expect(sql).toMatch(/g\.deleted_at IS NULL/);
+    });
+  });
+
   // ── insertGuardiansTx (MIG-2 normalized write path) ───────────────────────
 
   describe('insertGuardiansTx', () => {
