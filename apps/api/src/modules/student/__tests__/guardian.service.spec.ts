@@ -311,6 +311,34 @@ describe('GuardianService', () => {
     });
   });
 
+  // ── CL Phase 1 — removeGuardian (DELETE /students/:id/guardians/:id) ──────
+
+  describe('removeGuardian', () => {
+    it('soft-deletes the guardian-student link and returns the removal', async () => {
+      const deletedAt = new Date('2026-08-15T12:00:00Z');
+      mockTenantPrisma.query.mockResolvedValueOnce([{ id: 'guardian-1', deleted_at: deletedAt }]);
+
+      const result = await service.removeGuardian('student-1', 'guardian-1');
+
+      expect(result).toEqual({ id: 'guardian-1', studentId: 'student-1', removedAt: deletedAt.toISOString() });
+      const [sql, guardianId, studentId] = mockTenantPrisma.query.mock.calls[0];
+      expect(sql).toMatch(/SET deleted_at = NOW\(\)/);
+      expect(sql).toMatch(/AND deleted_at IS NULL/);
+      expect(guardianId).toBe('guardian-1');
+      expect(studentId).toBe('student-1');
+    });
+
+    it('throws NotFoundException when the guardian does not exist or is already removed', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      await expect(service.removeGuardian('student-1', 'guardian-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the guardian belongs to a different student', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]); // WHERE student_id=$2 excludes it
+      await expect(service.removeGuardian('other-student', 'guardian-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ── CL Phase 0 — audience/fan-out helpers ─────────────────────────────────
 
   describe('getActiveParentUserIds', () => {

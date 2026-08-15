@@ -109,6 +109,15 @@ export function useCreateGuardianAccount(studentId: string) {
   });
 }
 
+export function useRemoveGuardian(studentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (guardianId: string) =>
+      studentsApi.removeGuardian(studentId, guardianId).then((r) => r.data.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['student', studentId] }),
+  });
+}
+
 export function useResendGuardianAccount(studentId: string) {
   return useMutation({
     mutationFn: (guardianId: string) =>

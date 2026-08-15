@@ -187,6 +187,17 @@ export class StudentController {
     return this.guardianService.provisionGuardian(studentId, dto);
   }
 
+  // CL Phase 1 — severs this one guardian-student link (soft delete). Does not
+  // touch the guardian's login; see GuardianService.removeGuardian.
+  @Delete(':studentId/guardians/:guardianId')
+  @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
+  removeGuardian(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('guardianId', ParseUUIDPipe) guardianId: string,
+  ) {
+    return this.guardianService.removeGuardian(studentId, guardianId);
+  }
+
   @Post(':studentId/guardians/:guardianId/account')
   @Roles(Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR)
   createGuardianAccount(

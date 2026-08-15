@@ -446,6 +446,39 @@ export class GuardianService {
     };
   }
 
+  /**
+   * CL Phase 1 — DELETE /students/:studentId/guardians/:guardianId. Soft-deletes
+   * the guardian-student LINK (deleted_at), matching this codebase's
+   * soft-delete-only convention — never a hard delete, never touches the
+   * guardian's `users` row. Scoped to one link: a guardian tied to several
+   * students (siblings) keeps their other links untouched.
+   *
+   * Locked decision (CL-guardian-removal-spec.md): removing a guardian's
+   * last/only linked student does NOT deactivate their login — it's left
+   * intact but empty. That needs no extra code here; it falls out of this
+   * same code path once every one of their links has deleted_at set.
+   *
+   * Atomic conditional UPDATE (same idiom as BILL-6's reject/decide guards):
+   * a guardian already removed, or one that never belonged to this student,
+   * both surface as the same 404 — no double-decide race.
+   */
+  async removeGuardian(
+    studentId: string,
+    guardianId: string,
+  ): Promise<{ id: string; studentId: string; removedAt: string }> {
+    const rows = await this.tenantPrisma.query<{ id: string; deleted_at: Date }>(
+      `UPDATE guardians SET deleted_at = NOW(), updated_at = NOW()
+       WHERE id = $1::uuid AND student_id = $2::uuid AND deleted_at IS NULL
+       RETURNING id, deleted_at`,
+      guardianId,
+      studentId,
+    );
+    if (!rows[0]) {
+      throw new NotFoundException('Guardian not found');
+    }
+    return { id: rows[0].id, studentId, removedAt: rows[0].deleted_at.toISOString() };
+  }
+
   // ── CL Phase 0 — audience/fan-out helpers ────────────────────────────────
   // Replaces ~12 copy-pasted call sites (5 notification listeners,
   // sms.service.ts ×3, submission.service.ts) that each independently

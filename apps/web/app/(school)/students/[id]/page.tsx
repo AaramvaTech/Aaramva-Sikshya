@@ -13,12 +13,14 @@ import {
   Mail,
   Pencil,
   Phone,
+  Trash2,
   TrendingUp,
   User,
   Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStudent, useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { useStudent, useCurrentAcademicYear, useRemoveGuardian } from '@/lib/hooks/use-students';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
 import { useStudentBalance, useStudentBillInvoices } from '@/lib/hooks/use-bill-payment';
 import { sumInvoiceTotals } from '@/lib/invoice-totals';
@@ -216,6 +218,7 @@ export default function StudentProfilePage() {
 
   const { data: student, isLoading } = useStudent(id);
   const { data: currentYear } = useCurrentAcademicYear();
+  const removeGuardian = useRemoveGuardian(id);
 
   const role = useAuthStore((s) => s.user?.role);
   const canSeeBilling = canSeeBillingTab(role);
@@ -532,14 +535,40 @@ export default function StudentProfilePage() {
                               {g.relation.toLowerCase()}
                             </p>
                           </div>
-                          {g.isPrimary && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border-brand-500/30 bg-brand-50 text-brand-600 shrink-0"
-                            >
-                              Primary
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {g.isPrimary && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs border-brand-500/30 bg-brand-50 text-brand-600"
+                              >
+                                Primary
+                              </Badge>
+                            )}
+                            <ConfirmDialog
+                              title="Remove guardian"
+                              description={`This removes ${g.firstName} ${g.lastName ?? ''} as a guardian of ${student.fullName}. If they have a parent-portal login, it stays active but loses access to this student. This does not affect their other children, if any.`}
+                              confirmLabel="Remove"
+                              variant="destructive"
+                              onConfirm={async () => {
+                                try {
+                                  await removeGuardian.mutateAsync(g.id);
+                                  toast.success('Guardian removed');
+                                } catch {
+                                  toast.error('Failed to remove guardian');
+                                }
+                              }}
+                              trigger={
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-gray-400 hover:text-error-500"
+                                  title="Remove guardian"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              }
+                            />
+                          </div>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                           <span className="flex items-center gap-1">
