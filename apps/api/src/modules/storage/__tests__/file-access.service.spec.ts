@@ -9,6 +9,7 @@ import { StorageService } from '../storage.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 import type { AuthUser } from '../../auth/auth.types';
 
 const UUID_PART = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -25,6 +26,7 @@ describe('FileAccessService (presigned-read scoping)', () => {
   let service: FileAccessService;
   const queryMock = jest.fn();
   const presignReadMock = jest.fn();
+  const ownsStudentMock = jest.fn();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -39,6 +41,7 @@ describe('FileAccessService (presigned-read scoping)', () => {
           useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo' }) },
         },
         { provide: TenantPrismaService, useValue: { query: queryMock } },
+        { provide: GuardianScopeService, useValue: { ownsStudent: ownsStudentMock } },
       ],
     }).compile();
 
@@ -95,16 +98,14 @@ describe('FileAccessService (presigned-read scoping)', () => {
     });
 
     it('allows a linked parent, forbids an unlinked parent (IDOR probe)', async () => {
-      queryMock
-        .mockResolvedValueOnce([studentRow]) // students lookup
-        .mockResolvedValueOnce([{ ok: 1 }]); // guardians link exists
+      queryMock.mockResolvedValueOnce([studentRow]); // students lookup
+      ownsStudentMock.mockResolvedValueOnce(true);
       await expect(
         service.presignRead(PHOTO_KEY, user(Role.PARENT, 'parent-a')),
       ).resolves.toMatchObject({ url: expect.any(String) });
 
-      queryMock
-        .mockResolvedValueOnce([studentRow]) // students lookup
-        .mockResolvedValueOnce([]); // no guardians link
+      queryMock.mockResolvedValueOnce([studentRow]); // students lookup
+      ownsStudentMock.mockResolvedValueOnce(false);
       await expect(
         service.presignRead(PHOTO_KEY, user(Role.PARENT, 'parent-b')),
       ).rejects.toThrow(ForbiddenException);

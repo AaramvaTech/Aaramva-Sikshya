@@ -20,8 +20,11 @@ import { errorBody } from '../common/errors/error-codes';
 export class GuardianScopeService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  /** Throws 403 unless callerId has an ACTIVE guardian link to studentId. */
-  async assertOwnsStudent(callerId: string, studentId: string): Promise<void> {
+  /** True iff callerId has an ACTIVE guardian link to studentId. Non-throwing
+   *  variant for callers that branch across several roles before deciding
+   *  whether to throw (e.g. FileAccessService, which also lets staff/self
+   *  through) — assertOwnsStudent below is a thin throw-on-false wrapper. */
+  async ownsStudent(callerId: string, studentId: string): Promise<boolean> {
     const rows = await this.tenantPrisma.query<{ ok: number }>(
       `SELECT 1 AS ok FROM guardians
        WHERE user_id = $1::uuid AND student_id = $2::uuid AND deleted_at IS NULL
@@ -29,7 +32,12 @@ export class GuardianScopeService {
       callerId,
       studentId,
     );
-    if (!rows[0]) {
+    return !!rows[0];
+  }
+
+  /** Throws 403 unless callerId has an ACTIVE guardian link to studentId. */
+  async assertOwnsStudent(callerId: string, studentId: string): Promise<void> {
+    if (!(await this.ownsStudent(callerId, studentId))) {
       throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
     }
   }

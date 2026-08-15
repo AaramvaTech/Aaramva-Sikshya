@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
@@ -8,6 +8,7 @@ import { LedgerEntryRow, toLedgerEntryResponse, LedgerEntryResponseDto } from '.
 import { LedgerAdjustmentDto, LedgerQueryDto } from './dto/ledger.dto';
 import { Role } from '../common/enums/role.enum';
 import { resolveRange } from '../reports/report.util';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 /** Distinct from tenant-migration's advisory-lock namespace (4271) — advisory
  * locks are instance-global, not schema-scoped, so a separate constant keeps
@@ -36,7 +37,10 @@ interface PostEntryParams {
  */
 @Injectable()
 export class LedgerService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianScope: GuardianScopeService,
+  ) {}
 
   /**
    * Public so other services (e.g. BillRunPostRunnerService) can compose a
@@ -244,7 +248,7 @@ export class LedgerService {
     callerRole?: Role,
   ): Promise<{ data: LedgerEntryResponseDto[]; meta: { page: number; limit: number; total: number } }> {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
 
     const page = query.page ?? 1;
@@ -275,7 +279,7 @@ export class LedgerService {
     callerRole?: Role,
   ): Promise<{ studentId: string; balance: number; sign: 'OWES' | 'ADVANCE' | 'ZERO' }> {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
 
     const rows = await this.tenantPrisma.query<{ sum: string }>(
@@ -320,7 +324,7 @@ export class LedgerService {
     entries: LedgerEntryResponseDto[];
   }> {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
 
     const studentRows = await this.tenantPrisma.query<{
@@ -430,15 +434,5 @@ export class LedgerService {
     }
 
     return { checked: students.length, drifted };
-  }
-
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 }

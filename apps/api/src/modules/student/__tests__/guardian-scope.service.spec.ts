@@ -20,6 +20,18 @@ describe('GuardianScopeService', () => {
     jest.clearAllMocks();
   });
 
+  describe('ownsStudent', () => {
+    it('returns true when an active guardian link exists', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([{ ok: 1 }]);
+      await expect(service.ownsStudent('parent-1', 'student-1')).resolves.toBe(true);
+    });
+
+    it('returns false when no link exists', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      await expect(service.ownsStudent('parent-1', 'student-1')).resolves.toBe(false);
+    });
+  });
+
   describe('assertOwnsStudent', () => {
     it('resolves when an active guardian link exists', async () => {
       mockTenantPrisma.query.mockResolvedValueOnce([{ ok: 1 }]);

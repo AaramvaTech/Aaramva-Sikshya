@@ -11,6 +11,7 @@ import { LedgerService } from '../ledger.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 import type { AuthUser } from '../../auth/auth.types';
 
 const mockTx = {
@@ -118,6 +119,7 @@ async function makeService(env: Record<string, string>) {
   const ledgerService = {
     withStudentLock: jest.fn().mockImplementation((_studentId: string, fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
   };
+  const guardianScope = { assertOwnsStudent: jest.fn() };
   const module = await Test.createTestingModule({
     providers: [
       EsewaService,
@@ -132,6 +134,7 @@ async function makeService(env: Record<string, string>) {
       },
       { provide: BillPaymentService, useValue: billPaymentService },
       { provide: LedgerService, useValue: ledgerService },
+      { provide: GuardianScopeService, useValue: guardianScope },
       {
         provide: ConfigService,
         useValue: { get: jest.fn((key: string) => env[key]) },
@@ -144,6 +147,7 @@ async function makeService(env: Record<string, string>) {
     tenantPrisma,
     billPaymentService,
     ledgerService,
+    guardianScope,
   };
 }
 
@@ -229,10 +233,9 @@ describe('EsewaService', () => {
     });
 
     it('PARENT can only initiate for own children (guardians linkage)', async () => {
-      const { service, tenantPrisma } = await makeService(ENABLED_ENV);
-      tenantPrisma.query
-        .mockResolvedValueOnce([{ ...baseBillInvoiceRow }]) // bill_invoice
-        .mockResolvedValueOnce([{ student_id: 'someone-elses-child' }]); // guardians
+      const { service, tenantPrisma, guardianScope } = await makeService(ENABLED_ENV);
+      tenantPrisma.query.mockResolvedValueOnce([{ ...baseBillInvoiceRow }]); // bill_invoice
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(
         service.initiate({ invoiceId: 'inv-1' }, parentUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
@@ -240,10 +243,9 @@ describe('EsewaService', () => {
     });
 
     it('PARENT with matching guardian row initiates fine', async () => {
-      const { service, tenantPrisma } = await makeService(ENABLED_ENV);
-      tenantPrisma.query
-        .mockResolvedValueOnce([{ ...baseBillInvoiceRow }])
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]);
+      const { service, tenantPrisma, guardianScope } = await makeService(ENABLED_ENV);
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
+      tenantPrisma.query.mockResolvedValueOnce([{ ...baseBillInvoiceRow }]);
       const result = await service.initiate({ invoiceId: 'inv-1' }, parentUser);
       expect(result.transactionUuid).toMatch(/^[0-9a-f-]{36}$/);
     });

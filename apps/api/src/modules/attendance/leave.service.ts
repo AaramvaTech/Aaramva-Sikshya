@@ -3,6 +3,7 @@ import { errorBody } from '../common/errors/error-codes';
 import { Role } from '../common/enums/role.enum';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { SmsService } from '../communication/sms.service';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 import {
   LeaveApplicationRow,
   LeaveApplicationResponseDto,
@@ -16,6 +17,7 @@ export class LeaveService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly sms: SmsService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async applyLeave(
@@ -37,14 +39,7 @@ export class LeaveService {
     } else if (callerRole === Role.PARENT) {
       // PARENT: dto.studentId is required; verify the student is one of the caller's children
       if (!dto.studentId) throw new BadRequestException('studentId is required');
-      const children = await this.tenantPrisma.query<{ student_id: string }>(
-        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-        appliedById,
-      );
-      const childIds = new Set(children.map((c) => c.student_id));
-      if (!childIds.has(dto.studentId)) {
-        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
-      }
+      await this.guardianScope.assertOwnsStudent(appliedById, dto.studentId);
       studentId = dto.studentId;
     } else {
       // Staff roles: studentId is required in the body

@@ -6,6 +6,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
 import { FinanceSettingsService } from '../finance-settings.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 import { Money } from '../../../common/money/money';
 import { BillPaymentAllocationMode, BillPaymentMethod, CreateBillPaymentDto } from '../dto/bill-payment.dto';
 
@@ -48,6 +49,7 @@ describe('BillPaymentService', () => {
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let ledgerService: jest.Mocked<LedgerService>;
   let financeSettingsService: jest.Mocked<FinanceSettingsService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -64,6 +66,7 @@ describe('BillPaymentService', () => {
           },
         },
         { provide: FinanceSettingsService, useValue: { getInvoiceNumberingReset: jest.fn() } },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
@@ -71,6 +74,7 @@ describe('BillPaymentService', () => {
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     ledgerService = module.get(LedgerService) as jest.Mocked<LedgerService>;
     financeSettingsService = module.get(FinanceSettingsService) as jest.Mocked<FinanceSettingsService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
     financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: false });
   });
@@ -446,9 +450,8 @@ describe('BillPaymentService', () => {
 
   describe('findOne — PARENT object-scoping', () => {
     it('403s a PARENT who does not own the payment student', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([mockPaymentRow])
-        .mockResolvedValueOnce([]); // guardians lookup: no match
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockPaymentRow]);
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(service.findOne('payment-1', 'parent-1', Role.PARENT)).rejects.toThrow(ForbiddenException);
     });
   });

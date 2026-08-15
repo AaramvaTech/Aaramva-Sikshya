@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -13,6 +12,7 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { BillPaymentService } from '../bill-payment.service';
 import { LedgerService } from '../ledger.service';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 import { BillPaymentAllocationMode, BillPaymentMethod } from '../dto/bill-payment.dto';
 import { InitiateEsewaPaymentDto } from '../dto/esewa.dto';
 import { toMoney } from '../entities/finance.entity';
@@ -127,6 +127,7 @@ export class EsewaService implements OnModuleInit {
     private readonly tenantContext: TenantContextService,
     private readonly billPaymentService: BillPaymentService,
     private readonly ledgerService: LedgerService,
+    private readonly guardianScope: GuardianScopeService,
   ) {
     this.productCode = this.config.get<string>('ESEWA_PRODUCT_CODE') || '';
     this.secretKey = this.config.get<string>('ESEWA_SECRET_KEY') || '';
@@ -192,7 +193,7 @@ export class EsewaService implements OnModuleInit {
     if (!invoice) throw new NotFoundException(`Invoice ${dto.invoiceId} not found`);
 
     if (user.role === Role.PARENT) {
-      await this.assertParentOwnsStudent(user.userId, invoice.student_id);
+      await this.guardianScope.assertOwnsStudent(user.userId, invoice.student_id);
     }
 
     const outstanding = toMoney(invoice.outstanding).toNumber();
@@ -478,7 +479,7 @@ export class EsewaService implements OnModuleInit {
         `SELECT student_id FROM bill_invoices WHERE id = $1::uuid`,
         txn.bill_invoice_id,
       );
-      await this.assertParentOwnsStudent(user.userId, invoice?.student_id ?? '');
+      await this.guardianScope.assertOwnsStudent(user.userId, invoice?.student_id ?? '');
     }
     if (!this.enabled) {
       // Gateway off (e.g. mid-rotation): report recorded state, change nothing.
@@ -632,16 +633,6 @@ export class EsewaService implements OnModuleInit {
     );
     if (!txn) throw new NotFoundException(`Transaction ${transactionUuid} not found`);
     return txn;
-  }
-
-  private async assertParentOwnsStudent(callerId: string, studentId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 
   private webBaseUrl(slug: string): string {

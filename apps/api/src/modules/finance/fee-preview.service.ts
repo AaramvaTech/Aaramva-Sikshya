@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
@@ -10,6 +10,7 @@ import { StudentTransportAssignmentService } from './student-transport-assignmen
 import { StudentConcessionRow } from './entities/bill-assignment.entity';
 import { FeePreviewQueryDto } from './dto/fee-preview.dto';
 import { Role } from '../common/enums/role.enum';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 export interface FeePreviewConcessionLine {
   concessionId: string;
@@ -81,6 +82,7 @@ export class FeePreviewService {
     private readonly overrideService: StudentFeeOverrideService,
     private readonly concessionService: StudentConcessionService,
     private readonly transportService: StudentTransportAssignmentService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async preview(
@@ -90,7 +92,7 @@ export class FeePreviewService {
     callerRole?: Role,
   ): Promise<FeePreviewResponseDto> {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
 
     const asOfDate = query.asOfDate ?? todayAdInNepal();
@@ -211,15 +213,5 @@ export class FeePreviewService {
       concessionTotal: concessionTotal.toNumber(),
       netTotal: netTotal.toNumber(),
     };
-  }
-
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 }

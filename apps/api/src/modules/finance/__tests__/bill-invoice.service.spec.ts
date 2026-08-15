@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { BillInvoiceService } from '../bill-invoice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockInvoiceRow = {
   id: 'invoice-1',
@@ -37,17 +38,20 @@ const mockInvoiceRow = {
 describe('BillInvoiceService', () => {
   let service: BillInvoiceService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         BillInvoiceService,
         { provide: TenantPrismaService, useValue: { query: jest.fn() } },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(BillInvoiceService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
   });
 
@@ -106,17 +110,16 @@ describe('BillInvoiceService', () => {
     });
 
     it('403s a PARENT who does not own the invoice student', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([mockInvoiceRow]) // invoice lookup
-        .mockResolvedValueOnce([]); // guardians lookup: no matching child
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockInvoiceRow]); // invoice lookup
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(service.findOne('invoice-1', 'parent-1', Role.PARENT)).rejects.toThrow(ForbiddenException);
     });
 
     it('200s a PARENT who owns the invoice student', async () => {
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([mockInvoiceRow])
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians: owns this child
         .mockResolvedValueOnce([]); // items
 
       const result = await service.findOne('invoice-1', 'parent-1', Role.PARENT);
@@ -126,16 +129,15 @@ describe('BillInvoiceService', () => {
 
   describe('findByStudent', () => {
     it('403s a PARENT who does not own the student', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians lookup: no match
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(
         service.findByStudent('student-1', {}, 'parent-1', Role.PARENT),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('delegates to the same list query, scoped to the student', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians: owns this child
-        .mockResolvedValueOnce([]); // invoice list
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // invoice list
 
       const result = await service.findByStudent('student-1', {}, 'parent-1', Role.PARENT);
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 0 });

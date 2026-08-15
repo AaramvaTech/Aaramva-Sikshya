@@ -11,6 +11,7 @@ import { errorBody } from '../common/errors/error-codes';
 import type { AuthUser } from '../auth/auth.types';
 import { READ_URL_TTL_SEC, StorageService } from './storage.service';
 import { FileKind, parseStorageKey } from './storage.policy';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 /** Staff roles that may read any student/staff photo in their school. */
 const STAFF_READERS = [
@@ -50,6 +51,7 @@ export class FileAccessService {
     private readonly storage: StorageService,
     private readonly tenantContext: TenantContextService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async presignRead(rawKey: string | undefined, user: AuthUser) {
@@ -104,13 +106,7 @@ export class FileAccessService {
           throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
         }
         if (user.role === Role.PARENT) {
-          const link = await this.tenantPrisma.query<{ ok: number }>(
-            `SELECT 1 AS ok FROM guardians
-             WHERE student_id = $1::uuid AND user_id = $2::uuid`,
-            rows[0].id,
-            user.userId,
-          );
-          if (link.length > 0) return;
+          if (await this.guardianScope.ownsStudent(user.userId, rows[0].id)) return;
         }
         throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
@@ -157,10 +153,13 @@ export class FileAccessService {
         const visible = rows.filter((r) => r.status !== 'DRAFT');
         if (visible.length === 0) throw new NotFoundException('File not found.');
         if (user.role === Role.STUDENT || user.role === Role.PARENT) {
+          // CL: composed into a bigger raw query below (per-visible-assignment
+          // loop) — can't route through a service call mid-SQL-string, so this
+          // inline fragment gets the same deleted_at discipline directly.
           const ownJoin =
             user.role === Role.STUDENT
               ? `s.user_id = $3::uuid`
-              : `EXISTS (SELECT 1 FROM guardians g WHERE g.student_id = s.id AND g.user_id = $3::uuid)`;
+              : `EXISTS (SELECT 1 FROM guardians g WHERE g.student_id = s.id AND g.user_id = $3::uuid AND g.deleted_at IS NULL)`;
           for (const r of visible) {
             const hit = await this.tenantPrisma.query<{ ok: number }>(
               `SELECT 1 AS ok FROM students s
@@ -196,13 +195,7 @@ export class FileAccessService {
         if (STAFF_READERS.includes(user.role)) return;
         if (user.role === Role.STUDENT && rows[0].user_id === user.userId) return;
         if (user.role === Role.PARENT) {
-          const link = await this.tenantPrisma.query<{ ok: number }>(
-            `SELECT 1 AS ok FROM guardians
-             WHERE student_id = $1::uuid AND user_id = $2::uuid`,
-            rows[0].student_id,
-            user.userId,
-          );
-          if (link.length > 0) return;
+          if (await this.guardianScope.ownsStudent(user.userId, rows[0].student_id)) return;
         }
         throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }

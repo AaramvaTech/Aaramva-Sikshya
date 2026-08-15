@@ -6,6 +6,7 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StudentAttendanceStatus } from '../dto/student-attendance.dto';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -38,6 +39,7 @@ describe('StudentAttendanceService', () => {
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let tenantContext: jest.Mocked<TenantContextService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -65,6 +67,7 @@ describe('StudentAttendanceService', () => {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
         },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
@@ -72,6 +75,7 @@ describe('StudentAttendanceService', () => {
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     tenantContext = module.get(TenantContextService) as jest.Mocked<TenantContextService>;
     eventEmitter = module.get(EventEmitter2) as jest.Mocked<EventEmitter2>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -271,8 +275,7 @@ describe('StudentAttendanceService', () => {
 
   describe('IDOR protection — PARENT role', () => {
     it('getStudentSummary throws ForbiddenException when student is not the caller\'s child', async () => {
-      // guardians query returns no children for this parent
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.getStudentSummary('other-student', 'year-1', 'parent-uuid', Role.PARENT),
@@ -280,8 +283,8 @@ describe('StudentAttendanceService', () => {
     });
 
     it('getStudentSummary allows a PARENT whose child matches the requested student', async () => {
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
       (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'child-uuid' }]) // IDOR check returns a match
         .mockResolvedValueOnce([{ id: 'child-uuid', full_name: 'Aarav Sharma', section_id: 'sec-1' }])
         .mockResolvedValueOnce([{ status: 'PRESENT', count: '40' }])
         .mockResolvedValueOnce([{ working_days: '50' }])
@@ -293,7 +296,7 @@ describe('StudentAttendanceService', () => {
     });
 
     it('getStudentHistory throws ForbiddenException when student is not the caller\'s child', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.getStudentHistory('other-student', {}, 'parent-uuid', Role.PARENT),
@@ -301,12 +304,13 @@ describe('StudentAttendanceService', () => {
     });
 
     it('getStudentHistory skips IDOR check when callerRole is not PARENT', async () => {
-      // No guardians query should be issued for a TEACHER
+      // No guardian ownership check should run for a TEACHER
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);  // getByQuery result
 
       await expect(
         service.getStudentHistory('any-student', {}, 'teacher-uuid', Role.TEACHER),
       ).resolves.toBeDefined();
+      expect(guardianScope.assertOwnsStudent).not.toHaveBeenCalled();
     });
   });
 });

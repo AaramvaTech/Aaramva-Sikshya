@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { adToBs } from 'bs-calendar';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -18,6 +18,7 @@ import {
 } from './entities/bill-payment.entity';
 import { LedgerEntryRow } from './entities/ledger.entity';
 import { Role } from '../common/enums/role.enum';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 export interface RecordPaymentInTxParams {
   studentId: string;
@@ -60,6 +61,7 @@ export class BillPaymentService {
     private readonly tenantContext: TenantContextService,
     private readonly ledgerService: LedgerService,
     private readonly financeSettingsService: FinanceSettingsService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async recordPayment(dto: CreateBillPaymentDto, receivedById: string): Promise<BillPaymentResponseDto> {
@@ -273,7 +275,7 @@ export class BillPaymentService {
     if (!rows[0]) throw new NotFoundException(`Payment ${id} not found`);
 
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(rows[0].student_id, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, rows[0].student_id);
     }
 
     const allocations = await this.tenantPrisma.query<BillPaymentAllocationRow>(
@@ -506,15 +508,5 @@ export class BillPaymentService {
       );
       return toBillPaymentResponse(updatedRow, updatedAllocations);
     });
-  }
-
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 }
