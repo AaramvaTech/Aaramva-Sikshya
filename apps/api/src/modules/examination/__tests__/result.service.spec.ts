@@ -6,6 +6,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { GradingScaleService } from '../grading-scale.service';
 import { PdfService } from '../pdf.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -80,6 +81,7 @@ describe('ResultService', () => {
   let service: ResultService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let pdf: { renderReportCard: jest.Mock };
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     pdf = { renderReportCard: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 test')) };
@@ -100,11 +102,13 @@ describe('ResultService', () => {
           useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo', schemaName: 'tenant_demo' }) },
         },
         { provide: PdfService, useValue: pdf },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(ResultService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -388,7 +392,7 @@ describe('ResultService', () => {
 
   describe('IDOR protection — PARENT role', () => {
     it('getStudentResults throws ForbiddenException when student is not the caller\'s child', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.getStudentResults('other-student', 'parent-uuid', Role.PARENT),
@@ -410,7 +414,7 @@ describe('ResultService', () => {
     });
 
     it('getReportCard throws ForbiddenException when UUID student is not the caller\'s child', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.getReportCard('550e8400-e29b-41d4-a716-446655440000', 'parent-uuid', Role.PARENT),
@@ -420,7 +424,7 @@ describe('ResultService', () => {
     // POL-1 T3: the PDF variant shares getReportCard's hard-scope — a PARENT
     // probing another family's child gets 403 before any PDF work happens.
     it('buildReportCardPdf throws ForbiddenException for a cross-family PARENT probe', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guardians returns no match
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.buildReportCardPdf('550e8400-e29b-41d4-a716-446655440000', 'parent-uuid', Role.PARENT),

@@ -13,10 +13,14 @@ import {
   toTimeString,
 } from './entities/academic.entity';
 import { CreateTimetableSlotDto, BulkTimetableDto } from './dto/timetable.dto';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 @Injectable()
 export class TimetableService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianScope: GuardianScopeService,
+  ) {}
 
   async createSlot(dto: CreateTimetableSlotDto): Promise<TimetableSlotResponseDto> {
     return this.tenantPrisma.run(async (tx) => {
@@ -55,14 +59,7 @@ export class TimetableService {
 
   async getSectionTimetable(sectionId: string, callerId?: string, callerRole?: Role): Promise<SectionTimetableDto> {
     if (callerRole === Role.PARENT && callerId) {
-      const enrollment = await this.tenantPrisma.query<{ id: string }>(
-        `SELECT s.id FROM students s
-         JOIN guardians g ON g.student_id = s.id
-         WHERE g.user_id = $1::uuid AND s.section_id = $2::uuid AND s.deleted_at IS NULL`,
-        callerId,
-        sectionId,
-      );
-      if (!enrollment[0]) throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
+      await this.guardianScope.assertOwnsStudentInSection(callerId, sectionId);
     }
     // WEB-P Phase 4 — STUDENT was in this route's @Roles() allowlist but had
     // no ownership check at all (only PARENT was scoped above), so any

@@ -7,6 +7,7 @@ import { StudentFeeOverrideService } from '../student-fee-override.service';
 import { StudentConcessionService } from '../student-concession.service';
 import { StudentTransportAssignmentService } from '../student-transport-assignment.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockAssignment = {
   id: 'sfsa-1',
@@ -56,12 +57,14 @@ describe('FeePreviewService', () => {
   let overrideService: jest.Mocked<StudentFeeOverrideService>;
   let concessionService: jest.Mocked<StudentConcessionService>;
   let transportService: jest.Mocked<StudentTransportAssignmentService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         FeePreviewService,
         { provide: TenantPrismaService, useValue: { query: jest.fn(), execute: jest.fn(), run: jest.fn() } },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
         { provide: StudentFeeStructureAssignmentService, useValue: { findActiveAssignment: jest.fn() } },
         { provide: StudentFeeOverrideService, useValue: { findActiveForStudent: jest.fn() } },
         { provide: StudentConcessionService, useValue: { findActiveForStudent: jest.fn() } },
@@ -75,6 +78,7 @@ describe('FeePreviewService', () => {
     overrideService = module.get(StudentFeeOverrideService) as jest.Mocked<StudentFeeOverrideService>;
     concessionService = module.get(StudentConcessionService) as jest.Mocked<StudentConcessionService>;
     transportService = module.get(StudentTransportAssignmentService) as jest.Mocked<StudentTransportAssignmentService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
 
     (transportService.findActiveForStudent as jest.Mock).mockResolvedValue(null);
@@ -176,7 +180,7 @@ describe('FeePreviewService', () => {
   });
 
   it('PARENT caller who does not own the student is rejected', async () => {
-    (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'some-other-student' }]);
+    guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
     await expect(
       service.preview('student-1', { academicYearId: 'year-1' }, 'parent-user-1', Role.PARENT),
     ).rejects.toThrow(ForbiddenException);
@@ -184,8 +188,8 @@ describe('FeePreviewService', () => {
   });
 
   it('PARENT caller who owns the student can preview', async () => {
+    guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
     (tenantPrisma.query as jest.Mock)
-      .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians ownership check
       .mockResolvedValueOnce([{ name: 'Grade 5 — Day scholar' }])
       .mockResolvedValueOnce([makeItem('head-1', 'Tuition', '5000.00')]);
     (assignmentService.findActiveAssignment as jest.Mock).mockResolvedValueOnce(mockAssignment);

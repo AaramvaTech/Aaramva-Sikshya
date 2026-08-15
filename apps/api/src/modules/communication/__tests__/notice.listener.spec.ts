@@ -3,12 +3,14 @@ import { NoticeListener } from '../listeners/notice.listener';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 describe('NoticeListener', () => {
   let listener: NoticeListener;
   let notificationService: jest.Mocked<NotificationService>;
   let pushService: jest.Mocked<PushService>;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianService: jest.Mocked<GuardianService>;
 
   const baseEvent = {
     tenantSlug: 'demo',
@@ -33,6 +35,7 @@ describe('NoticeListener', () => {
         },
         { provide: PushService, useValue: { sendToRecipients: jest.fn().mockResolvedValue(undefined) } },
         { provide: TenantPrismaService, useValue: { query: jest.fn(), run: jest.fn(), execute: jest.fn() } },
+        { provide: GuardianService, useValue: { getActiveParentUserIds: jest.fn() } },
       ],
     }).compile();
 
@@ -40,6 +43,7 @@ describe('NoticeListener', () => {
     notificationService = module.get(NotificationService) as jest.Mocked<NotificationService>;
     pushService = module.get(PushService) as jest.Mocked<PushService>;
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianService = module.get(GuardianService) as jest.Mocked<GuardianService>;
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -67,14 +71,17 @@ describe('NoticeListener', () => {
   });
 
   it('CLASS audience resolves that class\'s students + their parents only', async () => {
-    (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'stu-u-1' }, { id: 'par-u-1' }]);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'stu-1' }]) // scoped student ids in the class
+      .mockResolvedValueOnce([{ id: 'stu-u-1' }]); // those students' own user ids
+    guardianService.getActiveParentUserIds.mockResolvedValueOnce(['par-u-1']);
 
     await listener.handleNoticePosted({ ...baseEvent, audience: 'CLASS', classId: 'class-9' });
 
     const [sql, classId] = (tenantPrisma.query as jest.Mock).mock.calls[0];
     expect(sql).toContain('sections');
-    expect(sql).toContain('guardians');
     expect(classId).toBe('class-9');
+    expect(guardianService.getActiveParentUserIds).toHaveBeenCalledWith(['stu-1']);
     const [userIds] = notificationService.createNotificationsBulk.mock.calls[0];
     expect(userIds).toEqual(['stu-u-1', 'par-u-1']);
   });

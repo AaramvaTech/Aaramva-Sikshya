@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { Role } from '../common/enums/role.enum';
 import { BillInvoiceQueryDto } from './dto/bill-invoice.dto';
@@ -6,6 +6,7 @@ import {
   BillInvoiceRow, BillInvoiceItemRow, BillInvoiceResponseDto,
   toBillInvoiceResponse,
 } from './entities/bill-invoice.entity';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 /**
  * BILL-4-SPEC.md §5 read endpoints: list, single (parent object-scoped),
@@ -15,7 +16,10 @@ import {
  */
 @Injectable()
 export class BillInvoiceService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianScope: GuardianScopeService,
+  ) {}
 
   async findAll(query: BillInvoiceQueryDto): Promise<{
     data: BillInvoiceResponseDto[];
@@ -78,7 +82,7 @@ export class BillInvoiceService {
     if (!rows[0]) throw new NotFoundException(`Invoice ${id} not found`);
 
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(rows[0].student_id, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, rows[0].student_id);
     }
 
     const items = await this.tenantPrisma.query<BillInvoiceItemRow>(
@@ -95,18 +99,8 @@ export class BillInvoiceService {
     callerRole?: Role,
   ): Promise<{ data: BillInvoiceResponseDto[]; meta: { page: number; limit: number; total: number } }> {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
     return this.findAll({ ...query, studentId });
-  }
-
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 }

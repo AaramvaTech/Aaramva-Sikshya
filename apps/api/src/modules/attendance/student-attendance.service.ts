@@ -1,9 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { errorBody } from '../common/errors/error-codes';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role } from '../common/enums/role.enum';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 import { todayAdInNepal } from '../common/utils/date.util';
 import {
   StudentAttendanceRow,
@@ -28,6 +28,7 @@ export class StudentAttendanceService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async bulkMark(dto: BulkStudentAttendanceDto, markedById: string): Promise<void> {
@@ -160,13 +161,7 @@ export class StudentAttendanceService {
     callerRole?: Role,
   ) {
     if (callerRole === Role.PARENT && callerId) {
-      const children = await this.tenantPrisma.query<{ student_id: string }>(
-        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-        callerId,
-      );
-      if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
-      }
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
     return this.getByQuery({ ...query, studentId });
   }
@@ -178,13 +173,7 @@ export class StudentAttendanceService {
     callerRole?: Role,
   ): Promise<StudentSummaryDto> {
     if (callerRole === Role.PARENT && callerId) {
-      const children = await this.tenantPrisma.query<{ student_id: string }>(
-        `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-        callerId,
-      );
-      if (!children.some((c) => c.student_id === studentId)) {
-        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
-      }
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
     const students = await this.tenantPrisma.query<{
       id: string;

@@ -10,6 +10,7 @@ import { SubmissionService } from '../submission.service';
 import { StorageService } from '../../storage/storage.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 import { Role } from '../../common/enums/role.enum';
 import type { AuthUser } from '../../auth/auth.types';
 
@@ -86,6 +87,7 @@ describe('SubmissionService', () => {
         },
         { provide: StorageService, useValue: storageMock },
         { provide: EventEmitter2, useValue: { emit: emitMock } },
+        { provide: GuardianService, useValue: { getActiveChildStudents: jest.fn() } },
       ],
     }).compile();
     service = module.get(SubmissionService);

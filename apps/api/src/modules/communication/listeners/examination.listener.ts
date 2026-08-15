@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 export interface ResultPublishedEvent {
   tenantSlug: string;
@@ -25,33 +26,36 @@ export class ExaminationListener {
     private readonly notificationService: NotificationService,
     private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   @OnEvent('result.published')
   async handleResultPublished(payload: ResultPublishedEvent): Promise<void> {
     try {
-      const users = await this.tenantPrisma.query<{ id: string }>(
+      const scoped = await this.tenantPrisma.query<{ student_id: string }>(
+        `SELECT DISTINCT sr.student_id
+         FROM student_results sr
+         JOIN students s ON s.id = sr.student_id AND s.deleted_at IS NULL
+         WHERE sr.exam_type_id = $1::uuid`,
+        payload.examTypeId,
+      );
+      const studentUserRows = await this.tenantPrisma.query<{ id: string }>(
         `SELECT DISTINCT u.id
          FROM student_results sr
          JOIN students s ON s.id = sr.student_id AND s.deleted_at IS NULL
          JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
-         WHERE sr.exam_type_id = $1::uuid
-         UNION
-         SELECT DISTINCT u.id
-         FROM student_results sr
-         JOIN students s ON s.id = sr.student_id AND s.deleted_at IS NULL
-         JOIN guardians g ON g.student_id = sr.student_id
-         JOIN users u ON u.id = g.user_id AND u.role = 'PARENT' AND u.deleted_at IS NULL
          WHERE sr.exam_type_id = $1::uuid`,
         payload.examTypeId,
       );
-      if (users.length === 0) return;
+      const parentUserIds = await this.guardianService.getActiveParentUserIds(scoped.map((s) => s.student_id));
+      const userIds = Array.from(new Set([...studentUserRows.map((r) => r.id), ...parentUserIds]));
+      if (userIds.length === 0) return;
 
       const title = 'Results Published';
       const body = `Results for ${payload.examTypeName} have been published.`;
       const data = { examTypeId: payload.examTypeId, route: 'results' };
       const created = await this.notificationService.createNotificationsBulk(
-        users.map((u) => u.id),
+        userIds,
         title,
         body,
         'EXAM',

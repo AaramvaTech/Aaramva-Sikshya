@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { TimetableService } from '../timetable.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockSlotRow = {
   id: 'slot-1',
@@ -35,6 +36,7 @@ const createSlotDto = {
 describe('TimetableService', () => {
   let service: TimetableService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   const mockTx = {
     $queryRawUnsafe: jest.fn(),
@@ -53,11 +55,13 @@ describe('TimetableService', () => {
             execute: jest.fn(),
           },
         },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudentInSection: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(TimetableService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -232,8 +236,7 @@ describe('TimetableService', () => {
 
   describe('IDOR protection — PARENT and STUDENT roles', () => {
     it('getSectionTimetable throws ForbiddenException when no child of parent is enrolled in the section', async () => {
-      // enrollment check returns no matching student
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      guardianScope.assertOwnsStudentInSection.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.getSectionTimetable('other-section', 'parent-uuid', Role.PARENT),
@@ -241,8 +244,8 @@ describe('TimetableService', () => {
     });
 
     it('getSectionTimetable proceeds when parent has a child enrolled in the section', async () => {
+      guardianScope.assertOwnsStudentInSection.mockResolvedValueOnce(undefined);
       (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ id: 'child-uuid' }])       // IDOR enrollment check passes
         .mockResolvedValueOnce([{                             // timetable slots query
           ...mockSlotRow,
           subject_name: 'Math', subject_code: 'MTH',

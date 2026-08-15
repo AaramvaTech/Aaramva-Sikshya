@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { adToBs } from 'bs-calendar';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -16,6 +16,7 @@ import {
 } from './entities/bill-correction.entity';
 import { LedgerEntryRow, LedgerEntryResponseDto, toLedgerEntryResponse } from './entities/ledger.entity';
 import { Role } from '../common/enums/role.enum';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 /**
  * BILL-6-SPEC.md §3/§7 — credit notes (Checkpoint A), refunds + write-offs
@@ -42,6 +43,7 @@ export class BillCorrectionService {
     private readonly tenantContext: TenantContextService,
     private readonly ledgerService: LedgerService,
     private readonly financeSettingsService: FinanceSettingsService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async requestCreditNote(dto: CreateCreditNoteDto, requestedById: string): Promise<BillCorrectionResponseDto> {
@@ -384,11 +386,14 @@ export class BillCorrectionService {
 
     if (callerRole === Role.PARENT && callerId) {
       if (query.studentId) {
-        await this.assertGuardianOwnsStudent(query.studentId, callerId);
+        await this.guardianScope.assertOwnsStudent(callerId, query.studentId);
         conditions.push(`bc.student_id = $${idx++}::uuid`);
         params.push(query.studentId);
       } else {
-        conditions.push(`bc.student_id IN (SELECT student_id FROM guardians WHERE user_id = $${idx++}::uuid)`);
+        // CL: list-scoping WHERE fragment, not a single-entity assertion —
+        // can't route through assertOwnsStudent's throw-shaped API, but gets
+        // the same deleted_at discipline inline.
+        conditions.push(`bc.student_id IN (SELECT student_id FROM guardians WHERE user_id = $${idx++}::uuid AND deleted_at IS NULL)`);
         params.push(callerId);
       }
     } else if (query.studentId) {
@@ -434,7 +439,7 @@ export class BillCorrectionService {
     if (!correction) throw new NotFoundException(`Correction ${id} not found`);
 
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(correction.student_id, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, correction.student_id);
     }
 
     let ledgerEntries: LedgerEntryResponseDto[] = [];
@@ -513,15 +518,5 @@ export class BillCorrectionService {
       seqKey,
     );
     return buildCorrectionNumber(todayBs.year, seqRow.value);
-  }
-
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
   }
 }

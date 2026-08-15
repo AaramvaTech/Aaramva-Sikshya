@@ -16,6 +16,7 @@ import {
   toNum,
 } from './entities/examination.entity';
 import { ComputeResultsDto } from './dto/examination.dto';
+import { GuardianScopeService } from '../student/guardian-scope.service';
 
 export interface ComputeSummary {
   computed: number;
@@ -31,6 +32,7 @@ export class ResultService {
     private readonly tenantContext: TenantContextService,
     private readonly gradingScaleService: GradingScaleService,
     private readonly pdfService: PdfService,
+    private readonly guardianScope: GuardianScopeService,
   ) {}
 
   async computeResults(dto: ComputeResultsDto): Promise<ComputeSummary> {
@@ -319,19 +321,9 @@ export class ResultService {
     }));
   }
 
-  private async assertGuardianOwnsStudent(studentId: string, callerId: string): Promise<void> {
-    const children = await this.tenantPrisma.query<{ student_id: string }>(
-      `SELECT student_id FROM guardians WHERE user_id = $1::uuid`,
-      callerId,
-    );
-    if (!children.some((c) => c.student_id === studentId)) {
-      throw new ForbiddenException('Access denied');
-    }
-  }
-
   async getStudentResults(studentId: string, callerId?: string, callerRole?: Role) {
     if (callerRole === Role.PARENT && callerId) {
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
     // Students & parents only see published terms; staff see all.
     const publishedOnly = callerRole === Role.STUDENT || callerRole === Role.PARENT;
@@ -391,7 +383,7 @@ export class ResultService {
     if (callerRole === Role.PARENT && callerId) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
       if (!isUuid) throw new ForbiddenException('Access denied');
-      await this.assertGuardianOwnsStudent(studentId, callerId);
+      await this.guardianScope.assertOwnsStudent(callerId, studentId);
     }
 
     // Accept either UUID (internal id) or admission number (student_id column)

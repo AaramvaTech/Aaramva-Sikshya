@@ -7,6 +7,7 @@ import { LedgerService } from '../ledger.service';
 import { FinanceSettingsService } from '../finance-settings.service';
 import { Role } from '../../common/enums/role.enum';
 import { CreateCreditNoteDto, CreateRefundDto, CreateWriteOffDto, RefundMethod } from '../dto/bill-correction.dto';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -54,6 +55,7 @@ describe('BillCorrectionService', () => {
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let ledgerService: jest.Mocked<LedgerService>;
   let financeSettingsService: jest.Mocked<FinanceSettingsService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -70,6 +72,7 @@ describe('BillCorrectionService', () => {
           },
         },
         { provide: FinanceSettingsService, useValue: { getCreditNoteApprovalThreshold: jest.fn() } },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
@@ -77,6 +80,7 @@ describe('BillCorrectionService', () => {
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     ledgerService = module.get(LedgerService) as jest.Mocked<LedgerService>;
     financeSettingsService = module.get(FinanceSettingsService) as jest.Mocked<FinanceSettingsService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
     financeSettingsService.getCreditNoteApprovalThreshold.mockResolvedValue({ creditNoteApprovalThreshold: 5000 });
   });
@@ -243,16 +247,15 @@ describe('BillCorrectionService', () => {
 
   describe('findOne — PARENT scoping', () => {
     it('403s a parent who does not own the student', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([mockCorrectionRow]) // correction fetch
-        .mockResolvedValueOnce([{ student_id: 'someone-else' }]); // guardians lookup
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockCorrectionRow]); // correction fetch
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(service.findOne('corr-1', 'parent-1', Role.PARENT)).rejects.toThrow(ForbiddenException);
     });
 
     it('lets a parent read their own child\'s correction, with ledger audit trail', async () => {
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([{ ...mockCorrectionRow, ledger_entry_id: 'ledger-entry-1' }])
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians lookup
         .mockResolvedValueOnce([
           { id: 'ledger-entry-1', student_id: 'student-1', academic_year_id: 'year-1', entry_date: new Date(), entry_type: 'CREDIT_NOTE', debit: '0', credit: '1200.00', ref_doc_type: 'bill_correction', ref_doc_id: 'corr-1', narration: null, reverses_entry_id: null, created_by: 'owner-1', created_at: new Date() },
         ]);

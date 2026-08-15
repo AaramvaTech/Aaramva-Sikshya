@@ -4,6 +4,7 @@ import { SmsService } from '../sms.service';
 import { NotificationService } from '../notification.service';
 import { PushService } from '../push.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { GuardianService } from '../../student/guardian.service';
 
 interface PaymentReceivedEvent {
   studentId: string;
@@ -26,6 +27,7 @@ export class FinanceListener {
     private readonly notificationService: NotificationService,
     private readonly pushService: PushService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly guardianService: GuardianService,
   ) {}
 
   @OnEvent('payment.received')
@@ -103,32 +105,19 @@ export class FinanceListener {
    * Guardian contact for SMS = the primary-flagged guardian, else the earliest by
    * created_at (FIX-1B: normalized `guardians` table is the sole read source; the
    * legacy students.guardians JSONB is deprecated and no longer read). Returns
-   * null when the student has no guardian with a phone on file.
+   * null when the student has no ACTIVE guardian with a phone on file.
    */
   private async resolveGuardianPhone(studentId: string): Promise<string | null> {
-    const rows = await this.tenantPrisma.query<{ phone: string | null }>(
-      `SELECT phone FROM guardians
-       WHERE student_id = $1::uuid
-       ORDER BY is_primary DESC, created_at ASC
-       LIMIT 1`,
-      studentId,
-    );
-    return rows[0]?.phone ?? null;
+    const phones = await this.guardianService.getPrimaryGuardianPhones([studentId]);
+    return phones.get(studentId) ?? null;
   }
 
   private async findParentUser(studentId: string): Promise<{ id: string } | null> {
     // FIX-1B: resolve the linked PARENT via the normalized guardians.user_id
     // linkage (tenant-scoped) instead of the legacy students.guardians JSONB
     // containment query. Prefers the primary guardian's account when several link.
-    const rows = await this.tenantPrisma.query<{ id: string }>(
-      `SELECT u.id FROM guardians g
-       JOIN users u ON u.id = g.user_id
-       WHERE g.student_id = $1::uuid AND u.role = 'PARENT' AND u.deleted_at IS NULL
-       ORDER BY g.is_primary DESC, g.created_at ASC
-       LIMIT 1`,
-      studentId,
-    );
-    return rows[0] ?? null;
+    const id = await this.guardianService.getPrimaryGuardianUserId(studentId);
+    return id ? { id } : null;
   }
 
   private async getStudentName(studentId: string): Promise<string> {

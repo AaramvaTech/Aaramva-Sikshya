@@ -96,6 +96,13 @@ export const studentsApi = {
       `/students/${studentId}/guardians/${guardianId}/account/resend`,
     ),
 
+  // CL Phase 1: severs this one guardian-student link (soft delete). Does not
+  // touch the guardian's own login — see GuardianService.removeGuardian.
+  removeGuardian: (studentId: string, guardianId: string) =>
+    api.delete<ApiResponse<{ id: string; studentId: string; removedAt: string }>>(
+      `/students/${studentId}/guardians/${guardianId}`,
+    ),
+
   // WEB-P Phase 5 — GET /students/my-children (PARENT role only, no id param
   // — scoped server-side via the guardians table on the caller's own token).
   getMyChildren: () => api.get<ApiResponse<MyChild[]>>('/students/my-children'),

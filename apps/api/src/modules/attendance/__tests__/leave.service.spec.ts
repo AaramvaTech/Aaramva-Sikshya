@@ -4,6 +4,7 @@ import { LeaveService } from '../leave.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { SmsService } from '../../communication/sms.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockLeaveRow = {
   id: 'leave-1',
@@ -34,6 +35,7 @@ describe('LeaveService', () => {
   let sms: { send: jest.Mock };
   // Fake transaction client handed to tenantPrisma.run()
   let tx: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     tx = { $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() };
@@ -52,20 +54,21 @@ describe('LeaveService', () => {
           },
         },
         { provide: SmsService, useValue: sms },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(LeaveService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
 
     jest.clearAllMocks();
   });
 
   describe('applyLeave()', () => {
     it('creates a PENDING leave application record for a PARENT caller', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians lookup
-        .mockResolvedValueOnce([mockLeaveRow]);                 // INSERT
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockLeaveRow]); // INSERT
 
       const result = await service.applyLeave(
         { ...leaveDto, studentId: 'student-1' },
@@ -114,9 +117,8 @@ describe('LeaveService', () => {
     // ─── PARENT branch tests ──────────────────────────────────────────────────
 
     it('PARENT files leave for own child (in guardians) → success', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // guardians lookup
-        .mockResolvedValueOnce([mockLeaveRow]);                 // INSERT
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockLeaveRow]); // INSERT
 
       const result = await service.applyLeave(
         { ...leaveDto, studentId: 'student-1' },
@@ -125,17 +127,11 @@ describe('LeaveService', () => {
       );
 
       expect(result.status).toBe('PENDING');
-      // Verify guardians query used appliedById
-      expect(tenantPrisma.query).toHaveBeenNthCalledWith(
-        1,
-        expect.stringContaining('guardians'),
-        'parent-user-1',
-      );
+      expect(guardianScope.assertOwnsStudent).toHaveBeenCalledWith('parent-user-1', 'student-1');
     });
 
     it('PARENT files leave for non-child studentId → 403 ForbiddenException', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'child-of-parent' }]); // guardians lookup — different child
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
 
       await expect(
         service.applyLeave(

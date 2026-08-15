@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { LedgerService } from '../ledger.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
+import { GuardianScopeService } from '../../student/guardian-scope.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -34,6 +35,7 @@ function makeEntryRow(overrides: Record<string, unknown> = {}) {
 describe('LedgerService', () => {
   let service: LedgerService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
+  let guardianScope: jest.Mocked<GuardianScopeService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -47,11 +49,13 @@ describe('LedgerService', () => {
             execute: jest.fn(),
           },
         },
+        { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(LedgerService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
+    guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
   });
 
@@ -203,15 +207,15 @@ describe('LedgerService', () => {
 
   describe('getStudentLedger', () => {
     it('rejects a PARENT who does not own the student', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'someone-else' }]);
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(
         service.getStudentLedger('student-1', {}, 'parent-1', Role.PARENT),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('returns a paginated statement with running balance for an owning PARENT', async () => {
+      guardianScope.assertOwnsStudent.mockResolvedValueOnce(undefined);
       (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ student_id: 'student-1' }]) // ownership check
         .mockResolvedValueOnce([{ ...makeEntryRow(), running_balance: '500.00', total_count: '1' }]);
       const result = await service.getStudentLedger('student-1', { page: 1, limit: 20 }, 'parent-1', Role.PARENT);
       expect(result.data[0].runningBalance).toBe(500);
@@ -239,7 +243,7 @@ describe('LedgerService', () => {
 
   describe('getStatement', () => {
     it('rejects a PARENT who does not own the student', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'someone-else' }]);
+      guardianScope.assertOwnsStudent.mockRejectedValueOnce(new ForbiddenException());
       await expect(
         service.getStatement('student-1', {}, 'parent-1', Role.PARENT),
       ).rejects.toThrow(ForbiddenException);

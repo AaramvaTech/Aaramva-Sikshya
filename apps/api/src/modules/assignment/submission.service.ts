@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { GuardianService } from '../student/guardian.service';
 import { Role } from '../common/enums/role.enum';
 import { errorBody } from '../common/errors/error-codes';
 import type { AuthUser } from '../auth/auth.types';
@@ -44,6 +45,7 @@ export class SubmissionService {
     private readonly tenantContext: TenantContextService,
     private readonly storage: StorageService,
     private readonly events: EventEmitter2,
+    private readonly guardianService: GuardianService,
   ) {}
 
   // ─── Hard-scope resolvers ───────────────────────────────────────────────────
@@ -221,15 +223,7 @@ export class SubmissionService {
   // ─── Parent endpoint ────────────────────────────────────────────────────────
 
   async listForMyChildren(user: AuthUser) {
-    const children = await this.tenantPrisma.query<
-      EnrolledStudent & { first_name: string; last_name: string }
-    >(
-      `SELECT DISTINCT s.id, s.class_id, s.section_id, s.first_name, s.last_name
-       FROM students s
-       JOIN guardians g ON g.student_id = s.id
-       WHERE g.user_id = $1::uuid AND s.deleted_at IS NULL AND s.status = 'ACTIVE'`,
-      user.userId,
-    );
+    const children = await this.guardianService.getActiveChildStudents(user.userId);
 
     const result: {
       studentId: string;
@@ -252,12 +246,12 @@ export class SubmissionService {
          ORDER BY a.due_date DESC
          LIMIT 50`,
         child.id,
-        child.class_id,
-        child.section_id,
+        child.classId,
+        child.sectionId,
       );
       result.push({
         studentId: child.id,
-        studentName: `${child.first_name} ${child.last_name}`,
+        studentName: `${child.firstName} ${child.lastName}`,
         assignments: rows.map((r) => ({
           ...toAssignmentResponse(r),
           submission: r.my_status
