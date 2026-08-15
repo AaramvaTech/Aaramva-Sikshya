@@ -81,6 +81,23 @@ describe('DashboardService', () => {
       expect(result.unreadNotifications).toBe(12);
     });
 
+    it('MON-1: fee pending/collection-rate computed to the cent via Money, not float division', async () => {
+      // 100000/300000*100 = 33.3333...repeating -> rounds to 33.33
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ total: '0', active: '0' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'ay-1' }])
+        .mockResolvedValueOnce([{ invoiced: '300000.00', collected: '100000.00' }])
+        .mockResolvedValueOnce([{ count: '0' }]);
+
+      const result = await service.getOverview();
+
+      expect(result.fees?.totalInvoiced).toBe(300000);
+      expect(result.fees?.totalCollected).toBe(100000);
+      expect(result.fees?.totalPending).toBe(200000);
+      expect(result.fees?.collectionRate).toBe(33.33);
+    });
+
     it('returns null fees when no current academic year', async () => {
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([{ total: '100', active: '95' }])
@@ -191,7 +208,7 @@ describe('DashboardService', () => {
         ])
         // Recent payments
         .mockResolvedValueOnce([
-          { id: 'p1', student_first: 'Ram', student_last: 'Sharma', amount: '5000', created_at: new Date() },
+          { id: 'p1', student_first: 'Ram', student_last: 'Sharma', amount: '5000.75', created_at: new Date() },
         ])
         // Recent notices
         .mockResolvedValueOnce([
@@ -206,7 +223,7 @@ describe('DashboardService', () => {
       expect(result.recentStudents[0].admittedAt).toHaveProperty('bs');
       expect(result.recentPayments).toHaveLength(1);
       expect(result.recentPayments[0].studentName).toBe('Ram Sharma');
-      expect(result.recentPayments[0].amount).toBe(5000);
+      expect(result.recentPayments[0].amount).toBe(5000.75);
       expect(result.recentNotices).toHaveLength(2);
       expect(result.recentNotices[0].title).toBe('Exam Schedule');
       expect(result.recentNotices[0].publishedAt).not.toBeNull();
