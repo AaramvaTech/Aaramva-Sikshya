@@ -6,6 +6,7 @@ import {
   LibraryMemberRow,
   BookIssueRow,
   BookIssueResponseDto,
+  toMoney,
   toBookIssueResponse,
 } from './entities/library.entity';
 import { IssueBookDto, ReturnBookDto, IssueQueryDto } from './dto/library.dto';
@@ -31,7 +32,7 @@ export class IssueService {
       `SELECT COUNT(*) AS count FROM book_issues WHERE member_id = $1::uuid AND status = 'ISSUED'`,
       dto.memberId,
     );
-    if (Number(count) >= member.max_books) {
+    if (parseInt(count, 10) >= member.max_books) {
       throw new BadRequestException('Member has reached borrowing limit');
     }
 
@@ -90,8 +91,7 @@ export class IssueService {
       );
       if (daysLate > 0) {
         fineDays = daysLate;
-        // JS-float money (fineDays × fine_per_day) — tracked under BUG-3 → MON-1.
-        fineAmount = fineDays * parseFloat(String(issue.fine_per_day));
+        fineAmount = toMoney(issue.fine_per_day).mul(fineDays).toNumber();
       }
 
       const [updated] = await tx.$queryRawUnsafe<BookIssueRow[]>(
@@ -218,7 +218,7 @@ export class IssueService {
     );
     const total = rows[0] ? parseInt(String(rows[0].total_count ?? '0')) : 0;
     return {
-      data: rows.map((r) => ({ ...toBookIssueResponse(r), overdueDays: Number(r.overdue_days ?? 0) })),
+      data: rows.map((r) => ({ ...toBookIssueResponse(r), overdueDays: parseInt(String(r.overdue_days ?? 0), 10) })),
       meta: { page, limit, total },
     };
   }

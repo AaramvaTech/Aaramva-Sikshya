@@ -8,10 +8,12 @@ import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role } from '../common/enums/role.enum';
 import { assertSelfOrHrAdmin } from './hr-access.util';
+import { Money } from '../../common/money/money';
 import {
   PayrollMonthRow,
   SalarySlipRow,
   StaffProfileRow,
+  toMoney,
   toNum,
   toPayrollMonthResponse,
   toSalarySlipResponse,
@@ -118,8 +120,12 @@ export class PayrollService {
       const baseSalary = override?.customBaseSalary ?? toNum(staff.base_salary);
       const allowances = override?.additionalAllowances ?? [];
       const deductions = override?.additionalDeductions ?? [];
-      const allowanceTotal = allowances.reduce((s, a) => s + a.amount, 0);
-      const deductionTotal = deductions.reduce((s, d) => s + d.amount, 0);
+      const allowanceTotal = allowances
+        .reduce((s, a) => s.add(Money.fromNumber(a.amount)), Money.zero())
+        .toNumber();
+      const deductionTotal = deductions
+        .reduce((s, d) => s.add(Money.fromNumber(d.amount)), Money.zero())
+        .toNumber();
 
       const [slip] = await this.tenantPrisma.query<SalarySlipRow>(
         `INSERT INTO salary_slips
@@ -196,10 +202,14 @@ export class PayrollService {
     const existing = slips[0];
     const allowances = dto.allowances ?? (existing.allowances as { name: string; amount: number }[]);
     const deductions = dto.deductions ?? (existing.deductions as { name: string; amount: number }[]);
-    const allowanceTotal = allowances.reduce((s, a) => s + a.amount, 0);
-    const deductionTotal = deductions.reduce((s, d) => s + d.amount, 0);
+    const allowanceTotal = allowances
+      .reduce((s, a) => s.add(Money.fromNumber(a.amount)), Money.zero())
+      .toNumber();
+    const deductionTotal = deductions
+      .reduce((s, d) => s.add(Money.fromNumber(d.amount)), Money.zero())
+      .toNumber();
     const unpaidLeaveDays = dto.unpaidLeaveDays ?? existing.unpaid_leave_days;
-    const leaveDeduction = (toNum(existing.base_salary) / 30) * unpaidLeaveDays;
+    const leaveDeduction = toMoney(existing.base_salary).div(30).mul(unpaidLeaveDays).toNumber();
 
     const updated = await this.tenantPrisma.query<SalarySlipRow>(
       `UPDATE salary_slips

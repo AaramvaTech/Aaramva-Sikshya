@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { toTimeString } from '../academic/entities/academic.entity';
+import { Money } from '../../common/money/money';
 import {
   BsAdDate,
   toDateField,
@@ -136,11 +137,13 @@ export class DashboardService {
         academicYearId,
       );
 
-      const totalInvoiced = feeRows[0] ? Math.round(parseFloat(feeRows[0].invoiced) * 100) / 100 : 0;
-      const totalCollected = feeRows[0] ? Math.round(parseFloat(feeRows[0].collected) * 100) / 100 : 0;
-      const totalPending = Math.round((totalInvoiced - totalCollected) * 100) / 100;
+      const totalInvoicedMoney = feeRows[0] ? Money.fromDb(feeRows[0].invoiced) : Money.zero();
+      const totalCollectedMoney = feeRows[0] ? Money.fromDb(feeRows[0].collected) : Money.zero();
+      const totalInvoiced = totalInvoicedMoney.toNumber();
+      const totalCollected = totalCollectedMoney.toNumber();
+      const totalPending = totalInvoicedMoney.sub(totalCollectedMoney).toNumber();
       const collectionRate = totalInvoiced > 0
-        ? Math.round((totalCollected / totalInvoiced) * 10000) / 100
+        ? totalCollectedMoney.div(totalInvoiced).mul(100).toNumber()
         : 0;
 
       fees = {
@@ -297,7 +300,7 @@ export class DashboardService {
       recentPayments: paymentRows.map((r) => ({
         id: r.id,
         studentName: `${r.student_first} ${r.student_last}`.trim(),
-        amount: Math.round(parseFloat(r.amount) * 100) / 100,
+        amount: Money.fromDb(r.amount).toNumber(),
         createdAt: toDateField(r.created_at),
       })),
       recentNotices: noticeRows.map((r) => ({

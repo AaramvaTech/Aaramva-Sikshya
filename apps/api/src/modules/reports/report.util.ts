@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { adToBs, bsToAd, todayBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
+import { Money } from '../../common/money/money';
 
 /**
  * REP-1 shared helpers.
@@ -63,10 +64,19 @@ export function resolveRange(from?: string, to?: string): { from: string; to: st
   return { from: resolvedFrom, to: resolvedTo };
 }
 
-/** Postgres numeric → number (finance report convention). */
+/**
+ * Postgres numeric → number (finance report convention). NOTE: today this is
+ * only actually consumed by exam-report.service.ts for percentages/GPA, not
+ * money — MON-1 Phase C converts it to Money for consistency with every other
+ * toNum in the codebase anyway, per the completion doc's explicit scope.
+ */
+export function toMoney(v: string | number | null | undefined): Money {
+  if (v === null || v === undefined) return Money.zero();
+  return typeof v === 'number' ? Money.fromNumber(v) : Money.fromDb(v);
+}
+
 export function toNum(v: string | number | null | undefined): number {
-  if (v === null || v === undefined) return 0;
-  return typeof v === 'number' ? v : parseFloat(v);
+  return toMoney(v).toNumber();
 }
 
 /** Rate helper: percent with one decimal, 0 when the denominator is 0. */

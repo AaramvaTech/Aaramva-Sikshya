@@ -1,4 +1,5 @@
 import { adToBs } from 'bs-calendar';
+import { Money } from '../../../common/money/money';
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
@@ -96,9 +97,14 @@ export function toDateField(d: Date | string | null | undefined): { ad: string; 
   }
 }
 
+/** BILL-0-style row-field → Money, consistent with finance.entity.ts's toMoney. */
+export function toMoney(v: string | number | null | undefined): Money {
+  if (v === null || v === undefined) return Money.zero();
+  return typeof v === 'number' ? Money.fromNumber(v) : Money.fromDb(v);
+}
+
 export function toNum(v: string | number | null | undefined): number {
-  if (v === null || v === undefined) return 0;
-  return typeof v === 'number' ? v : parseFloat(v);
+  return toMoney(v).toNumber();
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -226,7 +232,7 @@ export function toLibraryMemberResponse(row: LibraryMemberRow & { member_name?: 
     memberType: (row.member_type === 'STAFF' ? 'STAFF' : 'STUDENT') as 'STUDENT' | 'STAFF',
     maxBooks: row.max_books,
     isActive: row.is_active,
-    currentIssueCount: row.current_issue_count ? Number(row.current_issue_count) : 0,
+    currentIssueCount: row.current_issue_count ? parseInt(String(row.current_issue_count), 10) : 0,
     joinedAt: toDateField(row.joined_at),
   };
 }

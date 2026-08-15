@@ -64,9 +64,30 @@ Status: **FIXED in code** per architect decision (env-fix alone was not enough �
 | **Disposition** | **DEFERRED → MON-1** (dedicated post-QA-1 pass; architect decision). **No BUG-3 code changes in QA-1.** |
 | **Agreed remediation (MON-1)** | (a) **Report aggregates** (report.service totals/rates) → **SQL-side NUMERIC aggregation** (SUM/aggregate in Postgres, not JS reduce). (b) **Transactional derived money** (discounts in `calculateItemAmounts`, fines in `recalculateFine`, **library `issue.service` `fine_amount`**) → **`Prisma.Decimal` arithmetic** — decimal.js is already bundled via Prisma, so **no new dependency**. (c) **Integer-paisa rejected** as unnecessarily invasive. (d) **Schema normalization (Phase-10 decision):** while touching money columns, normalize **`book_issues.fine_amount NUMERIC(8,2) → NUMERIC(10,2)`** (and consider `fine_per_day NUMERIC(6,2)`) for consistency with the finance money columns. |
 
+**Stale-citation note (added 2026-08-15, MON-1 Phases A-D closeout):** every file this row cites —
+`invoice.service.ts`, `fee-structure.service.ts`, `report.service.ts` — **no longer exists**. Old
+Finance was hard-deleted whole by `BILLING-CUTOVER` (commit `f1d1dcc`, 2026-08-14/15), which
+happened after this row was written and after MON-1 was first deferred. Don't chase these
+citations. **MON-1's actual remediation landed against the current Billing rail** (`bill-*`
+services), not these dead files — see `docs/api-contracts/MON-1-money-math-completion.md` for the
+real scope and `git log --grep=MON-1` for the four completed phases: (a) report aggregates were
+already SQL-side by the time MON-1 ran (REP-1's `toMoney`-based reports superseded
+`report.service.ts` entirely); (b) transactional money in `hr/payroll.service.ts`,
+`dashboard.service.ts`, and `library/issue.service.ts` converted to `Money`; (c) integer-paisa
+stayed rejected, unchanged; (d) `book_issues.fine_amount` widened to `NUMERIC(10,2)` (migration
+`0032`). The Billing rail's own `bill-*.service.ts` money math was already `Money`-based before
+MON-1 started (BILL-0, predates this doc) — not part of MON-1's scope, already done.
+
 ## dueDate text-vs-date cast — **VERIFIED already fixed (no action)**
 
 The Phase-5 backlog "dueDate cast bug" is **already resolved**: `invoice.service.ts:160` casts `$4::date`, both `fee_structure_items` writes cast `$5::date` (POL-1 T1 + sibling `updateItems`). Finance recon confirmed **zero** un-cast DATE writes (payments/transactions have no DATE column). Live: fee-structure create + invoice generate with `dueDate` → 201 (no Postgres 42804). Grep for siblings found none.
+
+**Stale-citation note (added 2026-08-15):** `invoice.service.ts` and `fee_structure_items` writes
+cited above are gone — deleted whole by `BILLING-CUTOVER` (commit `f1d1dcc`). This finding is now
+purely historical (correctly documents that POL-1 T1 fixed the bug before the file was later
+deleted for unrelated reasons); there is no live equivalent to re-check on the current Billing
+rail, since the new rail's fee-structure catalog has no `dueDate` field at all — due dates are
+computed per bill-run/invoice, not stored on the catalog entry.
 
 ## BUG-2 (Phase 4) — Cross-teacher assignment edit records no actor — **FIXED**
 

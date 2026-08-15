@@ -47,7 +47,7 @@ export class LibraryMemberService {
          RETURNING value`,
         seqKey,
       );
-      const memberNumber = `LIB-${bsYear}-${String(Number(seqRow.value)).padStart(4, '0')}`;
+      const memberNumber = `LIB-${bsYear}-${String(seqRow.value).padStart(4, '0')}`;
 
       const [member] = await tx.$queryRawUnsafe<LibraryMemberRow[]>(
         `INSERT INTO library_members (member_number, student_id, user_id, max_books)
