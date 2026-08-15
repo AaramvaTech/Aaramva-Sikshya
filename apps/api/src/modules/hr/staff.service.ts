@@ -59,7 +59,7 @@ export class StaffService {
          RETURNING value`,
         seqKey,
       );
-      const employeeId = `EMP-${bsYear}-${String(Number(seqRow.value)).padStart(4, '0')}`;
+      const employeeId = `EMP-${bsYear}-${String(seqRow.value).padStart(4, '0')}`;
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 

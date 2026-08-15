@@ -32,7 +32,7 @@ export class IssueService {
       `SELECT COUNT(*) AS count FROM book_issues WHERE member_id = $1::uuid AND status = 'ISSUED'`,
       dto.memberId,
     );
-    if (Number(count) >= member.max_books) {
+    if (parseInt(count, 10) >= member.max_books) {
       throw new BadRequestException('Member has reached borrowing limit');
     }
 
@@ -218,7 +218,7 @@ export class IssueService {
     );
     const total = rows[0] ? parseInt(String(rows[0].total_count ?? '0')) : 0;
     return {
-      data: rows.map((r) => ({ ...toBookIssueResponse(r), overdueDays: Number(r.overdue_days ?? 0) })),
+      data: rows.map((r) => ({ ...toBookIssueResponse(r), overdueDays: parseInt(String(r.overdue_days ?? 0), 10) })),
       meta: { page, limit, total },
     };
   }

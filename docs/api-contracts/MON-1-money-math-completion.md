@@ -1,6 +1,11 @@
 # MON-1 — Money Math Completion (HR / Dashboard / Library)
 
-**Status:** Spec, not yet built.
+**Status:** DONE — all four phases complete (2026-08-15, branch
+`feat/mon-1-payroll-money-math`). Phase A (payroll) landed first as its own
+reviewed step; Phases B-D landed in one continuous pass per Srijan's
+instruction, each with its own commit and live proof. See each phase section
+below for its live-proof summary; full detail in the commit messages
+(`git log --grep=MON-1`).
 **Type:** Contained fix — 6 files, 3 modules. Not an API-wide migration.
 
 ## Context
@@ -17,7 +22,7 @@ this is preventative, not a fix for something broken.
 
 ## Scope — in priority order
 
-### Phase A — Payroll (highest risk, do first)
+### Phase A — Payroll (highest risk, do first) — DONE
 
 `hr/payroll.service.ts:202` — `base_salary / 30 * unpaidLeaveDays`. Division-then-multiply
 in floating point is the classic shape for rounding drift, and this is salary math.
@@ -31,7 +36,7 @@ Convert both to use the `Money` class. Replace the ad-hoc `toNum = parseFloat` h
 and at least one allowance/deduction), Postgres read-back confirming the stored amount
 matches manual calculation to the cent.
 
-### Phase B — Dashboard
+### Phase B — Dashboard — DONE
 
 `dashboard/dashboard.service.ts:141,143,300` — pending/collection-rate math, `parseFloat`
 on payment rows.
@@ -43,7 +48,7 @@ result comes back, not a re-architecture of the queries themselves.
 **Checkpoint:** live dashboard load, Postgres read-back confirming the displayed
 collection-rate/pending figures match a manual SQL calculation.
 
-### Phase C — Library
+### Phase C — Library — DONE
 
 `library/issue.service.ts:94` — fine calculation (already self-tagged in-code as
 `BUG-3 → MON-1`). Lower real risk than payroll (integer × NUMERIC multiply, not a
@@ -55,7 +60,7 @@ Replace the ad-hoc `toNum` helper in `library/entities/library.entity.ts` and
 **Checkpoint:** live fine calculation for a real overdue book-issue record, Postgres
 read-back.
 
-### Phase D — Small cleanup, fold in wherever convenient
+### Phase D — Small cleanup, fold in wherever convenient — DONE
 
 - Widen `book_issues.fine_amount` from `NUMERIC(8,2)` to `NUMERIC(10,2)` — flagged in
   QA-1, never done. Cheap migration, do it alongside Phase C since it's the same table.

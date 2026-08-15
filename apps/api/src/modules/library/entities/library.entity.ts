@@ -232,7 +232,7 @@ export function toLibraryMemberResponse(row: LibraryMemberRow & { member_name?: 
     memberType: (row.member_type === 'STAFF' ? 'STAFF' : 'STUDENT') as 'STUDENT' | 'STAFF',
     maxBooks: row.max_books,
     isActive: row.is_active,
-    currentIssueCount: row.current_issue_count ? Number(row.current_issue_count) : 0,
+    currentIssueCount: row.current_issue_count ? parseInt(String(row.current_issue_count), 10) : 0,
     joinedAt: toDateField(row.joined_at),
   };
 }
