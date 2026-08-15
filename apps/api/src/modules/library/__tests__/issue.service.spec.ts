@@ -222,6 +222,27 @@ describe('IssueService', () => {
       jest.restoreAllMocks();
     });
 
+    it('MON-1: fine_amount (fine_per_day x days) computed via Money, not float multiply', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 13, 18, 45, 0));
+      // fine_per_day 12.50 x 3 days late = 37.50 exactly.
+      const overdueIssue = { ...baseIssueRow, due_date: '2026-07-11', fine_per_day: '12.50' };
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([overdueIssue]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ ...overdueIssue, status: 'RETURNED' }]);
+      mockTx.$executeRawUnsafe.mockResolvedValueOnce(1);
+
+      await service.returnBook('issue-1', {}, 'librarian-1');
+
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE book_issues'),
+        '2026-07-14',
+        'librarian-1',
+        3,     // fine_days
+        37.5,  // fine_amount = 3 x 12.50
+        'issue-1',
+      );
+      jest.restoreAllMocks();
+    });
+
     it('sets is_available=true on the copy in the same transaction', async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 5);

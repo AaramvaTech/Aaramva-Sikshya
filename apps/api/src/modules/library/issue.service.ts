@@ -6,6 +6,7 @@ import {
   LibraryMemberRow,
   BookIssueRow,
   BookIssueResponseDto,
+  toMoney,
   toBookIssueResponse,
 } from './entities/library.entity';
 import { IssueBookDto, ReturnBookDto, IssueQueryDto } from './dto/library.dto';
@@ -90,8 +91,7 @@ export class IssueService {
       );
       if (daysLate > 0) {
         fineDays = daysLate;
-        // JS-float money (fineDays × fine_per_day) — tracked under BUG-3 → MON-1.
-        fineAmount = fineDays * parseFloat(String(issue.fine_per_day));
+        fineAmount = toMoney(issue.fine_per_day).mul(fineDays).toNumber();
       }
 
       const [updated] = await tx.$queryRawUnsafe<BookIssueRow[]>(
