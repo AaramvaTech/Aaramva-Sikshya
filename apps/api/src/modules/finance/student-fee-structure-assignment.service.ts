@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
   StudentFeeStructureAssignmentRow,
@@ -35,6 +35,31 @@ export class StudentFeeStructureAssignmentService {
         studentId,
       );
       if (!studentRows[0]) throw new NotFoundException(`Student ${studentId} not found`);
+
+      // BILL-DATA-1 Phase 3: the close-out below sets effective_to = new
+      // effective_from - 1 on whatever is currently open. If the new
+      // effectiveFrom isn't actually after that row's own effective_from
+      // (a backdated re-assignment), that produces effective_to < effective_from
+      // on the row being closed — the exact bug found in motherland-school's
+      // 10 inverted rows. Reject before writing instead of silently corrupting
+      // the row being closed.
+      const openRows = await tx.$queryRawUnsafe<{ effective_from: Date | string }[]>(
+        `SELECT effective_from FROM student_fee_structure_assignments
+         WHERE student_id = $1::uuid AND academic_year_id = $2::uuid
+           AND effective_to IS NULL AND deleted_at IS NULL`,
+        studentId,
+        academicYearId,
+      );
+      if (openRows[0]) {
+        const openFrom = openRows[0].effective_from instanceof Date
+          ? openRows[0].effective_from.toISOString().split('T')[0]
+          : String(openRows[0].effective_from);
+        if (dto.effectiveFrom <= openFrom) {
+          throw new BadRequestException(
+            `New effectiveFrom (${dto.effectiveFrom}) must be after the current assignment's effectiveFrom (${openFrom})`,
+          );
+        }
+      }
 
       await tx.$executeRawUnsafe(
         `UPDATE student_fee_structure_assignments

@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import {
   AcademicYearRow,
   AcademicYearResponseDto,
   toAcademicYearResponse,
+  toAdString,
 } from './entities/academic.entity';
 import {
   CreateAcademicYearDto,
@@ -16,6 +17,11 @@ export class AcademicYearService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   async create(dto: CreateAcademicYearDto): Promise<AcademicYearResponseDto> {
+    if (dto.endDate < dto.startDate) {
+      throw new BadRequestException('end date must not be before start date');
+    }
+    await this.assertNoOverlap(dto.startDate, dto.endDate);
+
     const rows = await this.tenantPrisma.query<AcademicYearRow>(
       `INSERT INTO academic_years (name, year_bs, start_date, end_date)
        VALUES ($1, $2, $3::date, $4::date)
@@ -23,6 +29,28 @@ export class AcademicYearService {
       dto.name, dto.yearBs, dto.startDate, dto.endDate,
     );
     return toAcademicYearResponse(rows[0]);
+  }
+
+  /**
+   * BILL-DATA-1 Phase 3: rejects a date range that overlaps any other live
+   * academic year for this tenant — the exact class of bug motherland-school
+   * had (two AYs with overlapping AD ranges). excludeId lets update() check
+   * a row's new range against every OTHER row without conflicting with itself.
+   */
+  private async assertNoOverlap(startDate: string, endDate: string, excludeId?: string): Promise<void> {
+    const rows = await this.tenantPrisma.query<{ id: string; name: string }>(
+      `SELECT id, name FROM academic_years
+       WHERE deleted_at IS NULL
+         AND start_date <= $2::date AND end_date >= $1::date
+         AND ($3::uuid IS NULL OR id != $3::uuid)
+       LIMIT 1`,
+      startDate, endDate, excludeId ?? null,
+    );
+    if (rows[0]) {
+      throw new ConflictException(
+        `Date range overlaps existing academic year "${rows[0].name}"`,
+      );
+    }
   }
 
   async findAll(query: ListAcademicYearsQueryDto): Promise<{
@@ -60,6 +88,21 @@ export class AcademicYearService {
     const setClauses: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
+
+    if (dto.startDate !== undefined || dto.endDate !== undefined) {
+      const current = await this.tenantPrisma.query<{ start_date: Date | string; end_date: Date | string }>(
+        `SELECT start_date, end_date FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
+        id,
+      );
+      if (!current[0]) throw new NotFoundException(`Academic year ${id} not found`);
+
+      const newStart = dto.startDate ?? toAdString(current[0].start_date);
+      const newEnd = dto.endDate ?? toAdString(current[0].end_date);
+      if (newEnd < newStart) {
+        throw new BadRequestException('end date must not be before start date');
+      }
+      await this.assertNoOverlap(newStart, newEnd, id);
+    }
 
     if (dto.name !== undefined) { setClauses.push(`name = $${idx++}`); params.push(dto.name); }
     if (dto.startDate !== undefined) { setClauses.push(`start_date = $${idx++}::date`); params.push(dto.startDate); }
