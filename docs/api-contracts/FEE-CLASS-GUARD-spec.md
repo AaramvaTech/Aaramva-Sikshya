@@ -116,3 +116,54 @@ tests accepted as proof.
    Grade 5 ones, get assignment rows with the override stamp.
 5. Confirm a same-class assignment (no mismatch) behaves exactly as before
    the change — no override flag needed, no new warning.
+
+Evidence chain for the API half: `FEE-CLASS-GUARD-evidence.md` (that file is
+the source of truth for what was proved, not any chat transcript).
+
+---
+
+## Addendum — rulings (2026-08-16, API checkpoint review)
+
+These were decided after the API half was built and proved. They are binding.
+
+### A1. A student with no class blocks
+
+`students.class_id` is nullable. A student with `class_id IS NULL` is treated
+as a **mismatch** and is blocked (overridable like any other mismatch). The
+guard cannot confirm a match, and this feature defaults to blocking rather than
+waving through. Confirmed, keep.
+
+### A2. The override flag is deliberately NOT role-restricted
+
+`allowCrossClassAssignment` is available to every role that can already assign a
+fee structure (`ACCOUNTANT_AND_ABOVE`) — there is no extra role gate, no
+approval workflow, and no threshold, unlike BILL-6's corrections.
+
+The intended friction is **deliberate action plus the audit stamp**, not
+permission: the caller must consciously pass the flag on that request, and the
+row permanently records `class_mismatch_overridden` / `overridden_by_user_id` /
+`overridden_at`. Cross-class structures (Transport, Hostel) are a normal, daily
+part of the job for the same people who do ordinary assignment; gating them
+behind a second role would push work onto an owner for a routine case and, in
+practice, get worked around.
+
+If this ever needs tightening, the stamp is already the reporting primitive —
+add a review over `class_mismatch_overridden = true` before adding a role gate.
+
+### A3. §2's outcome list was wrong; `failures[].reason` is the correct home
+
+The outcome names in §2 (`Will be charged` / `No fee assigned` / `Already
+billed` / `Excluded` / `Failed`) are **bill-run line outcomes**
+(`BillRunLineOutcome`, `apps/web/components/finance/bill-run-outcome-badge.tsx`)
+— they belong to a different feature and Bulk Assign never had them. Author's
+error, acknowledged at the API checkpoint.
+
+Bulk Assign's real per-student outcome reporting is
+`bulk_assign_jobs.failures[]` (`{ studentId, error }`, rendered by
+`bulk-job-progress.tsx`). The class-mismatch outcome is carried there as a new
+**optional** `reason: 'CLASS_MISMATCH' | 'STUDENT_INVALID'` field.
+
+`reason` is optional on purpose: `failures` is a `jsonb` column that was never
+migrated, so every historical failure row has only `{studentId, error}`.
+**Any consumer — web UI included — must handle `reason` being absent** and fall
+back to rendering the `error` string.
