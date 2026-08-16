@@ -34,7 +34,7 @@ describe('StudentDocumentService', () => {
         },
         {
           provide: StorageService,
-          useValue: { presignUpload: jest.fn(), verifyConfirmedKey: jest.fn() },
+          useValue: { verifyConfirmedKey: jest.fn() },
         },
         { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
       ],
@@ -45,37 +45,6 @@ describe('StudentDocumentService', () => {
     storage = module.get(StorageService) as jest.Mocked<StorageService>;
     guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
     jest.clearAllMocks();
-  });
-
-  describe('presignUpload()', () => {
-    it('presigns a student-document upload after confirming the student exists', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'student-1' }]);
-      (storage.presignUpload as jest.Mock).mockResolvedValueOnce({
-        key: 'k', uploadUrl: 'u', expiresIn: 600, headers: {},
-      });
-
-      const result = await service.presignUpload(
-        'student-1',
-        { documentType: 'BIRTH_CERTIFICATE', filename: 'x.pdf', contentType: 'application/pdf', size: 1000 },
-        Role.PRINCIPAL,
-      );
-
-      expect(storage.presignUpload).toHaveBeenCalledWith(
-        'student-document', 'application/pdf', 1000, 'demo', Role.PRINCIPAL,
-      );
-      expect(result.key).toBe('k');
-    });
-
-    it('404s when the student does not exist', async () => {
-      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
-      await expect(
-        service.presignUpload(
-          'missing', { documentType: 'X', filename: 'x.pdf', contentType: 'application/pdf', size: 1000 },
-          Role.PRINCIPAL,
-        ),
-      ).rejects.toThrow(NotFoundException);
-      expect(storage.presignUpload).not.toHaveBeenCalled();
-    });
   });
 
   describe('confirmUpload()', () => {

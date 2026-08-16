@@ -135,7 +135,6 @@ export interface StudentDetail {
   academicYear: string | null;
   previousSchool: string | null;
   photoUrl: string | null;
-  documents: StudentDocument[];
   status: string;
   createdAt: string;
 }

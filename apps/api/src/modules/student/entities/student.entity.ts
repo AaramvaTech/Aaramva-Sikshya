@@ -29,7 +29,6 @@ export interface StudentRow {
   academic_year: string | null;
   previous_school: string | null;
   photo_url: string | null;
-  documents: unknown[];
   status: string;
   created_by: string | null;
   created_at: Date | string;
@@ -108,7 +107,6 @@ export interface StudentResponseDto {
   academicYear: string | null;
   previousSchool: string | null;
   photoUrl: string | null;
-  documents: unknown[];
   status: string;
   createdAt: string;
 }
@@ -157,7 +155,6 @@ export function toStudentResponse(
     academicYear: row.academic_year,
     previousSchool: row.previous_school,
     photoUrl: row.photo_url,
-    documents: row.documents ?? [],
     status: row.status,
     createdAt: row.created_at instanceof Date
       ? row.created_at.toISOString()
@@ -165,8 +162,8 @@ export function toStudentResponse(
   };
 }
 
-// ─── STUDENT-DOCS-1: student_documents (real table — the students.documents
-// JSONB column above is vestigial and unused by this feature; see spec §Phase 3) ─
+// ─── STUDENT-DOCS-1: student_documents (real table — replaces the
+// students.documents JSONB column, dropped in Phase 3 as unused dead weight) ─
 
 export interface StudentDocumentRow {
   id: string;

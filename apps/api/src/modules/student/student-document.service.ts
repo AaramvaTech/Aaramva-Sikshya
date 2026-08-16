@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { StorageService, PresignUploadResult } from '../storage/storage.service';
+import { StorageService } from '../storage/storage.service';
 import { GuardianScopeService } from './guardian-scope.service';
 import { Role } from '../common/enums/role.enum';
 import { errorBody } from '../common/errors/error-codes';
@@ -10,17 +10,22 @@ import {
   StudentDocumentResponseDto,
   toStudentDocumentResponse,
 } from './entities/student.entity';
-import { PresignStudentDocumentDto, ConfirmStudentDocumentDto } from './dto/student-document.dto';
+import { ConfirmStudentDocumentDto } from './dto/student-document.dto';
 
 /**
  * STUDENT-DOCS-1: admin/staff-managed document records for a student — birth
  * certificate, transfer certificate, etc. Real table (student_documents),
- * NOT the vestigial students.documents JSONB column (see student.entity.ts).
+ * replacing the vestigial students.documents JSONB column (dropped Phase 3).
  *
- * Upload (presign/confirm) is role-gated at the controller to
- * STUDENT_PROFILE_EDITORS (matches PATCH /students/:id). List/download is
- * broader: staff readers, plus the owning student and their guardians via
- * the same ownership checks used everywhere else in this module.
+ * Upload presigns via the generic POST /files/presign-upload (kind
+ * student-document) — Phase 1 built a dedicated presign endpoint here too,
+ * matching the frontend's original contract, but Phase 2's actual UI wiring
+ * confirmed it unused (mirrors staff's own document upload, which never had
+ * one either); Phase 3 removed it. confirmUpload (role-gated at the
+ * controller to STUDENT_PROFILE_EDITORS, matching PATCH /students/:id) is
+ * the only write left. List/download is broader: staff readers, plus the
+ * owning student and their guardians via the same ownership checks used
+ * everywhere else in this module.
  */
 @Injectable()
 export class StudentDocumentService {
@@ -30,16 +35,6 @@ export class StudentDocumentService {
     private readonly storage: StorageService,
     private readonly guardianScope: GuardianScopeService,
   ) {}
-
-  async presignUpload(
-    studentId: string,
-    dto: PresignStudentDocumentDto,
-    role: Role,
-  ): Promise<PresignUploadResult> {
-    await this.assertStudentExists(studentId);
-    const { slug } = this.tenantContext.getOrThrow();
-    return this.storage.presignUpload('student-document', dto.contentType, dto.size, slug, role);
-  }
 
   async confirmUpload(
     studentId: string,

@@ -37,7 +37,7 @@ import {
   StudentMeAttendanceSummaryDto,
   StudentMeAttendanceHistoryDto,
 } from './dto/student-me-query.dto';
-import { PresignStudentDocumentDto, ConfirmStudentDocumentDto } from './dto/student-document.dto';
+import { ConfirmStudentDocumentDto } from './dto/student-document.dto';
 
 // STUDENT-DOCS-1: upload matches PATCH :id exactly (student profile editing).
 const STUDENT_DOCUMENT_MANAGERS = [Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR];
@@ -253,15 +253,10 @@ export class StudentController {
     return this.studentDocumentService.listDocuments(id, user.userId, user.role);
   }
 
-  @Post(':id/documents/presign')
-  @Roles(...STUDENT_DOCUMENT_MANAGERS)
-  presignDocumentUpload(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: PresignStudentDocumentDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.studentDocumentService.presignUpload(id, dto, user.role);
-  }
+  // STUDENT-DOCS-1 Phase 3: the dedicated presign endpoint that used to live
+  // here was removed — confirmed unused (frontend presigns via the generic
+  // POST /files/presign-upload, kind student-document, same as staff's own
+  // document upload never having a dedicated presign route either).
 
   @Post(':id/documents/confirm')
   @Roles(...STUDENT_DOCUMENT_MANAGERS)
