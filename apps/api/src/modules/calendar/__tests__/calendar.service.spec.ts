@@ -35,7 +35,7 @@ const schoolRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('CalendarService (Phase 2 — school holiday CRUD)', () => {
+describe('CalendarService (Phase 2 — school holiday CRUD; Phase 3 — working-day query surface)', () => {
   let service: CalendarService;
 
   beforeEach(async () => {
@@ -153,6 +153,70 @@ describe('CalendarService (Phase 2 — school holiday CRUD)', () => {
 
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
+    });
+  });
+
+  // ── Phase 3: working-day query surface ────────────────────────────────────
+
+  describe('isHoliday', () => {
+    it('returns true when a live holiday row exists', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([{ ok: 1 }]);
+      await expect(service.isHoliday('2026-10-21')).resolves.toBe(true);
+    });
+
+    it('returns false when no row exists', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      await expect(service.isHoliday('2026-08-18')).resolves.toBe(false);
+    });
+  });
+
+  describe('isWorkingDay', () => {
+    it('returns false for a Saturday without needing a DB call', async () => {
+      // 2026-08-15 is a Saturday
+      const result = await service.isWorkingDay('2026-08-15');
+      expect(result).toBe(false);
+      expect(mockTenantPrisma.query).not.toHaveBeenCalled();
+    });
+
+    it('returns false for a weekday that is a holiday', async () => {
+      // 2026-10-21 (Vijaya Dashami) is a Wednesday
+      mockTenantPrisma.query.mockResolvedValueOnce([{ ok: 1 }]);
+      await expect(service.isWorkingDay('2026-10-21')).resolves.toBe(false);
+    });
+
+    it('returns true for an ordinary weekday', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      await expect(service.isWorkingDay('2026-08-18')).resolves.toBe(true); // Tuesday
+    });
+  });
+
+  describe('countWorkingDays', () => {
+    it('counts correctly across a range spanning one govt holiday, one school holiday, and Saturdays', async () => {
+      // 2026-08-17 (Mon) .. 2026-08-23 (Sun) — one full week.
+      // 2026-08-22 is a Saturday (excluded by weekday rule).
+      // Craft a GOVT holiday on 2026-08-19 (Wed) and a SCHOOL holiday on 2026-08-20 (Thu).
+      mockTenantPrisma.query.mockResolvedValueOnce([
+        { date: '2026-08-19' },
+        { date: '2026-08-20' },
+      ]);
+
+      const result = await service.countWorkingDays('2026-08-17', '2026-08-23');
+
+      // Mon 17, Tue 18, Wed 19(holiday), Thu 20(holiday), Fri 21, Sat 22(weekend), Sun 23
+      // Working days: 17, 18, 21, 23 = 4
+      expect(result).toBe(4);
+    });
+
+    it('returns 0 when startDate is after endDate', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([]);
+      const result = await service.countWorkingDays('2026-08-20', '2026-08-17');
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 for a range that is entirely one govt holiday', async () => {
+      mockTenantPrisma.query.mockResolvedValueOnce([{ date: '2026-10-21' }]);
+      const result = await service.countWorkingDays('2026-10-21', '2026-10-21');
+      expect(result).toBe(0);
     });
   });
 });

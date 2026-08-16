@@ -13,14 +13,14 @@ import {
 } from './dto/calendar-day.dto';
 
 /**
- * CAL-1 Phase 2 — admin CRUD for source='SCHOOL' rows in
- * `school_calendar_days` (migration 0033). Locked decision: GOVT rows
- * (Phase 1's bulk import) are fixed and not overridable per-school —
+ * CAL-1. Two responsibilities in one service (matches the spec's own
+ * naming): Phase 2's admin CRUD for source='SCHOOL' rows, and Phase 3's
+ * working-day query surface other modules (late-fee, attendance) call.
+ * Both read the same table, `school_calendar_days` (migration 0033).
+ *
+ * Locked decision: GOVT rows are fixed and not overridable per-school —
  * update/remove reject any row whose source isn't 'SCHOOL', regardless of
  * caller role.
- *
- * Phase 3 adds the working-day query surface (isWorkingDay/countWorkingDays)
- * to this same service, in a later commit.
  */
 @Injectable()
 export class CalendarService {
@@ -122,6 +122,60 @@ export class CalendarService {
     return { data: rows.map(toCalendarDayResponse), meta: { page, limit, total } };
   }
 
+  // ── Phase 3: working-day query surface ─────────────────────────────────
+  // Consumed by BillFineService (late-fee, Phase 4) and StudentAttendanceService
+  // / StudentMeService (attendance, Phase 5). Implicitly tenant-scoped via
+  // TenantPrismaService, matching every other service in this codebase — no
+  // explicit tenantId param (the spec's own example signature is shorthand
+  // for "scoped per tenant", not a literal parameter list to copy).
+
+  /** True iff there's a live holiday row (GOVT or SCHOOL) for this date.
+   *  Does NOT consider the weekday — see isWorkingDay for the combined
+   *  check. Split out because callers like the attendance-marking guard
+   *  (Phase 5) want the holiday condition specifically, not the broader
+   *  "is this a working day" question, which would also fold in Saturday —
+   *  a pre-existing, separate platform concept CAL-1 isn't touching. */
+  async isHoliday(date: string): Promise<boolean> {
+    const rows = await this.tenantPrisma.query<{ ok: number }>(
+      `SELECT 1 AS ok FROM school_calendar_days
+       WHERE date = $1::date AND is_holiday = true AND deleted_at IS NULL
+       LIMIT 1`,
+      date,
+    );
+    return !!rows[0];
+  }
+
+  /** Working day = Sunday-Friday (the existing platform day-of-week
+   *  convention: 0=Sunday..6=Saturday, see student-me.service.ts's
+   *  todayInNepal) AND not a holiday. */
+  async isWorkingDay(date: string): Promise<boolean> {
+    if (dayOfWeek(date) === 6) return false;
+    return !(await this.isHoliday(date));
+  }
+
+  /** Inclusive on both ends. Returns 0 if startDate > endDate. Fetches the
+   *  holiday set for the whole range in one query rather than one query
+   *  per day — an overdue-fee or attendance-summary window is at most a
+   *  handful of months, so this stays a small in-memory set. */
+  async countWorkingDays(startDate: string, endDate: string): Promise<number> {
+    const holidayRows = await this.tenantPrisma.query<{ date: Date | string }>(
+      `SELECT date FROM school_calendar_days
+       WHERE date BETWEEN $1::date AND $2::date AND is_holiday = true AND deleted_at IS NULL`,
+      startDate, endDate,
+    );
+    const holidays = new Set(holidayRows.map((r) => toAdString(r.date)));
+
+    let count = 0;
+    const cursor = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
+    while (cursor.getTime() <= end.getTime()) {
+      const iso = cursor.toISOString().split('T')[0];
+      if (cursor.getUTCDay() !== 6 && !holidays.has(iso)) count++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return count;
+  }
+
   // ── Internal ────────────────────────────────────────────────────────────
 
   private async findLiveOrThrow(id: string): Promise<CalendarDayRow> {
@@ -138,4 +192,8 @@ export class CalendarService {
       throw new ForbiddenException(`Government holidays cannot be ${verb}`);
     }
   }
+}
+
+function dayOfWeek(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
 }
