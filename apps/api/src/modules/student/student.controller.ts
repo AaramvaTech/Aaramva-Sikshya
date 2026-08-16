@@ -24,6 +24,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { StudentService } from './student.service';
 import { StudentMeService } from './student-me.service';
 import { GuardianService } from './guardian.service';
+import { StudentDocumentService } from './student-document.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 import { CreateGuardianAccountDto } from './dto/create-guardian-account.dto';
@@ -36,6 +37,20 @@ import {
   StudentMeAttendanceSummaryDto,
   StudentMeAttendanceHistoryDto,
 } from './dto/student-me-query.dto';
+import { PresignStudentDocumentDto, ConfirmStudentDocumentDto } from './dto/student-document.dto';
+
+// STUDENT-DOCS-1: upload matches PATCH :id exactly (student profile editing).
+const STUDENT_DOCUMENT_MANAGERS = [Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR];
+// List/download: the same staff read tier as findOne(), plus the student
+// themself and their guardians (object-scoped inside the service).
+const STUDENT_DOCUMENT_READERS = [
+  ...STUDENT_DOCUMENT_MANAGERS,
+  Role.TEACHER,
+  Role.ACCOUNTANT,
+  Role.LIBRARIAN,
+  Role.STUDENT,
+  Role.PARENT,
+];
 
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -44,6 +59,7 @@ export class StudentController {
     private readonly studentService: StudentService,
     private readonly studentMeService: StudentMeService,
     private readonly guardianService: GuardianService,
+    private readonly studentDocumentService: StudentDocumentService,
   ) {}
 
   @Post()
@@ -227,5 +243,32 @@ export class StudentController {
     @Param('guardianId', ParseUUIDPipe) guardianId: string,
   ) {
     return this.guardianService.resendGuardianCredentials(studentId, guardianId);
+  }
+
+  // ─── STUDENT-DOCS-1: documents ────────────────────────────────────────────
+
+  @Get(':id/documents')
+  @Roles(...STUDENT_DOCUMENT_READERS)
+  listDocuments(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.studentDocumentService.listDocuments(id, user.userId, user.role);
+  }
+
+  @Post(':id/documents/presign')
+  @Roles(...STUDENT_DOCUMENT_MANAGERS)
+  presignDocumentUpload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PresignStudentDocumentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studentDocumentService.presignUpload(id, dto, user.role);
+  }
+
+  @Post(':id/documents/confirm')
+  @Roles(...STUDENT_DOCUMENT_MANAGERS)
+  confirmDocumentUpload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmStudentDocumentDto,
+  ) {
+    return this.studentDocumentService.confirmUpload(id, dto);
   }
 }

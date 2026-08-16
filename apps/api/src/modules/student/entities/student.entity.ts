@@ -164,3 +164,38 @@ export function toStudentResponse(
       : String(row.created_at),
   };
 }
+
+// ─── STUDENT-DOCS-1: student_documents (real table — the students.documents
+// JSONB column above is vestigial and unused by this feature; see spec §Phase 3) ─
+
+export interface StudentDocumentRow {
+  id: string;
+  student_id: string;
+  document_type: string;
+  file_url: string;
+  file_name: string | null;
+  uploaded_at: Date | string;
+  deleted_at: Date | string | null;
+}
+
+export interface StudentDocumentResponseDto {
+  id: string;
+  studentId: string;
+  documentType: string;
+  fileUrl: string;
+  fileName: string | null;
+  uploadedAt: string;
+}
+
+export function toStudentDocumentResponse(row: StudentDocumentRow): StudentDocumentResponseDto {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    documentType: row.document_type,
+    fileUrl: row.file_url,
+    fileName: row.file_name,
+    uploadedAt: row.uploaded_at instanceof Date
+      ? row.uploaded_at.toISOString()
+      : String(row.uploaded_at),
+  };
+}
