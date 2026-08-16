@@ -10,6 +10,9 @@ export interface StudentFeeStructureAssignmentRow {
   effective_from: Date | string;
   effective_to: Date | string | null;
   assigned_by: string;
+  class_mismatch_overridden: boolean;
+  overridden_by_user_id: string | null;
+  overridden_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
   deleted_at: Date | string | null;
@@ -67,6 +70,21 @@ export interface StudentTransportAssignmentRow {
   total_count?: string;
 }
 
+/**
+ * FEE-CLASS-GUARD: the job's per-student outcome list gains an optional
+ * machine-readable `reason`. It stays optional because every pre-existing
+ * failure row in bulk_assign_jobs.failures (jsonb, never migrated) has only
+ * {studentId, error} — a required field would misrepresent history. Absent
+ * reason = the original "student not found or inactive" outcome.
+ */
+export type BulkAssignFailureReason = 'STUDENT_INVALID' | 'CLASS_MISMATCH';
+
+export interface BulkAssignFailure {
+  studentId: string;
+  error: string;
+  reason?: BulkAssignFailureReason;
+}
+
 export interface BulkAssignJobRow {
   id: string;
   fee_structure_id: string;
@@ -76,11 +94,12 @@ export interface BulkAssignJobRow {
   scope_section_id: string | null;
   scope_student_ids: string[] | null;
   effective_from: Date | string;
+  allow_cross_class: boolean;
   status: string;
   total: number;
   processed: number;
   failed_count: number;
-  failures: { studentId: string; error: string }[];
+  failures: BulkAssignFailure[];
   created_by: string;
   created_at: Date | string;
   started_at: Date | string | null;
@@ -97,6 +116,9 @@ export interface StudentFeeStructureAssignmentResponseDto {
   effectiveFrom: string;
   effectiveTo: string | null;
   assignedBy: string;
+  classMismatchOverridden: boolean;
+  overriddenBy: string | null;
+  overriddenAt: string | null;
   createdAt: string;
 }
 
@@ -150,11 +172,12 @@ export interface BulkAssignJobResponseDto {
   scopeClassId: string | null;
   scopeSectionId: string | null;
   effectiveFrom: string;
+  allowCrossClassAssignment: boolean;
   status: string;
   total: number;
   processed: number;
   failedCount: number;
-  failures: { studentId: string; error: string }[];
+  failures: BulkAssignFailure[];
   createdBy: string;
   createdAt: string;
   startedAt: string | null;
@@ -185,6 +208,9 @@ export function toStudentFeeStructureAssignmentResponse(
     effectiveFrom: toDateOnly(row.effective_from),
     effectiveTo: row.effective_to ? toDateOnly(row.effective_to) : null,
     assignedBy: row.assigned_by,
+    classMismatchOverridden: !!row.class_mismatch_overridden,
+    overriddenBy: row.overridden_by_user_id ?? null,
+    overriddenAt: row.overridden_at ? toIso(row.overridden_at) : null,
     createdAt: toIso(row.created_at),
   };
 }
@@ -248,6 +274,7 @@ export function toBulkAssignJobResponse(row: BulkAssignJobRow): BulkAssignJobRes
     scopeClassId: row.scope_class_id,
     scopeSectionId: row.scope_section_id,
     effectiveFrom: toDateOnly(row.effective_from),
+    allowCrossClassAssignment: !!row.allow_cross_class,
     status: row.status,
     total: row.total,
     processed: row.processed,

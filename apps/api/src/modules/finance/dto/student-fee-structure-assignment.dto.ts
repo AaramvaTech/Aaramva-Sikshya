@@ -1,8 +1,14 @@
-import { IsArray, IsDateString, IsEnum, IsOptional, IsUUID, ArrayMinSize } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsOptional, IsUUID, ArrayMinSize } from 'class-validator';
 
 export class AssignFeeStructureDto {
   @IsUUID() feeStructureId: string;
   @IsDateString() effectiveFrom: string;
+  /**
+   * FEE-CLASS-GUARD: deliberate opt-in to assigning a structure whose class/
+   * section doesn't match the student's (a shared Transport/Hostel structure,
+   * say). Absent/false → a mismatch is rejected with 422 CLASS_MISMATCH.
+   */
+  @IsOptional() @IsBoolean() allowCrossClassAssignment?: boolean;
 }
 
 /**
@@ -33,4 +39,10 @@ export class BulkAssignDto {
   @IsOptional() @IsUUID() sectionId?: string;
   @IsOptional() @IsArray() @ArrayMinSize(1) @IsUUID('4', { each: true }) studentIds?: string[];
   @IsDateString() effectiveFrom: string;
+  /**
+   * FEE-CLASS-GUARD: applied uniformly to every student in the run. Absent/
+   * false → mismatched students are skipped and reported as CLASS_MISMATCH in
+   * the job's per-student failure list; matching students are unaffected.
+   */
+  @IsOptional() @IsBoolean() allowCrossClassAssignment?: boolean;
 }

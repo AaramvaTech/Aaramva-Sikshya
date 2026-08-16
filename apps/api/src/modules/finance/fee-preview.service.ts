@@ -33,6 +33,8 @@ export interface FeePreviewResponseDto {
   studentId: string;
   feeStructureId: string;
   feeStructureName: string;
+  /** FEE-CLASS-GUARD: the active assignment was made across classes on purpose. */
+  classMismatchOverridden: boolean;
   academicYearId: string;
   asOfDate: string;
   heads: FeePreviewHeadLine[];
@@ -204,6 +206,7 @@ export class FeePreviewService {
       studentId,
       feeStructureId: assignment.fee_structure_id,
       feeStructureName: structureRows[0]?.name ?? '',
+      classMismatchOverridden: !!assignment.class_mismatch_overridden,
       academicYearId: query.academicYearId,
       asOfDate,
       heads,

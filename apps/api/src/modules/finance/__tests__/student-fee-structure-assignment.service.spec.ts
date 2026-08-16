@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentFeeStructureAssignmentService } from '../student-fee-structure-assignment.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -16,10 +16,33 @@ const mockAssignmentRow = {
   effective_from: new Date('2026-04-14'),
   effective_to: null,
   assigned_by: 'user-1',
+  class_mismatch_overridden: false,
+  overridden_by_user_id: null,
+  overridden_at: null,
   created_at: new Date('2026-04-14'),
   updated_at: new Date('2026-04-14'),
   deleted_at: null,
 };
+
+// FEE-CLASS-GUARD: both lookups now carry class/section + display names.
+const structureRow = (over: Record<string, unknown> = {}) => ({
+  id: 'bfs-1',
+  academic_year_id: 'year-1',
+  class_id: 'class-1',
+  section_id: null,
+  class_name: 'Grade 1',
+  section_name: null,
+  ...over,
+});
+
+const studentRow = (over: Record<string, unknown> = {}) => ({
+  id: 'student-1',
+  class_id: 'class-1',
+  section_id: 'section-a',
+  class_name: 'Grade 1',
+  section_name: 'A',
+  ...over,
+});
 
 describe('StudentFeeStructureAssignmentService', () => {
   let service: StudentFeeStructureAssignmentService;
@@ -54,7 +77,7 @@ describe('StudentFeeStructureAssignmentService', () => {
 
   it('assign() 404s when the student does not exist', async () => {
     mockTx.$queryRawUnsafe
-      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure found
+      .mockResolvedValueOnce([structureRow()]) // structure found
       .mockResolvedValueOnce([]); // student not found
     await expect(
       service.assign('missing-student', { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-14' }, 'user-1'),
@@ -63,8 +86,8 @@ describe('StudentFeeStructureAssignmentService', () => {
 
   it('assign() closes any existing OPEN assignment before inserting the new one', async () => {
     mockTx.$queryRawUnsafe
-      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure
-      .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([structureRow()]) // structure
+      .mockResolvedValueOnce([studentRow()]) // student (same class -> no mismatch)
       .mockResolvedValueOnce([mockAssignmentRow]); // insert RETURNING
 
     const result = await service.assign(
@@ -88,6 +111,72 @@ describe('StudentFeeStructureAssignmentService', () => {
       'year-1',
       '2026-04-14',
       'user-1',
+      false, // class_mismatch_overridden — matching assignment, no stamp
+    );
+  });
+
+  // ─── FEE-CLASS-GUARD ────────────────────────────────────────────────────────
+
+  it('assign() rejects a class mismatch with 422 CLASS_MISMATCH and writes nothing', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([structureRow()]) // Grade 1 structure
+      .mockResolvedValueOnce([studentRow({ class_id: 'class-5', class_name: 'Grade 5' })]);
+
+    await expect(
+      service.assign('student-1', { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-14' }, 'user-1'),
+    ).rejects.toMatchObject({
+      constructor: UnprocessableEntityException,
+      response: {
+        code: 'CLASS_MISMATCH',
+        details: {
+          feeStructure: { id: 'bfs-1', className: 'Grade 1', sectionName: null },
+          target: { studentId: 'student-1', className: 'Grade 5', sectionName: 'A' },
+        },
+      },
+    });
+    // Neither the close-out UPDATE nor the INSERT ran.
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
+    expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(2);
+  });
+
+  it('assign() proceeds and stamps the override when allowCrossClassAssignment is set', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([structureRow()])
+      .mockResolvedValueOnce([studentRow({ class_id: 'class-5', class_name: 'Grade 5' })])
+      .mockResolvedValueOnce([{ ...mockAssignmentRow, class_mismatch_overridden: true }]);
+
+    const result = await service.assign(
+      'student-1',
+      { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-14', allowCrossClassAssignment: true },
+      'user-1',
+    );
+
+    expect(result.classMismatchOverridden).toBe(true);
+    expect(mockTx.$queryRawUnsafe).toHaveBeenLastCalledWith(
+      expect.stringContaining('class_mismatch_overridden'),
+      'student-1',
+      'bfs-1',
+      'year-1',
+      '2026-04-14',
+      'user-1',
+      true,
+    );
+  });
+
+  it('assign() does NOT stamp an override when the flag is passed on a matching assignment', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([structureRow()])
+      .mockResolvedValueOnce([studentRow()]) // same class -> no mismatch
+      .mockResolvedValueOnce([mockAssignmentRow]);
+
+    await service.assign(
+      'student-1',
+      { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-14', allowCrossClassAssignment: true },
+      'user-1',
+    );
+
+    expect(mockTx.$queryRawUnsafe).toHaveBeenLastCalledWith(
+      expect.any(String), 'student-1', 'bfs-1', 'year-1', '2026-04-14', 'user-1', false,
     );
   });
 
