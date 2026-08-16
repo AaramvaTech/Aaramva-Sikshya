@@ -294,10 +294,15 @@ export class StudentMeService {
     }
 
     // Count by status
+    // CAL-1 Phase 5: exclude holiday dates from both the count and the
+    // working-days denominator — defense in depth alongside StudentAttendance
+    // Service.bulkMark's write-side guard, for any row marked before that
+    // guard existed.
     const counts = await this.tenantPrisma.query<AttendanceCountRow>(
       `SELECT status, COUNT(*) AS count
        FROM student_attendance
        WHERE student_id = $1::uuid AND academic_year_id = $2::uuid
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)
        GROUP BY status`,
       student.id,
       academicYearId,
@@ -307,7 +312,8 @@ export class StudentMeService {
     const workingDaysRows = await this.tenantPrisma.query<WorkingDaysRow>(
       `SELECT COUNT(DISTINCT date) AS working_days
        FROM student_attendance
-       WHERE section_id = $1::uuid AND academic_year_id = $2::uuid`,
+       WHERE section_id = $1::uuid AND academic_year_id = $2::uuid
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)`,
       student.section_id,
       academicYearId,
     );
@@ -318,6 +324,7 @@ export class StudentMeService {
        FROM student_attendance
        WHERE student_id = $1::uuid
          AND date >= CURRENT_DATE - INTERVAL '30 days'
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)
        ORDER BY date DESC`,
       student.id,
     );
@@ -377,7 +384,11 @@ export class StudentMeService {
       }
     }
 
-    const conditions: string[] = ['student_id = $1::uuid'];
+    // CAL-1 Phase 5: a holiday should never appear in the marked-days list.
+    const conditions: string[] = [
+      'student_id = $1::uuid',
+      'date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)',
+    ];
     const params: unknown[] = [student.id];
     let idx = 2;
 

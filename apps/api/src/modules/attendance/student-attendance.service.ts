@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role } from '../common/enums/role.enum';
 import { GuardianScopeService } from '../student/guardian-scope.service';
+import { CalendarService } from '../calendar/calendar.service';
 import { todayAdInNepal } from '../common/utils/date.util';
 import {
   StudentAttendanceRow,
@@ -29,6 +30,7 @@ export class StudentAttendanceService {
     private readonly tenantContext: TenantContextService,
     private readonly eventEmitter: EventEmitter2,
     private readonly guardianScope: GuardianScopeService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   async bulkMark(dto: BulkStudentAttendanceDto, markedById: string): Promise<void> {
@@ -38,6 +40,13 @@ export class StudentAttendanceService {
     markDate.setHours(0, 0, 0, 0);
     if (markDate > today) {
       throw new BadRequestException('Cannot mark attendance for future dates');
+    }
+
+    // CAL-1 Phase 5: don't allow marking attendance on a holiday. Checks the
+    // holiday condition specifically (not isWorkingDay) — Saturday is a
+    // separate, pre-existing platform concept this isn't re-scoping.
+    if (await this.calendarService.isHoliday(dto.date)) {
+      throw new BadRequestException('Cannot mark attendance on a holiday');
     }
 
     await this.tenantPrisma.run(async (tx) => {
@@ -187,10 +196,14 @@ export class StudentAttendanceService {
     if (!students[0]) throw new NotFoundException(`Student ${studentId} not found`);
     const student = students[0];
 
+    // CAL-1 Phase 5: exclude holiday dates from both the count and the
+    // working-days denominator — defense in depth alongside bulkMark's
+    // write-side guard, for any row marked before that guard existed.
     const counts = await this.tenantPrisma.query<{ status: string; count: string }>(
       `SELECT status, COUNT(*) AS count
        FROM student_attendance
        WHERE student_id = $1::uuid AND academic_year_id = $2::uuid
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)
        GROUP BY status`,
       studentId,
       academicYearId,
@@ -199,7 +212,8 @@ export class StudentAttendanceService {
     const workingDaysRows = await this.tenantPrisma.query<{ working_days: string }>(
       `SELECT COUNT(DISTINCT date) AS working_days
        FROM student_attendance
-       WHERE section_id = $1::uuid AND academic_year_id = $2::uuid`,
+       WHERE section_id = $1::uuid AND academic_year_id = $2::uuid
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)`,
       student.section_id,
       academicYearId,
     );
@@ -209,6 +223,7 @@ export class StudentAttendanceService {
        FROM student_attendance
        WHERE student_id = $1::uuid
          AND date >= CURRENT_DATE - INTERVAL '30 days'
+         AND date NOT IN (SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL)
        ORDER BY date DESC`,
       studentId,
     );

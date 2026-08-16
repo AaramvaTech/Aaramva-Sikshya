@@ -296,6 +296,27 @@ describe('StudentMeService', () => {
         service.getMyAttendanceSummary('unlinked-user', {}),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    // CAL-1 Phase 5.
+    it('excludes holiday dates from the counts, working-days, and history queries', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([mockStudentRow])
+        .mockResolvedValueOnce([mockAcademicYear])
+        .mockResolvedValueOnce(mockCounts)
+        .mockResolvedValueOnce(mockWorkingDays)
+        .mockResolvedValueOnce(mockHistory);
+
+      await service.getMyAttendanceSummary(STUDENT_USER_ID, {});
+
+      const countsSql = (tenantPrisma.query as jest.Mock).mock.calls[2][0] as string;
+      const workingDaysSql = (tenantPrisma.query as jest.Mock).mock.calls[3][0] as string;
+      const historySql = (tenantPrisma.query as jest.Mock).mock.calls[4][0] as string;
+      for (const sql of [countsSql, workingDaysSql, historySql]) {
+        expect(sql).toMatch(
+          /NOT IN \(SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL\)/,
+        );
+      }
+    });
   });
 
   // ─── B.4: getMyAttendanceHistory() ──────────────────────────────────────────
