@@ -2228,3 +2228,27 @@ export interface CashierCloseResult {
   gatewayTotal: number;
   byMethod: { method: string; total: number; count: number }[];
 }
+
+// ── CAL-1 — Calendar / holidays ─────────────────────────────────────────────
+export type CalendarDaySource = 'GOVT' | 'SCHOOL';
+export interface CalendarDay {
+  id: string;
+  date: { ad: string; bs: string };
+  academicYearId: string | null;
+  isHoliday: boolean;
+  source: CalendarDaySource;
+  labelEn: string;
+  labelNe: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+export interface CreateSchoolHolidayData {
+  date: string;
+  labelEn: string;
+  labelNe?: string;
+}
+export interface UpdateSchoolHolidayData {
+  date?: string;
+  labelEn?: string;
+  labelNe?: string;
+}

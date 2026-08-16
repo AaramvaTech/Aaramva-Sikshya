@@ -60,6 +60,7 @@ const navItems: NavItem[] = [
       { name: 'Classes', path: '/academic/classes' },
       { name: 'Subjects', path: '/academic/subjects' },
       { name: 'Timetable', path: '/academic/timetable' },
+      { name: 'Holidays', path: '/academic/holidays' },
     ],
   },
   {

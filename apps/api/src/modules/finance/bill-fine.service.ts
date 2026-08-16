@@ -4,7 +4,8 @@ import { LedgerService } from './ledger.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
-import { pickApplicableRule, computeTotalFine, FineRule } from './bill-fine.util';
+import { CalendarService } from '../calendar/calendar.service';
+import { pickApplicableRule, computeTotalFine, addDaysAd, FineRule } from './bill-fine.util';
 import {
   BillFineAccrualRow, BillFineRunRow, BillFineAccrualResponseDto, BillFineRunResponseDto,
   toBillFineAccrualResponse, toBillFineRunResponse,
@@ -37,6 +38,7 @@ export class BillFineService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly ledgerService: LedgerService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   async runLateFees(
@@ -186,9 +188,9 @@ export class BillFineService {
     postedById: string | null,
   ): Promise<Money | null> {
     return this.ledgerService.withStudentLock(candidate.student_id, async (tx: TenantTx) => {
-      const [state] = await tx.$queryRawUnsafe<{ days_overdue: number; outstanding: string; already_posted: string }[]>(
+      const [state] = await tx.$queryRawUnsafe<{ due_date: Date | string; outstanding: string; already_posted: string }[]>(
         `SELECT
-           ($2::date - bi.due_date) AS days_overdue,
+           bi.due_date,
            bi.total_receivable
              - COALESCE((SELECT SUM(bpa.amount) FROM bill_payment_allocations bpa
                          JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
@@ -202,11 +204,18 @@ export class BillFineService {
                     ), 0) AS already_posted
          FROM bill_invoices bi
          WHERE bi.id = $1::uuid`,
-        candidate.invoice_id, today,
+        candidate.invoice_id,
       );
       if (!state) return null;
 
-      const daysOverdue = state.days_overdue;
+      // CAL-1 Phase 4: working days, not calendar days — a due date's own day
+      // never counts (dayAfterDue), and CalendarService.countWorkingDays
+      // excludes Saturdays + any holiday (GOVT or SCHOOL) in the range, so a
+      // holiday no longer accrues fine days against the parent.
+      const dueDate = state.due_date instanceof Date
+        ? state.due_date.toISOString().split('T')[0]
+        : String(state.due_date);
+      const daysOverdue = await this.calendarService.countWorkingDays(addDaysAd(dueDate, 1), today);
       if (daysOverdue <= rule.graceDays) return null; // B7-2: still in grace
 
       const outstanding = toMoney(state.outstanding);

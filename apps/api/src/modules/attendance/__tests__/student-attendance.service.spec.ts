@@ -7,6 +7,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StudentAttendanceStatus } from '../dto/student-attendance.dto';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
+import { CalendarService } from '../../calendar/calendar.service';
 
 const mockTx = {
   $queryRawUnsafe: jest.fn(),
@@ -40,6 +41,7 @@ describe('StudentAttendanceService', () => {
   let tenantContext: jest.Mocked<TenantContextService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
   let guardianScope: jest.Mocked<GuardianScopeService>;
+  let calendarService: jest.Mocked<CalendarService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -68,6 +70,7 @@ describe('StudentAttendanceService', () => {
           useValue: { emit: jest.fn() },
         },
         { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
+        { provide: CalendarService, useValue: { isHoliday: jest.fn() } },
       ],
     }).compile();
 
@@ -76,6 +79,7 @@ describe('StudentAttendanceService', () => {
     tenantContext = module.get(TenantContextService) as jest.Mocked<TenantContextService>;
     eventEmitter = module.get(EventEmitter2) as jest.Mocked<EventEmitter2>;
     guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
+    calendarService = module.get(CalendarService) as jest.Mocked<CalendarService>;
 
     jest.clearAllMocks();
     mockTx.$queryRawUnsafe.mockReset();
@@ -88,6 +92,9 @@ describe('StudentAttendanceService', () => {
       slug: 'test-school',
       schemaName: 'tenant_test',
     });
+    // Default: not a holiday, so every pre-existing bulkMark test that
+    // doesn't care about CAL-1 keeps passing unmodified.
+    calendarService.isHoliday.mockResolvedValue(false);
   });
 
   describe('bulkMark()', () => {
@@ -139,6 +146,16 @@ describe('StudentAttendanceService', () => {
           'teacher-1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    // CAL-1 Phase 5.
+    it('throws BadRequestException when the date is a holiday, and never touches the DB', async () => {
+      calendarService.isHoliday.mockResolvedValueOnce(true);
+
+      await expect(
+        service.bulkMark(baseBulkDto, 'teacher-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(tenantPrisma.run).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException for a future date', async () => {
@@ -205,6 +222,25 @@ describe('StudentAttendanceService', () => {
   });
 
   describe('getStudentSummary()', () => {
+    // CAL-1 Phase 5 — regression guard: a holiday must never inflate either
+    // the numerator (status counts) or the denominator (working days).
+    it('excludes holiday dates from both the status-count and working-days queries', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-1', full_name: 'Ram Sharma', section_id: 'section-1' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ working_days: '0' }])
+        .mockResolvedValueOnce([]);
+
+      await service.getStudentSummary('student-1', 'year-1');
+
+      const countsSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
+      const workingDaysSql = (tenantPrisma.query as jest.Mock).mock.calls[2][0] as string;
+      const historySql = (tenantPrisma.query as jest.Mock).mock.calls[3][0] as string;
+      for (const sql of [countsSql, workingDaysSql, historySql]) {
+        expect(sql).toMatch(/NOT IN \(SELECT date FROM school_calendar_days WHERE is_holiday = true AND deleted_at IS NULL\)/);
+      }
+    });
+
     it('calculates attendancePercent correctly', async () => {
       (tenantPrisma.query as jest.Mock)
         .mockResolvedValueOnce([{ id: 'student-1', full_name: 'Ram Sharma', section_id: 'section-1' }])

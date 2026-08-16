@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { StudentFeeStructureAssignmentService } from '../student-fee-structure-assignment.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -65,6 +65,7 @@ describe('StudentFeeStructureAssignmentService', () => {
     mockTx.$queryRawUnsafe
       .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure
       .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([{ effective_from: '2026-01-01' }]) // currently-open row, earlier than new date
       .mockResolvedValueOnce([mockAssignmentRow]); // insert RETURNING
 
     const result = await service.assign(
@@ -89,6 +90,49 @@ describe('StudentFeeStructureAssignmentService', () => {
       '2026-04-14',
       'user-1',
     );
+  });
+
+  it('assign() allows a new effectiveFrom when there is no currently-open row', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure
+      .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([]) // no open row
+      .mockResolvedValueOnce([mockAssignmentRow]); // insert RETURNING
+
+    const result = await service.assign(
+      'student-1',
+      { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-14' },
+      'user-1',
+    );
+
+    expect(result.id).toBe('sfsa-1');
+  });
+
+  // BILL-DATA-1 Phase 3: the exact bug found in motherland-school — a
+  // backdated re-assign() call closing the currently-open row with
+  // effective_to < effective_from.
+  it('assign() rejects a backdated effectiveFrom that would invert the row being closed', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure
+      .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([{ effective_from: '2026-08-16' }]); // currently-open row, LATER than new date
+
+    await expect(
+      service.assign('student-1', { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-13' }, 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it('assign() rejects a same-day re-assignment (would produce a 1-day-inverted close)', async () => {
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }]) // structure
+      .mockResolvedValueOnce([{ id: 'student-1' }]) // student
+      .mockResolvedValueOnce([{ effective_from: '2026-04-13' }]); // currently-open row, SAME date
+
+    await expect(
+      service.assign('student-1', { feeStructureId: 'bfs-1', effectiveFrom: '2026-04-13' }, 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
   });
 
   it('findActiveAssignment() queries the effective range around asOfDate', async () => {

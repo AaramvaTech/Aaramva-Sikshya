@@ -1,5 +1,15 @@
 import { Money } from '../../common/money/money';
 
+/** Adds n days to an AD date string ("YYYY-MM-DD"), returning the same
+ *  format. UTC-frame arithmetic on the date's own local components (not
+ *  toISOString() on a locally-constructed Date) — the FIX-2 discipline for
+ *  DB-sourced DATE values, which this is. */
+export function addDaysAd(date: string, n: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
 export interface FineRule {
   id: string;
   scope: 'GLOBAL' | 'FEE_HEAD';
