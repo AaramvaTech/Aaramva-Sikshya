@@ -48,7 +48,6 @@ const mockStudentRow = {
   academic_year: '2081-2082',
   previous_school: null,
   photo_url: null,
-  documents: [],
   status: 'ACTIVE',
   created_by: 'uid-1',
   created_at: new Date('2024-07-16T10:00:00Z'),

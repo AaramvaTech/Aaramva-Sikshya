@@ -136,6 +136,28 @@ export class FileAccessService {
         throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
       }
 
+      // STUDENT-DOCS-1: staff read freely; the owning student and that
+      // student's guardians may read their own — same shape as submission-file.
+      case 'student-document': {
+        const rows = await this.tenantPrisma.query<{
+          student_id: string;
+          user_id: string | null;
+        }>(
+          `SELECT sd.student_id, s.user_id
+           FROM student_documents sd
+           JOIN students s ON s.id = sd.student_id
+           WHERE sd.file_url = $1 AND sd.deleted_at IS NULL`,
+          key,
+        );
+        if (rows.length === 0) throw new NotFoundException('File not found.');
+        if (STAFF_READERS.includes(user.role)) return;
+        if (user.role === Role.STUDENT && rows[0].user_id === user.userId) return;
+        if (user.role === Role.PARENT) {
+          if (await this.guardianScope.ownsStudent(user.userId, rows[0].student_id)) return;
+        }
+        throw new ForbiddenException(errorBody('FORBIDDEN_SCOPE'));
+      }
+
       // EDU-1: teacher homework attachment — staff read freely; students and
       // parents only when targeted by a non-DRAFT assignment referencing it.
       case 'assignment-attachment': {

@@ -135,7 +135,6 @@ export interface StudentDetail {
   academicYear: string | null;
   previousSchool: string | null;
   photoUrl: string | null;
-  documents: StudentDocument[];
   status: string;
   createdAt: string;
 }
@@ -160,9 +159,10 @@ export interface StudentStats {
 
 export interface StudentDocument {
   id: string;
+  studentId: string;
   documentType: string;
   fileUrl: string;
-  fileName: string;
+  fileName: string | null;
   uploadedAt: string;
 }
 

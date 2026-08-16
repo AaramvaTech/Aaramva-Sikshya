@@ -2,13 +2,14 @@
 
 import { useRef, useState, type ReactNode, type ElementType } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   BookOpen,
   Camera,
   CalendarDays,
   Edit2,
+  FileText,
   Loader2,
   Mail,
   Pencil,
@@ -19,7 +20,12 @@ import {
   Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStudent, useCurrentAcademicYear, useRemoveGuardian } from '@/lib/hooks/use-students';
+import {
+  useStudent,
+  useCurrentAcademicYear,
+  useRemoveGuardian,
+  useStudentDocuments,
+} from '@/lib/hooks/use-students';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useStudentAttendanceSummary } from '@/lib/hooks/use-attendance';
 import { useStudentBalance, useStudentBillInvoices } from '@/lib/hooks/use-bill-payment';
@@ -27,6 +33,7 @@ import { sumInvoiceTotals } from '@/lib/invoice-totals';
 import { studentsApi } from '@/lib/api/students.api';
 import { uploadFile } from '@/lib/upload';
 import { useFileUrl } from '@/lib/hooks/use-file-url';
+import { FileDownloadLink } from '@/components/shared/file-download-link';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { BsDate } from '@/components/shared/bs-date';
@@ -43,12 +50,22 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { StudentBillingTab } from '@/components/finance/student-billing-tab';
 import { canSeeBillingTab } from '@/lib/billing-tab-access';
+import { canUploadStudentDocuments } from '@/lib/student-document-access';
 import type { StudentDocument } from '@/types/api.types';
+
+// STUDENT-DOCS-1 Phase 2 (locked list, confirmed before building):
+// PASSPORT_PHOTO is deliberately distinct from the profile photo above
+// (students.photoUrl) — a formal ID-style photo, not the avatar.
+const DOCUMENT_TYPES = [
+  'BIRTH_CERTIFICATE', 'TRANSFER_CERTIFICATE', 'CHARACTER_CERTIFICATE',
+  'MARKSHEET', 'CITIZENSHIP', 'VACCINATION_CARD', 'PASSPORT_PHOTO', 'OTHER',
+];
 
 // BILLING-CUTOVER Phase 4: the old 'fees' tab (FeesTab/AssignmentRow, old
 // Finance's per-student-item override editor) is removed — 'billing' below
@@ -214,7 +231,12 @@ export default function StudentProfilePage() {
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [showEnrollForm, setShowEnrollForm] = useState(false);
+  const [docDialogOpen, setDocDialogOpen] = useState(false);
+  const [docType, setDocType] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docUploading, setDocUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const { data: student, isLoading } = useStudent(id);
   const { data: currentYear } = useCurrentAcademicYear();
@@ -222,12 +244,11 @@ export default function StudentProfilePage() {
 
   const role = useAuthStore((s) => s.user?.role);
   const canSeeBilling = canSeeBillingTab(role);
+  const canUploadDocuments = canUploadStudentDocuments(role);
   const visibleTabs = TABS.filter((t) => t.key !== 'billing' || canSeeBilling);
 
-  const { data: documents, isLoading: docsLoading } = useQuery({
-    queryKey: ['student-documents', id],
-    queryFn: () => studentsApi.getDocuments(id).then((r) => r.data.data),
-    enabled: activeTab === 'documents' && !!id,
+  const { data: documents, isLoading: docsLoading } = useStudentDocuments(id, {
+    enabled: activeTab === 'documents',
   });
 
   // FILE-1: storage keys resolve to presigned GETs; legacy values pass through.
@@ -279,6 +300,50 @@ export default function StudentProfilePage() {
     setPendingPhoto(null);
     setPendingPhotoFile(null);
     setPhotoDialogOpen(true);
+  }
+
+  // ── Document upload (STUDENT-DOCS-1) ──────────────────────────────────────
+  function handleDocFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File must be less than 10 MB');
+      return;
+    }
+    setDocFile(file);
+  }
+
+  async function handleDocUpload() {
+    if (!docType || !docFile) {
+      toast.error('Please select document type and file');
+      return;
+    }
+    setDocUploading(true);
+    try {
+      // FILE-1: presign→PUT→fileKey (same shared helper as the profile photo
+      // above and staff's own document upload). Brand-new feature, no legacy
+      // base64 data to migrate — storage being disabled is a real error here,
+      // not a fallback path.
+      const uploaded = await uploadFile(docFile, 'student-document');
+      if (uploaded.mode !== 'key') {
+        toast.error('File storage is unavailable — cannot upload documents right now');
+        return;
+      }
+      await studentsApi.addDocument(id, {
+        documentType: docType,
+        fileKey: uploaded.key,
+        fileName: docFile.name,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['student-documents', id] });
+      toast.success('Document uploaded');
+      setDocDialogOpen(false);
+      setDocType('');
+      setDocFile(null);
+    } catch {
+      toast.error('Failed to upload document');
+    } finally {
+      setDocUploading(false);
+    }
   }
 
   if (isLoading) {
@@ -665,7 +730,20 @@ export default function StudentProfilePage() {
           <div className="border-b border-stroke px-5 py-4 dark:border-strokedark">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-black dark:text-white">Documents</h4>
-              <Button size="sm" variant="outline">Upload Document</Button>
+              {canUploadDocuments && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDocType('');
+                    setDocFile(null);
+                    setDocDialogOpen(true);
+                  }}
+                >
+                  <FileText className="h-4 w-4 mr-1.5" />
+                  Upload Document
+                </Button>
+              )}
             </div>
           </div>
           <div className="p-5">
@@ -686,25 +764,30 @@ export default function StudentProfilePage() {
                 <tbody className="divide-y divide-stroke dark:divide-strokedark">
                   {documents.map((doc: StudentDocument) => (
                     <tr key={doc.id} className="hover:bg-gray-2 dark:hover:bg-meta-4">
-                      <td className="py-2 text-black dark:text-white">{doc.documentType}</td>
-                      <td className="py-2 text-gray-500">{doc.fileName}</td>
+                      <td className="py-2 text-black dark:text-white">
+                        <Badge variant="outline" className="text-xs">
+                          {doc.documentType.replace(/_/g, ' ')}
+                        </Badge>
+                      </td>
+                      <td className="py-2 text-gray-500">{doc.fileName ?? '—'}</td>
                       <td className="py-2 text-gray-500"><BsDate date={doc.uploadedAt} /></td>
                       <td className="py-2 text-right">
-                        <a
-                          href={doc.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <FileDownloadLink
+                          value={doc.fileUrl}
                           className="text-brand-500 hover:underline text-xs"
                         >
                           Download
-                        </a>
+                        </FileDownloadLink>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-8">No documents uploaded yet.</p>
+              <div className="text-center py-8">
+                <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">No documents uploaded yet.</p>
+              </div>
             )}
           </div>
         </div>
@@ -774,6 +857,94 @@ export default function StudentProfilePage() {
             >
               {photoLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Photo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document upload dialog (STUDENT-DOCS-1) */}
+      <Dialog
+        open={docDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDocDialogOpen(false);
+            setDocType('');
+            setDocFile(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Upload Document</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Document Type *</Label>
+              <div className="flex flex-wrap gap-2">
+                {DOCUMENT_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setDocType(type)}
+                    className={cn(
+                      'px-3 py-1.5 text-xs rounded-full border transition-colors',
+                      docType === type
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400 dark:border-gray-700 dark:text-gray-400',
+                    )}
+                  >
+                    {type === 'PASSPORT_PHOTO' ? 'Passport-size photo' : type.replace(/_/g, ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>File *</Label>
+              <input
+                ref={docInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleDocFileChange}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => docInputRef.current?.click()}
+                className="w-full"
+                disabled={!docType}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {docFile ? docFile.name : 'Choose file'}
+              </Button>
+              {docFile && (
+                <p className="text-xs text-gray-400">
+                  {(docFile.size / 1024).toFixed(0)} KB · {docFile.type || 'unknown type'}
+                </p>
+              )}
+              <p className="text-xs text-gray-400">Max 10 MB · Images or PDF</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDocDialogOpen(false);
+                setDocType('');
+                setDocFile(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-brand-500 hover:bg-brand-600 text-white"
+              onClick={handleDocUpload}
+              disabled={!docType || !docFile || docUploading}
+            >
+              {docUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Upload
             </Button>
           </DialogFooter>
         </DialogContent>
