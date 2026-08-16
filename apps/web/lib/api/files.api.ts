@@ -9,6 +9,7 @@ export type FileKind =
   | 'school-stamp'
   | 'qr-image'
   | 'staff-document'
+  | 'student-document'
   | 'assignment-attachment'
   | 'submission-file';
 

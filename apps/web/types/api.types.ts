@@ -160,9 +160,10 @@ export interface StudentStats {
 
 export interface StudentDocument {
   id: string;
+  studentId: string;
   documentType: string;
   fileUrl: string;
-  fileName: string;
+  fileName: string | null;
   uploadedAt: string;
 }
 
