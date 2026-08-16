@@ -1,5 +1,19 @@
 import { Money } from '../../../common/money/money';
-import { pickApplicableRule, computeTotalFine, FineRule } from '../bill-fine.util';
+import { pickApplicableRule, computeTotalFine, addDaysAd, FineRule } from '../bill-fine.util';
+
+describe('addDaysAd', () => {
+  it('adds days within a month', () => {
+    expect(addDaysAd('2026-07-24', 1)).toBe('2026-07-25');
+  });
+
+  it('rolls over a month boundary', () => {
+    expect(addDaysAd('2026-07-31', 1)).toBe('2026-08-01');
+  });
+
+  it('rolls over a year boundary', () => {
+    expect(addDaysAd('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
 
 function rule(overrides: Partial<FineRule> = {}): FineRule {
   return {
