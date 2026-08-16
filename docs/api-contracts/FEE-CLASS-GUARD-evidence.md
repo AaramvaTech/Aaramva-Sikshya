@@ -480,3 +480,70 @@ These are regression cover, **not** proof — sections 3–9 are the proof.
 3. **`class_id IS NULL` blocks.** A student with no class cannot be confirmed as a
    match, so `isClassMismatch` returns true and the guard rejects. Confirmed as
    intended at the API checkpoint review.
+
+---
+
+# Web checkpoint (spec §3)
+
+## 13. What was built
+
+| Spec §3 requirement | Where |
+|---|---|
+| Single-student Billing tab: inline warning before submit, naming both classes, explicit confirmation | `components/finance/fee-structure-assignment-panel.tsx` + `class-mismatch-warning.tsx` |
+| Never auto-send the override flag | `lib/class-guard.ts` → `overrideFlag()`, the single expression both forms' request bodies spread |
+| Bulk Assign: scope picker defaults to the structure's own class/section | `bulk-assign-dialog.tsx` → `pickStructure()` |
+| Bulk Assign: same warning + confirmation on a changed scope or a spanning hand-picked list | `bulk-assign-dialog.tsx` (CLASS branch compares the chosen scope; STUDENT_LIST branch is per-student and names the affected students) |
+| Fee Preview surfaces `classMismatchOverridden` | `fee-preview-panel.tsx` → `CrossClassBadge` (also on the current + historical rows in the assignment panel) |
+| `failures[].reason` optional on historical rows | `bulk-job-progress.tsx` — the label is additive, `error` always renders |
+
+The client-side comparison is **advisory only** and says so in the code: the
+server re-checks every write and is the sole authority. It compares by class/
+section **name**, not id, because `StudentDetail` carries only
+`className`/`sectionName` — sound within a tenant, since the schema has
+`UNIQUE(name)` on `classes` and `UNIQUE(class_id, name)` on `sections`. No API
+change was needed for the web half.
+
+`resolveStructureScope()` returns `null` while `useClasses()` is still loading,
+and both forms gate on it — an unresolved scope means "don't know yet", never
+"mismatch". Without that gate a half-loaded class list would fire a mismatch
+warning on a perfectly matching assignment. This is the async-gate bug class
+this codebase has shipped repeatedly (WEB-P Phases 2–4), so it is pinned by
+tests rather than left to inspection.
+
+The confirmation is re-armed (unticked) on every input that can change the
+verdict — structure pick, scope-type tab, class, section, adding/removing a
+picked student, and closing the form — so a stale tick cannot ride along.
+`overrideFlag(false, true)` returning `{}` is the backstop for that.
+
+## 14. Web verification — and its limit
+
+**Stated plainly: no browser automation was available in this session** (no
+Playwright or Puppeteer in the repo or the toolset), so unlike WEB-P Phases 1–4
+there is **no real click-through proof of these screens**. This is the same
+limitation disclosed for WEB-P Phase 5. What was actually run:
+
+```
+$ npx tsc --noEmit          -> clean
+$ npx vitest run            -> Test Files 42 passed (42)
+                               Tests     550 passed (550)      (was 531; +19)
+$ npm run build             -> succeeded, full route table emitted
+```
+
+The 19 new tests are the parts worth pinning, not filler:
+
+- `lib/__tests__/class-guard.test.ts` (16) — the mismatch rule mirrored
+  case-for-case against the API's own `bill-class-guard.util.spec.ts`; the
+  `resolveStructureScope` async gate, including an explicit case showing what
+  the false-warning bug would look like if `null` were coerced to a scope; and
+  `overrideFlag`'s four combinations, including `overrideFlag(true, false)`
+  asserting the key is **absent**, not `false`.
+- `components/finance/__tests__/bulk-job-progress.test.tsx` (+3) — a
+  `CLASS_MISMATCH` row renders the label, a historical row with **no** `reason`
+  renders its `error` and no label, and a mixed list renders both.
+
+`npm run build` is the strongest non-browser signal available here: it compiles
+and render-tree-checks every changed component in a real Next production build.
+
+**Not verified, and needing a human pass before merge:** the actual rendered
+appearance and click behaviour of the warning in both forms, and that the Bulk
+Assign scope picker visibly repopulates when a structure is chosen.

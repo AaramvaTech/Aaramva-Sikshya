@@ -17,10 +17,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { BulkJobProgress } from './bulk-job-progress';
+import { ClassMismatchWarning } from './class-mismatch-warning';
 import { useFeeStructures } from '@/lib/hooks/use-bill-catalog';
 import { useAcademicYears, useCurrentAcademicYear, useClasses, useStudents } from '@/lib/hooks/use-students';
 import { useBulkAssign } from '@/lib/hooks/use-bill-assignment';
 import { addPickedStudent, removePickedStudent } from '@/lib/student-picker';
+import {
+  describeScope, isClassMismatch, overrideFlag, resolveStructureScope, type ClassScope,
+} from '@/lib/class-guard';
 import { extractApiErrors } from '@/lib/api-errors';
 import type { BulkAssignScopeType, StudentSummary } from '@/types/api.types';
 
@@ -52,6 +56,7 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [jobId, setJobId] = useState<string | null>(null);
+  const [confirmedOverride, setConfirmedOverride] = useState(false);
 
   const { data: currentYear } = useCurrentAcademicYear();
   const { data: allYears } = useAcademicYears();
@@ -70,6 +75,48 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
 
   const bulkAssign = useBulkAssign();
 
+  // ─── FEE-CLASS-GUARD (spec §3) ─────────────────────────────────────────────
+  // Advisory client-side mirror of the server rule; the server re-checks
+  // per-student regardless. `structureScope` is null until the class list has
+  // loaded — null means "don't know yet", never "mismatch".
+  const selectedStructure = structures.find((s) => s.id === feeStructureId);
+  const structureScope = resolveStructureScope(classes, selectedStructure);
+
+  // CLASS scope: compare the picked class/section against the structure's own.
+  const chosenClassScope: ClassScope | null = (() => {
+    if (!classId || !classes) return null;
+    const cls = classes.find((c) => c.id === classId);
+    if (!cls) return null;
+    return { className: cls.name, sectionName: sections.find((s) => s.id === sectionId)?.name ?? null };
+  })();
+
+  // STUDENT_LIST scope: per-student, since a hand-picked list can span classes.
+  const mismatchedStudents = structureScope
+    ? pickedStudents.filter((s) =>
+        isClassMismatch(structureScope, { className: s.className, sectionName: s.sectionName }),
+      )
+    : [];
+
+  const mismatch = !!structureScope && (
+    scopeType === 'CLASS'
+      ? !!chosenClassScope && isClassMismatch(structureScope, chosenClassScope)
+      : mismatchedStudents.length > 0
+  );
+
+  /** Every input that can change the verdict re-arms the confirmation. */
+  function resetConfirmation() { setConfirmedOverride(false); }
+
+  /** Spec §3: the scope picker defaults to the structure's own class/section. */
+  function pickStructure(id: string) {
+    setFeeStructureId(id);
+    resetConfirmation();
+    const structure = structures.find((s) => s.id === id);
+    if (structure) {
+      setClassId(structure.classId);
+      setSectionId(structure.sectionId ?? '');
+    }
+  }
+
   function handleSearchInput(value: string) {
     setStudentSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -84,10 +131,12 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
     setStudentSearch('');
     setSearchQuery('');
     setShowDropdown(false);
+    resetConfirmation();
   }
 
   function removeStudent(id: string) {
     setPickedStudents((prev) => removePickedStudent(prev, id));
+    resetConfirmation();
   }
 
   function reset() {
@@ -101,16 +150,25 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
     setSearchQuery('');
     setPickedStudents([]);
     setJobId(null);
+    setConfirmedOverride(false);
   }
 
   const canSubmit =
     !!feeStructureId &&
     !!effectiveYearId &&
     !!effectiveFrom &&
-    (scopeType === 'CLASS' ? !!classId : pickedStudents.length > 0);
+    (scopeType === 'CLASS' ? !!classId : pickedStudents.length > 0) &&
+    (!mismatch || confirmedOverride);
 
   async function handleSubmit() {
-    if (!canSubmit) { toast.error('Fill in every required field'); return; }
+    if (!canSubmit) {
+      toast.error(
+        mismatch && !confirmedOverride
+          ? 'Confirm the class mismatch before starting'
+          : 'Fill in every required field',
+      );
+      return;
+    }
     try {
       const res = await bulkAssign.mutateAsync({
         feeStructureId,
@@ -120,6 +178,8 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
           sectionId: scopeType === 'CLASS' && sectionId ? sectionId : undefined,
           studentIds: scopeType === 'STUDENT_LIST' ? pickedStudents.map((s) => s.id) : undefined,
           effectiveFrom,
+          // overrideFlag() is the single place the "never auto-send" rule lives.
+          ...overrideFlag(mismatch, confirmedOverride),
         },
       });
       setJobId(res.data.data.id);
@@ -174,7 +234,7 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
 
               <div className="space-y-1.5">
                 <Label>Fee Structure *</Label>
-                <Select value={feeStructureId} onValueChange={(v) => setFeeStructureId(v ?? '')}>
+                <Select value={feeStructureId} onValueChange={(v) => pickStructure(v ?? '')}>
                   <SelectTrigger>
                     <span className={feeStructureId ? '' : 'text-muted-foreground'}>
                       {feeStructureId
@@ -197,7 +257,7 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
                 {(['CLASS', 'STUDENT_LIST'] as BulkAssignScopeType[]).map((s) => (
                   <button
                     key={s}
-                    onClick={() => setScopeType(s)}
+                    onClick={() => { setScopeType(s); resetConfirmation(); }}
                     className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                       scopeType === s
                         ? 'border-brand-500 text-brand-600 dark:text-brand-400'
@@ -212,7 +272,7 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
               {scopeType === 'CLASS' && (
                 <div className="space-y-1.5">
                   <Label>Class *</Label>
-                  <Select value={classId} onValueChange={(v) => { setClassId(v ?? ''); setSectionId(''); }}>
+                  <Select value={classId} onValueChange={(v) => { setClassId(v ?? ''); setSectionId(''); resetConfirmation(); }}>
                     <SelectTrigger>
                       <span className={classId ? '' : 'text-muted-foreground'}>
                         {classId ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…') : 'Select class'}
@@ -226,7 +286,7 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
                   {classId && sections.length > 0 && (
                     <>
                       <Label className="mt-2 block">Section (optional)</Label>
-                      <Select value={sectionId} onValueChange={(v) => setSectionId(v ?? '')}>
+                      <Select value={sectionId} onValueChange={(v) => { setSectionId(v ?? ''); resetConfirmation(); }}>
                         <SelectTrigger>
                           <span className={sectionId ? '' : 'text-muted-foreground'}>
                             {sectionId ? (sections.find((sec) => sec.id === sectionId)?.name ?? 'Loading…') : 'All sections'}
@@ -295,6 +355,40 @@ export function BulkAssignDialog({ open, onOpenChange }: Props) {
                 minYear={bsYear - 1}
                 maxYear={bsYear + 1}
               />
+
+              {mismatch && structureScope && (
+                <ClassMismatchWarning
+                  structure={structureScope}
+                  mismatchWith={
+                    scopeType === 'CLASS' && chosenClassScope ? (
+                      <>the selected scope is <strong>{describeScope(chosenClassScope)}</strong></>
+                    ) : (
+                      <>
+                        <strong>{mismatchedStudents.length}</strong> of {pickedStudents.length} picked
+                        student{pickedStudents.length === 1 ? '' : 's'} {mismatchedStudents.length === 1 ? 'is' : 'are'} in
+                        another class
+                      </>
+                    )
+                  }
+                  checked={confirmedOverride}
+                  onCheckedChange={setConfirmedOverride}
+                >
+                  {scopeType === 'STUDENT_LIST' ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      {mismatchedStudents
+                        .map((s) => `${s.fullName} (${s.className ?? 'no class'}${s.sectionName ? ` — ${s.sectionName}` : ''})`)
+                        .join(', ')}
+                      . Without this confirmation they are skipped and reported as
+                      &ldquo;Class mismatch&rdquo;; everyone else is still assigned.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Without this confirmation every student in that scope is skipped and reported
+                      as &ldquo;Class mismatch&rdquo;.
+                    </p>
+                  )}
+                </ClassMismatchWarning>
+              )}
             </div>
 
             <DialogFooter>

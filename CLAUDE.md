@@ -1372,6 +1372,68 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   **1093 api tests total (+46 across both checkpoints), `nest build` clean.** Tenant migration
   canary-applied to `demo` first, then rolled to all 8 tenants.
 
+- [x] FEE-CLASS-GUARD — class/section guard on fee-structure assignment
+  (`docs/api-contracts/FEE-CLASS-GUARD-spec.md` + `-evidence.md`, branch
+  `feat/fee-class-guard` off `main`). A `bill_fee_structure` is scoped to a class (and
+  optionally a section), but nothing checked that at assignment time — a Grade 1 structure
+  could be assigned to a Grade 5 student silently, on **either** write path. There are exactly
+  two writers of `student_fee_structure_assignments` (grepped: `assign()` and the bulk runner's
+  chunk INSERT) and both now route through one shared rule,
+  `finance/bill-class-guard.util.ts` — a rule duplicated in two places is a rule that
+  eventually disagrees with itself. **Single assign:** mismatch → `422 CLASS_MISMATCH`
+  (`ERROR_CATALOG` entry; the spec's literal `{code, feeStructure, target}` body maps onto
+  ERR-1's mandatory envelope as `error.code` + `error.details`), nothing written;
+  `allowCrossClassAssignment: true` proceeds and stamps `class_mismatch_overridden` /
+  `overridden_by_user_id` / `overridden_at`. **Bulk assign:** the flag is frozen onto the job
+  row (`allow_cross_class`, same reasoning as `scope_student_ids` — the poller must never
+  re-derive what the caller asked for) and the check runs **per student inside the job**, since
+  scope can be a hand-picked list spanning classes; a mismatch skips only that student. **The
+  stamp is per-student even though the flag is per-run** — one `unnest($1::uuid[],
+  $6::boolean[])` insert carries a parallel boolean array, so passing the flag on a matching
+  assignment is a no-op and a client cannot manufacture an audit trail.
+  Migration **0038** (stamp columns + an all-or-nothing CHECK, plus `allow_cross_class`);
+  additive, **no backfill** — the spec withholds authorization to touch existing rows, so
+  pre-existing rows read "not overridden", which is literally true but is *not* a claim they
+  were class-matched. **`class_id IS NULL` blocks** (can't confirm a match → don't wave
+  through). **The override is deliberately NOT role-restricted** — deliberate action plus the
+  audit stamp is the intended friction, not permission; cross-class structures (Transport,
+  Hostel) are routine for the same people who do ordinary assignment (spec addendum A2).
+  **Spec §2's named outcome list was wrong** — `Will be charged`/`No fee assigned`/`Already
+  billed`/`Excluded`/`Failed` are *bill-run line* outcomes (`BillRunLineOutcome`), never Bulk
+  Assign's; its real per-student reporting is `bulk_assign_jobs.failures[]`, extended with an
+  **optional** `reason` (`CLASS_MISMATCH`/`STUDENT_INVALID`) — optional because `failures` is
+  jsonb that was never migrated, so **every consumer must handle `reason` absent** (author's
+  error, acknowledged at the API checkpoint; addendum A3). **Migration proved twice:** canary
+  `demo` → all 8 tenants, AND — because `main`'s last migration is `0032` while the dev DB sits
+  at `0037` from unmerged branches — re-proved from scratch on a throwaway tenant provisioned
+  through the real `register-school` path with `0038` moved off disk (ledger `32`, no guard
+  columns), then applied on top: ledger `0031 → 0032 → 0038`, checksum identical to demo's, **no
+  dependency on 0033-0037**; scratch tenant dropped after. (Fleet-wide runs from a main-based
+  branch need `0033`-`0037` temporarily restored into the working tree — `assertChecksumsMatch`
+  aborts when an applied migration has no file on disk.) **Live proof of all five spec steps**
+  plus section-strictness both directions and the Fee Preview indicator, every step with a
+  Postgres read-back, all crafted data cleaned; full transcript in `-evidence.md`, which is the
+  source of truth (a chat report is not). Also found + fixed in passing: the dev API on `:3001`
+  runs `node dist/main`, **not** watch mode, so it silently serves stale code after a branch
+  switch — discriminated via a non-boolean DTO probe (`whitelist: true` without
+  `forbidNonWhitelisted` means old code *strips* an unknown property and returns the downstream
+  error), rebuilt, restarted. **Web (§3):** inline warning naming both classes + explicit
+  checkbox in both the student Billing tab and Bulk Assign; Bulk Assign's scope picker defaults
+  to the structure's own class/section; `CrossClassBadge` on Fee Preview and on current/historic
+  assignments so a later reviewer sees the override was intentional. `lib/class-guard.ts` mirrors
+  the server rule **advisory-only**, comparing by class/section *name* (StudentDetail has no ids;
+  sound because `UNIQUE(name)` on classes and `UNIQUE(class_id, name)` on sections make name and
+  id equality coincide) — **no API change was needed for the web half**. `resolveStructureScope()`
+  returns `null` while `useClasses()` loads and both forms gate on it: an unresolved scope means
+  "don't know yet", never "mismatch" — the async-gate bug class WEB-P Phases 2-4 shipped
+  repeatedly, pinned by tests here rather than left to inspection. `overrideFlag()` is the single
+  place the spec's "never silently submit with the override flag" rule lives, and the
+  confirmation is re-armed on every input that can change the verdict.
+  **1148 api tests (+13), `nest build` clean; 550 web tests (+19), `tsc --noEmit` clean,
+  `npm run build` succeeds.** **Web caveat:** no browser automation existed in that session, so
+  the screens have unit + build verification only — no click-through proof (same disclosure as
+  WEB-P Phase 5).
+
 > Update this checklist as modules are completed.
 
 ---

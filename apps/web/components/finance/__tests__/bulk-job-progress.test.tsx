@@ -74,3 +74,55 @@ describe('BulkJobProgress — the "queued" reassurance state', () => {
     expect(screen.queryByText('stu-9')).toBeNull();
   });
 });
+
+// FEE-CLASS-GUARD — `reason` is OPTIONAL: every failure row written before the
+// guard existed has only {studentId, error} (jsonb, never migrated). The label
+// is purely additive and `error` must render either way.
+describe('BulkJobProgress — failures[].reason', () => {
+  it('renders a "Class mismatch" label alongside the error when reason is CLASS_MISMATCH', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 3, total: 3, failedCount: 1,
+        failures: [{
+          studentId: 'stu-5',
+          error: 'Class mismatch. Fee structure is for Grade 1, but this student is in Grade 5 — A.',
+          reason: 'CLASS_MISMATCH',
+        }],
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" />);
+    expect(screen.getByText('Class mismatch')).toBeTruthy();
+    expect(screen.getByText(/Fee structure is for Grade 1/)).toBeTruthy();
+  });
+
+  it('renders a historical failure row with NO reason without crashing, and shows no label', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 3, total: 3, failedCount: 1,
+        failures: [{ studentId: 'stu-9', error: 'Student not found or inactive' }],
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" />);
+    expect(screen.getByText('Student not found or inactive')).toBeTruthy();
+    expect(screen.queryByText('Class mismatch')).toBeNull();
+  });
+
+  it('renders a mixed list — one historical row, one guarded row', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 4, total: 4, failedCount: 2,
+        failures: [
+          { studentId: 'stu-9', error: 'Student not found or inactive' },
+          { studentId: 'stu-5', error: 'Class mismatch. Fee structure is for Grade 1, but this student is in Grade 5 — A.', reason: 'CLASS_MISMATCH' },
+        ],
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" />);
+    expect(screen.getByText('2 students skipped')).toBeTruthy();
+    expect(screen.getByText('Student not found or inactive')).toBeTruthy();
+    expect(screen.getAllByText('Class mismatch')).toHaveLength(1);
+  });
+});

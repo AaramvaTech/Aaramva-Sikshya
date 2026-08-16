@@ -1658,11 +1658,17 @@ export interface StudentFeeStructureAssignment {
   effectiveFrom: string;
   effectiveTo: string | null;
   assignedBy: string;
+  /** FEE-CLASS-GUARD: assigned across classes on purpose. */
+  classMismatchOverridden: boolean;
+  overriddenBy: string | null;
+  overriddenAt: string | null;
   createdAt: string;
 }
 export interface AssignFeeStructureData {
   feeStructureId: string;
   effectiveFrom: string;
+  /** FEE-CLASS-GUARD: send ONLY on an explicitly confirmed mismatch. */
+  allowCrossClassAssignment?: boolean;
 }
 
 export interface StudentFeeOverride {
@@ -1762,8 +1768,21 @@ export interface BulkAssignData {
   sectionId?: string;
   studentIds?: string[];
   effectiveFrom: string;
+  /** FEE-CLASS-GUARD: applied uniformly to every student in the run. */
+  allowCrossClassAssignment?: boolean;
 }
 export type BulkAssignJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type BulkAssignFailureReason = 'STUDENT_INVALID' | 'CLASS_MISMATCH';
+/**
+ * FEE-CLASS-GUARD: `reason` is OPTIONAL and absent on every failure row
+ * written before this feature — `failures` is a jsonb column that was never
+ * migrated. Consumers must fall back to rendering `error`.
+ */
+export interface BulkAssignFailure {
+  studentId: string;
+  error: string;
+  reason?: BulkAssignFailureReason;
+}
 export interface BulkAssignJob {
   id: string;
   feeStructureId: string;
@@ -1772,11 +1791,12 @@ export interface BulkAssignJob {
   scopeClassId: string | null;
   scopeSectionId: string | null;
   effectiveFrom: string;
+  allowCrossClassAssignment: boolean;
   status: BulkAssignJobStatus;
   total: number;
   processed: number;
   failedCount: number;
-  failures: { studentId: string; error: string }[];
+  failures: BulkAssignFailure[];
   createdBy: string;
   createdAt: string;
   startedAt: string | null;
@@ -1802,6 +1822,8 @@ export interface FeePreview {
   studentId: string;
   feeStructureId: string;
   feeStructureName: string;
+  /** FEE-CLASS-GUARD: the active assignment was a deliberate cross-class one. */
+  classMismatchOverridden: boolean;
   academicYearId: string;
   asOfDate: string;
   heads: FeePreviewHeadLine[];
