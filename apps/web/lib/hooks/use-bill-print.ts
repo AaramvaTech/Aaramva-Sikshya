@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { billPrintApi } from '@/lib/api/bill-print.api';
 import type { PrintLanguage } from '@/lib/print-document';
+import type { PrintClassData } from '@/types/api.types';
 
 /**
  * BILL-8-UI — deliberately `useMutation`, not `useQuery`.
@@ -23,5 +24,25 @@ export function usePrintReceipt() {
   return useMutation({
     mutationFn: ({ paymentId, lang }: { paymentId: string; lang?: PrintLanguage }) =>
       billPrintApi.receipt(paymentId, lang).then((r) => r.data.data),
+  });
+}
+
+// ─── Phase 2 — bulk print ─────────────────────────────────────────────────────
+// These create a JOB, so unlike the single-document hooks above they are
+// mutations for the ordinary reason. Progress is then polled with the existing
+// `useBulkAssignJob` — the status endpoint is shared between both job
+// families, so there is no second poller.
+
+export function useBulkPrintRun() {
+  return useMutation({
+    mutationFn: ({ runId, lang }: { runId: string; lang?: PrintLanguage }) =>
+      billPrintApi.printRun(runId, lang).then((r) => r.data.data),
+  });
+}
+
+export function useBulkPrintClass() {
+  return useMutation({
+    mutationFn: ({ data, lang }: { data: PrintClassData; lang?: PrintLanguage }) =>
+      billPrintApi.printClass(data, lang).then((r) => r.data.data),
   });
 }

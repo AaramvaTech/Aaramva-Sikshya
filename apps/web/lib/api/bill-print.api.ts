@@ -1,5 +1,7 @@
 import api from '@/lib/api';
-import type { ApiResponse, PrintDocumentResponse } from '@/types/api.types';
+import type {
+  ApiResponse, PrintDocumentResponse, BulkAssignJob, PrintClassData,
+} from '@/types/api.types';
 import type { PrintLanguage } from '@/lib/print-document';
 
 /**
@@ -20,6 +22,22 @@ export const billPrintApi = {
 
   receipt: (paymentId: string, lang?: PrintLanguage) =>
     api.get<ApiResponse<PrintDocumentResponse>>(`/finance/bill/payments/${paymentId}/receipt`, {
+      params: lang ? { lang } : undefined,
+    }),
+
+  // ─── Phase 2 — bulk print (background jobs) ────────────────────────────────
+  // Both return a job row, not a document; progress and the merged PDF's
+  // download URL arrive via the shared GET /finance/jobs/:id.
+
+  /** Month-end: every non-VOIDED invoice in a posted run. */
+  printRun: (runId: string, lang?: PrintLanguage) =>
+    api.post<ApiResponse<BulkAssignJob>>(`/finance/bill/runs/${runId}/print`, undefined, {
+      params: lang ? { lang } : undefined,
+    }),
+
+  /** Ad hoc (addendum A1): one class + BS period, optionally one section. */
+  printClass: (data: PrintClassData, lang?: PrintLanguage) =>
+    api.post<ApiResponse<BulkAssignJob>>('/finance/bill/print/class', data, {
       params: lang ? { lang } : undefined,
     }),
 };

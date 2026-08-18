@@ -1,15 +1,30 @@
 'use client';
 
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { useBulkAssignJob } from '@/lib/hooks/use-bill-assignment';
+import {
+  normalizeJobFailures, skippedLabel, successLabel, type JobNoun,
+} from '@/lib/job-progress';
 
 interface BulkJobProgressProps {
   jobId: string;
-  /** Resolves a failed row's studentId to a display name. Falls back to the
-   * raw id when the caller doesn't have the roster on hand (e.g. a CLASS-
-   * scoped job never separately fetches the class roster client-side —
-   * see UI-2-SPEC.md §5.2's known gap). */
-  resolveStudentName?: (studentId: string) => string;
+  /** Resolves a failed row's id to a display name. Falls back to the raw id
+   * when the caller doesn't have the roster on hand (e.g. a CLASS-scoped job
+   * never separately fetches the class roster client-side — see
+   * UI-2-SPEC.md §5.2's known gap). */
+  resolveStudentName?: (id: string) => string;
+  /**
+   * BILL-8-UI Phase 2: what the failing rows ARE. Defaults to 'student' so
+   * every pre-existing bulk-assign call site keeps its exact wording without
+   * being touched.
+   */
+  noun?: JobNoun;
+  /**
+   * Rendered when a completed job carries a `downloadUrl` (bill-print only —
+   * bulk-assign jobs produce no artifact). Not auto-opened: the merged PDF can
+   * be large, and a surprise tab on job completion is worse than a button.
+   */
+  downloadLabel?: string;
 }
 
 /**
@@ -26,7 +41,9 @@ interface BulkJobProgressProps {
  * with nothing processed yet) get their own reassuring "queued" state
  * instead of the progress bar.
  */
-export function BulkJobProgress({ jobId, resolveStudentName }: BulkJobProgressProps) {
+export function BulkJobProgress({
+  jobId, resolveStudentName, noun = 'student', downloadLabel = 'Download merged PDF',
+}: BulkJobProgressProps) {
   const { data: job, isLoading, isError } = useBulkAssignJob(jobId);
 
   if (isLoading || !job) {
@@ -90,26 +107,41 @@ export function BulkJobProgress({ jobId, resolveStudentName }: BulkJobProgressPr
       {isDone && job.failedCount === 0 && (
         <div className="flex items-center gap-2 text-success-600">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span className="text-xs">All {job.total} student{job.total === 1 ? '' : 's'} assigned successfully.</span>
+          <span className="text-xs">{successLabel(job.total, noun)}</span>
         </div>
+      )}
+
+      {/* BILL-8-UI Phase 2 — a bill-print job's artifact. Absent on every
+          bulk-assign job, so this renders for print only, without a flag. */}
+      {isDone && job.downloadUrl && (
+        <a
+          href={job.downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-sm bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {downloadLabel}
+        </a>
       )}
 
       {isDone && job.failedCount > 0 && (
         <div className="mt-2 overflow-hidden rounded-sm border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
           <div className="px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
-            {job.failedCount} student{job.failedCount === 1 ? '' : 's'} skipped
+            {skippedLabel(job.failedCount, noun)}
           </div>
           <table className="w-full text-xs">
             <tbody>
-              {job.failures.map((f) => (
-                <tr key={f.studentId} className="border-t border-amber-100 dark:border-amber-900">
+              {normalizeJobFailures(job.failures).map((f, i) => (
+                <tr key={f.id || i} className="border-t border-amber-100 dark:border-amber-900">
                   <td className="px-3 py-1.5 font-mono text-gray-600 dark:text-gray-300">
-                    {resolveStudentName?.(f.studentId) ?? f.studentId}
+                    {resolveStudentName?.(f.id) ?? f.id}
                   </td>
                   <td className="px-3 py-1.5 text-gray-500">
                     {/* FEE-CLASS-GUARD: `reason` is absent on every failure row
                         written before the guard existed (jsonb, never migrated),
-                        so the label is additive and `error` always renders. */}
+                        and on every bill-print row, so the label is additive and
+                        `error` always renders. */}
                     {f.reason === 'CLASS_MISMATCH' && (
                       <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
                         Class mismatch
