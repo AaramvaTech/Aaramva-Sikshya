@@ -1504,7 +1504,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   STUDENT-DOCS-1, `assignment_submissions.file_key` EDU-1); a dry-run cross-check found **4 of
   23 flagged "orphans" are actively referenced**, including both tenants' bill QR codes and a
   live student document. **`--delete` was NOT run; nobody should run it on any environment
-  until the reference set is current.** The `data:`-value-should-be-4xx-not-500 half of (1)
+  until the reference set is current** (this session's own 2 orphans were instead deleted
+  directly by key, after confirming no job row could reach them). A third consequence found:
+  the pruner also flags the whole `bill-pdf`/`bill-receipt` cache as orphaned, and deleting
+  that silently breaks A6's byte-identical-reprint guarantee — a fix must rule on that cache
+  deliberately, not just add the three missing columns. The `data:`-value-should-be-4xx-not-500 half of (1)
   folds into the error-mapping ticket alongside the audit's unmapped Prisma `P2003`.
   **605 web tests (+31 across both phases), `tsc --noEmit` clean, `npm run build` succeeds.**
   **No browser automation exists in this repo** — the PDFs are proven real (fetched, `%PDF-`
