@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { PrintDocumentButton } from '@/components/finance/print-document-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { BsDate } from '@/components/shared/bs-date';
@@ -134,6 +135,11 @@ export function PaymentDetailModal({ paymentId, onClose }: PaymentDetailModalPro
 
         {payment && (
           <DialogFooter>
+            {/* BILL-8-UI Phase 1 — reprint from the detail view. VOIDED is
+                excluded: a voided payment is not evidence of money received. */}
+            {payment.status !== 'VOIDED' && (
+              <PrintDocumentButton doc={{ kind: 'receipt', paymentId: payment.id }} />
+            )}
             {isPendingCheque && (
               <>
                 <ConfirmDialog

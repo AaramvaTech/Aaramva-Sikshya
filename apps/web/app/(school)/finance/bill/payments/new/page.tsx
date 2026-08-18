@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
+import { PrintDocumentButton } from '@/components/finance/print-document-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -208,7 +209,11 @@ export default function RecordPaymentPage() {
             )}
           </div>
 
-          <div className="mt-6 flex justify-center gap-3">
+          {/* BILL-8-UI Phase 1: the load-bearing counter moment. The clerk has
+              the parent in front of them right now — the receipt has to be
+              here, not only in payment history. */}
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <PrintDocumentButton doc={{ kind: 'receipt', paymentId: result.id }} />
             <Button variant="outline" onClick={reset}>Record Another</Button>
             <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={() => router.push('/finance/bill/payments')}>
               Done
