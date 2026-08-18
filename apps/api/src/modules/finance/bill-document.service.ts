@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { StorageService } from '../storage/storage.service';
@@ -6,11 +6,12 @@ import { fetchImageBuffer } from '../branding/branding-color.service';
 import { Role } from '../common/enums/role.enum';
 import { Money } from '../../common/money/money';
 import { amountInWords } from '../../common/money/amount-in-words';
-import { resolveBillBrandColor } from '../../common/tenant-brand-color';
 import { PrintLanguage, resolvePrintLanguage } from './bill-print-labels';
 import { BillInvoiceService } from './bill-invoice.service';
 import { BillInvoiceResponseDto } from './entities/bill-invoice.entity';
 import { apportionWholeBillConcession } from './bill-pdf.util';
+import { fiscalYearLabel } from './bill-post.util';
+import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { BillPdfService, BillPdfData, BillPdfLineItem } from './bill-pdf.service';
 import { bsOf } from './ledger.util';
 
@@ -32,7 +33,7 @@ export interface TenantHeaderRow {
   print_language: string | null;
 }
 
-const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
+export const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
   "panNumber" AS pan_number, "registrationNumber" AS registration_number,
   address, phone, website, tagline,
   "paymentInstructions" AS payment_instructions, "qrImageUrl" AS qr_image_url,
@@ -53,6 +54,8 @@ const TENANT_HEADER_SELECT = `name, "logoUrl" AS logo_url,
  */
 @Injectable()
 export class BillDocumentService {
+  private readonly logger = new Logger(BillDocumentService.name);
+
   constructor(
     private readonly billInvoiceService: BillInvoiceService,
     private readonly publicPrisma: PublicPrismaService,
@@ -62,12 +65,18 @@ export class BillDocumentService {
   ) {}
 
   private keyFor(slug: string, invoiceId: string, language: string): string {
-    // B8-11: ref id + generation version. Always v1 within a checkpoint — an
-    // immutable invoice is only ever rendered once per version. Language is
-    // part of the key (not the version) — EN/NE/BOTH are genuinely
-    // different documents, each its own immutable cached artifact; a staff
-    // override never overwrites the tenant-default version.
-    return `tenant_${slug}/bill-pdf/${invoiceId}-v1-${language}.pdf`;
+    // B8-11: ref id + generation version. Language is part of the key (not
+    // the version) — EN/NE/BOTH are genuinely different documents, each its
+    // own immutable cached artifact; a staff override never overwrites the
+    // tenant-default version.
+    //
+    // BILL-PRINT-1 bumped v1 -> v2: the A5 stationery is a different artifact
+    // from BILL-8's single-A4 layout. v1 objects are deliberately NOT
+    // backfilled — an already-issued document stays as issued. CONSEQUENCE,
+    // documented rather than discovered in support: reprinting a pre-cutover
+    // invoice returns the OLD design, which will be reported as broken at
+    // least once. A forced-regenerate path is out of scope here.
+    return `tenant_${slug}/bill-pdf/${invoiceId}-v2-${language}.pdf`;
   }
 
   async getOrGenerateBillPdf(
@@ -140,21 +149,28 @@ export class BillDocumentService {
       isTaxable: i.isTaxable,
     }));
 
-    // Private-kind storage keys (signature/stamp/QR) fetched via getObjectBuffer;
-    // the logo is the one public-read kind and stores a full URL (fetched over
+    // BILL-PRINT-1: EVERY asset fetch here is best-effort. A print job must
+    // never fail because a decorative asset could not load, and this is the
+    // exact path where FILE-1-BLOB bites: a tenant whose principalSignatureUrl
+    // still holds a legacy `data:image/...;base64` URI makes getObjectBuffer
+    // throw XMinioInvalidResourceName, which previously took the whole bill
+    // print down with it. Swallowing to null here means such a tenant prints a
+    // correct bill with a blank signing space — the design's own fallback —
+    // instead of no bill at all.
+    //
+    // FILE-1-BLOB itself is NOT fixed by this: the column still holds a bad
+    // value and every other reader still trips on it. It stays its own ticket.
+    //
+    // The logo is the one public-read kind and stores a full URL (fetched over
     // HTTP, same pattern branding-color.service.ts already uses).
     const [logoBuffer, qrImageBuffer, principalSignatureBuffer, schoolStampBuffer] = await Promise.all([
-      tenant.logo_url ? fetchImageBuffer(tenant.logo_url) : Promise.resolve(null),
-      tenant.qr_image_url ? this.storageService.getObjectBuffer(tenant.qr_image_url) : Promise.resolve(null),
-      tenant.principal_signature_url
-        ? this.storageService.getObjectBuffer(tenant.principal_signature_url) : Promise.resolve(null),
-      tenant.school_stamp_url
-        ? this.storageService.getObjectBuffer(tenant.school_stamp_url) : Promise.resolve(null),
+      this.optionalAsset('logo', tenant.logo_url, (u) => fetchImageBuffer(u)),
+      this.optionalAsset('payment-QR', tenant.qr_image_url, (k) => this.storageService.getObjectBuffer(k)),
+      this.optionalAsset('principal-signature', tenant.principal_signature_url,
+        (k) => this.storageService.getObjectBuffer(k)),
+      this.optionalAsset('school-stamp', tenant.school_stamp_url,
+        (k) => this.storageService.getObjectBuffer(k)),
     ]);
-
-    // No accent color is hardcoded in the drawing code — it's a parameter,
-    // resolved here from the tenant's own curated-set value (or slate).
-    const { color: accentColor, tint: accentTint } = resolveBillBrandColor(tenant.brand_color);
 
     return {
       tenant: {
@@ -171,14 +187,18 @@ export class BillDocumentService {
         principalName: tenant.principal_name,
         principalSignatureBuffer,
         schoolStampBuffer,
-        accentColor,
-        accentTint,
       },
       invoice: {
         invoiceNumber: invoice.invoiceNumber ?? '—',
         studentName: invoice.studentName ?? '—',
         admissionNumber: invoice.admissionNumber ?? null,
         className: invoice.className ?? '—',
+        // BILL-PRINT-1 party block + the identity row's FY / Installment.
+        sectionName: invoice.sectionName ?? null,
+        rollNumber: invoice.rollNumber ?? null,
+        guardianName: invoice.guardianName ?? null,
+        fiscalYear: fiscalYearLabel(invoice.bsYear, invoice.bsMonth),
+        installment: `${BS_MONTH_NAMES_EN[invoice.bsMonth - 1]} ${invoice.bsYear}`,
         bsYear: invoice.bsYear,
         bsMonth: invoice.bsMonth,
         issueDateAd: invoice.issueDate,
@@ -210,6 +230,39 @@ export class BillDocumentService {
       items: lineItems,
       language,
     };
+  }
+
+  /**
+   * Loads one optional print asset, resolving to null on ANY failure — bad or
+   * malformed URL/key, storage error, timeout, unsupported bytes. Never throws.
+   */
+  private async optionalAsset(
+    kind: string,
+    ref: string | null,
+    load: (ref: string) => Promise<Buffer | null>,
+  ): Promise<Buffer | null> {
+    if (!ref) return null;
+    try {
+      const buf = await load(ref);
+      if (!buf) {
+        // A configured asset that resolves to nothing — StorageService returns
+        // null (it does not throw) when the object is simply absent. That is
+        // the likeliest real "my stamp stopped appearing" case, so it gets the
+        // same visibility as a hard failure.
+        this.logger.warn(`[BILL-PRINT-1] ${kind} asset not found in storage, printing without it: ${ref.slice(0, 60)}`);
+      }
+      return buf;
+    } catch (err) {
+      // Swallowed so the bill still prints — but NOT silently. A school whose
+      // stamp quietly stopped appearing would otherwise have no signal at all,
+      // and "the print succeeded" must not mean "nobody can tell what broke".
+      // The ref is logged truncated: a FILE-1-BLOB value is a 300KB data: URI.
+      this.logger.warn(
+        `[BILL-PRINT-1] ${kind} asset unavailable, printing without it: ` +
+        `${ref.slice(0, 60)}${ref.length > 60 ? `… (${ref.length} chars)` : ''} — ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 
   private formatBsDate(adDateString: string): string {

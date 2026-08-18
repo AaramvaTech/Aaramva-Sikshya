@@ -1,18 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import { loadPdfFonts, pickFont, drawMixedText } from '../../common/pdf/pdf-fonts';
-import { BS_MONTH_NAMES_EN } from 'bs-calendar';
-import { Money } from '../../common/money/money';
-import { printLabel, PrintLanguage } from './bill-print-labels';
-
-const MUTED = '#6b7280';
-const INK = '#111827';
-const AMBER = '#c0703a';
-/** Warm off-white panel background — the neutral surface everywhere the
- *  accent is NOT used, per the reviewed design's "one accent used
- *  purposefully" rule. */
-const WARM_PANEL = '#f7f5f0';
-const HAIRLINE = '#e5e2da';
+import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
+import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
+import { PAGE, drawSheet, HalfRenderer, StackMode } from './print/a5-sheet';
+import { Locale } from './print/mm';
+import { renderInvoiceHalf, InvoiceHalfData, InvoiceHalfLine } from './print/invoice-half';
 
 export interface BillPdfLineItem {
   itemName: string;
@@ -36,22 +28,38 @@ export interface BillPdfTenant {
   paymentInstructions: string | null;
   qrImageBuffer: Buffer | null;
   principalName: string | null;
+  /**
+   * Drawn into the reserved signing space above the signature rule, scaled to
+   * fit, best-effort. A school that uploaded a signature or stamp must keep
+   * seeing it on its bills; losing it silently would read as the software
+   * breaking, and on a financial record it may matter more than that. Every
+   * failure path — malformed stored value, S3 error, unsupported bytes — ends
+   * at the blank signing gap, which is the design's own fallback state.
+   */
   principalSignatureBuffer: Buffer | null;
   schoolStampBuffer: Buffer | null;
-  /** BILL-8: per-tenant billing accent — resolved (curated-set + default
-   *  fallback) by BillDocumentService. NOT hardcoded here — every accent
-   *  use in this file reads it from this parameter. */
-  accentColor: string;
-  accentTint: string;
 }
+
+// BILL-PRINT-1 removed accentColor/accentTint from this shape: SPEC §4 fixes
+// the accent at #0d5c43 and permits it in exactly four places, none of them a
+// fill, so a per-tenant accent has nowhere left to go on this document. (The
+// 80mm thermal receipt still has its own accentColor and is unaffected.)
 
 export interface BillPdfInvoice {
   invoiceNumber: string;
   studentName: string;
   admissionNumber: string | null;
   className: string;
+  /** BILL-PRINT-1: joined for the party block. */
+  sectionName: string | null;
+  rollNumber: string | null;
+  guardianName: string | null;
   bsYear: number;
   bsMonth: number;
+  /** Display form of the Nepali fiscal year, e.g. "2083/84". */
+  fiscalYear: string;
+  /** Month label, e.g. "Ashwin 2083". */
+  installment: string;
   issueDateAd: string;
   issueDateBs: string;
   dueDateAd: string;
@@ -62,10 +70,6 @@ export interface BillPdfInvoice {
   previousBalance: number;
   totalReceivable: number;
   amountInWordsEn: string | null;
-  /** BILL-8 B8-6: computed the same render-time way as amountInWordsEn
-   *  (from the frozen total_receivable) — only ever actually printed when
-   *  the review gate is open (BillDocumentService resolves `language`
-   *  accordingly; this field is harmless to compute either way). */
   amountInWordsNe: string | null;
 }
 
@@ -73,411 +77,181 @@ export interface BillPdfData {
   tenant: BillPdfTenant;
   invoice: BillPdfInvoice;
   items: BillPdfLineItem[];
-  /** BILL-8 B8-5: resolved by BillDocumentService (tenant default + gate +
-   *  optional staff override) — the renderer trusts it as-is, it does not
-   *  re-check the gate itself. */
   language: PrintLanguage;
 }
 
-/** Plain lakh-grouped number, no currency prefix — used everywhere except
- *  the final Total Receivable figure (design: "Rs." appears once). Numerals
- *  stay Arabic regardless of language, per the I18N-1 mobile precedent. */
-const num = (n: number): string => Money.fromNumber(n).toDisplay();
-const money = (n: number): string => `Rs. ${num(n)}`;
-
 /**
- * BILL-8 Checkpoint A/B — A4 bill. Pure renderer: takes already-fetched,
- * already-footed, already-colored, already-language-resolved data and
- * produces PDF bytes only — same discipline as examination/pdf.service.ts.
- * Footing/snapshot/reprint/amount-in-words logic all live in
- * BillDocumentService and are untouched by this file.
+ * BILL-PRINT-1 — A4 sheet holding two A5 fee invoices, per
+ * docs/design/billing-print/SPEC.md.
  *
- * Every fixed label routes through printLabel(key, data.language) — never a
- * hardcoded English string — and every text draw uses pickFont() (not a
- * hardcoded 'latin') so a Nepali label or amount-in-words string picks the
- * embedded Devanagari font automatically, same auto-detection
- * examination/pdf.service.ts already established for report cards.
+ * Pure renderer: takes already-fetched, already-footed, already-language-
+ * resolved data and produces PDF bytes only. Footing, snapshotting, reprint
+ * caching and amount-in-words all live in BillDocumentService and are
+ * untouched by this file — same discipline as before, and as
+ * examination/pdf.service.ts.
  *
- * Accent is used in exactly four places: the header rule, the logo tile
- * background (pale tint), the invoice-number text, and the Total
- * Receivable pill. Everywhere else is warm neutral.
+ * Replaces BILL-8's single-A4-per-invoice layout. What changed and why:
+ *   - the solid accent-filled "total" pill is gone; hierarchy is now weight,
+ *     size, and a 0.75pt rule (it photocopied as a black blob);
+ *   - content no longer floats at the top of a mostly-empty page — the A5
+ *     half IS the page, and the footer band is pinned to its bottom edge;
+ *   - money columns are fixed-width, right-aligned and tabular-figured, so
+ *     they sit on the decimal grid;
+ *   - copy designation, cut line, fiscal year and the computer-generated
+ *     note are all present, none of which the old layout had;
+ *   - image slots render designed placeholders rather than filled rectangles.
  *
- * Every doc.image() call is guarded by a null check — a missing logo/QR/
- * signature/stamp renders nothing at all, and the layout collapses the
- * space that image would have occupied rather than leaving a gap.
+ * Language mapping: EN and NE render one locale per sheet, as SPEC §8
+ * requires. BOTH has no equivalent in the design's model, so it renders the
+ * reference files' own arrangement — the English document on the top half and
+ * the Nepali one below — instead of the old inline "English / Nepali" labels,
+ * which cannot hold the design's fixed label widths. Flagged as a deviation.
  */
 @Injectable()
 export class BillPdfService {
   private readonly fonts = loadPdfFonts();
 
   render(data: BillPdfData): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
-      const chunks: Buffer[] = [];
-      doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      this.registerFonts(doc);
-      this.drawBill(doc, data);
-
-      doc.end();
-    });
+    return this.document((doc) => this.drawSheetFor(doc, data));
   }
 
   /**
-   * BILL-8 Checkpoint C (B8-9): renders N invoices into ONE PDFDocument, one
-   * page-set per invoice, instead of N separate documents. Reuses drawBill
-   * verbatim per invoice — same footing, color, language, and font logic as
-   * the single-document path, just called once per invoice onto a shared doc
-   * instead of once into its own doc. No PDF-merge library needed: pdfkit
-   * already supports multi-page documents via addPage(), which also resets
-   * doc.x/doc.y to the page margins, so each invoice starts fresh at the top
-   * exactly like a standalone render would.
+   * Bulk print: N invoices, two documents per A4 sheet in batch mode (no copy
+   * eyebrow, different students on each half). An odd count leaves the
+   * trailing half blank — the cut line still prints, so the sheet stays usable
+   * stationery rather than crashing or stretching.
+   *
+   * The one-page rule is asserted per SHEET, not per job artifact: a bulk job
+   * is inherently multi-page.
    */
   renderMerged(dataList: BillPdfData[]): Promise<Buffer> {
     if (dataList.length === 0) throw new Error('renderMerged requires at least one invoice');
+    return this.document((doc) => {
+      for (let i = 0; i < dataList.length; i += 2) {
+        if (i > 0) doc.addPage();
+        const pair = dataList.slice(i, i + 2);
+        const first = pair[0];
+        drawSheet(doc, pair.map((d) => this.halfFor(d, localeOf(d.language))), {
+          stackMode: 'batch',
+          copyLabels: copyLabels(first.language),
+          cutLabel: printLabel('cut', primaryLanguage(first.language)),
+        });
+      }
+    });
+  }
+
+  private document(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+      const doc = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0, bufferPages: true });
       const chunks: Buffer[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-
-      this.registerFonts(doc);
-      dataList.forEach((data, i) => {
-        if (i > 0) doc.addPage();
-        this.drawBill(doc, data);
-      });
-
+      for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
+      draw(doc);
       doc.end();
     });
   }
 
-  private registerFonts(doc: PDFKit.PDFDocument): void {
-    for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
-  }
-
-  private drawBill(doc: PDFKit.PDFDocument, data: BillPdfData): void {
-    const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const left = doc.page.margins.left;
-    const GAP = 24;
-    const { accentColor, accentTint } = data.tenant;
-    const lang = data.language;
-
-    this.renderHeader(doc, data.tenant, left, pageW, accentColor, accentTint, lang);
-    doc.y += GAP;
-    this.renderInvoiceTitleRow(doc, data.invoice, left, pageW, accentColor, lang);
-    doc.y += GAP;
-    this.renderMetaPanel(doc, data.invoice, left, pageW, lang);
-    doc.y += GAP;
-    this.renderItemsTable(doc, data.items, left, pageW, lang);
-    doc.y += GAP;
-    const wholeBillConcession = data.items.reduce((acc, i) => acc + i.apportionedConcession, 0);
-    this.renderBottomSplit(doc, data, wholeBillConcession, left, pageW, accentColor, lang);
-    doc.y += GAP * 0.8;
-    this.renderSignature(doc, data.tenant, left, pageW, lang);
-  }
-
-  private label(key: Parameters<typeof printLabel>[0], lang: PrintLanguage): string {
-    return printLabel(key, lang);
-  }
-
-  private renderHeader(
-    doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number,
-    accentColor: string, accentTint: string, lang: PrintLanguage,
-  ) {
-    const top = doc.y;
-    const tileSize = 46;
-    const radius = 10;
-    if (tenant.logoBuffer) {
-      doc.roundedRect(left, top, tileSize, tileSize, radius).fill(accentTint);
-      try {
-        doc.save();
-        doc.roundedRect(left, top, tileSize, tileSize, radius).clip();
-        doc.image(tenant.logoBuffer, left, top, { fit: [tileSize, tileSize], align: 'center', valign: 'center' });
-        doc.restore();
-      } catch {
-        // Corrupt/unsupported logo bytes must never break bill generation —
-        // the tinted tile still rendered above, just without an image in it.
-        doc.restore();
-      }
-    }
-    // Collapse the reserved space entirely when there's no logo — never a gap.
-    const textX = tenant.logoBuffer ? left + tileSize + 14 : left;
-    const panBoxW = 150;
-    const textW = pageW - (textX - left) - panBoxW - 14;
-
-    doc.font(pickFont(tenant.name, true)).fontSize(19).fillColor(accentColor)
-      .text(tenant.name, textX, top + 2, { width: textW });
-    if (tenant.tagline) {
-      doc.font(pickFont(tenant.tagline)).fontSize(10).fillColor(MUTED)
-        .text(tenant.tagline, textX, doc.y + 2, { width: textW });
-    }
-    // Mixed script: address is free tenant-entered text (could be either
-    // script) joined with phone/website (always Latin/numeric) — same
-    // audit as the signature line, fixed the same way rather than
-    // assuming one font for the whole joined line.
-    const contactParts = [tenant.address, tenant.phone, tenant.website].filter((p): p is string => !!p);
-    if (contactParts.length > 0) {
-      const contactRuns = contactParts.flatMap((part, i) => (i > 0 ? [{ text: '   ·   ' }, { text: part }] : [{ text: part }]));
-      const contactW = pageW - (textX - left);
-      drawMixedText(doc, contactRuns, textX, doc.y + 2, { width: contactW, align: 'left', fontSize: 8.5, color: MUTED });
-    }
-    const textBottom = doc.y;
-
-    // PAN + reg — top-right, small, dark values, no border this round.
-    let panBottom = top;
-    if (tenant.panNumber) {
-      const panLabel = this.label('panNo', lang);
-      doc.font(pickFont(panLabel)).fontSize(7.5).fillColor(MUTED)
-        .text(panLabel, left + pageW - panBoxW, top, { width: panBoxW, align: 'right' });
-      doc.font('latin-bold').fontSize(10.5).fillColor(INK)
-        .text(tenant.panNumber, left + pageW - panBoxW, top + 11, { width: panBoxW, align: 'right' });
-      panBottom = top + 26;
-    }
-    if (tenant.registrationNumber) {
-      const regLabel = this.label('regNo', lang);
-      // Mixed script: regLabel may be Devanagari, registrationNumber is
-      // whatever the school entered (always Latin in practice) — a single
-      // pickFont() on the concatenated string tofu'd whichever script it
-      // didn't cover. drawMixedText font-picks each run independently.
-      drawMixedText(doc, [{ text: `${regLabel} ` }, { text: tenant.registrationNumber }],
-        left + pageW - panBoxW, panBottom + 4, { width: panBoxW, align: 'right', fontSize: 7.5, color: MUTED });
-      panBottom += 14;
-    }
-
-    doc.y = Math.max(textBottom, panBottom, top + tileSize) + 10;
-    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(accentColor).lineWidth(2).stroke();
-  }
-
-  private renderInvoiceTitleRow(
-    doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number, accentColor: string, lang: PrintLanguage,
-  ) {
-    const y = doc.y;
-    const titleLabel = this.label('invoice', lang);
-    doc.font(pickFont(titleLabel, true)).fontSize(20).fillColor(INK).text(titleLabel, left, y);
-    doc.font(pickFont(inv.invoiceNumber, true)).fontSize(11).fillColor(accentColor)
-      .text(inv.invoiceNumber, left, y + 26);
-
-    const issuedLabel = this.label('issued', lang);
-    const dueLabel = this.label('due', lang);
-    const dateW = pageW * 0.4;
-    const dateX = left + pageW - dateW;
-    doc.font(pickFont(issuedLabel)).fontSize(7.5).fillColor(MUTED)
-      .text(issuedLabel, dateX, y, { width: dateW, align: 'right' });
-    doc.font('latin').fontSize(9.5).fillColor(INK)
-      .text(`${inv.issueDateAd}  (${inv.issueDateBs} BS)`, dateX, y + 10, { width: dateW, align: 'right' });
-    doc.font(pickFont(dueLabel)).fontSize(7.5).fillColor(MUTED)
-      .text(dueLabel, dateX, y + 26, { width: dateW, align: 'right' });
-    doc.font('latin').fontSize(9.5).fillColor(INK)
-      .text(`${inv.dueDateAd}  (${inv.dueDateBs} BS)`, dateX, y + 36, { width: dateW, align: 'right' });
-
-    doc.y = y + 50;
-  }
-
-  private renderMetaPanel(doc: PDFKit.PDFDocument, inv: BillPdfInvoice, left: number, pageW: number, lang: PrintLanguage) {
-    const y = doc.y;
-    const panelH = 62;
-    doc.roundedRect(left, y, pageW, panelH, 8).fill(WARM_PANEL);
-
-    const cols = [
-      { label: this.label('student', lang), value: inv.studentName },
-      { label: this.label('class', lang), value: inv.className },
-      { label: this.label('installment', lang), value: `${BS_MONTH_NAMES_EN[inv.bsMonth - 1]} ${inv.bsYear}` },
-    ];
-    const colW = pageW / 3;
-    cols.forEach((c, i) => {
-      const x = left + i * colW + 18;
-      doc.font(pickFont(c.label)).fontSize(7.5).fillColor(MUTED).text(c.label.toUpperCase(), x, y + 16, { width: colW - 30 });
-      doc.font(pickFont(c.value, true)).fontSize(11).fillColor(INK).text(c.value || '—', x, y + 28, { width: colW - 30 });
+  private drawSheetFor(doc: PDFKit.PDFDocument, data: BillPdfData): void {
+    const both = data.language === 'BOTH';
+    const halves: HalfRenderer[] = both
+      ? [this.halfFor(data, 'en'), this.halfFor(data, 'ne')]
+      : [this.halfFor(data, localeOf(data.language))];
+    const stackMode: StackMode = both ? 'batch' : 'duplicate';
+    drawSheet(doc, halves, {
+      stackMode,
+      copyLabels: copyLabels(data.language),
+      cutLabel: printLabel('cut', primaryLanguage(data.language)),
     });
-
-    doc.y = y + panelH;
   }
 
-  private renderItemsTable(doc: PDFKit.PDFDocument, items: BillPdfLineItem[], left: number, pageW: number, lang: PrintLanguage) {
-    const cols = [
-      { label: this.label('feeHead', lang), w: 0.30, align: 'left' as const },
-      { label: this.label('gross', lang), w: 0.14, align: 'right' as const },
-      { label: this.label('concession', lang), w: 0.14, align: 'right' as const },
-      { label: this.label('nonTaxable', lang), w: 0.14, align: 'right' as const },
-      { label: this.label('taxable', lang), w: 0.14, align: 'right' as const },
-      { label: this.label('total', lang), w: 0.14, align: 'right' as const },
-    ];
-    const xs: number[] = [];
-    let acc = left;
-    for (const c of cols) { xs.push(acc); acc += c.w * pageW; }
-
-    const headerY = doc.y;
-    doc.fontSize(7.5).fillColor(MUTED);
-    cols.forEach((c, i) => {
-      doc.font(pickFont(c.label)).text(c.label.toUpperCase(), xs[i] + 4, headerY, { width: c.w * pageW - 8, align: c.align });
-    });
-    doc.y = headerY + 16;
-
-    const rowH = 26;
-    items.forEach((item) => {
-      if (doc.y > doc.page.height - 100) doc.addPage();
-      const totalConcession = item.concessionAmount + item.apportionedConcession;
-      const net = item.grossAmount - totalConcession;
-      const nonTaxable = item.isTaxable ? 0 : net;
-      const taxable = item.isTaxable ? net : 0;
-      const rowY = doc.y;
-      // Hairline above each row (including the first, under the header labels).
-      doc.moveTo(left, rowY).lineTo(left + pageW, rowY).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
-      const textY = rowY + 8;
-      doc.font(pickFont(item.itemName, true)).fontSize(9.5).fillColor(INK)
-        .text(item.itemName, xs[0] + 4, textY, { width: cols[0].w * pageW - 8, align: 'left' });
-      doc.font('latin').fontSize(9.5).fillColor(INK)
-        .text(num(item.grossAmount), xs[1] + 4, textY, { width: cols[1].w * pageW - 8, align: 'right' });
-      doc.fillColor(totalConcession > 0 ? AMBER : INK)
-        .text(totalConcession > 0 ? `-${num(totalConcession)}` : num(totalConcession),
-          xs[2] + 4, textY, { width: cols[2].w * pageW - 8, align: 'right' });
-      doc.font('latin').fillColor(INK)
-        .text(num(nonTaxable), xs[3] + 4, textY, { width: cols[3].w * pageW - 8, align: 'right' })
-        .text(num(taxable), xs[4] + 4, textY, { width: cols[4].w * pageW - 8, align: 'right' });
-      // Total column — medium weight, per the reviewed design.
-      doc.font('latin-bold').fillColor(INK)
-        .text(num(net), xs[5] + 4, textY, { width: cols[5].w * pageW - 8, align: 'right' });
-      doc.y = rowY + rowH;
-    });
-    doc.moveTo(left, doc.y).lineTo(left + pageW, doc.y).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
+  private halfFor(data: BillPdfData, locale: Locale): HalfRenderer {
+    const half = toInvoiceHalf(data, locale);
+    return (doc, box, copyLabel) => renderInvoiceHalf(doc, box, half, copyLabel);
   }
+}
 
-  private renderBottomSplit(
-    doc: PDFKit.PDFDocument,
-    data: BillPdfData,
-    wholeBillConcession: number,
-    left: number,
-    pageW: number,
-    accentColor: string,
-    lang: PrintLanguage,
-  ) {
-    if (doc.y > doc.page.height - 220) doc.addPage();
-    const { invoice: inv, tenant } = data;
-    const totalsW = 220;
-    const totalsX = left + pageW - totalsW;
-    const leftColW = pageW - totalsW - 24;
-    const top = doc.y;
+// ─── Mapping ─────────────────────────────────────────────────────────────────
 
-    // ── LEFT: amount in words, QR tile, payment instructions ──────────────
-    let ly = top;
-    const wordsLines = [
-      lang !== 'NE' && inv.amountInWordsEn ? `${inv.amountInWordsEn} ${this.label('only', 'EN')}` : null,
-      lang !== 'EN' && inv.amountInWordsNe ? `${inv.amountInWordsNe} ${this.label('only', 'NE')}` : null,
-    ].filter((l): l is string => l != null);
-    if (wordsLines.length > 0) {
-      const wordsLabel = this.label('amountInWords', lang);
-      doc.font(pickFont(wordsLabel)).fontSize(8).fillColor(MUTED).text(wordsLabel.toUpperCase(), left, ly, { width: leftColW });
-      ly += 11;
-      for (const line of wordsLines) {
-        doc.font(pickFont(line, true)).fontSize(10.5).fillColor(INK).text(line, left, ly, { width: leftColW });
-        ly += 15;
-      }
-      ly += 19;
-    }
-    const qrSize = 52;
-    if (tenant.qrImageBuffer) {
-      doc.roundedRect(left, ly, qrSize, qrSize, 6).fill(WARM_PANEL);
-      try {
-        doc.save();
-        doc.roundedRect(left, ly, qrSize, qrSize, 6).clip();
-        doc.image(tenant.qrImageBuffer, left, ly, { fit: [qrSize, qrSize], align: 'center', valign: 'center' });
-        doc.restore();
-      } catch {
-        doc.restore();
-      }
-    }
-    if (tenant.paymentInstructions) {
-      const textX = tenant.qrImageBuffer ? left + qrSize + 12 : left;
-      const textW = leftColW - (textX - left);
-      const instrLabel = this.label('paymentInstructions', lang);
-      doc.font(pickFont(instrLabel)).fontSize(8).fillColor(MUTED).text(instrLabel.toUpperCase(), textX, ly);
-      // Free tenant-entered text — could genuinely be in either script, so
-      // this picks dynamically rather than assuming 'latin' (found during
-      // the mixed-script audit; not itself a concatenation bug, but the
-      // same class of oversight — a hardcoded font on text this codebase
-      // doesn't control the script of).
-      doc.font(pickFont(tenant.paymentInstructions)).fontSize(8.5).fillColor(INK)
-        .text(tenant.paymentInstructions, textX, ly + 11, { width: textW });
-    }
-    const leftBottom = tenant.qrImageBuffer ? ly + qrSize : ly + 40;
+function localeOf(language: PrintLanguage): Locale {
+  return language === 'NE' ? 'ne' : 'en';
+}
 
-    // ── RIGHT: totals stack + accent-filled Total Receivable pill ─────────
-    let ry = top;
-    const row = (label: string, value: string, valueColor = INK) => {
-      doc.font(pickFont(label)).fontSize(9.5).fillColor(INK).text(label, totalsX, ry, { width: totalsW * 0.55 });
-      doc.font('latin').fontSize(9.5).fillColor(valueColor)
-        .text(value, totalsX + totalsW * 0.55, ry, { width: totalsW * 0.45, align: 'right' });
-      ry += 18;
+/** The PrintLanguage a sheet-level string (cut marker, copy labels) is drawn in. */
+function primaryLanguage(language: PrintLanguage): PrintLanguage {
+  return language === 'BOTH' ? 'EN' : language;
+}
+
+function copyLabels(language: PrintLanguage): [string, string] {
+  const lang = primaryLanguage(language);
+  return [printLabel('studentCopy', lang), printLabel('officeCopy', lang)];
+}
+
+/**
+ * The design's five money columns from the stored line shape. Concession is
+ * the stored per-line value plus this line's apportioned share of the
+ * whole-bill concession; non-taxable and taxable split the net by the line's
+ * own is_taxable flag — the same derivation the previous layout used, moved
+ * out of the drawing code.
+ */
+export function toInvoiceLines(items: BillPdfLineItem[]): InvoiceHalfLine[] {
+  return items.map((item) => {
+    const concession = item.concessionAmount + item.apportionedConcession;
+    const net = item.grossAmount - concession;
+    return {
+      head: item.itemName,
+      gross: item.grossAmount,
+      concession,
+      nonTaxable: item.isTaxable ? 0 : net,
+      taxable: item.isTaxable ? net : 0,
+      total: net,
     };
-    // Subtotal = pre-tax net (concessions are already itemized per-line
-    // above with the amber minus-sign treatment, so no separate aggregate
-    // discount row here).
-    row(this.label('subtotal', lang), num(inv.netAmount - inv.taxAmount));
-    if (inv.taxRate != null) {
-      // The rate% moves into the value slot (already hardcoded 'latin' in
-      // row() below, always safe) rather than concatenating it onto the
-      // label — the label alone may be Devanagari, and "(13%)" glued onto
-      // it would hit the same mixed-script tofu bug drawMixedText exists
-      // to fix elsewhere; here it's simpler to just not concatenate.
-      row(this.label('tax', lang), `${num(inv.taxAmount)} (${inv.taxRate}%)`);
-    }
-    const prevAbs = Math.abs(inv.previousBalance);
-    if (prevAbs > 0) {
-      row(this.label(inv.previousBalance > 0 ? 'previousBalanceDr' : 'previousBalanceCr', lang), num(prevAbs));
-    }
-    ry += 6;
+  });
+}
 
-    const pillH = 44;
-    doc.roundedRect(totalsX, ry, totalsW, pillH, pillH / 2).fill(accentColor);
-    const totalReceivableLabel = this.label('totalReceivable', lang);
-    doc.font(pickFont(totalReceivableLabel)).fontSize(8.5).fillColor('#FFFFFF')
-      .text(totalReceivableLabel.toUpperCase(), totalsX + 18, ry + 10, { width: totalsW - 36 });
-    doc.font('latin-bold').fontSize(15).fillColor('#FFFFFF')
-      .text(money(inv.totalReceivable), totalsX + 18, ry + 22, { width: totalsW - 36 });
-    const rightBottom = ry + pillH;
-
-    doc.y = Math.max(leftBottom, rightBottom) + 4;
-  }
-
-  private renderSignature(doc: PDFKit.PDFDocument, tenant: BillPdfTenant, left: number, pageW: number, lang: PrintLanguage) {
-    if (doc.y > doc.page.height - 90) doc.addPage();
-    const sigW = 210;
-    const sigX = left + pageW - sigW;
-    let imgBottom = doc.y;
-
-    if (tenant.schoolStampBuffer || tenant.principalSignatureBuffer) {
-      const imgY = doc.y;
-      if (tenant.schoolStampBuffer) {
-        try {
-          doc.image(tenant.schoolStampBuffer, sigX + sigW - 55, imgY, { fit: [50, 50] });
-        } catch {
-          // ignore — hairline + text below still render
-        }
-      }
-      if (tenant.principalSignatureBuffer) {
-        try {
-          doc.image(tenant.principalSignatureBuffer, sigX, imgY + 8, { fit: [sigW - 65, 34] });
-        } catch {
-          // ignore
-        }
-      }
-      imgBottom = imgY + 54;
-    }
-
-    doc.moveTo(sigX, imgBottom).lineTo(sigX + sigW, imgBottom).strokeColor(HAIRLINE).lineWidth(0.75).stroke();
-    const forLabel = this.label('forSchool', lang);
-    // Mixed script (the reported bug): forLabel may be Devanagari,
-    // tenant.name is whatever script the school entered (usually Latin) —
-    // drawMixedText font-picks each run independently rather than forcing
-    // both through pickFont(forLabel)'s single choice.
-    drawMixedText(doc, [{ text: `${forLabel}: ` }, { text: tenant.name }],
-      sigX, imgBottom + 6, { width: sigW, align: 'right', fontSize: 9, color: INK });
-    if (tenant.principalName) {
-      doc.font(pickFont(tenant.principalName)).fontSize(8.5).fillColor(MUTED)
-        .text(tenant.principalName, sigX, imgBottom + 19, { width: sigW, align: 'right' });
-    }
-  }
+export function toInvoiceHalf(data: BillPdfData, locale: Locale): InvoiceHalfData {
+  const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
+  const { invoice: inv, tenant } = data;
+  const words = locale === 'ne' ? inv.amountInWordsNe : inv.amountInWordsEn;
+  const only = printLabel('only', lang);
+  return {
+    school: {
+      name: tenant.name,
+      tagline: tenant.tagline,
+      address: tenant.address,
+      phone: tenant.phone,
+      website: tenant.website,
+      pan: tenant.panNumber,
+      regNo: tenant.registrationNumber,
+      logo: tenant.logoBuffer,
+      qr: tenant.qrImageBuffer,
+      paymentInstructions: tenant.paymentInstructions,
+      signatoryName: tenant.principalName,
+      signature: tenant.principalSignatureBuffer,
+      stamp: tenant.schoolStampBuffer,
+    },
+    number: inv.invoiceNumber,
+    issuedAd: inv.issueDateAd,
+    issuedBs: inv.issueDateBs,
+    dueAd: inv.dueDateAd,
+    dueBs: inv.dueDateBs,
+    fiscalYear: inv.fiscalYear,
+    installment: inv.installment,
+    studentName: inv.studentName,
+    className: inv.className,
+    section: inv.sectionName,
+    roll: inv.rollNumber,
+    studentId: inv.admissionNumber,
+    guardian: inv.guardianName,
+    lines: toInvoiceLines(data.items),
+    // Pre-tax net, matching the sum of the lines' Total column so the fee
+    // table foots against this figure exactly.
+    subtotal: inv.netAmount - inv.taxAmount,
+    previousBalance: inv.previousBalance,
+    totalReceivable: inv.totalReceivable,
+    inWords: words ? `${words} ${only}` : null,
+    locale,
+    label: (key: LabelKey) => printLabel(key, lang),
+  };
 }

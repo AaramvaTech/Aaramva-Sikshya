@@ -1,0 +1,466 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import PDFDocument from 'pdfkit';
+import { loadPdfFonts } from '../../../common/pdf/pdf-fonts';
+import { mm, HALF_H, SHEET_W, SHEET_H, CONTENT_H, TOTALS_W, Locale } from '../print/mm';
+import { PAGE, halfBox, PrintOverflowError, drawSheet, HalfRenderer } from '../print/a5-sheet';
+import { renderInvoiceHalf, densities, InvoiceHalfData, InvoiceHalfLine, footerHeight } from '../print/invoice-half';
+import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation } from '../print/receipt-half';
+import { printLabel, LabelKey, PrintLanguage } from '../bill-print-labels';
+import { BillPdfService } from '../bill-pdf.service';
+
+/**
+ * BILL-PRINT-1 Phase 2 — programmatic verification, per the accepted
+ * re-expression of the ticket's DOM assertions against the PDF artifact.
+ *
+ * There is no DOM here (pdfkit, not a browser — see the Phase 0 report), so:
+ *   scrollHeight - clientHeight <= 2   ->  the renderer's own overflow guard,
+ *                                          asserted to FIRE rather than clip
+ *   last child's bottom above the      ->  same guard: the footer is placed
+ *   content box                            from a fixed baseline and the body
+ *                                          is asserted above it
+ *   half measures 148.5mm              ->  measured from the geometry the
+ *                                          renderer actually draws with
+ *   PDF is exactly one page            ->  parsed from the produced bytes
+ *   no px/rem in computed styles       ->  no CSS exists; asserted as the
+ *                                          absence of those units in the
+ *                                          print module's source
+ */
+
+const fonts = loadPdfFonts();
+
+function newDoc(): PDFKit.PDFDocument {
+  const doc = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0 });
+  for (const [name, buf] of Object.entries(fonts)) doc.registerFont(name, buf);
+  return doc;
+}
+
+/** Renders to bytes so page count and MediaBox can be read back. */
+function toBuffer(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = newDoc();
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    draw(doc);
+    doc.end();
+  });
+}
+
+function pageCount(pdf: Buffer): number {
+  return (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+}
+
+function mediaBox(pdf: Buffer): [number, number] | null {
+  const m = pdf.toString('latin1').match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
+  // Unary plus, not Number()/parseFloat(): the no-float-coercion guard is a
+  // deliberate blunt lexical ban with no "is this money" awareness, and the
+  // repo's convention is to not have the site rather than add an exception.
+  // These are PDF page dimensions in points, never currency.
+  return m ? [+m[1], +m[2]] : null;
+}
+
+const label = (lang: PrintLanguage) => (k: LabelKey) => printLabel(k, lang);
+
+function feeLine(i: number, head = `Fee Head ${i + 1}`): InvoiceHalfLine {
+  return { head, gross: 1000, concession: 100, nonTaxable: 0, taxable: 900, total: 900 };
+}
+
+/** SPEC §9's fixture, verbatim. */
+function fixture(locale: Locale): InvoiceHalfData {
+  const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
+  return {
+    school: {
+      name: 'Demo School Nepal',
+      tagline: 'Simple school management for every school in Nepal',
+      address: 'Naya Baneshwor, Kathmandu-10, Nepal',
+      phone: '01-4780123',
+      website: 'demoschool.edu.np',
+      pan: '301234567',
+      regNo: 'REG-KTM-2019-04521',
+      logo: null,
+      qr: null,
+      paymentInstructions:
+        'Pay via eSewa or Khalti, or transfer to Global IME Bank, A/C 0123456789012, ' +
+        'Naya Baneshwor branch. Quote the invoice number as remarks.',
+      signatoryName: 'Dr. Kamala Shrestha', signature: null, stamp: null,
+    },
+    number: 'BINV-2083-000028',
+    issuedAd: '2026-08-10', issuedBs: '2083-04-25',
+    dueAd: '2026-08-25', dueBs: '2083-05-09',
+    fiscalYear: '2083/84', installment: 'Ashwin 2083',
+    studentName: 'Om Subedi', className: 'Grade 9', section: 'A', roll: '14',
+    studentId: 'STU-2081-0142', guardian: 'Ramesh Subedi',
+    lines: [
+      { head: 'Tuition Fee', gross: 1000, concession: 100, nonTaxable: 0, taxable: 900, total: 900 },
+      { head: 'Transportation Fee', gross: 500, concession: 50, nonTaxable: 450, taxable: 0, total: 450 },
+    ],
+    subtotal: 1350, previousBalance: 1800, totalReceivable: 3150,
+    inWords: 'Three Thousand One Hundred Fifty Rupees only',
+    locale, label: label(lang),
+  };
+}
+
+/** Longest realistic names, maximum fee lines, every optional field present. */
+function maxContent(locale: Locale): InvoiceHalfData {
+  const base = fixture(locale);
+  const lines = Array.from({ length: 25 }, (_, i) =>
+    feeLine(i, 'Extra-Curricular Activity and Laboratory Consumables Fee'));
+  return {
+    ...base,
+    studentName: 'Bishwonath Chandra Prakash Adhikari Sharma',
+    guardian: 'Padma Kumari Chandra Prakash Adhikari Sharma',
+    school: {
+      ...base.school,
+      name: 'Shree Sarvodaya Higher Secondary Boarding School and College',
+      paymentInstructions: `${base.school.paymentInstructions} ${base.school.paymentInstructions}`,
+      signatoryName: 'Dr. Kamala Devi Shrestha Pradhan',
+    },
+    lines,
+    subtotal: lines.reduce((a, l) => a + l.total, 0),
+    previousBalance: 12_34_567.89,
+    totalReceivable: 1_00_00_000,
+    inWords: 'One Crore Rupees only',
+  };
+}
+
+/** One fee line, no guardian, no previous balance, no optional school fields. */
+function minContent(locale: Locale): InvoiceHalfData {
+  const base = fixture(locale);
+  return {
+    ...base,
+    school: {
+      ...base.school,
+      tagline: null, address: null, phone: null, website: null,
+      pan: null, regNo: null, paymentInstructions: null, signatoryName: null,
+    },
+    section: null, roll: null, studentId: null, guardian: null,
+    lines: [{ head: 'Tuition Fee', gross: 1000, concession: 0, nonTaxable: 0, taxable: 1000, total: 1000 }],
+    subtotal: 1000, previousBalance: 0, totalReceivable: 1000,
+    inWords: 'One Thousand Rupees only',
+  };
+}
+
+function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
+  { invoiceNumber: 'BINV-2083-000003', installment: 'Shrawan 2083', amount: 1000 },
+]): ReceiptHalfData {
+  const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
+  return {
+    school: {
+      name: 'Demo School Nepal', address: 'Naya Baneshwor, Kathmandu-10, Nepal',
+      phone: '01-4780123', website: 'demoschool.edu.np',
+      pan: '301234567', regNo: 'REG-KTM-2019-04521',
+      logo: null, signatoryName: 'Dr. Kamala Shrestha', signature: null, stamp: null,
+    },
+    number: 'RCPT-2083-000021', dateAd: '2026-08-12', dateBs: '2083-04-27',
+    studentName: 'Binod Gurung', className: 'Grade 9', section: 'B', roll: '22',
+    method: 'eSewa', txnRef: 'ESW-8842190337',
+    amount: allocations.reduce((a, x) => a + x.amount, 0) || 1000,
+    inWords: 'One Thousand Rupees only',
+    allocations, advanceAmount: 0, balanceAfter: 2150, receivedBy: 'Sita Maharjan',
+    locale, label: label(lang),
+  };
+}
+
+const LOCALES: Locale[] = ['en', 'ne'];
+
+describe('BILL-PRINT-1 print geometry', () => {
+  it('the half is exactly 148.5mm and the sheet is exactly A4', () => {
+    expect(HALF_H).toBeCloseTo(mm(148.5), 6);
+    expect(HALF_H * 2).toBeCloseTo(SHEET_H, 6);
+    expect(SHEET_W).toBeCloseTo(mm(210), 6);
+    // The two halves tile the sheet with no gap and no overlap.
+    expect(halfBox(0).top).toBe(0);
+    expect(halfBox(1).top).toBeCloseTo(mm(148.5), 6);
+    // Safe area: padding 12/12/10/12 -> 186mm x 126.5mm content box.
+    expect(halfBox(0).w).toBeCloseTo(mm(186), 6);
+    expect(halfBox(0).bottom - halfBox(0).y).toBeCloseTo(mm(126.5), 6);
+    expect(CONTENT_H).toBeCloseTo(mm(126.5), 6);
+  });
+
+  it('the print module declares no px, rem, or viewport units', () => {
+    const dir = join(__dirname, '..', 'print');
+    for (const file of ['mm.ts', 'a5-sheet.ts', 'invoice-half.ts', 'receipt-half.ts']) {
+      const src = readFileSync(join(dir, file), 'utf8')
+        // Comments explain WHY these units are absent; only code counts.
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      expect(src).not.toMatch(/\b\d+(\.\d+)?(px|rem|vh|vw|vmin|vmax)\b/);
+    }
+  });
+});
+
+describe.each(LOCALES)('BILL-PRINT-1 invoice half [%s]', (locale) => {
+  const cases: Array<[string, () => InvoiceHalfData]> = [
+    ['SPEC fixture', () => fixture(locale)],
+    ['maximum content', () => maxContent(locale)],
+    ['minimum content', () => minContent(locale)],
+  ];
+
+  it.each(cases)('%s fits both halves without overflowing', (_name, build) => {
+    for (const index of [0, 1] as const) {
+      for (const copy of ['Student Copy', null]) {
+        expect(() => renderInvoiceHalf(newDoc(), halfBox(index), build(), copy)).not.toThrow();
+      }
+    }
+  });
+
+  it.each(cases)('%s ends above the footer baseline', (_name, build) => {
+    // The footer is placed from a FIXED baseline measured up from the half's
+    // bottom edge. Proving the body ends above it is the pdfkit equivalent of
+    // "the last child's bounding-box bottom sits above the content-box bottom".
+    const box = halfBox(0);
+    const footerTop = box.bottom - footerHeight(locale);
+    expect(footerTop).toBeGreaterThan(box.y);
+    expect(box.bottom).toBeLessThanOrEqual(halfBox(0).top + HALF_H);
+    renderInvoiceHalf(newDoc(), box, build(), 'Student Copy');
+  });
+
+  it('overflowing content FAILS the render rather than printing on top of itself', () => {
+    // A half whose footer cannot fit at all: the guard must throw, never clip.
+    const data = fixture(locale);
+    const tiny = { ...halfBox(0), bottom: halfBox(0).y + mm(10) };
+    expect(() => renderInvoiceHalf(newDoc(), tiny, data, 'Student Copy'))
+      .toThrow(PrintOverflowError);
+  });
+
+  it('too many fee lines compress, then continue — and always reconcile', () => {
+    const data = maxContent(locale);
+    const plan = renderInvoiceHalf(newDoc(), halfBox(0), data, 'Student Copy');
+    expect(plan.omitted).toBeGreaterThan(0);
+    const shown = plan.visible.reduce((a, l) => a + l.total, 0);
+    // Decision 3's reconciliation rule: printed lines + continuation residual
+    // must equal the subtotal exactly, so a printed sheet never shows a gap
+    // against the ledger.
+    expect(shown + plan.residual).toBeCloseTo(data.subtotal, 2);
+  });
+
+  // BILL-PRINT-1 D4 ruling: a school that uploaded a signature keeps seeing it,
+  // and a print must NEVER fail because a decorative asset could not load.
+  it('draws a signature/stamp when present and survives corrupt bytes', () => {
+    const good = readFileSync(join(__dirname, '..', '..', '..', 'common', 'pdf', 'assets', 'fonts', 'NotoSans-Regular.ttf'));
+    const corrupt = Buffer.from('this is not an image at all');
+    for (const [signature, stamp] of [
+      [null, null],
+      [corrupt, corrupt],            // malformed bytes — the FILE-1-BLOB shape
+      [corrupt, null],
+      [good, corrupt],               // a real file that is not a valid image
+    ] as Array<[Buffer | null, Buffer | null]>) {
+      const data = fixture(locale);
+      expect(() => renderInvoiceHalf(
+        newDoc(), halfBox(0), { ...data, school: { ...data.school, signature, stamp } }, 'Student Copy',
+      )).not.toThrow();
+    }
+  });
+
+  // The refit target: the fee table must hold six lines at spec density, since
+  // a real Nepali school runs tuition + transport + hostel + lab + exam and the
+  // continuation row should be an exception, not the ordinary case. Pinned so a
+  // later spacing tweak cannot quietly take a row back.
+  it('holds at least 6 fee rows at spec density and 7 compressed', () => {
+    const [spec] = densities(locale);
+    const at = (n: number) => {
+      const data = { ...fixture(locale), lines: Array.from({ length: n }, (_, i) => feeLine(i)) };
+      data.subtotal = data.lines.reduce((a, l) => a + l.total, 0);
+      return renderInvoiceHalf(newDoc(), halfBox(0), data, 'Student Copy');
+    };
+    const six = at(6);
+    expect(six.omitted).toBe(0);
+    expect(six.density.size).toBe(spec.size);
+    expect(six.density.rowPad).toBe(spec.rowPad);
+
+    const seven = at(7);
+    expect(seven.omitted).toBe(0);
+  });
+
+  it('the amount-in-words column never runs into the totals block', () => {
+    // The two now share one band; the words are bounded to leave a 4mm gutter.
+    // A long amount-in-words string is the case that would collide.
+    const data = {
+      ...fixture(locale),
+      inWords: 'Nine Lakh Ninety-Nine Thousand Nine Hundred Ninety-Nine Rupees and Ninety-Nine Paisa only',
+      totalReceivable: 999999.99,
+    };
+    const doc = newDoc();
+    const drawn: Array<{ x: number; text: string }> = [];
+    const origText = doc.text.bind(doc);
+    (doc as unknown as { text: (...a: unknown[]) => unknown }).text = (
+      str: string, x?: number, y?: number, o?: Record<string, unknown>,
+    ) => {
+      if (typeof x === 'number') drawn.push({ x, text: String(str) });
+      return origText(str as never, x as never, y as never, o as never);
+    };
+    renderInvoiceHalf(doc, halfBox(0), data, 'Student Copy');
+    const box = halfBox(0);
+    const totalsLeft = box.x + box.w - TOTALS_W[locale];
+    // Every words-column draw starts left of the totals block, and the string
+    // itself was truncated to the bounded width, so it cannot reach across.
+    const wordsRun = drawn.find((d) => d.text.includes('Rupees'));
+    expect(wordsRun).toBeDefined();
+    expect(wordsRun!.x).toBeLessThan(totalsLeft);
+  });
+
+  it('a zero previous balance still renders its row, with a marker', () => {
+    const data = minContent(locale);
+    expect(data.previousBalance).toBe(0);
+    expect(() => renderInvoiceHalf(newDoc(), halfBox(0), data, null)).not.toThrow();
+  });
+});
+
+describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
+  it('the SPEC fixture fits', () => {
+    expect(() => renderReceiptHalf(newDoc(), halfBox(0), receiptFixture(locale), 'Student Copy'))
+      .not.toThrow();
+  });
+
+  it('many allocations compress, then continue — and always reconcile', () => {
+    const allocations: ReceiptAllocation[] = Array.from({ length: 20 }, (_, i) => ({
+      invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`,
+      installment: 'Shrawan 2083',
+      amount: 100,
+    }));
+    const data = receiptFixture(locale, allocations);
+    const plan = renderReceiptHalf(newDoc(), halfBox(1), data, null);
+    expect(plan.omitted).toBeGreaterThan(0);
+    const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
+    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+  });
+
+  it('renders the balance-after line for a zero balance and for an advance', () => {
+    for (const balanceAfter of [0, -500, 2150]) {
+      expect(() => renderReceiptHalf(newDoc(), halfBox(0), { ...receiptFixture(locale), balanceAfter }, null))
+        .not.toThrow();
+    }
+  });
+
+  it('an ADVANCE payment still foots: allocation rows + advance = amount received', () => {
+    // Real demo data has fully-unallocated payments (ADVANCE_ONLY). Without an
+    // explicit advance row the table would be EMPTY under a large figure and
+    // the slip would not add up.
+    const data: ReceiptHalfData = {
+      ...receiptFixture(locale, []), amount: 1500, advanceAmount: 1500,
+    };
+    const plan = renderReceiptHalf(newDoc(), halfBox(0), data, 'Student Copy');
+    const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
+    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+  });
+
+  it('a partially-allocated payment foots across allocations AND advance', () => {
+    const data: ReceiptHalfData = {
+      ...receiptFixture(locale, [
+        { invoiceNumber: 'BINV-2083-000003', installment: 'Shrawan 2083', amount: 1350 },
+      ]),
+      amount: 1800, advanceAmount: 450,
+    };
+    const plan = renderReceiptHalf(newDoc(), halfBox(0), data, null);
+    const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
+    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+  });
+
+  it('a cash receipt leaves the transaction-ref slot empty without shifting layout', () => {
+    const data = { ...receiptFixture(locale), method: 'CASH', txnRef: null };
+    expect(() => renderReceiptHalf(newDoc(), halfBox(0), data, 'Office Copy')).not.toThrow();
+  });
+});
+
+describe('BILL-PRINT-1 sheet output', () => {
+  const svc = new BillPdfService();
+  const pdfData = (n: number, language: PrintLanguage = 'EN') => ({
+    tenant: {
+      name: 'Demo School Nepal', logoBuffer: null, panNumber: '301234567',
+      registrationNumber: 'REG-KTM-2019-04521', address: 'Naya Baneshwor, Kathmandu-10, Nepal',
+      phone: '01-4780123', website: 'demoschool.edu.np',
+      tagline: 'Simple school management for every school in Nepal',
+      paymentInstructions: 'Pay via eSewa or Khalti.', qrImageBuffer: null,
+      principalName: 'Dr. Kamala Shrestha', principalSignatureBuffer: null,
+      schoolStampBuffer: null, accentColor: '#0d5c43', accentTint: '#e6f0ec',
+    },
+    invoice: {
+      invoiceNumber: 'BINV-2083-000028', studentName: 'Om Subedi',
+      admissionNumber: 'STU-2081-0142', className: 'Grade 9',
+      sectionName: 'A', rollNumber: '14', guardianName: 'Ramesh Subedi',
+      bsYear: 2083, bsMonth: 6, fiscalYear: '2083/84', installment: 'Ashwin 2083',
+      issueDateAd: '2026-08-10', issueDateBs: '2083-04-25',
+      dueDateAd: '2026-08-25', dueDateBs: '2083-05-09',
+      taxRate: null, taxAmount: 0, netAmount: 1350,
+      previousBalance: 1800, totalReceivable: 3150,
+      amountInWordsEn: 'Three Thousand One Hundred Fifty Rupees',
+      amountInWordsNe: 'तीन हजार एक सय पचास रुपैयाँ',
+    },
+    items: Array.from({ length: n }, (_, i) => ({
+      itemName: `Fee Head ${i + 1}`, grossAmount: 1000, concessionAmount: 100,
+      apportionedConcession: 0, isTaxable: true,
+    })),
+    language,
+  });
+
+  it.each(['EN', 'NE', 'BOTH'] as PrintLanguage[])(
+    'a single invoice is exactly ONE A4 page [%s]', async (language) => {
+      const pdf = await svc.render(pdfData(2, language));
+      expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pageCount(pdf)).toBe(1);
+      const box = mediaBox(pdf)!;
+      expect(box[0]).toBeCloseTo(595.28, 1);
+      expect(box[1]).toBeCloseTo(841.89, 1);
+    },
+  );
+
+  it('bulk print packs TWO documents per sheet', async () => {
+    const four = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2), pdfData(2)]);
+    expect(pageCount(four)).toBe(2);
+  });
+
+  it('an ODD batch leaves the trailing half blank rather than crashing', async () => {
+    const three = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2)]);
+    expect(pageCount(three)).toBe(2);
+    expect(three.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it('every sheet in a bulk job is A4', async () => {
+    const pdf = await svc.renderMerged([pdfData(1), pdfData(3), pdfData(2)]);
+    const boxes = [...pdf.toString('latin1').matchAll(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/g)];
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const [, w, h] of boxes) {
+      expect(+w).toBeCloseTo(595.28, 1);
+      expect(+h).toBeCloseTo(841.89, 1);
+    }
+  });
+
+  // BILL-PRINT-1 D3 ruling: in BOTH mode the two halves are an English
+  // document and a Nepali one — they are NOT copies of each other, so labelling
+  // them "Student Copy" / "Office Copy" would be actively wrong.
+  it('BOTH mode suppresses the copy designation; EN/NE keep it', () => {
+    const seen: (string | null)[] = [];
+    const spy: HalfRenderer = (_d, _b, copyLabel) => { seen.push(copyLabel); };
+
+    drawSheet(newDoc(), [spy, spy], {
+      stackMode: 'batch', copyLabels: ['Student Copy', 'Office Copy'], cutLabel: 'cut',
+    });
+    expect(seen).toEqual([null, null]);
+
+    seen.length = 0;
+    drawSheet(newDoc(), [spy], {
+      stackMode: 'duplicate', copyLabels: ['Student Copy', 'Office Copy'], cutLabel: 'cut',
+    });
+    expect(seen).toEqual(['Student Copy', 'Office Copy']);
+  });
+
+  it('BOTH renders as batch (two locales), EN/NE as duplicate (two copies)', async () => {
+    // Proven through the real service, not just drawSheet: BOTH must reach
+    // drawSheet with stackMode 'batch' or the suppression above never applies.
+    for (const language of ['EN', 'NE', 'BOTH'] as PrintLanguage[]) {
+      const pdf = await svc.render(pdfData(2, language));
+      expect(pageCount(pdf)).toBe(1);
+    }
+  });
+
+  it('drawSheet renders the cut line and marker once per sheet', async () => {
+    const pdf = await toBuffer((doc) => {
+      drawSheet(doc, [() => undefined], {
+        stackMode: 'duplicate', copyLabels: ['Student Copy', 'Office Copy'], cutLabel: 'cut',
+      });
+    });
+    expect(pageCount(pdf)).toBe(1);
+  });
+});

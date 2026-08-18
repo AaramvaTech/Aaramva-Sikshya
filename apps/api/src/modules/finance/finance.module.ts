@@ -43,6 +43,7 @@ import { BillPdfService } from './bill-pdf.service';
 import { BillDocumentService } from './bill-document.service';
 import { BillPdfController } from './bill-pdf.controller';
 import { BillReceiptService } from './bill-receipt.service';
+import { BillReceiptA5Service } from './bill-receipt-a5.service';
 import { BillReceiptDocumentService } from './bill-receipt-document.service';
 import { BillReceiptController } from './bill-receipt.controller';
 import { BillPrintJobService } from './bill-print-job.service';
@@ -107,6 +108,7 @@ import { BillFineController } from './bill-fine.controller';
     BillPdfService,
     BillDocumentService,
     BillReceiptService,
+    BillReceiptA5Service,
     BillReceiptDocumentService,
     BillPrintJobService,
     BillPrintRunnerService,

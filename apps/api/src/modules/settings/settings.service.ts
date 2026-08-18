@@ -4,7 +4,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 import { StorageService } from '../storage/storage.service';
-import { NEPALI_PRINT_REVIEWED } from '../../common/nepali-print-review-gate';
+import { NEPALI_PRINT_PERMITTED } from '../../common/nepali-print-review-gate';
 
 interface TenantProfileRow {
   id: string;
@@ -120,7 +120,12 @@ export class SettingsService {
     // lives here, same split as MANUAL allocation's role check
     // (bill-payment.controller.ts): a declarative decorator can't
     // discriminate on a runtime flag.
-    if (dto.printLanguage !== undefined && dto.printLanguage !== 'EN' && !NEPALI_PRINT_REVIEWED) {
+    // BILL-PRINT-1: now NEPALI_PRINT_PERMITTED, which additionally requires
+    // the keyset this ticket added to have been reviewed. Without this the
+    // write path would still let a tenant SAVE printLanguage='NE' while the
+    // render path silently downgraded it to EN — a setting that appears to
+    // take and then does nothing.
+    if (dto.printLanguage !== undefined && dto.printLanguage !== 'EN' && !NEPALI_PRINT_PERMITTED) {
       throw new BadRequestException(
         'Nepali print output is not yet available for any school — pending native-speaker review of the Devanagari translation.',
       );

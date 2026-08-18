@@ -65,18 +65,28 @@ export class BillInvoiceService {
 
   async findOne(id: string, callerId?: string, callerRole?: Role): Promise<BillInvoiceResponseDto> {
     const rows = await this.tenantPrisma.query<BillInvoiceRow>(
+      // BILL-PRINT-1: section, roll and primary guardian join the SELECT for
+      // the print stationery's party block. All three columns already existed
+      // — nothing here is a schema change. Grouping by s.id (the students PK)
+      // makes every s.* column and the correlated guardian subquery legal
+      // without enumerating them.
       `SELECT bi.*, s.first_name || ' ' || s.last_name AS student_name,
               s.student_id AS admission_number, c.name AS class_name,
+              sec.name AS section_name, s.roll_number,
+              (SELECT g.first_name || COALESCE(' ' || g.last_name, '')
+                 FROM guardians g WHERE g.student_id = s.id
+                ORDER BY g.is_primary DESC, g.created_at LIMIT 1) AS guardian_name,
               COALESCE(SUM(bpa.amount), 0) AS paid_amount,
               bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance
        FROM bill_invoices bi
        JOIN students s ON s.id = bi.student_id
        LEFT JOIN classes c ON c.id = s.class_id
+       LEFT JOIN sections sec ON sec.id = s.section_id
        LEFT JOIN bill_payment_allocations bpa
          ON bpa.bill_invoice_id = bi.id
          AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
        WHERE bi.id = $1::uuid AND bi.deleted_at IS NULL
-       GROUP BY bi.id, s.first_name, s.last_name, s.student_id, c.name`,
+       GROUP BY bi.id, s.id, c.name, sec.name`,
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Invoice ${id} not found`);

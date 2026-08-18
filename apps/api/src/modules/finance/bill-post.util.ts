@@ -9,6 +9,17 @@ export function fiscalYearBs(bsYear: number, bsMonth: number): number {
 }
 
 /**
+ * BILL-PRINT-1: the printable form of the above, e.g. 2083 -> "2083/84".
+ * Derived from the INVOICE's own BS period, never from today — bs-calendar's
+ * getCurrentFiscalYear() reads the clock and would relabel an old invoice on
+ * reprint.
+ */
+export function fiscalYearLabel(bsYear: number, bsMonth: number): string {
+  const start = fiscalYearBs(bsYear, bsMonth);
+  return `${start}/${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+/**
  * R13: "Sequence keys are namespaced: <doctype>:<tenantSlug>:<fiscalYearBs>".
  * B4-10 / Checkpoint C: reset-per-fiscal-year is now a real per-tenant
  * setting (FinanceSettingsService, tenants.invoiceNumberingReset — added
