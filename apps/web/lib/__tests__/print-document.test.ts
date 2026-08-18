@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   defaultPrintLanguage, isStorageUnavailable, printErrorMessage, openPresignedUrl,
   PRINT_LANGUAGES, PRINT_LANGUAGE_LABELS, STORAGE_UNAVAILABLE_MESSAGE, THERMAL_SCALE_WARNING,
+  needsThermalScaleWarning,
 } from '@/lib/print-document';
 
 // Spec §Language — the print-time choice defaults to the tenant's own
@@ -85,5 +86,41 @@ describe('thermal scale warning', () => {
     expect(THERMAL_SCALE_WARNING).toMatch(/100%/);
     expect(THERMAL_SCALE_WARNING).toMatch(/80mm/);
     expect(THERMAL_SCALE_WARNING).toMatch(/fit to page/i);
+  });
+});
+
+// ─── BILL-PRINT-1 — receipt format ───────────────────────────────────────────
+// Decision 2: two receipt formats, chosen at the CALL SITE. The counter keeps
+// the 80mm thermal roll; office surfaces produce the A5 stationery. There is
+// no tenant setting and no schema column behind this.
+describe('receipt format', () => {
+  it('warns about print scale for the thermal roll only', () => {
+    // The 80mm page is real, so the browser's scale-to-fit default is the only
+    // thing between the cashier and a correct print.
+    expect(needsThermalScaleWarning('thermal')).toBe(true);
+    // An A5 receipt is on a standard sheet — the same warning there would send
+    // the user to change a setting that is already correct.
+    expect(needsThermalScaleWarning('a5')).toBe(false);
+  });
+
+  it('only the thermal warning mentions the 80mm width', () => {
+    expect(THERMAL_SCALE_WARNING).toContain('80mm');
+  });
+
+  it('sends `format` to the API only when a call site asks for one', async () => {
+    // Omitting it must leave the server default (thermal) in force, so every
+    // pre-BILL-PRINT-1 caller keeps its behaviour without being edited.
+    const get = vi.fn().mockResolvedValue({ data: { data: {} } });
+    vi.doMock('@/lib/api', () => ({ default: { get, post: vi.fn() } }));
+    vi.resetModules();
+    const { billPrintApi } = await import('@/lib/api/bill-print.api');
+
+    await billPrintApi.receipt('pay-1');
+    expect(get.mock.calls[0][1].params).toEqual({});
+
+    await billPrintApi.receipt('pay-1', 'NE', 'a5');
+    expect(get.mock.calls[1][1].params).toEqual({ lang: 'NE', format: 'a5' });
+
+    vi.doUnmock('@/lib/api');
   });
 });

@@ -2,7 +2,7 @@ import api from '@/lib/api';
 import type {
   ApiResponse, PrintDocumentResponse, BulkAssignJob, PrintClassData,
 } from '@/types/api.types';
-import type { PrintLanguage } from '@/lib/print-document';
+import type { PrintLanguage, ReceiptFormat } from '@/lib/print-document';
 
 /**
  * BILL-8-UI — the print engine's two single-document endpoints. Both return
@@ -20,9 +20,14 @@ export const billPrintApi = {
       params: lang ? { lang } : undefined,
     }),
 
-  receipt: (paymentId: string, lang?: PrintLanguage) =>
+  /**
+   * BILL-PRINT-1: `format` picks the 80mm thermal roll (the counter printer,
+   * and the server's default) or the A5 stationery. It is a CALL-SITE choice —
+   * there is no tenant setting and no schema column behind it.
+   */
+  receipt: (paymentId: string, lang?: PrintLanguage, format?: ReceiptFormat) =>
     api.get<ApiResponse<PrintDocumentResponse>>(`/finance/bill/payments/${paymentId}/receipt`, {
-      params: lang ? { lang } : undefined,
+      params: { ...(lang ? { lang } : {}), ...(format ? { format } : {}) },
     }),
 
   // ─── Phase 2 — bulk print (background jobs) ────────────────────────────────

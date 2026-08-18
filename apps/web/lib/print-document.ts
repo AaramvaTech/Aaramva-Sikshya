@@ -78,3 +78,20 @@ export const POPUP_BLOCKED_MESSAGE =
  */
 export const THERMAL_SCALE_WARNING =
   'In the print dialog, set Scale to 100% (or "Actual size") — not "Fit to page". This receipt is 80mm wide.';
+
+/**
+ * BILL-PRINT-1 Decision 2: the receipt has two formats, chosen at the call
+ * site. `thermal` is the 80mm counter roll (the server's default, so every
+ * pre-existing caller is unchanged); `a5` is the print stationery, two per A4
+ * sheet, for the office paths.
+ */
+export type ReceiptFormat = 'thermal' | 'a5';
+
+/**
+ * The scale warning belongs to the thermal roll only. An A5 receipt is on a
+ * standard sheet and prints correctly at the dialog's defaults — showing the
+ * 80mm warning there would be actively wrong.
+ */
+export function needsThermalScaleWarning(format: ReceiptFormat): boolean {
+  return format === 'thermal';
+}

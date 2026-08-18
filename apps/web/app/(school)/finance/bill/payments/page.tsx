@@ -189,8 +189,16 @@ export default function BillPaymentsPage() {
               )}
               {/* Embedded in the menu this row already had, rather than a
                   second dropdown beside it (BILL-8-UI Phase 1). */}
+              {/* BILL-PRINT-1 Decision 2: the payments LIST is the office
+                  reprint surface — a receipt pulled up days later, not the
+                  counter moment — so it produces the A5 stationery. The two
+                  counter surfaces (the payment-recorded confirmation and the
+                  payment detail modal) stay on the 80mm thermal roll. */}
               {canPrint && (
-                <PrintLanguageItems doc={{ kind: 'receipt', paymentId: p.id }} heading="Print receipt" />
+                <PrintLanguageItems
+                  doc={{ kind: 'receipt', paymentId: p.id, format: 'a5' }}
+                  heading="Print receipt (A5)"
+                />
               )}
             </DropdownMenuContent>
           </DropdownMenu>

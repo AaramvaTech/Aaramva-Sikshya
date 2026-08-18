@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { billPrintApi } from '@/lib/api/bill-print.api';
 import { billAssignmentApi } from '@/lib/api/bill-assignment.api';
-import type { PrintLanguage } from '@/lib/print-document';
+import type { PrintLanguage, ReceiptFormat } from '@/lib/print-document';
 import type { PrintClassData } from '@/types/api.types';
 
 /**
@@ -23,8 +23,9 @@ export function usePrintInvoicePdf() {
 
 export function usePrintReceipt() {
   return useMutation({
-    mutationFn: ({ paymentId, lang }: { paymentId: string; lang?: PrintLanguage }) =>
-      billPrintApi.receipt(paymentId, lang).then((r) => r.data.data),
+    mutationFn: (
+      { paymentId, lang, format }: { paymentId: string; lang?: PrintLanguage; format?: ReceiptFormat },
+    ) => billPrintApi.receipt(paymentId, lang, format).then((r) => r.data.data),
   });
 }
 
