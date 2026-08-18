@@ -109,6 +109,21 @@ describe('BulkJobProgress — failures[].reason', () => {
     expect(screen.queryByText('Class mismatch')).toBeNull();
   });
 
+  it('still labels CLASS_MISMATCH after the Phase 2 generalisation', () => {
+    // Guards the exact regression the shared-component change could cause:
+    // FEE-CLASS-GUARD's label surviving the studentId/invoiceId normalisation.
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 2, total: 2, failedCount: 1,
+        failures: [{ studentId: 'stu-5', error: 'Class mismatch. Grade 1 vs Grade 5.', reason: 'CLASS_MISMATCH' }],
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" />);
+    expect(screen.getByText('Class mismatch')).toBeTruthy();
+    expect(screen.getByText('1 student skipped')).toBeTruthy();
+  });
+
   it('renders a mixed list — one historical row, one guarded row', () => {
     mockUseBulkAssignJob.mockReturnValue({
       data: job({
@@ -124,5 +139,58 @@ describe('BulkJobProgress — failures[].reason', () => {
     expect(screen.getByText('2 students skipped')).toBeTruthy();
     expect(screen.getByText('Student not found or inactive')).toBeTruthy();
     expect(screen.getAllByText('Class mismatch')).toHaveLength(1);
+  });
+});
+
+// BILL-8-UI Phase 2 — the same component now serves bill-print jobs, which
+// key failures by invoiceId, carry no `reason`, and produce a downloadUrl.
+describe('BulkJobProgress — bill-print jobs (noun="invoice")', () => {
+  it('says "printed", not "assigned", and counts invoices', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({ status: 'COMPLETED', processed: 40, total: 40 }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" noun="invoice" />);
+    expect(screen.getByText('All 40 invoices printed successfully.')).toBeTruthy();
+  });
+
+  it('renders an invoiceId-keyed failure row', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 3, total: 3, failedCount: 1,
+        failures: [{ invoiceId: 'inv-7', error: 'Render failed' }],
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" noun="invoice" />);
+    expect(screen.getByText('1 invoice skipped')).toBeTruthy();
+    expect(screen.getByText('inv-7')).toBeTruthy();
+    expect(screen.getByText('Render failed')).toBeTruthy();
+    expect(screen.queryByText('Class mismatch')).toBeNull();
+  });
+
+  it('offers the merged PDF once the job carries a downloadUrl', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 40, total: 40,
+        downloadUrl: 'https://storage.example/merged.pdf?sig=abc',
+      }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" noun="invoice" />);
+    const link = screen.getByRole('link', { name: /Download merged PDF/i }) as HTMLAnchorElement;
+    expect(link.href).toContain('merged.pdf');
+    // Signed storage URL — never hand the opened tab a window.opener handle.
+    expect(link.rel).toContain('noopener');
+  });
+
+  // Bulk-assign jobs never carry one; the button must not appear for them.
+  it('shows no download for a completed bulk-assign job', () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({ status: 'COMPLETED', processed: 10, total: 10 }),
+      isLoading: false, isError: false,
+    });
+    render(<BulkJobProgress jobId="job-1" />);
+    expect(screen.queryByRole('link', { name: /Download/i })).toBeNull();
   });
 });

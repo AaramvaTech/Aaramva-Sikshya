@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Receipt, Ban, XCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Receipt, Ban, XCircle, CheckCircle2, AlertTriangle, Printer } from 'lucide-react';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import type { ColumnDef } from '@tanstack/react-table';
 import { PageHeader } from '@/components/shared/page-header';
@@ -16,6 +16,7 @@ import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
 import { BillRunOutcomeBadge, labels as outcomeLabels } from '@/components/finance/bill-run-outcome-badge';
 import { Button } from '@/components/ui/button';
 import { PrintDocumentButton } from '@/components/finance/print-document-button';
+import { BulkPrintDialog } from '@/components/finance/bulk-print-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useBillRun, useExcludeBillRunLines, usePostBillRun, useVoidBillRun } from '@/lib/hooks/use-bill-run';
 import { useClasses } from '@/lib/hooks/use-students';
@@ -38,6 +39,7 @@ export default function BillRunReviewPage() {
   const router = useRouter();
   const runId = params.id;
 
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [outcomeFilter, setOutcomeFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
 
@@ -66,6 +68,9 @@ export default function BillRunReviewPage() {
   }
 
   const isDraft = run.status === 'DRAFT';
+  // Only a POSTED run has invoices to print (addendum A7).
+  const canBulkPrint = run.status === 'POSTED';
+  const runLabel = `${BS_MONTH_NAMES_EN[run.bsMonth - 1]} ${run.bsYear}`;
   const draftCount = run.outcomeSummary.DRAFT ?? 0;
   const noAssignmentCount = run.outcomeSummary.SKIPPED_NO_ASSIGNMENT ?? 0;
   const alreadyBilledCount = run.outcomeSummary.SKIPPED_ALREADY_BILLED ?? 0;
@@ -208,10 +213,29 @@ export default function BillRunReviewPage() {
       <PageHeader
         title={`${BS_MONTH_NAMES_EN[run.bsMonth - 1]} ${run.bsYear} — ${run.scope === 'WHOLE_SCHOOL' ? 'Whole School' : classes?.find((c) => c.id === run.classId)?.name ?? 'Class'}`}
         action={
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-theme-xs font-medium ${BILL_RUN_STATUS_STYLES[run.status]}`}>
-            {run.status.charAt(0) + run.status.slice(1).toLowerCase()}
-          </span>
+          <div className="flex items-center gap-3">
+            {/* BILL-8-UI Phase 2 (addendum A7) — POSTED only. A DRAFT run has
+                no invoice rows at all (they are written at post time), so the
+                endpoint would 400; hide the action rather than let the user
+                find that out. VOIDED is excluded for the same reason it is
+                excluded from single-document print. */}
+            {canBulkPrint && (
+              <Button variant="outline" size="sm" onClick={() => setBulkPrintOpen(true)}>
+                <Printer className="mr-1.5 h-4 w-4" />
+                Print all bills
+              </Button>
+            )}
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-theme-xs font-medium ${BILL_RUN_STATUS_STYLES[run.status]}`}>
+              {run.status.charAt(0) + run.status.slice(1).toLowerCase()}
+            </span>
+          </div>
         }
+      />
+
+      <BulkPrintDialog
+        open={bulkPrintOpen}
+        onOpenChange={setBulkPrintOpen}
+        scope={{ kind: 'run', runId, runLabel: runLabel }}
       />
 
       {/* ── Header card ── */}
