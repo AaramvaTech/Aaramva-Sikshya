@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render as rtlRender, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { useBulkAssignJob } from '@/lib/hooks/use-bill-assignment';
+import { billAssignmentApi } from '@/lib/api/bill-assignment.api';
 import { BulkJobProgress } from '../bulk-job-progress';
+
+vi.mock('@/lib/api/bill-assignment.api', () => ({
+  billAssignmentApi: { bulkAssign: { getJob: vi.fn() } },
+}));
 
 vi.mock('@/lib/hooks/use-bill-assignment', async () => {
   const actual = await vi.importActual<typeof import('@/lib/hooks/use-bill-assignment')>('@/lib/hooks/use-bill-assignment');
@@ -10,6 +17,7 @@ vi.mock('@/lib/hooks/use-bill-assignment', async () => {
 });
 
 const mockUseBulkAssignJob = useBulkAssignJob as unknown as ReturnType<typeof vi.fn>;
+const mockGetJob = billAssignmentApi.bulkAssign.getJob as unknown as ReturnType<typeof vi.fn>;
 
 function job(overrides: Partial<Record<string, unknown>>) {
   return {
@@ -19,6 +27,13 @@ function job(overrides: Partial<Record<string, unknown>>) {
     createdBy: 'user-1', createdAt: '2026-04-14T00:00:00.000Z', startedAt: null, completedAt: null,
     ...overrides,
   };
+}
+
+/** The component calls a real mutation (useJobDownloadUrl), so it needs a
+ *  QueryClient. Local wrapper keeps every call site below unchanged. */
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 afterEach(() => cleanup());
@@ -169,19 +184,46 @@ describe('BulkJobProgress — bill-print jobs (noun="invoice")', () => {
     expect(screen.queryByText('Class mismatch')).toBeNull();
   });
 
-  it('offers the merged PDF once the job carries a downloadUrl', () => {
+  // Addendum A4 — the download is a BUTTON, never an <a href>. The URL polled
+  // alongside the job is already ageing against its 300s TTL and polling stops
+  // at a terminal status, so a rendered href would go stale in an open dialog.
+  it('offers the merged PDF as a button, with no URL rendered into the DOM', () => {
     mockUseBulkAssignJob.mockReturnValue({
       data: job({
         status: 'COMPLETED', processed: 40, total: 40,
-        downloadUrl: 'https://storage.example/merged.pdf?sig=abc',
+        downloadUrl: 'https://storage.example/merged.pdf?sig=STALE',
       }),
       isLoading: false, isError: false,
     });
+    const { container } = render(<BulkJobProgress jobId="job-1" noun="invoice" />);
+    expect(screen.getByRole('button', { name: /Download merged PDF/i })).toBeTruthy();
+    // The polled (ageing) URL must not be anywhere in the markup.
+    expect(screen.queryByRole('link', { name: /Download/i })).toBeNull();
+    expect(container.innerHTML).not.toContain('sig=STALE');
+  });
+
+  it('re-fetches a fresh URL at click time and opens THAT, not the polled one', async () => {
+    mockUseBulkAssignJob.mockReturnValue({
+      data: job({
+        status: 'COMPLETED', processed: 40, total: 40,
+        downloadUrl: 'https://storage.example/merged.pdf?sig=STALE',
+      }),
+      isLoading: false, isError: false,
+    });
+    mockGetJob.mockResolvedValue({
+      data: { success: true, data: { downloadUrl: 'https://storage.example/merged.pdf?sig=FRESH' } },
+    });
+    const opened: string[] = [];
+    vi.stubGlobal('open', (u: string) => { opened.push(u); return {} as Window; });
+
     render(<BulkJobProgress jobId="job-1" noun="invoice" />);
-    const link = screen.getByRole('link', { name: /Download merged PDF/i }) as HTMLAnchorElement;
-    expect(link.href).toContain('merged.pdf');
-    // Signed storage URL — never hand the opened tab a window.opener handle.
-    expect(link.rel).toContain('noopener');
+    fireEvent.click(screen.getByRole('button', { name: /Download merged PDF/i }));
+
+    await waitFor(() => expect(opened).toHaveLength(1));
+    expect(mockGetJob).toHaveBeenCalledWith('job-1');
+    expect(opened[0]).toContain('sig=FRESH');
+    expect(opened[0]).not.toContain('sig=STALE');
+    vi.unstubAllGlobals();
   });
 
   // Bulk-assign jobs never carry one; the button must not appear for them.
@@ -191,6 +233,6 @@ describe('BulkJobProgress — bill-print jobs (noun="invoice")', () => {
       isLoading: false, isError: false,
     });
     render(<BulkJobProgress jobId="job-1" />);
-    expect(screen.queryByRole('link', { name: /Download/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Download/i })).toBeNull();
   });
 });
