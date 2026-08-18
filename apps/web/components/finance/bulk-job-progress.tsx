@@ -1,10 +1,13 @@
 'use client';
 
+import { toast } from 'sonner';
 import { Loader2, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { useBulkAssignJob } from '@/lib/hooks/use-bill-assignment';
+import { useJobDownloadUrl } from '@/lib/hooks/use-bill-print';
 import {
   normalizeJobFailures, skippedLabel, successLabel, type JobNoun,
 } from '@/lib/job-progress';
+import { openPresignedUrl, printErrorMessage, POPUP_BLOCKED_MESSAGE } from '@/lib/print-document';
 
 interface BulkJobProgressProps {
   jobId: string;
@@ -45,6 +48,21 @@ export function BulkJobProgress({
   jobId, resolveStudentName, noun = 'student', downloadLabel = 'Download merged PDF',
 }: BulkJobProgressProps) {
   const { data: job, isLoading, isError } = useBulkAssignJob(jobId);
+  const downloadMutation = useJobDownloadUrl();
+
+  /** Re-presign at click time (A4), then open. Never a stored href. */
+  async function handleDownload() {
+    try {
+      const url = await downloadMutation.mutateAsync(jobId);
+      if (!url) {
+        toast.error('The merged PDF is no longer available. Try printing again.');
+        return;
+      }
+      if (!openPresignedUrl(url)) toast.error(POPUP_BLOCKED_MESSAGE);
+    } catch (err) {
+      toast.error(printErrorMessage(err, 'Failed to open the merged PDF'));
+    }
+  }
 
   if (isLoading || !job) {
     return (
@@ -112,17 +130,25 @@ export function BulkJobProgress({
       )}
 
       {/* BILL-8-UI Phase 2 — a bill-print job's artifact. Absent on every
-          bulk-assign job, so this renders for print only, without a flag. */}
+          bulk-assign job, so this renders for print only, without a flag.
+
+          A BUTTON, not an <a href>: addendum A4. The presigned URL polled with
+          the job is already ageing against its 300s TTL, and polling stops at a
+          terminal status — so a dialog left open five minutes would hold a dead
+          link. The URL is re-fetched at click time instead, and never rendered
+          into the DOM. */}
       {isDone && job.downloadUrl && (
-        <a
-          href={job.downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-sm bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600"
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloadMutation.isPending}
+          className="inline-flex items-center gap-1.5 rounded-sm bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-60"
         >
-          <Download className="h-3.5 w-3.5" />
+          {downloadMutation.isPending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <Download className="h-3.5 w-3.5" />}
           {downloadLabel}
-        </a>
+        </button>
       )}
 
       {isDone && job.failedCount > 0 && (

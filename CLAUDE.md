@@ -1453,6 +1453,61 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   the screens have unit + build verification only — no click-through proof (same disclosure as
   WEB-P Phase 5); Srijan did the manual pass himself.
 
+- [x] BILL-8-UI — print/PDF surface for the web admin (`docs/api-contracts/BILL-8-UI-spec.md`
+  + `-evidence.md`, branch `feat/bill-8-ui` off `main`). **UI-only, zero `apps/api` diff**
+  (re-verified at every checkpoint). Origin: `BILLING-AUDIT-2026-08.md` §M5 — BILL-8's whole
+  print engine had been merged and **unreachable from the product** since it shipped; the
+  backend was done, the buttons were never built. **Phase 0 inventory** established the shape
+  before any code: both single-document endpoints return **`{presignedUrl, generated}`, not a
+  PDF body**, presigned for **300s** (`READ_URL_TTL_SEC`); bulk print is a **background job**
+  mirroring `BulkAssignJobService`, 10s poller, sharing `GET /finance/jobs/:id`, producing one
+  **merged** PDF (not a zip); `?lang=EN|NE|BOTH` is a **staff-only** request param defaulting
+  to `tenants.printLanguage` (PARENT callers have it stripped server-side); brand colour is
+  tenant-only, no param. **Phase 1** wires the payment-recorded confirmation (the load-bearing
+  counter moment), payment history + detail modal, bill run detail per line, and the student
+  Billing tab — the last needed a **new Invoices panel, because the tab had every *setup*
+  panel but never showed the invoices they produce** (an independent gap, recorded as such).
+  **Phase 2** adds month-end (whole run) and ad-hoc (class+period) bulk print. **`<BulkJobProgress>`
+  was generalised, not forked** — `GET /finance/jobs/:id` already served both job families and
+  only the failure key differed (`studentId` vs `invoiceId`), so `lib/job-progress.ts`
+  normalises both; `noun` defaults to `'student'` so every bulk-assign call site is untouched,
+  with tests pinning the old strings verbatim and asserting FEE-CLASS-GUARD's optional
+  `failures[].reason` still labels "Class mismatch" after the change. **The load-bearing rule
+  is addendum A4: a presigned URL is fetched at click time and NEVER cached, persisted, or
+  rendered into an `href`** — enforced structurally by making every print hook a
+  `useMutation` (a query would cache a link that dies in 300s), pinned by a test that runs the
+  hooks under a `staleTime: Infinity` client and asserts a refetch. Bulk initially violated
+  this (polling stops at a terminal status, freezing the `downloadUrl` into a button's href);
+  fixed at the Phase 2 checkpoint by re-fetching the job on click, with tests asserting the
+  polled URL appears nowhere in the DOM and that the *re-fetched* one is what opens.
+  `STORAGE_UNAVAILABLE` gets its own message naming storage as the cause (A5) — object storage
+  is a hard dependency of this entire surface. Draft runs **hide** bulk print (A7) rather than
+  relying on the endpoint's 400. **Measured, real 15-invoice run:** render 1.09s EN / 1.37s NE,
+  merged 736KB / 750KB, plus ~7-9s poller queue wait; extrapolates to ~2.9s / ~2.0MB for a
+  40-student class. The merged NE PDF is only ~2% bigger than EN even though a *single* NE
+  invoice is 62% bigger — the Devanagari subset embeds once per document and amortises.
+  **Two pre-existing defects found, neither fixed here:** (1) **`FILE-1-BLOB`, blocking, next
+  ticket** — tenants whose `principalSignatureUrl` still holds a legacy `data:image/…;base64`
+  URI (motherland-school, 318,839 B) **cannot print at all, single or bulk**, because
+  `buildPdfData` passes it to `getObjectBuffer` as an S3 key → `XMinioInvalidResourceName`;
+  proven by causation (NULL the field → same run completes 15/15/0; restored byte-for-byte
+  after). It surfaces now only because this ticket is the first caller of these endpoints.
+  (2) **`prune-orphans` would delete live data** — its reference set
+  (`scripts/prune-orphans.ts:63-90`) is the FILE-1-era list and misses three storage-backed
+  columns added since (`tenants.qrImageUrl` BILL-8, `student_documents.file_url`
+  STUDENT-DOCS-1, `assignment_submissions.file_key` EDU-1); a dry-run cross-check found **4 of
+  23 flagged "orphans" are actively referenced**, including both tenants' bill QR codes and a
+  live student document. **`--delete` was NOT run; nobody should run it on any environment
+  until the reference set is current.** The `data:`-value-should-be-4xx-not-500 half of (1)
+  folds into the error-mapping ticket alongside the audit's unmapped Prisma `P2003`.
+  **605 web tests (+31 across both phases), `tsc --noEmit` clean, `npm run build` succeeds.**
+  **No browser automation exists in this repo** — the PDFs are proven real (fetched, `%PDF-`
+  magic bytes, MediaBox read from the artifacts themselves: A4 `595.28×841.89`, thermal
+  `226.77×399` = exactly 80mm), but the screens driving them are proven only by type-check,
+  unit tests, and a production build; Srijan does the click-through, the Devanagari review, and
+  a real thermal print at 100% scale himself (artifacts at
+  `~/Documents/aaramva-print-review/2026-08-18-BILL-8-UI/`).
+
 > Update this checklist as modules are completed.
 
 ---

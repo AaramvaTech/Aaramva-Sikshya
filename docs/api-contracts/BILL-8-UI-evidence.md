@@ -154,25 +154,36 @@ font subset is embedded once per document, so it amortises across a merge.
 | 40 (full class) | ~2.9 s | ~2.0 MB |
 | 200 (whole school) | ~15 s | ~9.8 MB |
 
-### Is the 300s presigned URL tight? — No, but the risk is not where it looks
+### Is the 300s presigned URL tight? — No, but the risk was not where it looks
 
 Generation never consumes the TTL. `BillPrintJobService.findOne` presigns
 **fresh on every status poll** (`bill-print-job.service.ts:123-127`), so the
 clock starts when the client reads a COMPLETED job, not when the job starts.
 Even the 200-invoice extrapolation (~15 s render) is irrelevant to the TTL.
 
-The real exposure is **after** completion: `<BulkJobProgress>` stops polling
-at a terminal status, so the `downloadUrl` rendered into the button is frozen
-at that moment. A user who leaves the dialog open for more than 5 minutes and
-then clicks Download gets an expired link. Reported, not fixed, per the
-checkpoint instruction. (A one-line fix exists — re-fetch the job on click
-rather than rendering a stored href — and would match Phase 1's addendum A4
-discipline, which the bulk path currently does not follow.)
+The real exposure was **after** completion: `<BulkJobProgress>` stops polling
+at a terminal status, so a `downloadUrl` rendered into an `href` froze at that
+moment, and a dialog left open past five minutes held a dead link.
+
+**Fixed** (pulled into scope at the Phase 2 checkpoint): the download is a
+`<button>`, not an `<a href>`. Clicking re-fetches the job through
+`useJobDownloadUrl()` — a mutation, for the same reason the single-document
+hooks are — and opens whatever URL that returns. The ageing URL is never
+rendered into the DOM at all, so bulk now obeys addendum A4 exactly as Phase 1
+does.
+
+Two tests pin it: one asserts the polled URL (`sig=STALE`) appears nowhere in
+the markup and that no link element exists; the other clicks the button and
+asserts the *re-fetched* URL (`sig=FRESH`) is what gets opened.
 
 Transfer is not a concern at these sizes: 736 KB took 72 ms from local MinIO;
 even 9.8 MB over a 1 Mbps school uplink is ~80 s, inside the 300 s window.
 
-### Pre-existing defect found: legacy base64 tenant assets break ALL printing
+### FILE-1-BLOB — legacy base64 tenant assets break ALL printing
+
+**Logged as `FILE-1-BLOB`. Blocking. Next ticket after BILL-8-UI merges.**
+Deliberately NOT fixed here — this ticket's zero-`apps/api`-diff property is
+worth more than folding in an unrelated data migration.
 
 The first bulk-print attempt failed **15/15** with
 `XMinioInvalidResourceName: Resource name contains bad components such as ".." or "."`.
@@ -202,23 +213,89 @@ The original value was restored byte-for-byte afterwards (318,839 bytes,
 `LIKE 'data:image%'` true again), so motherland is back in its pre-existing
 broken state — this ticket neither caused nor fixed it.
 
-Two things this implies, both **out of scope here**:
-- the legacy-blob migration FILE-1 deferred is now blocking, not cosmetic;
-- a `data:`/URL value reaching `getObjectBuffer` should fail as a 4xx naming
-  the tenant asset, not a 500 `INTERNAL_ERROR` (compare BILLING-AUDIT §H4).
+**Scope of exposure** — every tenant column feeding `buildPdfData` through
+`getObjectBuffer` is affected. Live census:
+
+| tenant | `principalSignatureUrl` | `schoolStampUrl` | `logoUrl` |
+|---|---|---|---|
+| demo | storage key ✓ | storage key ✓ | public URL ✓ |
+| motherland-school | **`data:image/jpeg;base64,…`** (318,839 B) | NULL | **`data:image/png;base64,…`** |
+
+`logoUrl` survives only because it goes through `fetchImageBuffer` (HTTP) rather
+than `getObjectBuffer`, and a `data:` URI happens not to reach S3 there. The
+signature is the one that hard-fails.
+
+**Two follow-ups, both out of scope here:**
+1. **`FILE-1-BLOB`** (this finding) — migrate the remaining legacy base64 blobs
+   to storage keys. FILE-1's cutover census counted 5; at minimum
+   motherland's signature and logo are still outstanding, and until they are,
+   that tenant cannot print. Blocking, next ticket.
+2. **4xx mapping** — a `data:`/URL value reaching `getObjectBuffer` should fail
+   as a 4xx naming the offending tenant asset, not a 500 `INTERNAL_ERROR`.
+   **Folds into the error-mapping ticket** alongside the unmapped Prisma
+   `P2003` from `BILLING-AUDIT-2026-08.md` §H4 — same class of defect
+   (a caller/data problem reported as a server fault).
+
+---
+
+## `prune-orphans` would delete live data — NOT run
+
+The checkpoint asked for `npm run prune-orphans` to clear this session's two
+merged PDFs. **The dry-run (the default) was run; `--delete` was not.** Two
+independent reasons:
+
+**1. It would not have worked.** `GRACE_HOURS` is 24, and both merged PDFs were
+minutes old — they are not in the orphan list at all.
+
+**2. It would have destroyed live objects.** The dry-run listed 23 orphans;
+cross-checking each against the DB shows **4 are actively referenced**:
+
+```
+*** LIVE-REFERENCED *** tenant_demo/bill-qr/5f22679d-….png                 demo tenants.qrImageUrl
+*** LIVE-REFERENCED *** tenant_motherland-school/qr-image/fa0cbdc0-….png   motherland tenants.qrImageUrl
+*** LIVE-REFERENCED *** tenant_demo/student-document/409b5e2d-….png        student_documents.file_url (1.7 MB)
+*** LIVE-REFERENCED *** tenant_demo/submission-file/7b4883f8-….png         assignment_submissions.file_key
+```
+
+Cause: `scripts/prune-orphans.ts:63-90` builds its reference set from
+`students.photo_url`, `staff_profiles.photo_url`, `staff_documents.file_url`,
+and `tenants.logoUrl`/`principalSignatureUrl`/`schoolStampUrl` — the FILE-1-era
+list. Three storage-backed columns added since are missing:
+
+| column | added by | consequence |
+|---|---|---|
+| `tenants.qrImageUrl` | BILL-8 (payment QR) | both tenants' bill QR codes deleted |
+| `student_documents.file_url` | STUDENT-DOCS-1 | live student documents deleted |
+| `assignment_submissions.file_key` | EDU-1 | students' submitted work deleted |
+
+Deleting a school's payment QR breaks every printed bill; deleting a submission
+destroys a student's coursework with no recovery path (object storage is
+outside `pg_dump`, per the RUNBOOK).
+
+This is a **pre-existing bug in a destructive tool**, unrelated to BILL-8-UI
+except that this ticket is what ran it. Not fixed here — out of scope, and
+`scripts/` is under `apps/api`. **Recommend its own ticket, and that nobody
+runs `prune-orphans --delete` on any environment until the reference set is
+brought current.** The one-line-per-column fix is small; the audit of what else
+is missing is the real work.
 
 ### Proof hygiene
 
 All shims restored with read-backs: motherland accountant password restored
 (hash matches backup; shimmed password now **401**), `principalSignatureUrl`
 restored, and the 4 crafted `bill_print_jobs` rows deleted (`print_jobs_left`
-0). The 2 merged PDFs written to dev MinIO remain as orphaned objects,
-removable with `npm run prune-orphans`.
+0).
+
+The 2 merged PDFs written to dev MinIO remain. **`prune-orphans` was NOT run
+with `--delete`** — see the pruner finding below; the dry-run surfaced a
+data-loss bug that made running it unsafe, and it would not have removed these
+two objects anyway (they are inside the 24h grace window).
 
 ### Suite
 
-`604 web tests` (+15 for Phase 2), `tsc --noEmit` clean, `npm run build`
-succeeds. `git diff main..HEAD -- apps/api/` empty.
+`605 web tests` (+16 for Phase 2, including the A4 download fix),
+`tsc --noEmit` clean, `npm run build` succeeds.
+`git diff main..HEAD -- apps/api/` empty.
 
 ### Not visually verified (Phase 2)
 

@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { billPrintApi } from '@/lib/api/bill-print.api';
+import { billAssignmentApi } from '@/lib/api/bill-assignment.api';
 import type { PrintLanguage } from '@/lib/print-document';
 import type { PrintClassData } from '@/types/api.types';
 
@@ -44,5 +45,23 @@ export function useBulkPrintClass() {
   return useMutation({
     mutationFn: ({ data, lang }: { data: PrintClassData; lang?: PrintLanguage }) =>
       billPrintApi.printClass(data, lang).then((r) => r.data.data),
+  });
+}
+
+/**
+ * Addendum A4, applied to bulk: a completed job's `downloadUrl` is presigned
+ * fresh on every read (`BillPrintJobService.findOne`), so the 300s clock starts
+ * when the client last polled. <BulkJobProgress> stops polling at a terminal
+ * status, which means a rendered href goes stale after five minutes of an open
+ * dialog — the exact defect A4 exists to prevent.
+ *
+ * So the download re-fetches the job AT CLICK TIME and opens whatever URL that
+ * returns. A mutation, for the same reason the single-document hooks are:
+ * nothing may cache the link.
+ */
+export function useJobDownloadUrl() {
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      billAssignmentApi.bulkAssign.getJob(jobId).then((r) => r.data.data.downloadUrl),
   });
 }
