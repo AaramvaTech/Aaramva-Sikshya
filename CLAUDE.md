@@ -1428,11 +1428,28 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   "don't know yet", never "mismatch" — the async-gate bug class WEB-P Phases 2-4 shipped
   repeatedly, pinned by tests here rather than left to inspection. `overrideFlag()` is the single
   place the spec's "never silently submit with the override flag" rule lives, and the
-  confirmation is re-armed on every input that can change the verdict.
-  **1148 api tests (+13), `nest build` clean; 550 web tests (+19), `tsc --noEmit` clean,
+  confirmation is re-armed on every input that can change the verdict. **Server-side fallback:**
+  the client rule can miss (stale roster, structure re-scoped by another admin), and a `422`
+  used to dead-end in a toast — `parseClassMismatchError()` now turns the response back into the
+  same two scopes, the single-student form renders the identical warning from the SERVER's
+  account (authoritative, replaces the client's guess) and the same tick-and-Save retries. It
+  returns a usable object even for malformed `details` — a path forward matters more than a
+  pretty label. **Bulk deliberately has no such handler: that endpoint cannot emit
+  `CLASS_MISMATCH`** — `create()` only 404s/400s/201s, the guard runs per-student in the
+  background runner, so a client-rule miss surfaces as job failures already labelled "Class
+  mismatch" (a "retry the skipped students with override" affordance is the real remaining gap
+  there, deliberately out of §3's scope). **FK audit:** `overridden_by_user_id` is `NO ACTION`
+  (verified via `pg_constraint`, matching every sibling FK incl. `assigned_by`) — NOT `SET NULL`,
+  which would null one of the three stamp columns and trip
+  `chk_sfsa_override_stamp_complete` at runtime, and NOT `CASCADE`, which could delete money
+  rows; a user delete is simply rejected. **Users are never hard-deleted** (zero
+  `DELETE FROM users` in the API; tenant `users` is raw-SQL-only so there's no ORM path) **and
+  the app never writes `users.deleted_at` either** — deactivation is `is_active = false`
+  (`hr/staff.service.ts`); guardian/student "removal" soft-deletes the owning row, not the login.
+  **1148 api tests (+13), `nest build` clean; 556 web tests (+25), `tsc --noEmit` clean,
   `npm run build` succeeds.** **Web caveat:** no browser automation existed in that session, so
   the screens have unit + build verification only — no click-through proof (same disclosure as
-  WEB-P Phase 5).
+  WEB-P Phase 5); Srijan did the manual pass himself.
 
 > Update this checklist as modules are completed.
 

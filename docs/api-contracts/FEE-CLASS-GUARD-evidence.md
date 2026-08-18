@@ -547,3 +547,113 @@ and render-tree-checks every changed component in a real Next production build.
 **Not verified, and needing a human pass before merge:** the actual rendered
 appearance and click behaviour of the warning in both forms, and that the Bulk
 Assign scope picker visibly repopulates when a structure is chosen.
+
+---
+
+## 15. `overridden_by_user_id` delete behaviour — NO ACTION, no migration needed
+
+`0038` declares the column as a bare `UUID REFERENCES users(id)` with no
+`ON DELETE` clause, so Postgres applies its default, `NO ACTION`. Verified live
+rather than inferred, on `tenant_demo`:
+
+```
+student_fee_structure_assignments_academic_year_id_fkey    | NO ACTION | NO ACTION
+student_fee_structure_assignments_assigned_by_fkey         | NO ACTION | NO ACTION
+student_fee_structure_assignments_fee_structure_id_fkey    | NO ACTION | NO ACTION
+student_fee_structure_assignments_overridden_by_user_id_fkey | NO ACTION | NO ACTION
+student_fee_structure_assignments_student_id_fkey          | NO ACTION | NO ACTION
+```
+
+(`pg_constraint.confdeltype = 'a'`.) This is what was wanted, and it matches
+every sibling FK on the table — including `assigned_by`, the pre-existing
+`users` reference from `0020`.
+
+Both feared behaviours are therefore absent:
+
+- **Not `SET NULL`.** Nulling `overridden_by_user_id` alone would leave
+  `class_mismatch_overridden = true` with a null attributor and violate
+  `chk_sfsa_override_stamp_complete` — the delete would fail at runtime with a
+  check-constraint error rather than doing something sane.
+- **Not `CASCADE`.** Deleting a user cannot delete fee-assignment rows.
+
+Under `NO ACTION`, an attempt to delete a user who has overridden an assignment
+is *rejected by Postgres* — the correct outcome on a money table.
+
+### Are users ever hard-deleted?
+
+**No — and in practice they are not soft-deleted by the application either.**
+
+- Zero `DELETE FROM users` anywhere in `apps/api/src`. The `users` table lives
+  in the tenant schema and is reached only through raw SQL (Prisma manages the
+  public schema only), so there is no ORM delete path either.
+- Zero application writes to `users.deleted_at`. Every `UPDATE users` in the
+  codebase sets `last_login_at`, `password_hash`/`must_change_password`, or
+  `is_active`. Deactivation is `is_active = false`
+  (`hr/staff.service.ts:335`) — the column exists, the code never sets it.
+- Adjacent "removal" features soft-delete the *owning* row, not the login:
+  `GuardianService.remove` updates `guardians.deleted_at`;
+  `StudentService.removeStudent` updates `students.deleted_at`.
+
+Live counts:
+
+```
+demo       | soft_deleted 7 | deactivated 3 | total 13
+motherland | soft_deleted 0 | deactivated 0 | total 28
+```
+
+Demo's 7 are all hand-set during past proof cleanups — six
+`pradhansrijan07+…@gmail.com` MAIL-1 test accounts and `pay1-verify@demo.school`
+(recorded as manually soft-deleted 2026-08-15). Motherland, the real-data
+tenant, has none.
+
+**Net:** `overridden_by_user_id` cannot dangle, the CHECK cannot be tripped by a
+user removal, and no assignment row can be destroyed by one.
+
+---
+
+## 16. Server-side `CLASS_MISMATCH` fallback (single-student form)
+
+The client rule is advisory and can miss — a stale roster, a structure
+re-scoped by another admin, a class list cached from before a transfer. When it
+misses the server answers `422 CLASS_MISMATCH`, and before this change the
+admin got a dead-end toast.
+
+`parseClassMismatchError()` (`lib/class-guard.ts`) turns that response back into
+the same two scopes the inline warning takes. The single-student form now
+renders the identical `ClassMismatchWarning` from the server's own account of
+the mismatch — which **replaces** the client's guess, since it is the
+authoritative one — re-arms the checkbox, and the same tick-and-Save retries
+with `allowCrossClassAssignment: true`.
+
+It returns a usable object for **any** `CLASS_MISMATCH`, even one whose
+`details` are missing or malformed. A path forward matters more than a pretty
+label; the degenerate case renders "(no class)" and still offers the retry.
+
+Six new tests in `lib/__tests__/class-guard.test.ts` cover it, keyed to the
+**real** 422 body captured in §3 above rather than an invented shape — so they
+fail if the server contract moves: extraction, the rendered sentence, a
+section-scoped structure, null for every other error (including a bare network
+`Error`), the malformed-details fallback, and that a parsed result always arms
+the override path.
+
+### Why Bulk Assign has no equivalent handler
+
+**`POST /finance/bill/fee-structures/:id/bulk-assign` cannot return
+`CLASS_MISMATCH`.** `BulkAssignJobService.create()` does three things — look up
+the structure (404), validate the scope shape (400), insert the job row (201).
+The guard never runs there; it runs per-student in `BulkAssignRunnerService`,
+inside the background job, long after the response was sent.
+
+So a client-rule miss in the bulk form does not produce a dead-end toast. It
+produces a completed job whose skipped students are listed with
+`reason: 'CLASS_MISMATCH'`, already labelled "Class mismatch" in
+`bulk-job-progress.tsx`. Adding a 422 handler there would be unreachable code.
+
+**Real gap left open, needing a ruling:** after such a job completes, the
+admin's only path forward is to close the dialog and rebuild the whole run with
+the confirmation ticked. A "retry the skipped students with the override"
+affordance would close that properly, but it is a new feature, not part of
+spec §3.
+
+Suite after these two items: **556 web tests** (was 550), `tsc --noEmit` clean,
+`npm run build` succeeds.

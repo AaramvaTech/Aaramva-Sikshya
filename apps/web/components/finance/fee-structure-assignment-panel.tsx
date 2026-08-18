@@ -12,7 +12,8 @@ import { useFeeStructures } from '@/lib/hooks/use-bill-catalog';
 import { useStudentFeeStructureAssignments, useAssignFeeStructure } from '@/lib/hooks/use-bill-assignment';
 import { useClasses, useStudent } from '@/lib/hooks/use-students';
 import {
-  describeScope, isClassMismatch, overrideFlag, resolveStructureScope, type ClassScope,
+  describeScope, isClassMismatch, overrideFlag, parseClassMismatchError, resolveStructureScope,
+  type ClassScope, type ServerClassMismatch,
 } from '@/lib/class-guard';
 import { ClassMismatchWarning, CrossClassBadge } from './class-mismatch-warning';
 import { extractApiErrors } from '@/lib/api-errors';
@@ -49,6 +50,7 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
   const [feeStructureId, setFeeStructureId] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [confirmedOverride, setConfirmedOverride] = useState(false);
+  const [serverMismatch, setServerMismatch] = useState<ServerClassMismatch | null>(null);
 
   const current = assignments?.find((a) => a.effectiveTo === null);
   const history = assignments?.filter((a) => a.effectiveTo !== null) ?? [];
@@ -68,16 +70,27 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
   // Only once BOTH sides are known — an unresolved scope means "don't know
   // yet", never "mismatch" (a half-loaded class list would otherwise warn on a
   // perfectly matching assignment).
-  const mismatch = !!student && !!structureScope && isClassMismatch(structureScope, studentScope);
+  const clientMismatch = !!student && !!structureScope && isClassMismatch(structureScope, studentScope);
+
+  // The server's own account of a mismatch WINS over the client's guess: the
+  // client rule is advisory and can miss (stale roster, structure re-scoped by
+  // another admin), and when it does the 422 must still lead somewhere. Either
+  // source produces the same warning and the same confirm-and-retry path.
+  const shownMismatch: ServerClassMismatch | null =
+    serverMismatch ??
+    (clientMismatch && structureScope ? { structure: structureScope, target: studentScope } : null);
+  const mismatch = !!shownMismatch;
 
   function pickStructure(id: string) {
     setFeeStructureId(id);
     setConfirmedOverride(false); // a new pick always needs its own confirmation
+    setServerMismatch(null);     // …and a new pick invalidates the server's verdict
   }
 
   function closeForm() {
     setShowForm(false);
     setConfirmedOverride(false);
+    setServerMismatch(null);
   }
 
   async function handleAssign() {
@@ -94,8 +107,18 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
       setFeeStructureId('');
       setEffectiveFrom('');
       setConfirmedOverride(false);
+      setServerMismatch(null);
       onChanged();
     } catch (err) {
+      const fromServer = parseClassMismatchError(err);
+      if (fromServer) {
+        // Not a dead end: show the warning the client missed and re-arm the
+        // confirmation so the same tick-and-Save retries with the override.
+        setServerMismatch(fromServer);
+        setConfirmedOverride(false);
+        toast.error('Class mismatch — confirm below to assign anyway');
+        return;
+      }
       extractApiErrors(err, 'Failed to assign fee structure').forEach((m) => toast.error(m));
     }
   }
@@ -143,10 +166,10 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
             <Button size="sm" variant="ghost" onClick={closeForm}>Cancel</Button>
           </div>
 
-          {mismatch && structureScope && (
+          {shownMismatch && (
             <ClassMismatchWarning
-              structure={structureScope}
-              mismatchWith={<>this student is in <strong>{describeScope(studentScope)}</strong></>}
+              structure={shownMismatch.structure}
+              mismatchWith={<>this student is in <strong>{describeScope(shownMismatch.target)}</strong></>}
               checked={confirmedOverride}
               onCheckedChange={setConfirmedOverride}
             />

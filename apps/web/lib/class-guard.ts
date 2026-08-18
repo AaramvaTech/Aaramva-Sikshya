@@ -1,3 +1,4 @@
+import { apiErrorCode } from '@/lib/api-errors';
 import type { BillFeeStructure, ClassWithSections } from '@/types/api.types';
 
 /**
@@ -74,4 +75,42 @@ export function resolveStructureScope(
   const section = cls.sections.find((s) => s.id === structure.sectionId);
   if (!section) return null;
   return { className: cls.name, sectionName: section.name };
+}
+
+/** Both sides of the server's 422 body, in the same shape the warning renders. */
+export interface ServerClassMismatch {
+  structure: ClassScope;
+  target: ClassScope;
+}
+
+function readScope(raw: unknown): ClassScope {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  return {
+    className: typeof o.className === 'string' ? o.className : null,
+    sectionName: typeof o.sectionName === 'string' ? o.sectionName : null,
+  };
+}
+
+/**
+ * The client rule above is advisory and CAN miss — the student's class may
+ * have changed since the page loaded, another admin may have re-scoped the
+ * structure, or the two name lookups may simply be stale. When it misses, the
+ * server answers `422 CLASS_MISMATCH` and the admin would otherwise be stuck
+ * with a dead-end toast.
+ *
+ * This turns that response back into the same two scopes the inline warning
+ * takes, so the form can offer the identical confirm-and-retry path. The
+ * server's own account of the mismatch is authoritative and REPLACES whatever
+ * the client thought — that is the whole point of the fallback.
+ *
+ * Returns non-null for ANY `CLASS_MISMATCH`, even one whose `details` are
+ * missing or malformed: a usable path forward matters more than a pretty
+ * label, and a mismatch with no path forward is the bug being fixed here.
+ */
+export function parseClassMismatchError(err: unknown): ServerClassMismatch | null {
+  if (apiErrorCode(err) !== 'CLASS_MISMATCH') return null;
+  const details = (err as {
+    response?: { data?: { error?: { details?: { feeStructure?: unknown; target?: unknown } | null } } };
+  })?.response?.data?.error?.details;
+  return { structure: readScope(details?.feeStructure), target: readScope(details?.target) };
 }

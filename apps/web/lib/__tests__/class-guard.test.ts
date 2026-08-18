@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { isClassMismatch, describeScope, overrideFlag, resolveStructureScope } from '@/lib/class-guard';
+import {
+  isClassMismatch, describeScope, overrideFlag, parseClassMismatchError, resolveStructureScope,
+} from '@/lib/class-guard';
 import type { ClassWithSections } from '@/types/api.types';
 
 const scope = (className: string | null, sectionName: string | null = null) => ({ className, sectionName });
@@ -71,6 +73,88 @@ describe('describeScope', () => {
     expect(describeScope(scope('Grade 1'))).toBe('Grade 1');
     expect(describeScope(scope('Grade 1', 'A'))).toBe('Grade 1 — A');
     expect(describeScope(scope(null))).toBe('(no class)');
+  });
+});
+
+// The client rule is advisory and CAN miss (stale roster, structure re-scoped
+// by another admin). When it does, the server's 422 has to lead somewhere —
+// the same warning, the same confirm-and-retry. The fixture below is the REAL
+// response body captured in FEE-CLASS-GUARD-evidence.md §3, not an invented
+// shape, so this test fails if the server contract ever moves.
+describe('parseClassMismatchError', () => {
+  const realResponse = {
+    response: {
+      status: 422,
+      data: {
+        success: false,
+        error: {
+          code: 'CLASS_MISMATCH',
+          message: 'Fee structure is for Grade 1, but this student is in Grade 5 — A.',
+          details: {
+            feeStructure: { id: 'e46c4b08-cdbe-4f7d-8c01-c7e5a9ee4e5b', className: 'Grade 1', sectionName: null },
+            target: { studentId: '33333333-3333-4333-8333-000000000005', className: 'Grade 5', sectionName: 'A' },
+          },
+          requestId: 'a457992f-7f45-4dae-aa46-ea40cfd84320',
+        },
+      },
+    },
+  };
+
+  it('extracts both scopes from a real 422 CLASS_MISMATCH body', () => {
+    expect(parseClassMismatchError(realResponse)).toEqual({
+      structure: { className: 'Grade 1', sectionName: null },
+      target: { className: 'Grade 5', sectionName: 'A' },
+    });
+  });
+
+  it('feeds the warning the same sentence the server produced', () => {
+    const parsed = parseClassMismatchError(realResponse)!;
+    expect(describeScope(parsed.structure)).toBe('Grade 1');
+    expect(describeScope(parsed.target)).toBe('Grade 5 — A');
+  });
+
+  it('carries a section-scoped structure through intact', () => {
+    const sectionScoped = {
+      response: { data: { error: { code: 'CLASS_MISMATCH', details: {
+        feeStructure: { className: 'Grade 1', sectionName: 'B' },
+        target: { className: 'Grade 1', sectionName: 'A' },
+      } } } },
+    };
+    expect(parseClassMismatchError(sectionScoped)).toEqual({
+      structure: { className: 'Grade 1', sectionName: 'B' },
+      target: { className: 'Grade 1', sectionName: 'A' },
+    });
+  });
+
+  it('returns null for any other error, so normal error handling still runs', () => {
+    expect(parseClassMismatchError({ response: { data: { error: { code: 'RESOURCE_NOT_FOUND' } } } })).toBeNull();
+    expect(parseClassMismatchError({ response: { data: { error: { code: 'VALIDATION_FAILED' } } } })).toBeNull();
+    expect(parseClassMismatchError(new Error('network down'))).toBeNull();
+    expect(parseClassMismatchError(undefined)).toBeNull();
+  });
+
+  // A path forward matters more than a pretty label: a CLASS_MISMATCH whose
+  // details went missing must still open the confirm-and-retry route, never
+  // fall back to the dead-end toast this whole branch exists to remove.
+  it('still returns a usable object when details are missing or malformed', () => {
+    expect(parseClassMismatchError({ response: { data: { error: { code: 'CLASS_MISMATCH' } } } })).toEqual({
+      structure: { className: null, sectionName: null },
+      target: { className: null, sectionName: null },
+    });
+    expect(parseClassMismatchError({
+      response: { data: { error: { code: 'CLASS_MISMATCH', details: { feeStructure: 'nonsense', target: 42 } } } },
+    })).toEqual({
+      structure: { className: null, sectionName: null },
+      target: { className: null, sectionName: null },
+    });
+  });
+
+  // The server's verdict replaces the client's guess — that is the point of
+  // the fallback, so a parsed mismatch must always read as "mismatch".
+  it('a parsed result is always truthy, so it arms the override path', () => {
+    const parsed = parseClassMismatchError({ response: { data: { error: { code: 'CLASS_MISMATCH' } } } });
+    expect(overrideFlag(!!parsed, true)).toEqual({ allowCrossClassAssignment: true });
+    expect(overrideFlag(!!parsed, false)).toEqual({});
   });
 });
 
