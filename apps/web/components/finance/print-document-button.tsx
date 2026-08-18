@@ -12,12 +12,20 @@ import { useSchoolProfile } from '@/lib/hooks/use-settings';
 import { usePrintInvoicePdf, usePrintReceipt } from '@/lib/hooks/use-bill-print';
 import {
   PRINT_LANGUAGES, PRINT_LANGUAGE_LABELS, defaultPrintLanguage, openPresignedUrl,
-  printErrorMessage, POPUP_BLOCKED_MESSAGE, THERMAL_SCALE_WARNING, type PrintLanguage,
+  printErrorMessage, POPUP_BLOCKED_MESSAGE, THERMAL_SCALE_WARNING,
+  needsThermalScaleWarning, type PrintLanguage, type ReceiptFormat,
 } from '@/lib/print-document';
 
+/**
+ * BILL-PRINT-1 Decision 2: a receipt call site states its own format. The
+ * counter (payment-recorded confirmation, payment detail modal) stays on the
+ * 80mm thermal roll; office surfaces ask for the A5 stationery. Omitting it
+ * keeps the server's `thermal` default, so no existing caller changes
+ * behaviour by accident.
+ */
 export type PrintDoc =
   | { kind: 'invoice'; invoiceId: string }
-  | { kind: 'receipt'; paymentId: string };
+  | { kind: 'receipt'; paymentId: string; format?: ReceiptFormat };
 
 interface Props {
   doc: PrintDoc;
@@ -41,7 +49,7 @@ export function usePrintDocument(doc: PrintDoc) {
     try {
       const res = doc.kind === 'invoice'
         ? await invoiceMutation.mutateAsync({ invoiceId: doc.invoiceId, lang })
-        : await receiptMutation.mutateAsync({ paymentId: doc.paymentId, lang });
+        : await receiptMutation.mutateAsync({ paymentId: doc.paymentId, lang, format: doc.format });
 
       if (!openPresignedUrl(res.presignedUrl)) {
         toast.error(POPUP_BLOCKED_MESSAGE);
@@ -49,8 +57,9 @@ export function usePrintDocument(doc: PrintDoc) {
       }
       // Shown once per mounted surface — the thermal page is genuinely 80mm,
       // so the only thing between the user and a correct print is the
-      // browser's scale-to-fit default (spec §Thermal).
-      if (doc.kind === 'receipt' && !warnedThermal) {
+      // browser's scale-to-fit default (spec §Thermal). An A5 receipt is on a
+      // standard sheet and must NOT carry this warning.
+      if (doc.kind === 'receipt' && needsThermalScaleWarning(doc.format ?? 'thermal') && !warnedThermal) {
         setWarnedThermal(true);
         toast.info(THERMAL_SCALE_WARNING, { duration: 8000 });
       }
