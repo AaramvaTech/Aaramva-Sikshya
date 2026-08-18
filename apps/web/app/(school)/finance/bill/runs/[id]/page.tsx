@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
 import { BillRunOutcomeBadge, labels as outcomeLabels } from '@/components/finance/bill-run-outcome-badge';
 import { Button } from '@/components/ui/button';
+import { PrintDocumentButton } from '@/components/finance/print-document-button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useBillRun, useExcludeBillRunLines, usePostBillRun, useVoidBillRun } from '@/lib/hooks/use-bill-run';
 import { useClasses } from '@/lib/hooks/use-students';
@@ -135,17 +136,30 @@ export default function BillRunReviewPage() {
     {
       id: 'action',
       header: '',
-      cell: ({ row }) =>
-        isDraft && row.original.outcome === 'DRAFT' ? (
-          <ConfirmDialog
-            title="Exclude student"
-            description={`Exclude ${row.original.studentName ?? 'this student'} from this run? This can't be undone without voiding the whole run.`}
-            confirmLabel="Exclude"
-            variant="destructive"
-            onConfirm={() => handleExclude(row.original)}
-            trigger={<Button variant="outline" size="sm">Exclude</Button>}
+      cell: ({ row }) => {
+        if (isDraft && row.original.outcome === 'DRAFT') {
+          return (
+            <ConfirmDialog
+              title="Exclude student"
+              description={`Exclude ${row.original.studentName ?? 'this student'} from this run? This can't be undone without voiding the whole run.`}
+              confirmLabel="Exclude"
+              variant="destructive"
+              onConfirm={() => handleExclude(row.original)}
+              trigger={<Button variant="outline" size="sm">Exclude</Button>}
+            />
+          );
+        }
+        // BILL-8-UI Phase 1 — a line only has an invoice once the run is
+        // posted; `billInvoiceId` is null on every draft/skipped/failed line,
+        // so this gates on the id itself rather than on run status (addendum
+        // A7: don't render an action that can only produce an error).
+        return row.original.billInvoiceId ? (
+          <PrintDocumentButton
+            doc={{ kind: 'invoice', invoiceId: row.original.billInvoiceId }}
+            label="Print"
           />
-        ) : null,
+        ) : null;
+      },
     },
   ];
 

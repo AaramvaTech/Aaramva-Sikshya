@@ -2095,6 +2095,18 @@ export interface CreateWriteOffData {
 export interface DecideCorrectionData {
   note?: string;
 }
+// ── BILL-8-UI — print / PDF ─────────────────────────────────────────────────
+/**
+ * What every print endpoint returns. NOT a PDF body: a short-lived presigned
+ * URL (300s) plus whether this call rendered it or served the cached
+ * immutable artifact. Never cache or persist `presignedUrl` — see
+ * `lib/print-document.ts`.
+ */
+export interface PrintDocumentResponse {
+  presignedUrl: string;
+  generated: boolean;
+}
+
 export interface FinanceSettings {
   invoiceNumberingReset: boolean;
   creditNoteApprovalThreshold: number;

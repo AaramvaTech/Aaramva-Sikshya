@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { AmountDisplay } from '@/components/finance/amount-display';
 import { BillPaymentStatusBadge } from '@/components/finance/bill-payment-status-badge';
 import { PaymentDetailModal } from '@/components/finance/payment-detail-modal';
+import { PrintLanguageItems } from '@/components/finance/print-document-button';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import {
@@ -151,11 +152,9 @@ export default function BillPaymentsPage() {
         const p = row.original;
         const isPendingCheque = p.method === 'CHEQUE' && p.status === 'PENDING';
         const canVoid = isOwner && p.status !== 'VOIDED';
-        if (!isPendingCheque && !canVoid) {
-          return (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedPaymentId(p.id)}>View</Button>
-          );
-        }
+        // BILL-8-UI: a VOIDED payment must never produce a receipt — it is
+        // not evidence of money received. Everything else is reprintable.
+        const canPrint = p.status !== 'VOIDED';
         return (
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -187,6 +186,11 @@ export default function BillPaymentsPage() {
                 >
                   Void
                 </DropdownMenuItem>
+              )}
+              {/* Embedded in the menu this row already had, rather than a
+                  second dropdown beside it (BILL-8-UI Phase 1). */}
+              {canPrint && (
+                <PrintLanguageItems doc={{ kind: 'receipt', paymentId: p.id }} heading="Print receipt" />
               )}
             </DropdownMenuContent>
           </DropdownMenu>
