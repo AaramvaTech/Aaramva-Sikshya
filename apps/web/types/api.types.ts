@@ -1796,11 +1796,31 @@ export interface BulkAssignJob {
   total: number;
   processed: number;
   failedCount: number;
-  failures: BulkAssignFailure[];
+  /**
+   * BILL-8-UI: `GET /finance/jobs/:id` serves bulk-assign AND bill-print
+   * jobs. Bill-print keys its failures by `invoiceId` and carries no
+   * `reason`; both shapes are normalised in `lib/job-progress.ts`.
+   */
+  failures: (BulkAssignFailure | BillPrintFailure)[];
+  /** BILL-8-UI: bill-print only, and only once COMPLETED. */
+  downloadUrl?: string;
   createdBy: string;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+export interface BillPrintFailure {
+  invoiceId: string;
+  error: string;
+}
+
+/** BILL-8-UI Phase 2 — `POST /finance/bill/print/class` body. */
+export interface PrintClassData {
+  classId: string;
+  sectionId?: string;
+  bsYear: number;
+  bsMonth: number;
 }
 
 export interface FeePreviewConcessionLine {
@@ -2095,6 +2115,18 @@ export interface CreateWriteOffData {
 export interface DecideCorrectionData {
   note?: string;
 }
+// ── BILL-8-UI — print / PDF ─────────────────────────────────────────────────
+/**
+ * What every print endpoint returns. NOT a PDF body: a short-lived presigned
+ * URL (300s) plus whether this call rendered it or served the cached
+ * immutable artifact. Never cache or persist `presignedUrl` — see
+ * `lib/print-document.ts`.
+ */
+export interface PrintDocumentResponse {
+  presignedUrl: string;
+  generated: boolean;
+}
+
 export interface FinanceSettings {
   invoiceNumberingReset: boolean;
   creditNoteApprovalThreshold: number;

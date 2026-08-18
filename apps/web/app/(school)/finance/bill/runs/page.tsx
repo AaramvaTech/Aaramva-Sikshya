@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Search, Layers } from 'lucide-react';
+import { Search, Layers, Printer } from 'lucide-react';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
@@ -13,6 +13,7 @@ import { AmountDisplay } from '@/components/finance/amount-display';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { CreateBillRunDialog } from '@/components/finance/create-bill-run-dialog';
+import { BulkPrintDialog } from '@/components/finance/bulk-print-dialog';
 import { useBillRuns } from '@/lib/hooks/use-bill-run';
 import { useClasses } from '@/lib/hooks/use-students';
 import { BILL_RUN_STATUS_STYLES } from '@/lib/bill-run-form';
@@ -34,6 +35,7 @@ export default function BillRunsPage() {
   const classId = searchParams.get('classId') ?? '';
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   const { data: runsData, isLoading } = useBillRuns({
     page,
@@ -143,10 +145,20 @@ export default function BillRunsPage() {
         title="Bill Runs"
         description="Generate, review, and post monthly bills for a class or the whole school"
         action={
-          <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={() => setCreateOpen(true)}>
-            <Layers className="mr-2 h-4 w-4" />
-            New Bill Run
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* BILL-8-UI Phase 2, addendum A1 — the ad-hoc entry point. Lives
+                here rather than on an invoice list because no invoice list
+                page exists, and month-end printing is what this screen is
+                already about. */}
+            <Button variant="outline" onClick={() => setPrintOpen(true)}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print by Class
+            </Button>
+            <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={() => setCreateOpen(true)}>
+              <Layers className="mr-2 h-4 w-4" />
+              New Bill Run
+            </Button>
+          </div>
         }
       />
 
@@ -180,6 +192,7 @@ export default function BillRunsPage() {
       )}
 
       <CreateBillRunDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <BulkPrintDialog open={printOpen} onOpenChange={setPrintOpen} scope={{ kind: 'class' }} />
     </div>
   );
 }

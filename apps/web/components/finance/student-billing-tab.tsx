@@ -9,6 +9,7 @@ import { FeeOverridesPanel } from './fee-overrides-panel';
 import { StudentConcessionsPanel } from './student-concessions-panel';
 import { TransportAssignmentPanel } from './transport-assignment-panel';
 import { FeePreviewPanel } from './fee-preview-panel';
+import { StudentInvoicesPanel } from './student-invoices-panel';
 
 interface Props {
   studentId: string;
@@ -68,6 +69,9 @@ export function StudentBillingTab({ studentId }: Props) {
           <StudentConcessionsPanel studentId={studentId} academicYearId={academicYearId} onChanged={onChanged} />
           <TransportAssignmentPanel studentId={studentId} onChanged={onChanged} />
           <FeePreviewPanel studentId={studentId} academicYearId={academicYearId} />
+          {/* BILL-8-UI Phase 1 — last, after the preview: setup above, what
+              was actually billed below. */}
+          <StudentInvoicesPanel studentId={studentId} academicYearId={academicYearId} />
         </div>
       )}
     </div>
