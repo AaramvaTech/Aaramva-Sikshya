@@ -2,6 +2,7 @@
 
 import { RefreshCw } from 'lucide-react';
 import { useFeePreview } from '@/lib/hooks/use-bill-assignment';
+import { CrossClassBadge } from './class-mismatch-warning';
 
 interface Props {
   studentId: string;
@@ -43,7 +44,13 @@ export function FeePreviewPanel({ studentId, academicYearId }: Props) {
 
         {preview && (
           <div className="space-y-4">
-            <p className="text-xs text-gray-500">{preview.feeStructureName}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-gray-500">{preview.feeStructureName}</p>
+              {/* FEE-CLASS-GUARD §3: this is the panel an admin reviews a
+                  student from later — the override has to be visible here or
+                  a deliberate cross-class assignment reads as a bug. */}
+              {preview.classMismatchOverridden && <CrossClassBadge />}
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

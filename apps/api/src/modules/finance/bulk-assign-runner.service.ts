@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
-import { BulkAssignJobRow } from './entities/bill-assignment.entity';
+import { BulkAssignFailure, BulkAssignJobRow } from './entities/bill-assignment.entity';
+import { ClassScope, isClassMismatch, mismatchMessage } from './bill-class-guard.util';
+import { ScopeRow, toScope } from './student-fee-structure-assignment.service';
 
 const CHUNK_SIZE = 200;
 
@@ -54,13 +56,19 @@ export class BulkAssignRunnerService {
       );
     }
 
+    // FEE-CLASS-GUARD: the structure's own class/section, read once per job —
+    // it can't change mid-run, and re-reading it per chunk would only add
+    // queries. The per-STUDENT comparison still happens inside each chunk
+    // (spec §2: scope can be a hand-picked list spanning several classes).
+    const structureScope = await this.loadStructureScope(job.fee_structure_id);
+
     const allIds = job.scope_student_ids ?? [];
     let processed = job.processed;
     let studentsProcessed = 0;
 
     while (processed < allIds.length) {
       const chunk = allIds.slice(processed, processed + CHUNK_SIZE);
-      await this.processChunk(job, chunk);
+      await this.processChunk(job, chunk, structureScope);
       processed += chunk.length;
       studentsProcessed += chunk.length;
     }
@@ -73,17 +81,63 @@ export class BulkAssignRunnerService {
     return { studentsProcessed };
   }
 
-  private async processChunk(job: BulkAssignJobRow, chunk: string[]): Promise<void> {
+  /** The fee structure's own class/section + display names (FEE-CLASS-GUARD). */
+  private async loadStructureScope(feeStructureId: string): Promise<ClassScope> {
+    const rows = await this.tenantPrisma.query<ScopeRow>(
+      `SELECT bfs.class_id, bfs.section_id, c.name AS class_name, sec.name AS section_name
+         FROM bill_fee_structures bfs
+         LEFT JOIN classes  c   ON c.id   = bfs.class_id
+         LEFT JOIN sections sec ON sec.id = bfs.section_id
+        WHERE bfs.id = $1::uuid`,
+      feeStructureId,
+    );
+    return toScope(rows[0] ?? { class_id: null, section_id: null, class_name: null, section_name: null });
+  }
+
+  private async processChunk(
+    job: BulkAssignJobRow,
+    chunk: string[],
+    structureScope: ClassScope,
+  ): Promise<void> {
     await this.tenantPrisma.run(async (tx) => {
-      const validRows = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM students WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status = 'ACTIVE'`,
+      const validRows = await tx.$queryRawUnsafe<({ id: string } & ScopeRow)[]>(
+        `SELECT s.id, s.class_id, s.section_id,
+                c.name AS class_name, sec.name AS section_name
+           FROM students s
+           LEFT JOIN classes  c   ON c.id   = s.class_id
+           LEFT JOIN sections sec ON sec.id = s.section_id
+          WHERE s.id = ANY($1::uuid[]) AND s.deleted_at IS NULL AND s.status = 'ACTIVE'`,
         chunk,
       );
-      const validSet = new Set(validRows.map((r) => r.id));
-      const validIds = chunk.filter((id) => validSet.has(id));
-      const newFailures = chunk
-        .filter((id) => !validSet.has(id))
-        .map((id) => ({ studentId: id, error: 'Student not found or inactive' }));
+      const byId = new Map(validRows.map((r) => [r.id, r]));
+      const newFailures: BulkAssignFailure[] = [];
+      const validIds: string[] = [];
+      // Parallel to validIds — true where THAT student's assignment is a
+      // deliberately-overridden mismatch, so the stamp lands only on the rows
+      // it's actually true for, not uniformly across the run.
+      const overridden: boolean[] = [];
+
+      for (const id of chunk) {
+        const row = byId.get(id);
+        if (!row) {
+          newFailures.push({ studentId: id, error: 'Student not found or inactive', reason: 'STUDENT_INVALID' });
+          continue;
+        }
+        const studentScope = toScope(row);
+        const mismatch = isClassMismatch(structureScope, studentScope);
+        if (mismatch && !job.allow_cross_class) {
+          // FEE-CLASS-GUARD spec §2: one student's mismatch skips only that
+          // student — every other student in the chunk proceeds untouched.
+          newFailures.push({
+            studentId: id,
+            error: `Class mismatch. ${mismatchMessage(structureScope, studentScope)}`,
+            reason: 'CLASS_MISMATCH',
+          });
+          continue;
+        }
+        validIds.push(id);
+        overridden.push(mismatch);
+      }
 
       if (validIds.length > 0) {
         await tx.$executeRawUnsafe(
@@ -97,13 +151,17 @@ export class BulkAssignRunnerService {
         );
         await tx.$executeRawUnsafe(
           `INSERT INTO student_fee_structure_assignments
-             (student_id, fee_structure_id, academic_year_id, effective_from, assigned_by)
-           SELECT s, $2::uuid, $3::uuid, $4::date, $5::uuid FROM unnest($1::uuid[]) AS s`,
+             (student_id, fee_structure_id, academic_year_id, effective_from, assigned_by,
+              class_mismatch_overridden, overridden_by_user_id, overridden_at)
+           SELECT s, $2::uuid, $3::uuid, $4::date, $5::uuid,
+                  m, CASE WHEN m THEN $5::uuid END, CASE WHEN m THEN NOW() END
+             FROM unnest($1::uuid[], $6::boolean[]) AS t(s, m)`,
           validIds,
           job.fee_structure_id,
           job.academic_year_id,
           job.effective_from,
           job.created_by,
+          overridden,
         );
       }
 

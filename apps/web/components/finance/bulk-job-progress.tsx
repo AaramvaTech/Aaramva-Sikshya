@@ -106,7 +106,17 @@ export function BulkJobProgress({ jobId, resolveStudentName }: BulkJobProgressPr
                   <td className="px-3 py-1.5 font-mono text-gray-600 dark:text-gray-300">
                     {resolveStudentName?.(f.studentId) ?? f.studentId}
                   </td>
-                  <td className="px-3 py-1.5 text-gray-500">{f.error}</td>
+                  <td className="px-3 py-1.5 text-gray-500">
+                    {/* FEE-CLASS-GUARD: `reason` is absent on every failure row
+                        written before the guard existed (jsonb, never migrated),
+                        so the label is additive and `error` always renders. */}
+                    {f.reason === 'CLASS_MISMATCH' && (
+                      <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                        Class mismatch
+                      </span>
+                    )}
+                    {f.error}
+                  </td>
                 </tr>
               ))}
             </tbody>

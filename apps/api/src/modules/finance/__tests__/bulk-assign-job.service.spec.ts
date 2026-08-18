@@ -87,6 +87,31 @@ describe('BulkAssignJobService', () => {
       '2026-04-14',
       2,
       'user-1',
+      false, // FEE-CLASS-GUARD: allow_cross_class defaults off when the DTO omits it
+    );
+  });
+
+  it('create() freezes an explicit allowCrossClassAssignment onto the job row', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'bfs-1', academic_year_id: 'year-1' }])
+      .mockResolvedValueOnce([{ ...mockJobRow, allow_cross_class: true }]);
+
+    const result = await service.create(
+      'bfs-1',
+      {
+        scopeType: BulkAssignScopeType.STUDENT_LIST,
+        studentIds: ['s1'],
+        effectiveFrom: '2026-04-14',
+        allowCrossClassAssignment: true,
+      },
+      'user-1',
+    );
+
+    expect(result.allowCrossClassAssignment).toBe(true);
+    expect(tenantPrisma.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('allow_cross_class'),
+      'bfs-1', 'year-1', 'STUDENT_LIST', null, null,
+      JSON.stringify(['s1']), '2026-04-14', 1, 'user-1', true,
     );
   });
 

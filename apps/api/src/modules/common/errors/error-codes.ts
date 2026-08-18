@@ -37,6 +37,10 @@ export const ERROR_CATALOG = {
   RESOURCE_NOT_FOUND: { status: 404, message: 'The requested record was not found.' },
   CONFLICT_DUPLICATE: { status: 409, message: 'A record with this value already exists.' },
   VALIDATION_FAILED: { status: 422, message: 'Please correct the highlighted fields.' },
+  // FEE-CLASS-GUARD: the fee structure's class/section doesn't match the
+  // target student's. `details` carries { feeStructure, target } so the client
+  // can name both sides; retry with allowCrossClassAssignment to override.
+  CLASS_MISMATCH: { status: 422, message: "This fee structure is for a different class than the student's." },
   // ── Tenant ──────────────────────────────────────────────────────────────
   TENANT_NOT_FOUND: { status: 404, message: 'School not found. Check the school address (slug).' },
   TENANT_SUSPENDED: { status: 403, message: "This school's account is currently suspended." },

@@ -56,8 +56,8 @@ export class BulkAssignJobService {
     const rows = await this.tenantPrisma.query<BulkAssignJobRow>(
       `INSERT INTO bulk_assign_jobs
          (fee_structure_id, academic_year_id, scope_type, scope_class_id, scope_section_id,
-          scope_student_ids, effective_from, total, created_by)
-       VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5::uuid, $6::jsonb, $7::date, $8, $9::uuid)
+          scope_student_ids, effective_from, total, created_by, allow_cross_class)
+       VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5::uuid, $6::jsonb, $7::date, $8, $9::uuid, $10)
        RETURNING *`,
       feeStructureId,
       academicYearId,
@@ -68,6 +68,10 @@ export class BulkAssignJobService {
       dto.effectiveFrom,
       studentIds.length,
       createdById,
+      // FEE-CLASS-GUARD: frozen onto the job row for the same reason
+      // scope_student_ids is — the poller must run under the flag the caller
+      // actually asked for, and the row is the audit trail of that choice.
+      dto.allowCrossClassAssignment ?? false,
     );
     return toBulkAssignJobResponse(rows[0]);
   }

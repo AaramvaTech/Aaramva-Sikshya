@@ -1,11 +1,32 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException, Injectable, NotFoundException, UnprocessableEntityException,
+} from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { errorBody } from '../common/errors/error-codes';
 import {
   StudentFeeStructureAssignmentRow,
   toStudentFeeStructureAssignmentResponse,
   StudentFeeStructureAssignmentResponseDto,
 } from './entities/bill-assignment.entity';
+import { ClassScope, isClassMismatch, mismatchMessage } from './bill-class-guard.util';
 import { AssignFeeStructureDto } from './dto/student-fee-structure-assignment.dto';
+
+/** The class/section columns + their display names — same shape on both sides of the guard. */
+export interface ScopeRow {
+  class_id: string | null;
+  section_id: string | null;
+  class_name: string | null;
+  section_name: string | null;
+}
+
+export function toScope(row: ScopeRow): ClassScope {
+  return {
+    classId: row.class_id,
+    sectionId: row.section_id,
+    className: row.class_name,
+    sectionName: row.section_name,
+  };
+}
 
 @Injectable()
 export class StudentFeeStructureAssignmentService {
@@ -23,18 +44,57 @@ export class StudentFeeStructureAssignmentService {
     assignedById: string,
   ): Promise<StudentFeeStructureAssignmentResponseDto> {
     return this.tenantPrisma.run(async (tx) => {
-      const structureRows = await tx.$queryRawUnsafe<{ id: string; academic_year_id: string }[]>(
-        `SELECT id, academic_year_id FROM bill_fee_structures WHERE id = $1::uuid AND deleted_at IS NULL`,
+      const structureRows = await tx.$queryRawUnsafe<({ id: string; academic_year_id: string } & ScopeRow)[]>(
+        `SELECT bfs.id, bfs.academic_year_id, bfs.class_id, bfs.section_id,
+                c.name AS class_name, sec.name AS section_name
+           FROM bill_fee_structures bfs
+           LEFT JOIN classes  c   ON c.id   = bfs.class_id
+           LEFT JOIN sections sec ON sec.id = bfs.section_id
+          WHERE bfs.id = $1::uuid AND bfs.deleted_at IS NULL`,
         dto.feeStructureId,
       );
       if (!structureRows[0]) throw new NotFoundException(`Fee structure ${dto.feeStructureId} not found`);
       const academicYearId = structureRows[0].academic_year_id;
 
-      const studentRows = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+      const studentRows = await tx.$queryRawUnsafe<({ id: string } & ScopeRow)[]>(
+        `SELECT s.id, s.class_id, s.section_id,
+                c.name AS class_name, sec.name AS section_name
+           FROM students s
+           LEFT JOIN classes  c   ON c.id   = s.class_id
+           LEFT JOIN sections sec ON sec.id = s.section_id
+          WHERE s.id = $1::uuid AND s.deleted_at IS NULL`,
         studentId,
       );
       if (!studentRows[0]) throw new NotFoundException(`Student ${studentId} not found`);
+
+      // Two independent pre-write guards, both landing here in the same merge
+      // (FEE-CLASS-GUARD × BILL-DATA-1 Phase 3). Order is deliberate: WHAT is
+      // being assigned is checked before WHEN it starts, since a wrong-class
+      // assignment is wrong at any date — so a mismatch never even runs the
+      // open-row query below.
+
+      // FEE-CLASS-GUARD: blocked by default, overridable only on an explicit,
+      // per-request opt-in. The 422 body names both sides so the UI can show
+      // the admin exactly what disagrees before they choose to override.
+      const structureScope = toScope(structureRows[0]);
+      const studentScope = toScope(studentRows[0]);
+      const mismatch = isClassMismatch(structureScope, studentScope);
+      if (mismatch && !dto.allowCrossClassAssignment) {
+        throw new UnprocessableEntityException(
+          errorBody('CLASS_MISMATCH', mismatchMessage(structureScope, studentScope), {
+            feeStructure: {
+              id: dto.feeStructureId,
+              className: structureScope.className,
+              sectionName: structureScope.sectionName,
+            },
+            target: {
+              studentId,
+              className: studentScope.className,
+              sectionName: studentScope.sectionName,
+            },
+          }),
+        );
+      }
 
       // BILL-DATA-1 Phase 3: the close-out below sets effective_to = new
       // effective_from - 1 on whatever is currently open. If the new
@@ -71,16 +131,22 @@ export class StudentFeeStructureAssignmentService {
         dto.effectiveFrom,
       );
 
+      // The override stamp is written only when a mismatch was actually
+      // overridden — passing the flag on a matching assignment is a no-op, so
+      // a client that sends it blindly can't fake an audit trail.
       const [row] = await tx.$queryRawUnsafe<StudentFeeStructureAssignmentRow[]>(
         `INSERT INTO student_fee_structure_assignments
-           (student_id, fee_structure_id, academic_year_id, effective_from, assigned_by)
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::date, $5::uuid)
+           (student_id, fee_structure_id, academic_year_id, effective_from, assigned_by,
+            class_mismatch_overridden, overridden_by_user_id, overridden_at)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::date, $5::uuid,
+                 $6, CASE WHEN $6 THEN $5::uuid END, CASE WHEN $6 THEN NOW() END)
          RETURNING *`,
         studentId,
         dto.feeStructureId,
         academicYearId,
         dto.effectiveFrom,
         assignedById,
+        mismatch,
       );
 
       return toStudentFeeStructureAssignmentResponse(row);

@@ -10,6 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { StatusBadge } from '@/components/shared/status-badge';
 import { useFeeStructures } from '@/lib/hooks/use-bill-catalog';
 import { useStudentFeeStructureAssignments, useAssignFeeStructure } from '@/lib/hooks/use-bill-assignment';
+import { useClasses, useStudent } from '@/lib/hooks/use-students';
+import {
+  describeScope, isClassMismatch, overrideFlag, parseClassMismatchError, resolveStructureScope,
+  type ClassScope, type ServerClassMismatch,
+} from '@/lib/class-guard';
+import { ClassMismatchWarning, CrossClassBadge } from './class-mismatch-warning';
 import { extractApiErrors } from '@/lib/api-errors';
 
 interface Props {
@@ -43,20 +49,76 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
   const [showForm, setShowForm] = useState(false);
   const [feeStructureId, setFeeStructureId] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
+  const [confirmedOverride, setConfirmedOverride] = useState(false);
+  const [serverMismatch, setServerMismatch] = useState<ServerClassMismatch | null>(null);
 
   const current = assignments?.find((a) => a.effectiveTo === null);
   const history = assignments?.filter((a) => a.effectiveTo !== null) ?? [];
 
+  // FEE-CLASS-GUARD §3: the mismatch must be visible BEFORE submit, so the
+  // comparison is done client-side. `useStudent` is already in cache (the
+  // detail page that renders this tab loaded it); `useClasses` resolves the
+  // structure's classId/sectionId to the names the student row carries.
+  const { data: student } = useStudent(studentId);
+  const { data: classes } = useClasses();
+  const selectedStructure = structures.find((s) => s.id === feeStructureId);
+  const structureScope = resolveStructureScope(classes, selectedStructure);
+  const studentScope: ClassScope = {
+    className: student?.className ?? null,
+    sectionName: student?.sectionName ?? null,
+  };
+  // Only once BOTH sides are known — an unresolved scope means "don't know
+  // yet", never "mismatch" (a half-loaded class list would otherwise warn on a
+  // perfectly matching assignment).
+  const clientMismatch = !!student && !!structureScope && isClassMismatch(structureScope, studentScope);
+
+  // The server's own account of a mismatch WINS over the client's guess: the
+  // client rule is advisory and can miss (stale roster, structure re-scoped by
+  // another admin), and when it does the 422 must still lead somewhere. Either
+  // source produces the same warning and the same confirm-and-retry path.
+  const shownMismatch: ServerClassMismatch | null =
+    serverMismatch ??
+    (clientMismatch && structureScope ? { structure: structureScope, target: studentScope } : null);
+  const mismatch = !!shownMismatch;
+
+  function pickStructure(id: string) {
+    setFeeStructureId(id);
+    setConfirmedOverride(false); // a new pick always needs its own confirmation
+    setServerMismatch(null);     // …and a new pick invalidates the server's verdict
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setConfirmedOverride(false);
+    setServerMismatch(null);
+  }
+
   async function handleAssign() {
     if (!feeStructureId || !effectiveFrom) { toast.error('Select a fee structure and effective date'); return; }
+    if (mismatch && !confirmedOverride) { toast.error('Confirm the class mismatch before assigning'); return; }
     try {
-      await assign.mutateAsync({ studentId, data: { feeStructureId, effectiveFrom } });
+      await assign.mutateAsync({
+        studentId,
+        // overrideFlag() is the single place the "never auto-send" rule lives.
+        data: { feeStructureId, effectiveFrom, ...overrideFlag(mismatch, confirmedOverride) },
+      });
       toast.success(current ? 'Fee structure changed' : 'Fee structure assigned');
       setShowForm(false);
       setFeeStructureId('');
       setEffectiveFrom('');
+      setConfirmedOverride(false);
+      setServerMismatch(null);
       onChanged();
     } catch (err) {
+      const fromServer = parseClassMismatchError(err);
+      if (fromServer) {
+        // Not a dead end: show the warning the client missed and re-arm the
+        // confirmation so the same tick-and-Save retries with the override.
+        setServerMismatch(fromServer);
+        setConfirmedOverride(false);
+        toast.error('Class mismatch — confirm below to assign anyway');
+        return;
+      }
       extractApiErrors(err, 'Failed to assign fee structure').forEach((m) => toast.error(m));
     }
   }
@@ -68,34 +130,50 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
           <h4 className="font-semibold text-black dark:text-white">Fee Structure Assignment</h4>
           <p className="mt-0.5 text-xs text-gray-500">Which fee structure this student is billed against</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+        <Button size="sm" variant="outline" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
           <Plus className="mr-1 h-4 w-4" /> {current ? 'Change' : 'Assign'}
         </Button>
       </div>
 
       {showForm && (
-        <div className="flex flex-wrap items-end gap-2 border-b border-stroke bg-gray-50/50 px-6 py-4 dark:border-strokedark dark:bg-gray-800/20">
-          <div className="space-y-1">
-            <label className="text-xs text-gray-500">Fee Structure</label>
-            <Select value={feeStructureId} onValueChange={(v) => setFeeStructureId(v ?? '')}>
-              <SelectTrigger className="w-56">
-                <span className={feeStructureId ? '' : 'text-muted-foreground'}>
-                  {feeStructureId ? structureName(feeStructureId) : 'Select fee structure'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {structures.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {structures.length === 0 && (
-              <p className="text-xs text-gray-400">No fee structures for this class/year yet.</p>
-            )}
+        <div className="space-y-3 border-b border-stroke bg-gray-50/50 px-6 py-4 dark:border-strokedark dark:bg-gray-800/20">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">Fee Structure</label>
+              <Select value={feeStructureId} onValueChange={(v) => pickStructure(v ?? '')}>
+                <SelectTrigger className="w-56">
+                  <span className={feeStructureId ? '' : 'text-muted-foreground'}>
+                    {feeStructureId ? structureName(feeStructureId) : 'Select fee structure'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {structures.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {structures.length === 0 && (
+                <p className="text-xs text-gray-400">No fee structures for this class/year yet.</p>
+              )}
+            </div>
+            <BsDateInput label="Effective From" value={effectiveFrom} onChange={setEffectiveFrom} />
+            <Button
+              size="sm"
+              className="bg-brand-500 hover:bg-brand-600 text-white"
+              onClick={handleAssign}
+              disabled={assign.isPending || (mismatch && !confirmedOverride)}
+            >
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={closeForm}>Cancel</Button>
           </div>
-          <BsDateInput label="Effective From" value={effectiveFrom} onChange={setEffectiveFrom} />
-          <Button size="sm" className="bg-brand-500 hover:bg-brand-600 text-white" onClick={handleAssign} disabled={assign.isPending}>
-            Save
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+
+          {shownMismatch && (
+            <ClassMismatchWarning
+              structure={shownMismatch.structure}
+              mismatchWith={<>this student is in <strong>{describeScope(shownMismatch.target)}</strong></>}
+              checked={confirmedOverride}
+              onCheckedChange={setConfirmedOverride}
+            />
+          )}
         </div>
       )}
 
@@ -109,6 +187,9 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
             <span className="text-sm font-medium text-gray-800 dark:text-white">{structureName(current.feeStructureId)}</span>
             <StatusBadge status="ACTIVE" />
             <span className="text-xs text-gray-500">Since <BsDate date={current.effectiveFrom} /></span>
+            {/* FEE-CLASS-GUARD: a later reviewer must be able to see this was
+                deliberate, not a bug. */}
+            {current.classMismatchOverridden && <CrossClassBadge />}
           </div>
         )}
 
@@ -120,6 +201,7 @@ export function FeeStructureAssignmentPanel({ studentId, academicYearId, onChang
                 <div key={a.id} className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                   <span className="font-medium text-gray-700 dark:text-gray-300">{structureName(a.feeStructureId)}</span>
                   <span><BsDate date={a.effectiveFrom} /> — {a.effectiveTo ? <BsDate date={a.effectiveTo} /> : 'ongoing'}</span>
+                  {a.classMismatchOverridden && <CrossClassBadge />}
                 </div>
               ))}
             </div>
