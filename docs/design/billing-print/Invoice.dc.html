@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="omelette-owns-print" content="true">
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #e9e9e7; }
+  @media print { html, body { background: #fff; } .no-print { display: none !important; } }
+  a, a:link { color: #0d5c43; text-decoration: none; }
+  a:hover { color: #094433; }
+</style>
+</helmet>
+
+<div style="width: 210mm; height: 297mm; margin: 0 auto; background: #fff; position: relative; box-sizing: border-box; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;">
+
+  <div lang="en" style="width: 210mm; height: 148.5mm; box-sizing: border-box; padding: 12mm 12mm 10mm 12mm; display: flex; flex-direction: column; overflow: hidden; line-height: 1.35;">
+
+    <div style="display: flex; align-items: flex-start; gap: 5mm;">
+      <div style="width: 15mm; height: 15mm; flex: none; border: 0.5pt solid #0d5c43; display: flex; align-items: center; justify-content: center; font-size: 11pt; font-weight: 700; letter-spacing: 0.02em; color: #0d5c43;">DS</div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 11pt; font-weight: 700; letter-spacing: 0.01em;">Demo School Nepal</div>
+        <div style="font-size: 7.5pt; color: #5a5a5a; margin-top: 0.6mm;">Simple school management for every school in Nepal</div>
+        <div style="font-size: 7.5pt; color: #111; margin-top: 1.4mm;">Naya Baneshwor, Kathmandu-10, Nepal &nbsp;·&nbsp; 01-4780123 &nbsp;·&nbsp; demoschool.edu.np</div>
+      </div>
+      <div style="flex: none; text-align: right; padding-top: 0.5mm;">
+        <div style="font-size: 5.5pt; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">PAN No.</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.3mm;">301234567</div>
+        <div style="font-size: 5.5pt; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; margin-top: 1.2mm;">Reg. No.</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.3mm;">REG-KTM-2019-04521</div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.75pt solid #0d5c43; margin-top: 1.8mm;"></div>
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 8mm; margin-top: 1.8mm;">
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Student Copy</div>
+        <div style="font-size: 14pt; font-weight: 700; letter-spacing: 0.04em; color: #0d5c43; margin-top: 0.8mm;">INVOICE</div>
+        <div style="font-size: 8.5pt; font-weight: 700; margin-top: 0.8mm; white-space: nowrap;">BINV-2083-000028</div>
+      </div>
+      <div style="text-align: right; font-size: 7.5pt;">
+        <div style="display: flex; justify-content: flex-end; gap: 3mm;"><span style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; align-self: center;">Issued</span><span style="font-weight: 600; min-width: 38mm;">2026-08-10 (BS 2083-04-25)</span></div>
+        <div style="display: flex; justify-content: flex-end; gap: 3mm; margin-top: 1mm;"><span style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; align-self: center;">Due</span><span style="font-weight: 600; min-width: 38mm;">2026-08-25 (BS 2083-05-09)</span></div>
+        <div style="display: flex; justify-content: flex-end; gap: 3mm; margin-top: 1mm;"><span style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; align-self: center; white-space: nowrap;">FY / Installment</span><span style="min-width: 38mm;">2083/84 &nbsp;·&nbsp; Ashwin 2083</span></div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.25pt solid #b0b0b0; margin-top: 1.8mm;"></div>
+
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr 0.6fr 1.2fr 1.3fr; gap: 4mm; margin-top: 1.8mm;">
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Student</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.7mm;">Om Subedi</div>
+      </div>
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Class / Sec.</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.7mm;">Grade 9 / A</div>
+      </div>
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Roll</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.7mm;">14</div>
+      </div>
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Student ID</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.7mm;">STU-2081-0142</div>
+      </div>
+      <div>
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Guardian</div>
+        <div style="font-size: 8pt; font-weight: 600; margin-top: 0.7mm;">Ramesh Subedi</div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.25pt solid #b0b0b0; margin-top: 1.8mm;"></div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 1.6mm; font-variant-numeric: tabular-nums;">
+      <thead>
+        <tr>
+          <th style="text-align: left; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0;">Fee Head</th>
+          <th style="text-align: right; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0; width: 22mm;">Gross</th>
+          <th style="text-align: right; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0; width: 24mm;">Concession</th>
+          <th style="text-align: right; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0; width: 24mm;">Non-taxable</th>
+          <th style="text-align: right; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0; width: 22mm;">Taxable</th>
+          <th style="text-align: right; font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; padding: 0 0 1mm 0; width: 24mm;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align: left; font-size: 8pt; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">Tuition Fee</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">1,000.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 400; color: #5a5a5a; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">(100.00)</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">0.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">900.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 600; padding: 1.1mm 0; border-top: 0.25pt solid #b0b0b0;">900.00</td>
+        </tr>
+        <tr>
+          <td style="text-align: left; font-size: 8pt; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">Transportation Fee</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">500.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 400; color: #5a5a5a; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">(50.00)</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">450.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">0.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 600; padding: 1.1mm 0; border-top: 0.25pt solid #dcdcdc;">450.00</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="border-top: 0.5pt solid #111; margin-top: 0;"></div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 1.6mm;">
+      <div style="width: 74mm;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt;">
+          <span>Subtotal</span><span style="font-weight: 600;">1,350.00</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt; margin-top: 1.2mm;">
+          <span>Previous balance outstanding <span style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; color: #5a5a5a;">(DR)</span></span><span style="font-weight: 600;">1,800.00</span>
+        </div>
+        <div style="border-top: 0.75pt solid #0d5c43; margin-top: 2mm;"></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 1.2mm;">
+          <span style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #111; align-self: flex-end; padding-bottom: 0.6mm; white-space: nowrap;">Total receivable</span>
+          <span style="font-size: 15pt; font-weight: 700; letter-spacing: -0.01em;">Rs. 3,150.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 1.8mm;">
+      <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Amount in words</div>
+      <div style="font-size: 7.5pt; font-weight: 600; padding-bottom: 1.2mm; border-bottom: 0.25pt solid #b0b0b0; margin-top: 0.8mm;">Three Thousand One Hundred Fifty Rupees only</div>
+    </div>
+
+    <div style="flex: 1 1 auto; min-height: 0;"></div>
+
+    <div style="display: flex; gap: 6mm; align-items: flex-start; border-top: 0.25pt solid #b0b0b0; padding-top: 1.8mm;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a;">Payment instructions</div>
+        <div style="font-size: 7.5pt; margin-top: 0.9mm; max-width: 78mm;">Pay via eSewa or Khalti, or transfer to <span style="font-weight: 600;">Global IME Bank</span>, A/C <span style="font-weight: 600;">0123456789012</span>, Naya Baneshwor branch. Quote the invoice number as remarks.</div>
+      </div>
+      <div style="flex: none; width: 18mm; height: 18mm; border: 0.5pt solid #b0b0b0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm;">
+        <div style="width: 7mm; height: 7mm; border: 0.25pt solid #b0b0b0;"></div>
+        <div style="font-size: 5pt; letter-spacing: 0.06em; text-transform: uppercase; color: #5a5a5a; text-align: center;">Scan<br>to pay</div>
+      </div>
+      <div style="flex: none; width: 46mm; align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end;">
+        <div style="font-size: 6.25pt; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; white-space: nowrap; margin-bottom: 2.6mm;">Authorised signature</div>
+        <div style="border-top: 0.5pt solid #111; padding-top: 1mm;">
+          <div style="font-size: 8pt; font-weight: 600;">Dr. Kamala Shrestha</div>
+          <div style="font-size: 6.25pt; letter-spacing: 0.09em; text-transform: uppercase; color: #5a5a5a; margin-top: 0.4mm; white-space: nowrap;">Principal</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 1.2mm; font-size: 5.5pt; color: #5a5a5a; letter-spacing: 0.03em;">
+      <span style="white-space: nowrap;">This is a computer-generated invoice.</span>
+      <span style="white-space: nowrap;">BINV-2083-000028</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; top: 148.5mm; width: 210mm; height: 0; border-top: 0.25pt dashed #b0b0b0;"></div>
+  <div class="no-print-keep" style="position: absolute; left: 3mm; top: 146.4mm; font-size: 5pt; letter-spacing: 0.12em; text-transform: uppercase; color: #b0b0b0; background: #fff; padding: 0 1mm;">&#9986; cut</div>
+
+  <div lang="ne" style="width: 210mm; height: 148.5mm; box-sizing: border-box; padding: 12mm 12mm 10mm 12mm; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans Devanagari', 'Mukta', 'Kalimati', 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.42;">
+
+    <div style="display: flex; align-items: flex-start; gap: 5mm;">
+      <div style="width: 15mm; height: 15mm; flex: none; border: 0.5pt solid #0d5c43; display: flex; align-items: center; justify-content: center; font-size: 11pt; font-weight: 700; color: #0d5c43;">DS</div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 11pt; font-weight: 700;">डेमो स्कूल नेपाल</div>
+        <div style="font-size: 7.5pt; color: #5a5a5a; margin-top: 0.6mm;">नेपालका हरेक विद्यालयका लागि सरल विद्यालय व्यवस्थापन</div>
+        <div style="font-size: 7.5pt; color: #111; margin-top: 0.4mm;">नयाँ बानेश्वर, काठमाडौँ-१०, नेपाल &nbsp;·&nbsp; 01-4780123 &nbsp;·&nbsp; demoschool.edu.np</div>
+      </div>
+      <div style="flex: none; text-align: right; padding-top: 0.5mm;">
+        <div style="font-size: 6pt; font-weight: 600; color: #5a5a5a;">स्थायी लेखा नं.</div>
+        <div style="font-size: 8pt; font-weight: 600; font-variant-numeric: tabular-nums;">301234567</div>
+        <div style="font-size: 6pt; font-weight: 600; color: #5a5a5a; margin-top: 1mm;">दर्ता नं.</div>
+        <div style="font-size: 8pt; font-weight: 600;">REG-KTM-2019-04521</div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.75pt solid #0d5c43; margin-top: 1.6mm;"></div>
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 8mm; margin-top: 1.8mm;">
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">कार्यालय प्रति</div>
+        <div style="font-size: 14pt; font-weight: 700; color: #0d5c43; margin-top: 0.4mm;">बिल</div>
+        <div style="font-size: 8.5pt; font-weight: 700; margin-top: 0.4mm; font-variant-numeric: tabular-nums;">BINV-2083-000028</div>
+      </div>
+      <div style="text-align: right; font-size: 7.5pt;">
+        <div style="display: flex; justify-content: flex-end; gap: 3mm;"><span style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a; align-self: center;">जारी मिति</span><span style="font-weight: 600; min-width: 40mm; font-variant-numeric: tabular-nums;">2026-08-10 (BS 2083-04-25)</span></div>
+        <div style="display: flex; justify-content: flex-end; gap: 3mm;"><span style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a; align-self: center;">भुक्तानी मिति</span><span style="font-weight: 600; min-width: 40mm; font-variant-numeric: tabular-nums;">2026-08-25 (BS 2083-05-09)</span></div>
+        <div style="display: flex; justify-content: flex-end; gap: 3mm;"><span style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a; align-self: center;">आ.व. / किस्ता</span><span style="min-width: 40mm; font-variant-numeric: tabular-nums;">2083/84 &nbsp;·&nbsp; असोज 2083</span></div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.25pt solid #b0b0b0; margin-top: 1.8mm;"></div>
+
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr 0.6fr 1.2fr 1.3fr; gap: 4mm; margin-top: 1.6mm;">
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">विद्यार्थी</div>
+        <div style="font-size: 8pt; font-weight: 600;">ओम सुबेदी</div>
+      </div>
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">कक्षा / सेक्सन</div>
+        <div style="font-size: 8pt; font-weight: 600;">कक्षा ९ / A</div>
+      </div>
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">रोल नं.</div>
+        <div style="font-size: 8pt; font-weight: 600; font-variant-numeric: tabular-nums;">14</div>
+      </div>
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">विद्यार्थी परिचय नं.</div>
+        <div style="font-size: 8pt; font-weight: 600; font-variant-numeric: tabular-nums;">STU-2081-0142</div>
+      </div>
+      <div>
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">संरक्षक</div>
+        <div style="font-size: 8pt; font-weight: 600;">रमेश सुबेदी</div>
+      </div>
+    </div>
+
+    <div style="border-top: 0.25pt solid #b0b0b0; margin-top: 1.6mm;"></div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 1.6mm; font-variant-numeric: tabular-nums;">
+      <thead>
+        <tr>
+          <th style="text-align: left; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0;">शुल्क शीर्षक</th>
+          <th style="text-align: right; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0; width: 22mm;">कुल</th>
+          <th style="text-align: right; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0; width: 24mm;">छुट</th>
+          <th style="text-align: right; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0; width: 24mm;">कर नलाग्ने</th>
+          <th style="text-align: right; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0; width: 22mm;">कर लाग्ने</th>
+          <th style="text-align: right; font-size: 6.5pt; font-weight: 600; color: #5a5a5a; padding: 0 0 0.9mm 0; width: 24mm;">जम्मा</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align: left; font-size: 8pt; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">शिक्षण शुल्क</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">1,000.00</td>
+          <td style="text-align: right; font-size: 8pt; color: #5a5a5a; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">(100.00)</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">0.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">900.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 600; padding: 0.7mm 0; border-top: 0.25pt solid #b0b0b0;">900.00</td>
+        </tr>
+        <tr>
+          <td style="text-align: left; font-size: 8pt; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">यातायात शुल्क</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">500.00</td>
+          <td style="text-align: right; font-size: 8pt; color: #5a5a5a; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">(50.00)</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">450.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 500; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">0.00</td>
+          <td style="text-align: right; font-size: 8pt; font-weight: 600; padding: 0.7mm 0; border-top: 0.25pt solid #dcdcdc;">450.00</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="border-top: 0.5pt solid #111;"></div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 1.6mm;">
+      <div style="width: 82mm;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt;">
+          <span>उप-जम्मा</span><span style="font-weight: 600; font-variant-numeric: tabular-nums;">1,350.00</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt;">
+          <span>अघिल्लो बाँकी रकम <span style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">(DR)</span></span><span style="font-weight: 600; font-variant-numeric: tabular-nums;">1,800.00</span>
+        </div>
+        <div style="border-top: 0.75pt solid #0d5c43; margin-top: 1.8mm;"></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 1.2mm;">
+          <span style="font-size: 6.5pt; font-weight: 600; color: #111; align-self: flex-end; padding-bottom: 0.8mm;">कुल बुझाउनुपर्ने रकम</span>
+          <span style="font-size: 15pt; font-weight: 700; font-variant-numeric: tabular-nums;">Rs. 3,150.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 1.6mm;">
+      <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">अक्षरमा रकम</div>
+      <div style="font-size: 7.5pt; font-weight: 600; padding-bottom: 1mm; border-bottom: 0.25pt solid #b0b0b0;">तीन हजार एक सय पचास रुपैयाँ मात्र</div>
+    </div>
+
+    <div style="flex: 1 1 auto; min-height: 0;"></div>
+
+    <div style="display: flex; gap: 6mm; align-items: flex-start; border-top: 0.25pt solid #b0b0b0; padding-top: 1.6mm;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a;">भुक्तानी निर्देशन</div>
+        <div style="font-size: 7.5pt; max-width: 78mm;">eSewa वा Khalti मार्फत, वा <span style="font-weight: 600;">ग्लोबल आईएमई बैंक</span>, खाता नं. <span style="font-weight: 600; font-variant-numeric: tabular-nums;">0123456789012</span>, नयाँ बानेश्वर शाखामा रकम पठाउनुहोस्। रिमार्क्समा बिल नम्बर उल्लेख गर्नुहोस्।</div>
+      </div>
+      <div style="flex: none; width: 18mm; height: 18mm; border: 0.5pt solid #b0b0b0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm;">
+        <div style="width: 7mm; height: 7mm; border: 0.25pt solid #b0b0b0;"></div>
+        <div style="font-size: 5.5pt; color: #5a5a5a; text-align: center; line-height: 1.3;">स्कान<br>गर्नुहोस्</div>
+      </div>
+      <div style="flex: none; width: 46mm; align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end;">
+        <div style="font-size: 6.5pt; font-weight: 600; color: #5a5a5a; white-space: nowrap; margin-bottom: 2.2mm;">अधिकृत हस्ताक्षर</div>
+        <div style="border-top: 0.5pt solid #111; padding-top: 1mm;">
+          <div style="font-size: 8pt; font-weight: 600;">डा. कमला श्रेष्ठ</div>
+          <div style="font-size: 6.5pt; color: #5a5a5a; white-space: nowrap;">प्रधानाध्यापक</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.8mm; font-size: 6pt; color: #5a5a5a;">
+      <span>यो कम्प्युटरबाट तयार भएको बिल हो।</span>
+      <span style="font-variant-numeric: tabular-nums;">BINV-2083-000028</span>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>
