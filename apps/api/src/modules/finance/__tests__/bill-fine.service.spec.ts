@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { BillFineService } from '../bill-fine.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { LedgerService } from '../ledger.service';
+import { CalendarService } from '../../calendar/calendar.service';
 
 const mockTx = { $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() };
 
@@ -20,6 +21,7 @@ describe('BillFineService', () => {
   let service: BillFineService;
   let tenantPrisma: jest.Mocked<TenantPrismaService>;
   let ledgerService: jest.Mocked<LedgerService>;
+  let calendarService: jest.Mocked<CalendarService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -34,12 +36,14 @@ describe('BillFineService', () => {
             reverse: jest.fn(),
           },
         },
+        { provide: CalendarService, useValue: { countWorkingDays: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(BillFineService);
     tenantPrisma = module.get(TenantPrismaService) as jest.Mocked<TenantPrismaService>;
     ledgerService = module.get(LedgerService) as jest.Mocked<LedgerService>;
+    calendarService = module.get(CalendarService) as jest.Mocked<CalendarService>;
     jest.clearAllMocks();
   });
 
@@ -69,17 +73,22 @@ describe('BillFineService', () => {
         .mockResolvedValueOnce([runRow({ status: 'COMPLETED', invoices_scanned: 1, invoices_fined: 1, total_fine_posted: '100.00' })]); // update run returning
 
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ days_overdue: 10, outstanding: '5000.00', already_posted: '0.00' }]) // fresh recompute
+        .mockResolvedValueOnce([{ due_date: '2026-07-24', outstanding: '5000.00', already_posted: '0.00' }]) // fresh recompute
         .mockResolvedValueOnce([{ // insert accrual returning
           id: 'accrual-1', bill_invoice_id: 'inv-1', student_id: 'student-1', late_fee_rule_id: 'rule-1',
           accrued_through: new Date('2026-08-03'), days_overdue: 10, total_fine: '100.00', delta_posted: '100.00',
           rule_type_snapshot: 'PER_DAY', rule_value_snapshot: '10.00', rule_cap_snapshot: null,
           ledger_entry_id: 'ledger-1', fine_run_id: 'run-1', created_at: new Date('2026-08-03'),
         }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10); // CAL-1 Phase 4: working days, not calendar days
       ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-1' } as any);
 
       const result = await service.runLateFees('MANUAL', 'accountant-1');
 
+      // dayAfterDue is derived from the mocked due_date; today is the real
+      // clock (todayAdInNepal isn't mocked here, matching the pre-existing
+      // convention in this file of not asserting on the exact date param).
+      expect(calendarService.countWorkingDays).toHaveBeenCalledWith('2026-07-25', expect.any(String));
       expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
         studentId: 'student-1', entryType: 'FINE', debit: '100.00', credit: '0',
       }));
@@ -94,7 +103,8 @@ describe('BillFineService', () => {
         .mockResolvedValueOnce([{ id: 'rule-1', scope: 'GLOBAL', fee_head_id: null, type: 'PER_DAY', value: '10.00', grace_days: 0, cap_amount: null }])
         .mockResolvedValueOnce([{ invoice_id: 'inv-1', student_id: 'student-1', academic_year_id: 'year-1', fee_head_ids: [] }])
         .mockResolvedValueOnce([runRow({ status: 'COMPLETED', invoices_scanned: 1 })]);
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ days_overdue: 10, outstanding: '0.00', already_posted: '0.00' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ due_date: '2026-07-24', outstanding: '0.00', already_posted: '0.00' }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10);
 
       const result = await service.runLateFees('MANUAL', 'accountant-1');
 
@@ -108,7 +118,8 @@ describe('BillFineService', () => {
         .mockResolvedValueOnce([{ id: 'rule-1', scope: 'GLOBAL', fee_head_id: null, type: 'PER_DAY', value: '10.00', grace_days: 5, cap_amount: null }])
         .mockResolvedValueOnce([{ invoice_id: 'inv-1', student_id: 'student-1', academic_year_id: 'year-1', fee_head_ids: [] }])
         .mockResolvedValueOnce([runRow({ status: 'COMPLETED', invoices_scanned: 1 })]);
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ days_overdue: 5, outstanding: '5000.00', already_posted: '0.00' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ due_date: '2026-07-29', outstanding: '5000.00', already_posted: '0.00' }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(5);
 
       const result = await service.runLateFees('MANUAL', 'accountant-1');
 
@@ -122,7 +133,8 @@ describe('BillFineService', () => {
         .mockResolvedValueOnce([{ id: 'rule-1', scope: 'GLOBAL', fee_head_id: null, type: 'PER_DAY', value: '10.00', grace_days: 0, cap_amount: null }])
         .mockResolvedValueOnce([{ invoice_id: 'inv-1', student_id: 'student-1', academic_year_id: 'year-1', fee_head_ids: [] }])
         .mockResolvedValueOnce([runRow({ status: 'COMPLETED', invoices_scanned: 1 })]);
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ days_overdue: 10, outstanding: '5000.00', already_posted: '100.00' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ due_date: '2026-07-24', outstanding: '5000.00', already_posted: '100.00' }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10);
 
       const result = await service.runLateFees('MANUAL', 'accountant-1');
 
@@ -138,13 +150,14 @@ describe('BillFineService', () => {
         .mockResolvedValueOnce([{ invoice_id: 'inv-1', student_id: 'student-1', academic_year_id: 'year-1', fee_head_ids: [] }])
         .mockResolvedValueOnce([runRow({ status: 'COMPLETED', invoices_scanned: 1, invoices_fined: 1, total_fine_posted: '80.00' })]);
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ days_overdue: 10, outstanding: '5000.00', already_posted: '0.00' }])
+        .mockResolvedValueOnce([{ due_date: '2026-07-24', outstanding: '5000.00', already_posted: '0.00' }])
         .mockResolvedValueOnce([{
           id: 'accrual-1', bill_invoice_id: 'inv-1', student_id: 'student-1', late_fee_rule_id: 'rule-1',
           accrued_through: new Date('2026-08-03'), days_overdue: 10, total_fine: '80.00', delta_posted: '80.00',
           rule_type_snapshot: 'PER_DAY', rule_value_snapshot: '10.00', rule_cap_snapshot: '80.00',
           ledger_entry_id: 'ledger-1', fine_run_id: 'run-1', created_at: new Date('2026-08-03'),
         }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10);
       ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-1' } as any);
 
       const result = await service.runLateFees('MANUAL', 'accountant-1');

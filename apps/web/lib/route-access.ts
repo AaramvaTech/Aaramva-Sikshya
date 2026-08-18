@@ -65,6 +65,10 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   { prefix: '/communication', roles: EXAM_COMMS_TIER, endpoint: 'POST /communication/notices' },
 
   { prefix: '/dashboard', roles: TEACHER_TIER, endpoint: 'GET /dashboard/weekly-attendance' },
+  // CAL-1: holidays are accountant-tier (mirrors CalendarController, same
+  // tier as late-fee-rules/fee-structures — holidays gate both late-fee
+  // calc and attendance) — wider than the rest of /academic below it.
+  { prefix: '/academic/holidays', roles: ACCOUNTANT_AND_ABOVE, endpoint: 'POST /calendar/holidays' },
   // Academic structure management. Coordinator can manage classes/subjects/timetable
   // (POST /classes = COORDINATOR_AND_ABOVE); note academic-year *creation* is narrower
   // (SCHOOL_OWNER/PRINCIPAL only), which the section still permits via the shell.

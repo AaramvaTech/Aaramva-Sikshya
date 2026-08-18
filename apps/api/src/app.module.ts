@@ -15,6 +15,7 @@ import { TenantMiddleware } from './modules/tenant/tenant.middleware';
 import { AuthModule } from './modules/auth/auth.module';
 import { StudentModule } from './modules/student/student.module';
 import { AcademicModule } from './modules/academic/academic.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { JobsModule } from './jobs/jobs.module';
@@ -49,6 +50,7 @@ import { CredentialDeliveryModule } from './modules/credential-delivery/credenti
     AuthModule,
     StudentModule,
     AcademicModule,
+    CalendarModule,
     AttendanceModule,
     FinanceModule,
     HrModule,

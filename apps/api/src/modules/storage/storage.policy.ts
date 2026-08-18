@@ -42,6 +42,11 @@ export interface FileKindPolicy {
 const SETTINGS_EDITORS = [Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL];
 const STUDENT_MANAGERS = [...SETTINGS_EDITORS, Role.ACADEMIC_COORDINATOR];
 
+/** STUDENT-DOCS-1: matches PATCH /students/:id's role list exactly (student
+ *  profile editing) — deliberately NOT STUDENT_MANAGERS, which also includes
+ *  PLATFORM_ADMIN; student profile editing itself never has. */
+const STUDENT_PROFILE_EDITORS = [Role.SCHOOL_OWNER, Role.PRINCIPAL, Role.ACADEMIC_COORDINATOR];
+
 /** EDU-1 document types (assignment attachments + submissions). */
 const DOCUMENT_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -93,6 +98,14 @@ export const FILE_KIND_POLICIES = {
     maxBytes: 10 * MB,
     contentTypes: { ...IMAGE_TYPES, 'application/pdf': 'pdf' },
     uploadRoles: SETTINGS_EDITORS,
+    publicRead: false,
+  },
+  // STUDENT-DOCS-1: mirrors staff-document exactly (same size/type policy),
+  // scoped to the role tier that manages student records (not settings).
+  'student-document': {
+    maxBytes: 10 * MB,
+    contentTypes: { ...IMAGE_TYPES, 'application/pdf': 'pdf' },
+    uploadRoles: STUDENT_PROFILE_EDITORS,
     publicRead: false,
   },
   // EDU-1: teacher homework attachments — presignable via the generic route.

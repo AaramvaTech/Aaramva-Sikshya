@@ -7,6 +7,7 @@ import { StudentService } from './student.service';
 import { StudentMeService } from './student-me.service';
 import { GuardianService } from './guardian.service';
 import { GuardianScopeService } from './guardian-scope.service';
+import { StudentDocumentService } from './student-document.service';
 import { ImportService } from './import.service';
 import { ExaminationModule } from '../examination/examination.module';
 import { CredentialDeliveryModule } from '../credential-delivery/credential-delivery.module';
@@ -23,7 +24,10 @@ import { CredentialDeliveryModule } from '../credential-delivery/credential-deli
 @Module({
   imports: [ExaminationModule, StorageModule, CredentialDeliveryModule], // + REG-1 guardian credential delivery
   controllers: [StudentController, GuardianController, ImportController],
-  providers: [StudentService, StudentMeService, GuardianService, GuardianScopeService, ImportService],
+  providers: [
+    StudentService, StudentMeService, GuardianService, GuardianScopeService,
+    StudentDocumentService, ImportService,
+  ],
   exports: [StudentService, GuardianService, GuardianScopeService],
 })
 export class StudentModule {}

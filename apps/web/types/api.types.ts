@@ -135,7 +135,6 @@ export interface StudentDetail {
   academicYear: string | null;
   previousSchool: string | null;
   photoUrl: string | null;
-  documents: StudentDocument[];
   status: string;
   createdAt: string;
 }
@@ -160,9 +159,10 @@ export interface StudentStats {
 
 export interface StudentDocument {
   id: string;
+  studentId: string;
   documentType: string;
   fileUrl: string;
-  fileName: string;
+  fileName: string | null;
   uploadedAt: string;
 }
 
@@ -2249,4 +2249,28 @@ export interface CashierCloseResult {
   chequeTotal: number;
   gatewayTotal: number;
   byMethod: { method: string; total: number; count: number }[];
+}
+
+// ── CAL-1 — Calendar / holidays ─────────────────────────────────────────────
+export type CalendarDaySource = 'GOVT' | 'SCHOOL';
+export interface CalendarDay {
+  id: string;
+  date: { ad: string; bs: string };
+  academicYearId: string | null;
+  isHoliday: boolean;
+  source: CalendarDaySource;
+  labelEn: string;
+  labelNe: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+export interface CreateSchoolHolidayData {
+  date: string;
+  labelEn: string;
+  labelNe?: string;
+}
+export interface UpdateSchoolHolidayData {
+  date?: string;
+  labelEn?: string;
+  labelNe?: string;
 }

@@ -51,19 +51,13 @@ export const studentsApi = {
   enroll: (id: string, data: EnrollStudentData) =>
     api.post<ApiResponse<Enrollment>>(`/students/${id}/enroll`, data),
 
-  getUploadUrl: (
+  // STUDENT-DOCS-1: presign+PUT goes through the shared uploadFile() helper
+  // (kind 'student-document', same as student-photo/staff-document) — this is
+  // the confirm/persist step, mirroring hrApi.addStaffDocument's shape exactly.
+  addDocument: (
     id: string,
-    data: { fileName: string; documentType: string; contentType: string },
-  ) =>
-    api.post<ApiResponse<{ presignedUrl: string; fileUrl: string }>>(
-      `/students/${id}/documents/presign`,
-      data,
-    ),
-
-  confirmUpload: (
-    id: string,
-    data: { fileUrl: string; fileName: string; documentType: string },
-  ) => api.post(`/students/${id}/documents/confirm`, data),
+    data: { documentType: string; fileKey: string; fileName?: string },
+  ) => api.post<ApiResponse<StudentDocument>>(`/students/${id}/documents/confirm`, data),
 
   getDocuments: (id: string) =>
     api.get<ApiResponse<StudentDocument[]>>(`/students/${id}/documents`),

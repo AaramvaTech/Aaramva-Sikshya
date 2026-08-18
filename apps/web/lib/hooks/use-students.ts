@@ -125,6 +125,18 @@ export function useResendGuardianAccount(studentId: string) {
   });
 }
 
+// STUDENT-DOCS-1: mirrors useStaffDocuments, plus an optional `enabled` gate
+// (the students/[id] page only wants this fetched once the Documents tab is
+// actually opened — same options?.enabled shape useStudents already uses).
+export function useStudentDocuments(id: string, options?: { enabled?: boolean }) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['student-documents', id],
+    queryFn: () => studentsApi.getDocuments(id).then((r) => r.data.data),
+    enabled: !!slug && !!id && (options?.enabled ?? true),
+  });
+}
+
 export function useClasses() {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
