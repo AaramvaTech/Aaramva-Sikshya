@@ -272,6 +272,15 @@ Deleting a school's payment QR breaks every printed bill; deleting a submission
 destroys a student's coursework with no recovery path (object storage is
 outside `pg_dump`, per the RUNBOOK).
 
+**A third, subtler consequence:** the pruner also flags the entire
+`bill-pdf/` + `bill-receipt/` cache as orphaned, because no DB column points at
+those keys — they are content-addressed by invoice/payment id. Deleting them
+loses no data permanently (they regenerate on next request) but **silently
+breaks addendum A6's byte-identical-reprint guarantee**: the regenerated PDF is
+rendered against *current* tenant branding, so a reprint could differ from the
+bill a parent already holds. Any fix to the reference set has to decide
+deliberately whether that cache is prunable, not just add three columns.
+
 This is a **pre-existing bug in a destructive tool**, unrelated to BILL-8-UI
 except that this ticket is what ran it. Not fixed here — out of scope, and
 `scripts/` is under `apps/api`. **Recommend its own ticket, and that nobody
@@ -286,10 +295,21 @@ All shims restored with read-backs: motherland accountant password restored
 restored, and the 4 crafted `bill_print_jobs` rows deleted (`print_jobs_left`
 0).
 
-The 2 merged PDFs written to dev MinIO remain. **`prune-orphans` was NOT run
-with `--delete`** — see the pruner finding below; the dry-run surfaced a
-data-loss bug that made running it unsafe, and it would not have removed these
-two objects anyway (they are inside the 24h grace window).
+The 2 merged PDFs written to dev MinIO **were deleted directly**, by key, after
+confirming no `bill_print_jobs` row could ever reach them (the table is empty
+for that tenant, so the objects were permanently unreachable):
+
+```
+deleted tenant_motherland-school/bill-print-job/865079e1-….pdf   (768,238 B)
+deleted tenant_motherland-school/bill-print-job/abb8acae-….pdf   (754,515 B)
+read-back: count=0
+```
+
+**`prune-orphans --delete` was NOT used** — see the pruner finding below. It
+would not have removed these two anyway (24h grace window), and it would have
+destroyed four live objects. Post-deletion spot-check confirms everything else
+is untouched: all four live-referenced objects still present, and demo's
+Phase 1 PDF cache intact (7 bill-pdf + 4 bill-receipt).
 
 ### Suite
 
