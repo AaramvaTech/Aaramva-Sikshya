@@ -6,6 +6,7 @@ import { PublicPrismaService } from '../../super-admin/public-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
 import { BillReceiptService } from '../bill-receipt.service';
+import { BillReceiptA5Service } from '../bill-receipt-a5.service';
 import { Role } from '../../common/enums/role.enum';
 
 const mockPayment = {
@@ -42,8 +43,13 @@ const mockPayment = {
   advanceAmount: 450,
 };
 
+// BILL-PRINT-1: the receipt now reads the SAME tenant header the bill does
+// (TENANT_HEADER_SELECT), because the A5 stationery carries a full letterhead.
 const mockTenantRow = {
   name: 'Demo School', principal_name: 'Dr. Kamala Shrestha', brand_color: null, print_language: null,
+  logo_url: null, pan_number: '301234567', registration_number: 'REG-1', address: 'Kathmandu',
+  phone: '01-4780123', website: 'demo.edu.np', tagline: null, payment_instructions: null,
+  qr_image_url: null, principal_signature_url: null, school_stamp_url: null,
 };
 
 describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
@@ -53,6 +59,7 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
   let publicPrisma: jest.Mocked<PublicPrismaService>;
   let storageService: jest.Mocked<StorageService>;
   let billReceiptService: jest.Mocked<BillReceiptService>;
+  let billReceiptA5Service: jest.Mocked<BillReceiptA5Service>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -67,6 +74,10 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
           useValue: { headObject: jest.fn(), putObject: jest.fn(), presignRead: jest.fn() },
         },
         { provide: BillReceiptService, useValue: { render: jest.fn() } },
+        // BILL-PRINT-1: the A5 stationery renderer. These cases all exercise the
+        // default (thermal) format, so it is never called — but it is a real
+        // constructor dependency and must resolve.
+        { provide: BillReceiptA5Service, useValue: { render: jest.fn() } },
       ],
     }).compile();
 
@@ -76,6 +87,7 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     publicPrisma = module.get(PublicPrismaService) as jest.Mocked<PublicPrismaService>;
     storageService = module.get(StorageService) as jest.Mocked<StorageService>;
     billReceiptService = module.get(BillReceiptService) as jest.Mocked<BillReceiptService>;
+    billReceiptA5Service = module.get(BillReceiptA5Service) as jest.Mocked<BillReceiptA5Service>;
     jest.clearAllMocks();
   });
 
@@ -89,7 +101,7 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
 
     expect(result).toEqual({ presignedUrl: 'https://minio.local/existing', generated: false });
     expect(billReceiptService.render).not.toHaveBeenCalled();
-    expect(storageService.headObject).toHaveBeenCalledWith('tenant_demo/bill-receipt/payment-1-v1-EN.pdf');
+    expect(storageService.headObject).toHaveBeenCalledWith('tenant_demo/bill-receipt/payment-1-v2-thermal-EN.pdf');
   });
 
   it('generates, stores, and presigns on first request — fetches student/class + invoice numbers for allocations', async () => {
@@ -97,8 +109,10 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     (publicPrisma.query as jest.Mock).mockResolvedValueOnce([mockTenantRow]);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
     (tenantPrisma.query as jest.Mock)
-      .mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9' }])
-      .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000027' }]);
+      .mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9', section_name: 'A', roll_number: 14 }])
+      .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000027', bs_year: 2083, bs_month: 4 }])
+      .mockResolvedValueOnce([{ full_name: 'Sita Maharjan' }])
+      .mockResolvedValueOnce([{ sum: '2150.00' }]);
     (billReceiptService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/new');
 
@@ -108,30 +122,37 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     const renderedData = (billReceiptService.render as jest.Mock).mock.calls[0][0];
     expect(renderedData.studentName).toBe('Om Subedi');
     expect(renderedData.className).toBe('Grade 9');
-    expect(renderedData.allocations).toEqual([{ invoiceNumber: 'BINV-2083-000027', amount: 1350 }]);
+    expect(renderedData.allocations).toEqual([
+      { invoiceNumber: 'BINV-2083-000027', amount: 1350, installment: 'Shrawan 2083' },
+    ]);
+    // BILL-PRINT-1: as-of-entry balance and the receiving cashier's name.
+    expect(renderedData.balanceAfter).toBe(2150);
+    expect(renderedData.receivedByName).toBe('Sita Maharjan');
     expect(renderedData.advanceAmount).toBe(450);
     expect(renderedData.amountInWordsEn).toEqual(expect.stringContaining('Eight Hundred'));
     expect(storageService.putObject).toHaveBeenCalledWith(
-      'tenant_demo/bill-receipt/payment-1-v1-EN.pdf', Buffer.from('%PDF'), 'application/pdf',
+      'tenant_demo/bill-receipt/payment-1-v2-thermal-EN.pdf', Buffer.from('%PDF'), 'application/pdf',
     );
   });
 
-  it('B8-6 gate: a stored printLanguage=NE resolves NE now that the review gate is open (B8-6, reviewed 2026-07-30)', async () => {
+  it('B8-6 gate: a stored printLanguage=NE falls back to EN while the BILL-PRINT-1 keyset is unreviewed', async () => {
     (billPaymentService.findOne as jest.Mock).mockResolvedValueOnce(mockPayment);
     (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockTenantRow, print_language: 'NE' }]);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
     (tenantPrisma.query as jest.Mock)
-      .mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9' }])
-      .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000027' }]);
+      .mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9', section_name: 'A', roll_number: 14 }])
+      .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000027', bs_year: 2083, bs_month: 4 }])
+      .mockResolvedValueOnce([{ full_name: 'Sita Maharjan' }])
+      .mockResolvedValueOnce([{ sum: '2150.00' }]);
     (billReceiptService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
 
     await service.getOrGenerateReceiptPdf('payment-1', 'accountant-1', Role.ACCOUNTANT, 'NE');
 
     const renderedData = (billReceiptService.render as jest.Mock).mock.calls[0][0];
-    expect(renderedData.language).toBe('NE');
+    expect(renderedData.language).toBe('EN');
     expect(storageService.putObject).toHaveBeenCalledWith(
-      'tenant_demo/bill-receipt/payment-1-v1-NE.pdf', expect.any(Buffer), 'application/pdf',
+      'tenant_demo/bill-receipt/payment-1-v2-thermal-EN.pdf', expect.any(Buffer), 'application/pdf',
     );
   });
 
@@ -140,15 +161,22 @@ describe('BillReceiptDocumentService.getOrGenerateReceiptPdf', () => {
     (billPaymentService.findOne as jest.Mock).mockResolvedValueOnce(advanceOnlyPayment);
     (publicPrisma.query as jest.Mock).mockResolvedValueOnce([mockTenantRow]);
     (storageService.headObject as jest.Mock).mockResolvedValueOnce(null);
-    (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9' }]);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ student_name: 'Om Subedi', class_name: 'Grade 9', section_name: 'A', roll_number: 14 }])
+      .mockResolvedValueOnce([{ full_name: 'Sita Maharjan' }])
+      .mockResolvedValueOnce([{ sum: '0.00' }]);
     (billReceiptService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
 
     await service.getOrGenerateReceiptPdf('payment-1', 'accountant-1', Role.ACCOUNTANT);
 
-    // Only ONE tenantPrisma.query call (student lookup) — no second call for
-    // invoice numbers when there's nothing to look up.
-    expect(tenantPrisma.query).toHaveBeenCalledTimes(1);
+    // The invoice-number lookup is still skipped when there is nothing to look
+    // up. BILL-PRINT-1 note: this used to assert a query COUNT of 1, which was
+    // a proxy for "no invoice lookup" that stopped being one once the receipt
+    // also read the received-by name and the as-of-entry balance. Asserting on
+    // the SQL itself tests the actual intent instead of a fragile count.
+    const sql = (tenantPrisma.query as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(sql.some((q) => q.includes('bill_invoices'))).toBe(false);
     const renderedData = (billReceiptService.render as jest.Mock).mock.calls[0][0];
     expect(renderedData.allocations).toEqual([]);
     expect(renderedData.advanceAmount).toBe(1800);

@@ -38,14 +38,19 @@ describe('BillPdfService', () => {
     expect(countPageMarkers(buffer)).toBe(1);
   });
 
-  it('renderMerged() produces one page-set per invoice, in one document', async () => {
+  // BILL-PRINT-1 changed this contract deliberately: an invoice is now an A5
+  // half, so a sheet carries TWO of them and three invoices occupy two sheets
+  // (the trailing half is left blank). Before, each invoice took a whole A4
+  // page. The old assertion (3 invoices -> 3 pages) encoded the single-A4
+  // layout that the new stationery replaces.
+  it('renderMerged() packs two A5 documents per A4 sheet', async () => {
     const dataList = [
       makeData({ invoiceNumber: 'BINV-2083-000001', studentName: 'Om Subedi' }),
       makeData({ invoiceNumber: 'BINV-2083-000002', studentName: 'Sita Rai' }),
       makeData({ invoiceNumber: 'BINV-2083-000003', studentName: 'Hari Thapa' }),
     ];
     const buffer = await service.renderMerged(dataList);
-    expect(countPageMarkers(buffer)).toBe(3);
+    expect(countPageMarkers(buffer)).toBe(2);
   });
 
   it('renderMerged() rejects an empty invoice list rather than producing a zero-page PDF', () => {

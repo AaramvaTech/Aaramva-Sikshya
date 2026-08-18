@@ -1,0 +1,103 @@
+import { Injectable } from '@nestjs/common';
+import PDFDocument from 'pdfkit';
+import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
+import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
+import { PAGE, drawSheet, HalfRenderer } from './print/a5-sheet';
+import { Locale } from './print/mm';
+import { renderReceiptHalf, ReceiptHalfData } from './print/receipt-half';
+import { BillReceiptData } from './bill-receipt.service';
+
+/**
+ * BILL-PRINT-1 — A4 sheet holding two A5 payment receipts, per SPEC §7.
+ *
+ * Decision 2: this does NOT replace the 80mm thermal receipt
+ * (bill-receipt.service.ts), which stays live and frozen for the counter
+ * printer. Format is chosen at the call site — the cashier's payment modal
+ * keeps thermal, the office paths produce A5 — and both read the SAME
+ * assembled data from BillReceiptDocumentService, so balance-after is
+ * computed once and neither renderer owns a second copy of it.
+ */
+@Injectable()
+export class BillReceiptA5Service {
+  private readonly fonts = loadPdfFonts();
+
+  render(data: BillReceiptData): Promise<Buffer> {
+    return this.document((doc) => {
+      const both = data.language === 'BOTH';
+      const halves: HalfRenderer[] = both
+        ? [this.halfFor(data, 'en'), this.halfFor(data, 'ne')]
+        : [this.halfFor(data, data.language === 'NE' ? 'ne' : 'en')];
+      drawSheet(doc, halves, {
+        stackMode: both ? 'batch' : 'duplicate',
+        copyLabels: [
+          printLabel('studentCopy', primary(data.language)),
+          printLabel('officeCopy', primary(data.language)),
+        ],
+        cutLabel: printLabel('cut', primary(data.language)),
+      });
+    });
+  }
+
+  private document(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0, bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
+      draw(doc);
+      doc.end();
+    });
+  }
+
+  private halfFor(data: BillReceiptData, locale: Locale): HalfRenderer {
+    const half = toReceiptHalf(data, locale);
+    return (doc, box, copyLabel) => renderReceiptHalf(doc, box, half, copyLabel);
+  }
+}
+
+function primary(language: PrintLanguage): PrintLanguage {
+  return language === 'BOTH' ? 'EN' : language;
+}
+
+export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHalfData {
+  const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
+  const words = locale === 'ne' ? data.amountInWordsNe : data.amountInWordsEn;
+  const only = printLabel('only', lang);
+  return {
+    school: {
+      name: data.tenant.name,
+      address: data.tenant.address,
+      phone: data.tenant.phone,
+      website: data.tenant.website,
+      pan: data.tenant.panNumber,
+      regNo: data.tenant.registrationNumber,
+      logo: data.tenant.logoBuffer,
+      signatoryName: data.tenant.principalName,
+      signature: data.tenant.principalSignatureBuffer,
+      stamp: data.tenant.schoolStampBuffer,
+    },
+    number: data.receiptNumber,
+    dateAd: data.receivedDateAd,
+    dateBs: data.receivedDateBs,
+    studentName: data.studentName,
+    className: data.className,
+    section: data.sectionName,
+    roll: data.rollNumber,
+    method: data.method,
+    txnRef: data.txnRef,
+    amount: data.amount,
+    inWords: words ? `${words} ${only}` : null,
+    allocations: data.allocations.map((a) => ({
+      invoiceNumber: a.invoiceNumber,
+      installment: a.installment,
+      amount: a.amount,
+    })),
+    advanceAmount: data.advanceAmount,
+    balanceAfter: data.balanceAfter,
+    receivedBy: data.receivedByName,
+    locale,
+    label: (key: LabelKey) => printLabel(key, lang),
+  };
+}

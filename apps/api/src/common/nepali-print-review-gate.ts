@@ -25,3 +25,34 @@
  * revisit if he raises specific strings later.
  */
 export const NEPALI_PRINT_REVIEWED = true;
+
+/**
+ * BILL-PRINT-1 — a SECOND gate, for the keyset this ticket added.
+ *
+ * The flag above was flipped on 2026-07-30 against the label set as it stood
+ * THEN. BILL-PRINT-1 added ~20 new keys (copy designations, the party block's
+ * Class/Sec., Roll, Student ID, Guardian, the footer's Remarks / Received by /
+ * Authorised signature, the computer-generated notices, the continuation-row
+ * wording, and more). Those strings were lifted verbatim from the approved
+ * design references — design-supplied, which is NOT the same as
+ * native-speaker-reviewed.
+ *
+ * It is deliberately a separate constant rather than flipping the one above
+ * back to false: that would falsely claim the 2026-07-30 review never
+ * happened. Both must be true for Nepali to reach a parent.
+ *
+ * Five keys also DIVERGE between the reviewed set and the design's proposal
+ * (due, nonTaxable, taxable, totalReceivable, paidTowards). The reviewed
+ * string wins in code today; the design's variants are recorded as candidates
+ * in docs/design/billing-print/BILL-PRINT-1-nepali-review.md and are not
+ * adopted until the same review rules on them. A gate that a design file can
+ * silently overwrite is not a gate.
+ *
+ * ONLY Srijan flips this, in its own reviewable commit, once the review sheet
+ * comes back — and it pairs with the container render (D6): both must clear
+ * before NE goes live.
+ */
+export const BILL_PRINT_1_NEPALI_REVIEWED = false;
+
+/** Nepali/bilingual print is permitted only when EVERY keyset is reviewed. */
+export const NEPALI_PRINT_PERMITTED = NEPALI_PRINT_REVIEWED && BILL_PRINT_1_NEPALI_REVIEWED;

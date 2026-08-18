@@ -5,7 +5,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import type { AuthUser } from '../auth/auth.types';
-import { BillReceiptDocumentService } from './bill-receipt-document.service';
+import { BillReceiptDocumentService, resolveReceiptFormat } from './bill-receipt-document.service';
 
 const ACCOUNTANT_AND_ABOVE = [
   Role.PLATFORM_ADMIN, Role.SCHOOL_OWNER, Role.PRINCIPAL,
@@ -27,11 +27,17 @@ export class BillReceiptController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,
     @Query('lang') lang?: string,
+    @Query('format') format?: string,
   ) {
     // B8-5 §5: staff-only language override, same restriction as the bill.
     const isStaff = ACCOUNTANT_AND_ABOVE.includes(user.role);
+    // BILL-PRINT-1 Decision 2: format is a call-site choice, not a tenant
+    // setting. The default is 'thermal' so every pre-existing caller — the
+    // cashier's payment modal, the parent app — keeps its current behaviour
+    // untouched; the office paths pass format=a5 explicitly.
     return this.billReceiptDocumentService.getOrGenerateReceiptPdf(
       id, user.userId, user.role, isStaff ? lang : undefined,
+      resolveReceiptFormat(format, 'thermal'),
     );
   }
 }

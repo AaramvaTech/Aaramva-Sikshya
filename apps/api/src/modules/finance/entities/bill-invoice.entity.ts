@@ -32,6 +32,9 @@ export interface BillInvoiceRow {
   student_name?: string;
   admission_number?: string;
   class_name?: string;
+  section_name?: string | null;
+  roll_number?: number | null;
+  guardian_name?: string | null;
   paid_amount?: string | number;
   balance?: string | number;
 }
@@ -60,6 +63,10 @@ export interface BillInvoiceResponseDto {
   studentName?: string;
   admissionNumber?: string;
   className?: string;
+  /** BILL-PRINT-1 party block — populated by findOne only. */
+  sectionName?: string | null;
+  rollNumber?: string | null;
+  guardianName?: string | null;
   academicYearId: string;
   billRunId: string;
   bsYear: number;
@@ -125,6 +132,9 @@ export function toBillInvoiceResponse(
     studentName: row.student_name,
     admissionNumber: row.admission_number,
     className: row.class_name,
+    sectionName: row.section_name ?? null,
+    rollNumber: row.roll_number != null ? String(row.roll_number) : null,
+    guardianName: row.guardian_name ?? null,
     academicYearId: row.academic_year_id,
     billRunId: row.bill_run_id,
     bsYear: row.bs_year,

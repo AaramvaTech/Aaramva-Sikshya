@@ -17,12 +17,27 @@ const MARGIN = 10;
 export interface BillReceiptAllocationLine {
   invoiceNumber: string;
   amount: number;
+  /** BILL-PRINT-1: the allocated invoice's BS period, e.g. "Shrawan 2083". */
+  installment: string;
 }
 
 export interface BillReceiptTenant {
   name: string;
   principalName: string | null;
   accentColor: string;
+  // BILL-PRINT-1: the A5 stationery carries a full letterhead. The thermal
+  // renderer below ignores every field in this block — 80mm has no room for
+  // one — but both formats read one assembled payload, so these live here
+  // rather than in a parallel shape.
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  panNumber: string | null;
+  registrationNumber: string | null;
+  logoBuffer: Buffer | null;
+  /** A5 only — drawn into the reserved signing space, best-effort. */
+  principalSignatureBuffer: Buffer | null;
+  schoolStampBuffer: Buffer | null;
 }
 
 export interface BillReceiptData {
@@ -32,10 +47,23 @@ export interface BillReceiptData {
   receivedDateBs: string;
   studentName: string;
   className: string;
+  /** BILL-PRINT-1 party block. */
+  sectionName: string | null;
+  rollNumber: string | null;
   method: string;
+  /** Resolved per Decision 5; null for CASH, which prints an empty slot. */
+  txnRef: string | null;
   amount: number;
   allocations: BillReceiptAllocationLine[];
   advanceAmount: number;
+  /**
+   * BILL-PRINT-1: the student's ledger balance AS OF this payment's own
+   * ledger entry — never the live balance. Signed on the ledger convention:
+   * positive = owes (DR), negative = advance (CR). A reprint must never
+   * contradict the slip that was originally handed over.
+   */
+  balanceAfter: number;
+  receivedByName: string | null;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
   language: PrintLanguage;
@@ -133,6 +161,18 @@ export class BillReceiptService {
         doc.y = y + 16;
       }
 
+      // ── Balance after this payment (BILL-PRINT-1) ────────────────────
+      // The one addition to this frozen renderer: the most-requested line on
+      // a fee slip, and it must be on the counter copy too, not only the A5.
+      {
+        const y = doc.y;
+        const balLabel = `${label('balanceAfterPayment')} ${data.balanceAfter < 0 ? '(CR)' : '(DR)'}`;
+        doc.font(pickFont(balLabel)).fontSize(8).fillColor(MUTED).text(balLabel, MARGIN, y, { width: w * 0.6 });
+        doc.font('latin-bold').fontSize(9).fillColor(INK)
+          .text(`Rs. ${num(Math.abs(data.balanceAfter))}`, MARGIN + w * 0.6, y, { width: w * 0.4, align: 'right' });
+        doc.y = y + 18;
+      }
+
       // ── Amount in words (compact) ─────────────────────────────────────
       const wordsLines = [
         lang !== 'NE' && data.amountInWordsEn ? `${data.amountInWordsEn} ${label('only')}` : null,
@@ -184,9 +224,10 @@ export class BillReceiptService {
     const amountBlock = 70;
     const allocations = data.allocations.length * 12 + (data.allocations.length > 0 ? 30 : 0);
     const advance = data.advanceAmount > 0 ? 16 : 0;
+    const balanceAfter = 18; // BILL-PRINT-1 line above
     const wordsLines = (data.language === 'BOTH' ? 2 : 1) * 22;
     const footer = 90;
     const padding = 40;
-    return header + metaRows + amountBlock + allocations + advance + wordsLines + footer + padding;
+    return header + metaRows + amountBlock + allocations + advance + balanceAfter + wordsLines + footer + padding;
   }
 }
