@@ -26,9 +26,9 @@ interface Props {
 }
 
 /**
- * The print action, minus any trigger — for embedding in a menu a surface
- * ALREADY has (the payments table's row menu), so a row never grows a second
- * dropdown next to its existing one.
+ * The print action itself, trigger-free: fetch a fresh presigned URL and open
+ * it (addendum A4 — never cached, never rendered into an `href`; the mutation
+ * guarantees that structurally). Shared by both presentations below.
  */
 export function usePrintDocument(doc: PrintDoc) {
   const { data: profile } = useSchoolProfile();
@@ -67,38 +67,43 @@ export function usePrintDocument(doc: PrintDoc) {
   return { print, tenantDefault, isPending: invoiceMutation.isPending || receiptMutation.isPending };
 }
 
-/** The language items alone, for embedding in an existing dropdown. */
+/** One language list, rendered by both presentations — so the labelling and
+ *  the "default" marker can never drift between them. */
+function LanguageItems({ print, tenantDefault }: ReturnType<typeof usePrintDocument>) {
+  return PRINT_LANGUAGES.map((lang) => (
+    <DropdownMenuItem key={lang} onClick={() => print(lang)}>
+      {PRINT_LANGUAGE_LABELS[lang]}
+      {lang === tenantDefault && <span className="ml-2 text-xs text-gray-400">default</span>}
+    </DropdownMenuItem>
+  ));
+}
+
+/**
+ * The language items alone, for embedding in a menu a surface ALREADY has
+ * (the payments table's row menu), so a row never grows a second dropdown
+ * beside its existing one.
+ */
 export function PrintLanguageItems({ doc, heading }: { doc: PrintDoc; heading: string }) {
-  const { print, tenantDefault } = usePrintDocument(doc);
+  const state = usePrintDocument(doc);
   return (
     <>
       <DropdownMenuSeparator />
       <DropdownMenuLabel>{heading}</DropdownMenuLabel>
-      {PRINT_LANGUAGES.map((lang) => (
-        <DropdownMenuItem key={lang} onClick={() => print(lang)}>
-          {PRINT_LANGUAGE_LABELS[lang]}
-          {lang === tenantDefault && <span className="ml-2 text-xs text-gray-400">default</span>}
-        </DropdownMenuItem>
-      ))}
+      <LanguageItems {...state} />
     </>
   );
 }
 
 /**
- * BILL-8-UI Phase 1 — the one print affordance, used by every single-document
- * surface (student Billing tab, bill run detail, payment history, and the
- * payment-recorded confirmation).
+ * BILL-8-UI Phase 1 — the standalone print affordance, used wherever a surface
+ * has no menu of its own: student Billing tab, bill run detail rows, the
+ * payment detail modal, and the payment-recorded confirmation.
  *
- * Flow, per addendum A4: click → fetch a fresh presigned URL → open it
- * immediately. The URL is never held in state, cached, or rendered into an
- * `href`; a mutation (not a query) guarantees that structurally.
- *
- * The language split-button only appears when the tenant has a choice worth
- * making. `?lang=` is a staff-only server override, and this is a staff-only
- * screen, so sending it is always legitimate here.
+ * `?lang=` is a staff-only server override and every caller here is a
+ * staff-only screen, so offering the choice is always legitimate.
  */
 export function PrintDocumentButton({ doc, label, className }: Props) {
-  const { print, tenantDefault, isPending } = usePrintDocument(doc);
+  const state = usePrintDocument(doc);
 
   const Icon = doc.kind === 'invoice' ? Printer : Receipt;
   const text = label ?? (doc.kind === 'invoice' ? 'Print bill' : 'Print receipt');
@@ -107,22 +112,17 @@ export function PrintDocumentButton({ doc, label, className }: Props) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size="sm" disabled={isPending} className={className}>
-            {isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Icon className="mr-1.5 h-4 w-4" />}
+          <Button variant="outline" size="sm" disabled={state.isPending} className={className}>
+            {state.isPending
+              ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              : <Icon className="mr-1.5 h-4 w-4" />}
             {text}
             <ChevronDown className="ml-1.5 h-3.5 w-3.5 opacity-60" />
           </Button>
         }
       />
       <DropdownMenuContent align="end">
-        {PRINT_LANGUAGES.map((lang) => (
-          <DropdownMenuItem key={lang} onClick={() => print(lang)}>
-            {PRINT_LANGUAGE_LABELS[lang]}
-            {lang === tenantDefault && (
-              <span className="ml-2 text-xs text-gray-400">default</span>
-            )}
-          </DropdownMenuItem>
-        ))}
+        <LanguageItems {...state} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,6 +1,8 @@
 # BILL-8-UI — Print / PDF Surface for the Web Admin
 
-**Status:** Spec — not yet built
+**Status:** Built — Phase 1 + Phase 2 complete on `feat/bill-8-ui`, pending
+Srijan's Devanagari review, click-through, and a real 100%-scale thermal
+print. Evidence: `BILL-8-UI-evidence.md`.
 **Touches:** `apps/web` billing admin only. **Zero `apps/api` diff expected.**
 **Depends on:** BILL-8 print engine (pdfkit, merged, on main)
 **Origin:** `docs/api-contracts/BILLING-AUDIT-2026-08.md` — BILL-8's entire
