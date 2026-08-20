@@ -440,7 +440,13 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   open** — this hotfix deliberately did not attempt it; the 2070-era vectors in `date.util.spec.ts`
   still deliberately key to the current (still-unaudited-elsewhere) table and must be updated
   whenever that fuller audit lands.
-- Run tests: `cd apps/api && npm test`
+- Run tests AND the typecheck — the suite alone is NOT a type gate:
+  `cd apps/api && npm test && npx tsc -p tsconfig.build.json --noEmit`
+  ts-jest reports diagnostics only for the file it is transforming, so a type
+  error inside a `src/` file passes `npm test` and is caught only by `tsc`
+  (measured 2026-08-20: 1266 green tests against 6 real type errors). CI runs
+  both in the same `api` job, so a green local `npm test` proves less than it
+  looks like it does.
 - OPS-1 (operations hardening): `GET /health` at ROOT path (no api/v1 prefix, no tenant, no
   throttle) — `ok|degraded|error`, 503 only when db down; redis down = degraded (app runs
   without Redis). Sentry via `src/instrument.ts` (SENTRY_DSN optional; scrubbed; captures only
