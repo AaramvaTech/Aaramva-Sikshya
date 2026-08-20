@@ -34,7 +34,7 @@ describe('BillPdfService', () => {
   const service = new BillPdfService();
 
   it('render() produces a single-page PDF for one invoice', async () => {
-    const buffer = await service.render(makeData());
+    const { buffer } = await service.render(makeData());
     expect(countPageMarkers(buffer)).toBe(1);
   });
 
@@ -49,7 +49,7 @@ describe('BillPdfService', () => {
       makeData({ invoiceNumber: 'BINV-2083-000002', studentName: 'Sita Rai' }),
       makeData({ invoiceNumber: 'BINV-2083-000003', studentName: 'Hari Thapa' }),
     ];
-    const buffer = await service.renderMerged(dataList);
+    const { buffer } = await service.renderMerged(dataList);
     expect(countPageMarkers(buffer)).toBe(2);
   });
 

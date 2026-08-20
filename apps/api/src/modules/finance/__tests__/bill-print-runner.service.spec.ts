@@ -49,7 +49,8 @@ describe('BillPrintRunnerService', () => {
         { provide: TenantContextService, useValue: { getOrThrow: jest.fn().mockReturnValue({ slug: 'demo' }) } },
         { provide: StorageService, useValue: { putObject: jest.fn() } },
         { provide: BillInvoiceService, useValue: { findOne: jest.fn() } },
-        { provide: BillDocumentService, useValue: { loadTenantHeader: jest.fn(), buildPdfData: jest.fn() } },
+        { provide: BillDocumentService,
+          useValue: { loadTenantHeader: jest.fn(), buildPdfData: jest.fn(), logAssetMisses: jest.fn() } },
         { provide: BillPdfService, useValue: { renderMerged: jest.fn() } },
       ],
     }).compile();
@@ -80,7 +81,7 @@ describe('BillPrintRunnerService', () => {
     (billDocumentService.buildPdfData as jest.Mock)
       .mockResolvedValueOnce({ invoice: { invoiceNumber: 'BINV-1' } })
       .mockResolvedValueOnce({ invoice: { invoiceNumber: 'BINV-2' } });
-    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF merged'));
+    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF merged'), assetMisses: [] });
 
     const result = await service.drainCurrentTenant();
 
@@ -109,7 +110,7 @@ describe('BillPrintRunnerService', () => {
       .mockRejectedValueOnce(new Error('Invoice inv-1 not found'))
       .mockResolvedValueOnce({ id: 'inv-2' });
     (billDocumentService.buildPdfData as jest.Mock).mockResolvedValueOnce({ invoice: { invoiceNumber: 'BINV-2' } });
-    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF merged'));
+    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF merged'), assetMisses: [] });
 
     const result = await service.drainCurrentTenant();
 
@@ -158,7 +159,7 @@ describe('BillPrintRunnerService', () => {
     (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([job]);
     (billInvoiceService.findOne as jest.Mock).mockResolvedValue({ id: 'inv-1' });
     (billDocumentService.buildPdfData as jest.Mock).mockResolvedValue({ invoice: {} });
-    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (billPdfService.renderMerged as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF'), assetMisses: [] });
 
     await service.drainCurrentTenant();
 

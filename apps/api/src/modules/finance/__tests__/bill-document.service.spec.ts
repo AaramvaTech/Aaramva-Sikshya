@@ -106,7 +106,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
       address: null, phone: null, website: null, tagline: null, payment_instructions: null,
       qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
     }]);
-    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF-1.4 fake'));
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF-1.4 fake'), assetMisses: [] });
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/presigned-new');
 
     const result = await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT);
@@ -141,7 +141,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
       address: null, phone: null, website: null, tagline: null, payment_instructions: null,
       qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
     }]);
-    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF'), assetMisses: [] });
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
 
     await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT);
@@ -175,7 +175,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
       address: null, phone: null, website: null, tagline: null, payment_instructions: null,
       qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
     }]);
-    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF'), assetMisses: [] });
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
 
     await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT);
@@ -195,7 +195,7 @@ describe('BillDocumentService.getOrGenerateBillPdf', () => {
       qr_image_url: null, principal_name: null, principal_signature_url: null, school_stamp_url: null,
       brand_color: null, print_language: 'NE',
     }]);
-    (billPdfService.render as jest.Mock).mockResolvedValueOnce(Buffer.from('%PDF'));
+    (billPdfService.render as jest.Mock).mockResolvedValueOnce({ buffer: Buffer.from('%PDF'), assetMisses: [] });
     (storageService.presignRead as jest.Mock).mockResolvedValueOnce('https://minio.local/x');
 
     await service.getOrGenerateBillPdf('invoice-1', 'accountant-1', Role.ACCOUNTANT, 'NE'); // staff override, also NE

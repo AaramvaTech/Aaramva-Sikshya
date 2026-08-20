@@ -15,6 +15,31 @@ import { BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { BillPdfService, BillPdfData, BillPdfLineItem } from './bill-pdf.service';
 import { bsOf } from './ledger.util';
 
+/**
+ * The ONE message shape for "an asset was configured but did not make it onto
+ * the document", whichever guard caught it — the fetch (bad key, storage
+ * error, malformed column value) or the draw (bytes that pdfkit rejected).
+ * Both paths must match so a single log search finds every occurrence.
+ */
+export function assetMissLine(kind: string, ref: string | null, reason: string): string {
+  const shown = ref
+    ? `${ref.slice(0, 60)}${ref.length > 60 ? `… (${ref.length} chars)` : ''}`
+    : '(no stored ref)';
+  return `[BILL-PRINT-1] ${kind} asset unavailable, printing without it: ${shown} — ${reason}`;
+}
+
+/** Maps an AssetMiss kind back to the tenant column it came from, so a
+ *  draw-side miss can name the same ref a fetch-side miss would have. */
+export function refForKind(tenant: TenantHeaderRow, kind: string): string | null {
+  switch (kind) {
+    case 'logo': return tenant.logo_url;
+    case 'payment-QR': return tenant.qr_image_url;
+    case 'principal-signature': return tenant.principal_signature_url;
+    case 'school-stamp': return tenant.school_stamp_url;
+    default: return null;
+  }
+}
+
 export interface TenantHeaderRow {
   name: string;
   logo_url: string | null;
@@ -102,7 +127,11 @@ export class BillDocumentService {
     }
 
     const pdfData = await this.buildPdfData(invoice, tenant, language);
-    const buffer = await this.billPdfService.render(pdfData);
+    const { buffer, assetMisses } = await this.billPdfService.render(pdfData);
+    // Draw-side misses (guard 2): the bytes arrived but pdfkit rejected them.
+    // Reported here, at the same boundary and in the same shape as the
+    // fetch-side misses above — print/ stays logger-free.
+    this.logAssetMisses(tenant, assetMisses);
     await this.storageService.putObject(key, buffer, 'application/pdf');
     return { presignedUrl: await this.storageService.presignRead(key), generated: true };
   }
@@ -232,6 +261,13 @@ export class BillDocumentService {
     };
   }
 
+  /** Reports assets that arrived as bytes but could not be drawn. */
+  logAssetMisses(tenant: TenantHeaderRow, misses: { kind: string; reason: string }[]): void {
+    for (const m of misses) {
+      this.logger.warn(assetMissLine(m.kind, refForKind(tenant, m.kind), m.reason));
+    }
+  }
+
   /**
    * Loads one optional print asset, resolving to null on ANY failure — bad or
    * malformed URL/key, storage error, timeout, unsupported bytes. Never throws.
@@ -257,10 +293,7 @@ export class BillDocumentService {
       // stamp quietly stopped appearing would otherwise have no signal at all,
       // and "the print succeeded" must not mean "nobody can tell what broke".
       // The ref is logged truncated: a FILE-1-BLOB value is a 300KB data: URI.
-      this.logger.warn(
-        `[BILL-PRINT-1] ${kind} asset unavailable, printing without it: ` +
-        `${ref.slice(0, 60)}${ref.length > 60 ? `… (${ref.length} chars)` : ''} — ${(err as Error).message}`,
-      );
+      this.logger.warn(assetMissLine(kind, ref, (err as Error).message));
       return null;
     }
   }

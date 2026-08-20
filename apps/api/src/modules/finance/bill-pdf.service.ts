@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
 import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
-import { PAGE, drawSheet, HalfRenderer, StackMode } from './print/a5-sheet';
+import { PAGE, drawSheet, HalfRenderer, StackMode, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderInvoiceHalf, InvoiceHalfData, InvoiceHalfLine } from './print/invoice-half';
 
@@ -73,6 +73,17 @@ export interface BillPdfInvoice {
   amountInWordsNe: string | null;
 }
 
+/**
+ * Bytes plus whatever could not be drawn. The misses are RETURNED, not logged:
+ * this service and print/ are pure renderers, and the orchestrating service is
+ * the only layer that still knows each asset's stored ref — which the log line
+ * needs.
+ */
+export interface BillPdfRender {
+  buffer: Buffer;
+  assetMisses: AssetMiss[];
+}
+
 export interface BillPdfData {
   tenant: BillPdfTenant;
   invoice: BillPdfInvoice;
@@ -111,7 +122,7 @@ export interface BillPdfData {
 export class BillPdfService {
   private readonly fonts = loadPdfFonts();
 
-  render(data: BillPdfData): Promise<Buffer> {
+  render(data: BillPdfData): Promise<BillPdfRender> {
     return this.document((doc) => this.drawSheetFor(doc, data));
   }
 
@@ -124,42 +135,45 @@ export class BillPdfService {
    * The one-page rule is asserted per SHEET, not per job artifact: a bulk job
    * is inherently multi-page.
    */
-  renderMerged(dataList: BillPdfData[]): Promise<Buffer> {
+  renderMerged(dataList: BillPdfData[]): Promise<BillPdfRender> {
     if (dataList.length === 0) throw new Error('renderMerged requires at least one invoice');
     return this.document((doc) => {
+      const misses: AssetMiss[] = [];
       for (let i = 0; i < dataList.length; i += 2) {
         if (i > 0) doc.addPage();
         const pair = dataList.slice(i, i + 2);
         const first = pair[0];
-        drawSheet(doc, pair.map((d) => this.halfFor(d, localeOf(d.language))), {
+        misses.push(...drawSheet(doc, pair.map((d) => this.halfFor(d, localeOf(d.language))), {
           stackMode: 'batch',
           copyLabels: copyLabels(first.language),
           cutLabel: printLabel('cut', primaryLanguage(first.language)),
-        });
+        }));
       }
+      return dedupe(misses);
     });
   }
 
-  private document(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+  private document(draw: (doc: PDFKit.PDFDocument) => AssetMiss[]): Promise<BillPdfRender> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0, bufferPages: true });
       const chunks: Buffer[] = [];
+      let assetMisses: AssetMiss[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), assetMisses }));
       doc.on('error', reject);
       for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
-      draw(doc);
+      assetMisses = draw(doc);
       doc.end();
     });
   }
 
-  private drawSheetFor(doc: PDFKit.PDFDocument, data: BillPdfData): void {
+  private drawSheetFor(doc: PDFKit.PDFDocument, data: BillPdfData): AssetMiss[] {
     const both = data.language === 'BOTH';
     const halves: HalfRenderer[] = both
       ? [this.halfFor(data, 'en'), this.halfFor(data, 'ne')]
       : [this.halfFor(data, localeOf(data.language))];
     const stackMode: StackMode = both ? 'batch' : 'duplicate';
-    drawSheet(doc, halves, {
+    return drawSheet(doc, halves, {
       stackMode,
       copyLabels: copyLabels(data.language),
       cutLabel: printLabel('cut', primaryLanguage(data.language)),
@@ -168,8 +182,14 @@ export class BillPdfService {
 
   private halfFor(data: BillPdfData, locale: Locale): HalfRenderer {
     const half = toInvoiceHalf(data, locale);
-    return (doc, box, copyLabel) => renderInvoiceHalf(doc, box, half, copyLabel);
+    // The half reports its full result; the sheet only needs the misses.
+    return (doc, box, copyLabel) => renderInvoiceHalf(doc, box, half, copyLabel).assetMisses;
   }
+}
+
+/** One line per broken asset, not one per sheet it appears on. */
+function dedupe(misses: AssetMiss[]): AssetMiss[] {
+  return misses.filter((m, i) => misses.findIndex((o) => o.kind === m.kind) === i);
 }
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────
