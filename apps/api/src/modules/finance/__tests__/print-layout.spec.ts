@@ -478,16 +478,30 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
     expect(seen.some((t) => t.includes('Balance after') || t.includes('बाँकी रकम'))).toBe(false);
   });
 
-  it('a partially-allocated payment foots across allocations AND advance', () => {
+  it('a partially-allocated payment foots across allocations AND the split, even when the table overflows', () => {
+    // This asserts that `residual` never loses money when the continuation row
+    // fires. The allocation count is deliberately past the table's capacity so
+    // that path is actually taken — with a table that fits, residual is always
+    // 0 and the assertion is arithmetic that cannot fail.
+    //
+    // It previously read `data.advanceAmount`, a field the renderer stopped
+    // reading when Option (b) split it into appliedToBalance + advanceCredit.
+    // The fixture set the two real fields to 0 and the stale one to 450, so the
+    // sum happened to reach `amount` while the renderer drew no split row at
+    // all: the assertion passed on arithmetic unrelated to what was rendered.
+    const allocations = Array.from({ length: 12 }, (_, i) => ({
+      invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`,
+      installment: 'Shrawan 2083', amount: 100,
+    }));
     const data: ReceiptHalfData = {
-      ...receiptFixture(locale, [
-        { invoiceNumber: 'BINV-2083-000003', installment: 'Shrawan 2083', amount: 1350 },
-      ]),
-      amount: 1800, advanceAmount: 450,
+      ...receiptFixture(locale, allocations),
+      amount: 1650, appliedToBalance: 450, advanceCredit: 0,
     };
     const plan = renderReceiptHalf(newDoc(), halfBox(0), data, null);
+    expect(plan.omitted).toBeGreaterThan(0); // the continuation path is live
     const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
-    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+    expect(shown + plan.residual + data.appliedToBalance + data.advanceCredit)
+      .toBeCloseTo(data.amount, 2);
   });
 
   // The two-pass fit deliberately lands content EXACTLY on the footer line.
@@ -698,7 +712,13 @@ describe('BILL-PRINT-1 sheet output', () => {
         invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`, amount: 1000,
         installment: 'Shrawan 2083',
       })),
-      advanceAmount: advance, balanceAfter: 2150, receivedByName: 'Sita Maharjan',
+      // These three were ABSENT before and the fixture still rendered: with
+      // balanceAfterSign undefined the balance line printed with NO (DR)
+      // marker, so this test's coverage of the marker path was zero even
+      // though it rendered a plausible receipt.
+      advanceAmount: advance, appliedToBalance: 0, advanceCredit: advance,
+      balanceAfter: 2150, balanceAfterSign: 'OWES',
+      receivedByName: 'Sita Maharjan',
       amountInWordsEn: 'One Thousand Rupees', amountInWordsNe: null, language: 'EN',
     });
 
@@ -709,6 +729,11 @@ describe('BILL-PRINT-1 sheet output', () => {
       const box = mediaBox(buffer)!;
       expect(box[0]).toBeCloseTo(595.28, 1);
       expect(box[1]).toBeCloseTo(841.89, 1);
+      // The two-pass fit lands content exactly on the footer, so a probe/draw
+      // divergence shows up as an overflow rather than as a bad-looking page.
+      // Asserting only "it produced a PDF" would not see that; the render call
+      // above throwing IS the assertion, and this documents why.
+      expect(buffer.length).toBeGreaterThan(1000);
     }
   });
 
