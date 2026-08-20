@@ -56,15 +56,28 @@ export interface BillReceiptData {
   txnRef: string | null;
   amount: number;
   allocations: BillReceiptAllocationLine[];
+  /** Total unallocated: amount - sum(allocations). The split below adds to it. */
   advanceAmount: number;
+  /**
+   * The unallocated money that went against EXISTING debt. Not an advance —
+   * nothing was held. Zero when the payment left the student in credit.
+   */
+  appliedToBalance: number;
+  /** The unallocated money genuinely held as credit. appliedToBalance +
+   *  advanceCredit === advanceAmount, always. */
+  advanceCredit: number;
   /**
    * BILL-PRINT-1: the student's ledger balance AS OF this payment's own
    * ledger entry — never the live balance. A reprint must never contradict the
    * slip that was originally handed over.
+   *
+   * NULL when the payment has no ledger entry (it never posted — a bounced or
+   * voided instrument). There is no "after" for a payment that did not happen,
+   * so the line is SUPPRESSED rather than falling back to the live balance,
+   * which would caption an unrelated figure as this payment's outcome.
    */
-  balanceAfter: number;
-  /** The ledger's own three-way sign. ZERO prints no DR/CR marker. */
-  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO';
+  balanceAfter: number | null;
+  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO' | null;
   receivedByName: string | null;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
@@ -158,19 +171,25 @@ export class BillReceiptService {
         }
         doc.moveDown(0.2);
       }
-      if (data.advanceAmount > 0) {
+      // The unallocated money, split by what actually happened to it.
+      for (const [key, amt] of [
+        ['appliedToBalance', data.appliedToBalance] as const,
+        ['advanceCredit', data.advanceCredit] as const,
+      ]) {
+        if (amt <= 0) continue;
         const y = doc.y;
-        const advLabel = label('advanceCredit');
-        doc.font(pickFont(advLabel)).fontSize(8.5).fillColor(INK).text(advLabel, MARGIN, y, { width: w * 0.55 });
+        const l = label(key);
+        doc.font(pickFont(l)).fontSize(8.5).fillColor(INK).text(l, MARGIN, y, { width: w * 0.55 });
         doc.font('latin').fontSize(8.5).fillColor(INK)
-          .text(num(data.advanceAmount), MARGIN + w * 0.55, y, { width: w * 0.45, align: 'right' });
+          .text(num(amt), MARGIN + w * 0.55, y, { width: w * 0.45, align: 'right' });
         doc.y = y + 16;
       }
 
       // ── Balance after this payment (BILL-PRINT-1) ────────────────────
       // The one addition to this frozen renderer: the most-requested line on
       // a fee slip, and it must be on the counter copy too, not only the A5.
-      {
+      // Suppressed entirely when the payment never posted — see balanceAfter.
+      if (data.balanceAfter !== null && data.balanceAfterSign !== null) {
         const y = doc.y;
         // ZERO carries no marker — see drCrMarker.
         const mk = drCrMarker(data.balanceAfterSign);
@@ -231,8 +250,8 @@ export class BillReceiptService {
     const metaRows = 5 * 13;
     const amountBlock = 70;
     const allocations = data.allocations.length * 12 + (data.allocations.length > 0 ? 30 : 0);
-    const advance = data.advanceAmount > 0 ? 16 : 0;
-    const balanceAfter = 18; // BILL-PRINT-1 line above
+    const advance = (data.appliedToBalance > 0 ? 16 : 0) + (data.advanceCredit > 0 ? 16 : 0);
+    const balanceAfter = data.balanceAfter !== null ? 18 : 0; // BILL-PRINT-1 line above
     const wordsLines = (data.language === 'BOTH' ? 2 : 1) * 22;
     const footer = 90;
     const padding = 40;

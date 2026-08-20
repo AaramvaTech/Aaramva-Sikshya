@@ -117,8 +117,9 @@ export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHal
       installment: a.installment,
       amount: a.amount,
     })),
-    advanceAmount: data.advanceAmount,
-    balanceAfter: Math.abs(data.balanceAfter),
+    appliedToBalance: data.appliedToBalance,
+    advanceCredit: data.advanceCredit,
+    balanceAfter: data.balanceAfter === null ? null : Math.abs(data.balanceAfter),
     balanceAfterSign: data.balanceAfterSign,
     // A gateway payment has no human receiver. `bill_payments.received_by` is
     // the user who SUBMITTED it, which for eSewa/Khalti is the parent paying —

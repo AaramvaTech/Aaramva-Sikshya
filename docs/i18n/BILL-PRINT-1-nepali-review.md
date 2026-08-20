@@ -6,7 +6,7 @@ comes back. Every school currently prints English regardless of its setting.
 **Reviewer:** a native Nepali speaker, ideally one who has handled a Nepali school's fee bills or
 receipts. No code knowledge needed — you only read the English and Nepali columns.
 
-**Scope:** 27 new strings (Part A) and 5 disagreements with an earlier review (Part B). The
+**Scope:** 28 new strings (Part A) and 5 disagreements with an earlier review (Part B). The
 `Key` column is for the developer applying your answers; ignore it.
 
 ---
@@ -24,7 +24,7 @@ receipts. No code knowledge needed — you only read the English and Nepali colu
 
 ---
 
-## Part A — new strings (27)
+## Part A — new strings (28)
 
 None of these has been reviewed by anyone. They were taken from the approved design files, which
 means they are design-supplied, not native-speaker-approved.
@@ -92,6 +92,7 @@ too** — which is what the approved design does: the Nepali half of `Receipt.dc
 | 25 | `methodBankTransfer` | Bank Transfer | बैंक ट्रान्सफर | Same slot — the longest of the five, and the cell is narrow | |
 | 26 | `methodEsewa` | eSewa | eSewa *(brand, unchanged)* | Same slot | |
 | 27 | `methodKhalti` | Khalti | Khalti *(brand, unchanged)* | Same slot | |
+| 28 | `appliedToBalance` | Applied to balance | बाँकी रकममा समायोजन | A row in the receipt's "paid towards" table, for money that was not tied to a specific bill and went against what the student already owed. Sits beside `पेश्की जम्मा` (Advance credit), which is for money genuinely held in credit — **the two must read as clearly different things** | |
 
 ### Note on #10 and #22 — the continuation rows, and a PLURAL question
 
