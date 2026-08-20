@@ -100,7 +100,44 @@ That matters for your ruling, because the three non-CLEARED states are not one c
 `demo` has zero PENDING rows today only because no cheque is mid-flight; the state is reachable the
 moment one is recorded.
 
-## 6. What the ruling has to decide
+## 6. THE RULING (Srijan, 2026-08-20) — recorded, not yet implemented
+
+**Priority: BILL-RCPT-STATUS follows BILL-PRINT-1 immediately, ahead of STOR-1 and ERR-MAP-1.**
+
+| Status | Behaviour |
+|---|---|
+| `CLEARED` | Renders as now. No change. |
+| `BOUNCED` | **Refuse.** 4xx via the ERR-1 envelope. No document rendered. |
+| `VOIDED` | **Refuse.** Same. |
+| `PENDING` | **Renders as an acknowledgement, not a receipt.** The amount is labelled as **tendered**, not received, and the document carries an explicit **"subject to clearance"** line. It acknowledges an instrument held; it must not read as a receipt for money. |
+
+**The status check runs BEFORE the cache lookup.** A receipt issued and cached while the payment was
+CLEARED must **refuse on reprint** once that payment has bounced or been voided. *The cache stores
+the document, not the permission to serve it.*
+
+That last point is the load-bearing one for implementation. The current order in
+`getOrGenerateReceiptPdf` is: scope-check → tenant/language resolve → **`headObject(key)` → early
+return presigned URL** → build data → render → store. The status check must sit above the
+`headObject` call, not beside the render, or every already-cached receipt for a since-bounced
+payment keeps serving from storage and the rule silently does nothing for exactly the population it
+exists to protect.
+
+Note this does NOT mean invalidating or deleting the cached object. The artifact remains a true
+record of what was issued at the time; what changes is whether the endpoint will hand it out again.
+
+### Consequences to carry into Phase 1
+
+- **Two new labels** for the PENDING variant (`amountTendered`, `subjectToClearance`), which land
+  after the Nepali review gate has already been flipped for the BILL-PRINT-1 keyset — so they need
+  their own review round rather than riding on the previous one.
+- **A5 and thermal both** need the PENDING variant; the thermal renderer is otherwise frozen.
+- **Three web call sites** must handle the 4xx: payments list row menu, payment detail modal,
+  payment-recorded confirmation. `printErrorMessage` already has the precedent
+  (`STORAGE_UNAVAILABLE`) for a status-specific message rather than a generic toast.
+- **Demo data already covers every branch** — 8 CLEARED, 3 BOUNCED, 13 VOIDED. PENDING has zero
+  rows, so that path needs a cheque recorded to test (it is born PENDING on record).
+
+## 7. What the ruling had to decide (retained for the record)
 
 1. **Refuse or render?** Per status, not globally — PENDING has a real use case that BOUNCED does
    not.
@@ -118,7 +155,7 @@ moment one is recorded.
 
 **Not recommending a rule here** — you asked for the facts to rule from.
 
-## 7. Blast radius of a refuse-by-default rule
+## 8. Blast radius of a refuse-by-default rule
 
 The web print surface calls `GET /finance/bill/payments/:id/receipt` from the payments list row
 menu, the payment detail modal, and the payment-recorded confirmation. A 4xx would need handling at
