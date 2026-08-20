@@ -8,6 +8,8 @@ import { renderInvoiceHalf, densities, InvoiceHalfData, InvoiceHalfLine, footerH
 import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation } from '../print/receipt-half';
 import { printLabel, LabelKey, PrintLanguage } from '../bill-print-labels';
 import { BillPdfService } from '../bill-pdf.service';
+import { BillReceiptA5Service } from '../bill-receipt-a5.service';
+import type { BillReceiptData } from '../bill-receipt.service';
 
 /**
  * BILL-PRINT-1 Phase 2 — programmatic verification, per the accepted
@@ -569,6 +571,42 @@ describe('BILL-PRINT-1 sheet output', () => {
 
     expect(withCorrupt.assetMisses.map((m) => m.kind)).toEqual(['principal-signature']);
     expect(withNull.assetMisses).toEqual([]);
+  });
+
+  // The copyLabel bug lived in BillReceiptA5Service.halfFor — the layer that
+  // wires probe-to-draw — not in the renderer. Every existing receipt spec
+  // MOCKS that service, so nothing exercised the real two-pass wiring and a
+  // regression there would ship silently. This renders through the actual
+  // service, which is the only test that would catch it.
+  it('the A5 receipt service renders end to end through its two-pass fit', async () => {
+    const svcA5 = new BillReceiptA5Service();
+    const receipt = (allocations: number, advance: number, method: string): BillReceiptData => ({
+      tenant: {
+        name: 'Demo School Nepal', principalName: 'Dr. Kamala Shrestha', accentColor: '#0d5c43',
+        address: 'Naya Baneshwor, Kathmandu-10, Nepal', phone: '01-4780123',
+        website: 'https://demoschool.edu.np', panNumber: '301234567', registrationNumber: 'REG-1',
+        logoBuffer: null, principalSignatureBuffer: null, schoolStampBuffer: null,
+      },
+      receiptNumber: 'RCPT-2083-000021', receivedDateAd: '2026-08-12', receivedDateBs: '2083-04-27',
+      studentName: 'Binod Gurung', className: 'Grade 9', sectionName: 'B', rollNumber: '22',
+      method, txnRef: method === 'CASH' ? null : 'ESW-8842190337',
+      amount: allocations * 1000 + advance,
+      allocations: Array.from({ length: allocations }, (_, i) => ({
+        invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`, amount: 1000,
+        installment: 'Shrawan 2083',
+      })),
+      advanceAmount: advance, balanceAfter: 2150, receivedByName: 'Sita Maharjan',
+      amountInWordsEn: 'One Thousand Rupees', amountInWordsNe: null, language: 'EN',
+    });
+
+    for (const shape of [receipt(1, 0, 'ESEWA'), receipt(0, 1500, 'CHEQUE'), receipt(6, 0, 'CASH')]) {
+      const { buffer } = await svcA5.render(shape);
+      expect(buffer.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pageCount(buffer)).toBe(1);
+      const box = mediaBox(buffer)!;
+      expect(box[0]).toBeCloseTo(595.28, 1);
+      expect(box[1]).toBeCloseTo(841.89, 1);
+    }
   });
 
   it('drawSheet renders the cut line and marker once per sheet', async () => {
