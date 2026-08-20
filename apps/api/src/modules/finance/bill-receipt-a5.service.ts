@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
 import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
-import { PAGE, drawSheet, HalfRenderer } from './print/a5-sheet';
+import { PAGE, drawSheet, HalfRenderer, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderReceiptHalf, ReceiptHalfData } from './print/receipt-half';
 import { BillReceiptData } from './bill-receipt.service';
+import { BillPdfRender } from './bill-pdf.service';
 
 /**
  * BILL-PRINT-1 — A4 sheet holding two A5 payment receipts, per SPEC §7.
@@ -21,13 +22,13 @@ import { BillReceiptData } from './bill-receipt.service';
 export class BillReceiptA5Service {
   private readonly fonts = loadPdfFonts();
 
-  render(data: BillReceiptData): Promise<Buffer> {
+  render(data: BillReceiptData): Promise<BillPdfRender> {
     return this.document((doc) => {
       const both = data.language === 'BOTH';
       const halves: HalfRenderer[] = both
         ? [this.halfFor(data, 'en'), this.halfFor(data, 'ne')]
         : [this.halfFor(data, data.language === 'NE' ? 'ne' : 'en')];
-      drawSheet(doc, halves, {
+      return drawSheet(doc, halves, {
         stackMode: both ? 'batch' : 'duplicate',
         copyLabels: [
           printLabel('studentCopy', primary(data.language)),
@@ -38,22 +39,23 @@ export class BillReceiptA5Service {
     });
   }
 
-  private document(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+  private document(draw: (doc: PDFKit.PDFDocument) => AssetMiss[]): Promise<BillPdfRender> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0, bufferPages: true });
       const chunks: Buffer[] = [];
+      let assetMisses: AssetMiss[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), assetMisses }));
       doc.on('error', reject);
       for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
-      draw(doc);
+      assetMisses = draw(doc);
       doc.end();
     });
   }
 
   private halfFor(data: BillReceiptData, locale: Locale): HalfRenderer {
     const half = toReceiptHalf(data, locale);
-    return (doc, box, copyLabel) => renderReceiptHalf(doc, box, half, copyLabel);
+    return (doc, box, copyLabel) => renderReceiptHalf(doc, box, half, copyLabel).assetMisses;
   }
 }
 

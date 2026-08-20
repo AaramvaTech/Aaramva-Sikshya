@@ -100,7 +100,10 @@ export class BillPrintRunnerService {
       throw new Error('All invoices in this print job failed to render');
     }
 
-    const buffer = await this.billPdfService.renderMerged(dataList);
+    const { buffer, assetMisses } = await this.billPdfService.renderMerged(dataList);
+    // A bulk run shares one tenant, so a broken asset is reported once for the
+    // whole job rather than once per invoice.
+    this.billDocumentService.logAssetMisses(tenant, assetMisses);
     const { slug } = this.tenantContext.getOrThrow();
     const key = this.keyFor(slug, job.id);
     await this.storageService.putObject(key, buffer, 'application/pdf');

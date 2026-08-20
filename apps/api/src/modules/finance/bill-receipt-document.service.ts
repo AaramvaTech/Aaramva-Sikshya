@@ -12,7 +12,7 @@ import { resolveBillBrandColor } from '../../common/tenant-brand-color';
 import { resolvePrintLanguage } from './bill-print-labels';
 import { bsOf } from './ledger.util';
 import { fiscalYearLabel } from './bill-post.util';
-import { TENANT_HEADER_SELECT, TenantHeaderRow } from './bill-document.service';
+import { TENANT_HEADER_SELECT, TenantHeaderRow, assetMissLine, refForKind } from './bill-document.service';
 import { BillReceiptService, BillReceiptData } from './bill-receipt.service';
 import { BillReceiptA5Service } from './bill-receipt-a5.service';
 import { BS_MONTH_NAMES_EN } from 'bs-calendar';
@@ -102,9 +102,18 @@ export class BillReceiptDocumentService {
     }
 
     const pdfData = await this.buildReceiptData(payment, tenant, language, format);
-    const buffer = format === 'a5'
-      ? await this.billReceiptA5Service.render(pdfData)
-      : await this.billReceiptService.render(pdfData);
+    let buffer: Buffer;
+    if (format === 'a5') {
+      const render = await this.billReceiptA5Service.render(pdfData);
+      buffer = render.buffer;
+      // Same boundary, same message shape as the fetch-side misses.
+      for (const m of render.assetMisses) {
+        this.logger.warn(assetMissLine(m.kind, refForKind(tenant, m.kind), m.reason));
+      }
+    } else {
+      // The 80mm thermal renderer draws no images at all — nothing to report.
+      buffer = await this.billReceiptService.render(pdfData);
+    }
     await this.storageService.putObject(key, buffer, 'application/pdf');
     return { presignedUrl: await this.storageService.presignRead(key), generated: true };
   }
@@ -252,10 +261,7 @@ async function optionalAsset(
     }
     return buf;
   } catch (err) {
-    logger.warn(
-      `[BILL-PRINT-1] ${kind} asset unavailable, printing without it: ` +
-      `${ref.slice(0, 60)}${ref.length > 60 ? `… (${ref.length} chars)` : ''} — ${(err as Error).message}`,
-    );
+    logger.warn(assetMissLine(kind, ref, (err as Error).message));
     return null;
   }
 }

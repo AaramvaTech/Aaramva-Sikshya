@@ -254,6 +254,28 @@ export function rule(
   doc.restore();
 }
 
+// ─── Asset misses ────────────────────────────────────────────────────────────
+
+/**
+ * A drawable asset that arrived as bytes but could not be DRAWN — pdfkit
+ * rejected it (corrupt file, unsupported encoding, a text file with a .png
+ * name). Distinct from a fetch failure, which never reaches this module.
+ *
+ * These are *recorded*, not logged. This module stays a pure renderer with no
+ * logger dependency; the half-renderers return the misses, and the
+ * orchestrating service — which is also the only layer that still knows the
+ * asset's stored ref — logs them at the same boundary it already logs fetch
+ * failures, in the same message shape.
+ */
+export interface AssetMiss {
+  /** Matches the fetch-side `kind`: logo | payment-QR | principal-signature | school-stamp. */
+  kind: string;
+  reason: string;
+}
+
+const reasonOf = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
+
 // ─── Designed placeholders ───────────────────────────────────────────────────
 
 /**
@@ -270,6 +292,7 @@ export function logoBox(
   monogramSize: number,
   schoolName: string,
   logo: Buffer | null,
+  misses?: AssetMiss[],
 ): void {
   if (logo) {
     try {
@@ -278,10 +301,12 @@ export function logoBox(
       doc.image(logo, x, y, { fit: [size, size], align: 'center', valign: 'center' });
       doc.restore();
       return;
-    } catch {
+    } catch (err) {
       // Corrupt or unsupported bytes must never break bill generation — fall
       // through to the monogram, which is a designed state rather than a gap.
+      // Recorded so the fallback is not silent.
       doc.restore();
+      misses?.push({ kind: 'logo', reason: reasonOf(err) });
     }
   }
   doc.rect(x, y, size, size).lineWidth(0.5).strokeColor(ACCENT).stroke();
@@ -321,6 +346,7 @@ export function qrBox(
   labelTop: string,
   labelBottom: string,
   qr: Buffer | null,
+  misses?: AssetMiss[],
 ): void {
   doc.rect(x, y, size, size).lineWidth(0.5).strokeColor(GREY_2).stroke();
   if (qr) {
@@ -330,8 +356,9 @@ export function qrBox(
       doc.image(qr, x, y, { fit: [size, size], align: 'center', valign: 'center' });
       doc.restore();
       return;
-    } catch {
+    } catch (err) {
       doc.restore();
+      misses?.push({ kind: 'payment-QR', reason: reasonOf(err) });
     }
   }
   // Scales with the box (7/18 of it), so the placeholder keeps its proportions.
@@ -369,7 +396,7 @@ export function optionalImage(
   y: number,
   w: number,
   h: number,
-  align: 'left' | 'right' = 'left',
+  opts: { kind: string; misses?: AssetMiss[]; align?: 'left' | 'right' },
 ): void {
   if (!asset) return;
   try {
@@ -378,11 +405,17 @@ export function optionalImage(
     // pdfkit's image align accepts only 'right' | 'center'; left is its
     // default, expressed by omitting the option.
     doc.image(asset, x, y, {
-      fit: [w, h], valign: 'bottom', ...(align === 'right' ? { align: 'right' as const } : {}),
+      fit: [w, h], valign: 'bottom',
+      ...(opts.align === 'right' ? { align: 'right' as const } : {}),
     });
     doc.restore();
-  } catch {
+  } catch (err) {
+    // The asset downloaded fine but pdfkit could not decode it. Fall back to
+    // the blank reserved space — a designed state — and record the miss so the
+    // caller can report it. Never throws: a decorative asset must not take
+    // down a money document.
     doc.restore();
+    opts.misses?.push({ kind: opts.kind, reason: reasonOf(err) });
   }
 }
 
@@ -390,8 +423,15 @@ export function optionalImage(
 
 export type StackMode = 'duplicate' | 'batch';
 
-/** Draws one A5 document into the given half. Returns nothing; it must fit. */
-export type HalfRenderer = (doc: PDFKit.PDFDocument, box: HalfBox, copyLabel: string | null) => void;
+/**
+ * Draws one A5 document into the given half. It must fit. Returns any assets
+ * that failed to draw, so the caller can report them (see AssetMiss).
+ */
+export type HalfRenderer = (
+  doc: PDFKit.PDFDocument,
+  box: HalfBox,
+  copyLabel: string | null,
+) => AssetMiss[] | void;
 
 export interface SheetOpts {
   stackMode: StackMode;
@@ -409,12 +449,13 @@ export interface SheetOpts {
  * trailing half is simply left blank — the cut line still prints, so the sheet
  * remains usable stationery.
  */
-export function drawSheet(doc: PDFKit.PDFDocument, halves: HalfRenderer[], opts: SheetOpts): void {
+export function drawSheet(doc: PDFKit.PDFDocument, halves: HalfRenderer[], opts: SheetOpts): AssetMiss[] {
   const [first, second] = opts.stackMode === 'duplicate' ? [halves[0], halves[0]] : halves;
+  const misses: AssetMiss[] = [];
 
-  first(doc, halfBox(0), opts.stackMode === 'duplicate' ? opts.copyLabels[0] : null);
+  misses.push(...(first(doc, halfBox(0), opts.stackMode === 'duplicate' ? opts.copyLabels[0] : null) ?? []));
   if (second) {
-    second(doc, halfBox(1), opts.stackMode === 'duplicate' ? opts.copyLabels[1] : null);
+    misses.push(...(second(doc, halfBox(1), opts.stackMode === 'duplicate' ? opts.copyLabels[1] : null) ?? []));
   }
 
   // Cut line at exactly 148.5mm, full width, plus the scissors marker sitting
@@ -425,6 +466,11 @@ export function drawSheet(doc: PDFKit.PDFDocument, halves: HalfRenderer[], opts:
   const markerW = widthOf(doc, marker, { size: 5, track: 0.12 * 5 }) + mm(2);
   doc.rect(mm(3) - mm(1), markerY - mm(0.4), markerW, mm(2.6)).fill('#ffffff');
   text(doc, marker, mm(3), markerY, { size: 5, color: GREY_2, track: 0.12 * 5 });
+
+  // The same asset draws once per half, so a single corrupt file yields one
+  // miss per half. Deduped by kind — the caller wants "the stamp is broken",
+  // not two identical lines.
+  return misses.filter((m, i) => misses.findIndex((o) => o.kind === m.kind) === i);
 }
 
 /** A4 page dimensions, for the renderers that construct the PDFDocument. */

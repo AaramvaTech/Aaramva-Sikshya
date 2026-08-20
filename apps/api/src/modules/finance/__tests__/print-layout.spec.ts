@@ -301,6 +301,33 @@ describe.each(LOCALES)('BILL-PRINT-1 invoice half [%s]', (locale) => {
     expect(wordsRun!.x).toBeLessThan(totalsLeft);
   });
 
+  // Condition (d): the asset downloads fine but pdfkit cannot decode it. It
+  // must fall back to the blank reserved space AND be reported — a silent
+  // fallback leaves a school with a vanished signature and nothing in the logs.
+  it('records a draw-side miss for undecodable bytes, per kind, without throwing', () => {
+    const corrupt = Buffer.from('this is not an image at all');
+    const data = fixture(locale);
+
+    const sigOnly = renderInvoiceHalf(newDoc(), halfBox(0),
+      { ...data, school: { ...data.school, signature: corrupt } }, 'Student Copy');
+    expect(sigOnly.assetMisses.map((m) => m.kind)).toEqual(['principal-signature']);
+    expect(sigOnly.assetMisses[0].reason).toBeTruthy();
+
+    const both = renderInvoiceHalf(newDoc(), halfBox(0),
+      { ...data, school: { ...data.school, signature: corrupt, stamp: corrupt, qr: corrupt, logo: corrupt } },
+      'Student Copy');
+    expect(both.assetMisses.map((m) => m.kind).sort())
+      .toEqual(['logo', 'payment-QR', 'principal-signature', 'school-stamp']);
+  });
+
+  it('reports NO miss when an asset is simply absent', () => {
+    // Null is "not configured", not a failure — it must not generate a log line.
+    const data = fixture(locale);
+    const r = renderInvoiceHalf(newDoc(), halfBox(0),
+      { ...data, school: { ...data.school, signature: null, stamp: null } }, 'Student Copy');
+    expect(r.assetMisses).toEqual([]);
+  });
+
   it('a zero previous balance still renders its row, with a marker', () => {
     const data = minContent(locale);
     expect(data.previousBalance).toBe(0);
@@ -397,7 +424,7 @@ describe('BILL-PRINT-1 sheet output', () => {
 
   it.each(['EN', 'NE', 'BOTH'] as PrintLanguage[])(
     'a single invoice is exactly ONE A4 page [%s]', async (language) => {
-      const pdf = await svc.render(pdfData(2, language));
+      const { buffer: pdf } = await svc.render(pdfData(2, language));
       expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
       expect(pageCount(pdf)).toBe(1);
       const box = mediaBox(pdf)!;
@@ -407,18 +434,18 @@ describe('BILL-PRINT-1 sheet output', () => {
   );
 
   it('bulk print packs TWO documents per sheet', async () => {
-    const four = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2), pdfData(2)]);
+    const { buffer: four } = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2), pdfData(2)]);
     expect(pageCount(four)).toBe(2);
   });
 
   it('an ODD batch leaves the trailing half blank rather than crashing', async () => {
-    const three = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2)]);
+    const { buffer: three } = await svc.renderMerged([pdfData(2), pdfData(2), pdfData(2)]);
     expect(pageCount(three)).toBe(2);
     expect(three.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
   it('every sheet in a bulk job is A4', async () => {
-    const pdf = await svc.renderMerged([pdfData(1), pdfData(3), pdfData(2)]);
+    const { buffer: pdf } = await svc.renderMerged([pdfData(1), pdfData(3), pdfData(2)]);
     const boxes = [...pdf.toString('latin1').matchAll(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/g)];
     expect(boxes.length).toBeGreaterThan(0);
     for (const [, w, h] of boxes) {
@@ -450,9 +477,35 @@ describe('BILL-PRINT-1 sheet output', () => {
     // Proven through the real service, not just drawSheet: BOTH must reach
     // drawSheet with stackMode 'batch' or the suppression above never applies.
     for (const language of ['EN', 'NE', 'BOTH'] as PrintLanguage[]) {
-      const pdf = await svc.render(pdfData(2, language));
+      const { buffer: pdf } = await svc.render(pdfData(2, language));
       expect(pageCount(pdf)).toBe(1);
     }
+  });
+
+  // The point of the fallback: a broken asset must put NOTHING on the page —
+  // same as no asset at all — and be reported.
+  //
+  // Deliberately NOT asserted as byte-identical. A null asset short-circuits
+  // before pdfkit's graphics state is touched; corrupt bytes emit a no-op
+  // clip/restore pair (re / W n / Q, ~33 bytes) before doc.image() throws.
+  // The rendered RESULT is identical — zero images either way — and chasing
+  // byte-equality would mean pre-decoding the image to avoid the clip, which
+  // duplicates pdfkit's decoder for no visible gain.
+  it('a broken asset puts nothing on the page, exactly like no asset', async () => {
+    const corrupt = Buffer.from('this is not an image at all');
+    const withNull = await svc.render(pdfData(2));
+    const withCorrupt = await svc.render({
+      ...pdfData(2),
+      tenant: { ...pdfData(2).tenant, principalSignatureBuffer: corrupt },
+    });
+    const images = (b: Buffer) => (b.toString('latin1').match(/\/Subtype\s*\/Image/g) ?? []).length;
+    expect(images(withNull.buffer)).toBe(0);
+    expect(images(withCorrupt.buffer)).toBe(0);
+    expect(pageCount(withCorrupt.buffer)).toBe(pageCount(withNull.buffer));
+    expect(mediaBox(withCorrupt.buffer)).toEqual(mediaBox(withNull.buffer));
+
+    expect(withCorrupt.assetMisses.map((m) => m.kind)).toEqual(['principal-signature']);
+    expect(withNull.assetMisses).toEqual([]);
   });
 
   it('drawSheet renders the cut line and marker once per sheet', async () => {

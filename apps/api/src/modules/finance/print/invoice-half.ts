@@ -5,7 +5,7 @@ import {
 } from './mm';
 import {
   HalfBox, text, eyebrow, eyebrowH, money, parenMoney, mixed, rule, truncate,
-  clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits,
+  clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits, AssetMiss,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -135,6 +135,12 @@ export function rowHeight(d: Density, locale: Locale): number {
   return d.size * LINE_HEIGHT[locale] + d.rowPad * 2;
 }
 
+/** What one rendered half reports back: its row plan, plus any asset that
+ *  arrived as bytes but could not be drawn. */
+export interface InvoiceHalfResult extends FeeRowPlan {
+  assetMisses: AssetMiss[];
+}
+
 export interface FeeRowPlan {
   density: Density;
   visible: InvoiceHalfLine[];
@@ -221,8 +227,9 @@ export function renderInvoiceHalf(
   box: HalfBox,
   data: InvoiceHalfData,
   copyLabel: string | null,
-): FeeRowPlan {
+): InvoiceHalfResult {
   const { locale, label } = data;
+  const assetMisses: AssetMiss[] = [];
   const L = box.x;
   const W = box.w;
   const R = L + W;
@@ -233,7 +240,7 @@ export function renderInvoiceHalf(
   const panW = mm(40);
   const textX = L + LOGO + mm(5);
   const textW = W - LOGO - mm(5) - panW - mm(5);
-  logoBox(doc, L, y, LOGO, MONOGRAM, data.school.name, data.school.logo);
+  logoBox(doc, L, y, LOGO, MONOGRAM, data.school.name, data.school.logo, assetMisses);
 
   let ty = y;
   text(doc, truncate(doc, data.school.name, textW, { size: 11, weight: 700 }), textX, ty, {
@@ -489,8 +496,8 @@ export function renderInvoiceHalf(
 
   // ── Footer band, drawn from the fixed baseline up ──────────────────────────
   assertFits('Invoice', y, footerTop);
-  renderFooter(doc, box, data, footerTop);
-  return plan;
+  renderFooter(doc, box, data, footerTop, assetMisses);
+  return { ...plan, assetMisses };
 }
 
 function drCr(signed: number): string {
@@ -516,6 +523,7 @@ function renderFooter(
   box: HalfBox,
   data: InvoiceHalfData,
   footerTop: number,
+  assetMisses: AssetMiss[],
 ): void {
   const { locale, label } = data;
   const L = box.x;
@@ -539,7 +547,7 @@ function renderFooter(
 
   // 2. QR — designed placeholder, real asset slot wired (generation out of scope).
   const qrX = R - SIG_W - mm(6) - QR;
-  qrBox(doc, qrX, bandY, QR, label('scan'), label('toPay'), data.school.qr);
+  qrBox(doc, qrX, bandY, QR, label('scan'), label('toPay'), data.school.qr, assetMisses);
 
   // 3. Signature — content justified to the band's bottom.
   const sigX = R - SIG_W;
@@ -550,8 +558,10 @@ function renderFooter(
   // The stamp sits to the right of the signature within the same reserved
   // space, so a school using both still shifts nothing.
   const stampW = data.school.stamp ? SIGN_GAP : 0;
-  optionalImage(doc, data.school.signature, sigX, sy, SIG_W - stampW, SIGN_GAP, 'left');
-  optionalImage(doc, data.school.stamp, sigX + SIG_W - stampW, sy, stampW, SIGN_GAP, 'right');
+  optionalImage(doc, data.school.signature, sigX, sy, SIG_W - stampW, SIGN_GAP,
+    { kind: 'principal-signature', misses: assetMisses });
+  optionalImage(doc, data.school.stamp, sigX + SIG_W - stampW, sy, stampW, SIGN_GAP,
+    { kind: 'school-stamp', align: 'right', misses: assetMisses });
   sy += SIGN_GAP;
   rule(doc, sigX, sy, SIG_W, RULE_INK, INK);
   sy += RULE_INK;
