@@ -6,7 +6,7 @@ import {
 import {
   HalfBox, text, eyebrow, eyebrowH, money, parenMoney, mixed, rule, truncate,
   clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits, AssetMiss, displayWebsite,
-  PrintCapacityError,
+  PrintCapacityError, drCrMarker,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -72,8 +72,10 @@ export interface InvoiceHalfData {
   guardian: string | null;
   lines: InvoiceHalfLine[];
   subtotal: number;
-  /** Signed, ledger convention: positive = owes (DR), negative = advance (CR). */
+  /** Magnitude of the previous balance. */
   previousBalance: number;
+  /** The ledger's own three-way sign — never re-derived from the number. */
+  previousBalanceSign: 'OWES' | 'ADVANCE' | 'ZERO';
   totalReceivable: number;
   inWords: string | null;
   locale: Locale;
@@ -487,7 +489,7 @@ export function renderInvoiceHalf(
   totalRow(
     label('previousBalanceOutstanding'),
     money(Math.abs(data.previousBalance)),
-    drCr(data.previousBalance),
+    drCrMarker(data.previousBalanceSign),
   );
 
   // ── Total band: amount in words (left) beside the total figure (right) ────
@@ -543,10 +545,6 @@ export function renderInvoiceHalf(
   assertFits('Invoice', y, footerTop);
   renderFooter(doc, box, data, footerTop, assetMisses);
   return { ...plan, assetMisses };
-}
-
-function drCr(signed: number): string {
-  return signed < 0 ? '(CR)' : '(DR)';
 }
 
 /**

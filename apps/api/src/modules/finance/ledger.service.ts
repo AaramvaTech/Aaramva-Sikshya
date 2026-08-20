@@ -3,7 +3,7 @@ import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
-import { bsOf, directionToDebitCredit } from './ledger.util';
+import { bsOf, directionToDebitCredit, balanceSign } from './ledger.util';
 import { LedgerEntryRow, toLedgerEntryResponse, LedgerEntryResponseDto } from './entities/ledger.entity';
 import { LedgerAdjustmentDto, LedgerQueryDto } from './dto/ledger.dto';
 import { Role } from '../common/enums/role.enum';
@@ -287,12 +287,7 @@ export class LedgerService {
       studentId,
     );
     const balance = toMoney(rows[0]?.sum ?? 0);
-    const cmp = balance.compare(Money.zero());
-    return {
-      studentId,
-      balance: balance.toNumber(),
-      sign: cmp === 0 ? 'ZERO' : cmp > 0 ? 'OWES' : 'ADVANCE',
-    };
+    return { studentId, balance: balance.toNumber(), sign: balanceSign(balance) };
   }
 
   /**

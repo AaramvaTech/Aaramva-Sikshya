@@ -10,7 +10,7 @@ import { amountInWords } from '../../common/money/amount-in-words';
 import { BillPaymentService } from './bill-payment.service';
 import { resolveBillBrandColor } from '../../common/tenant-brand-color';
 import { resolvePrintLanguage } from './bill-print-labels';
-import { bsOf } from './ledger.util';
+import { bsOf, balanceSign, BalanceSign } from './ledger.util';
 import { fiscalYearLabel } from './bill-post.util';
 import { TENANT_HEADER_SELECT, TenantHeaderRow, assetMissLine, refForKind } from './bill-document.service';
 import { BillReceiptService, BillReceiptData } from './bill-receipt.service';
@@ -200,7 +200,8 @@ export class BillReceiptDocumentService {
         };
       }),
       advanceAmount: payment.advanceAmount ?? 0,
-      balanceAfter,
+      balanceAfter: balanceAfter.amount,
+      balanceAfterSign: balanceAfter.sign,
       receivedByName: receivedByRows[0]?.full_name ?? null,
       amountInWordsEn: amountInWords(totalAmount, 'en'),
       amountInWordsNe: amountInWords(totalAmount, 'ne'),
@@ -223,7 +224,10 @@ export class BillReceiptDocumentService {
    * posts) has no "as of" point; it falls back to the live sum, which is the
    * only honest answer for a provisional receipt.
    */
-  private async balanceAsOf(studentId: string, ledgerEntryId: string | null): Promise<number> {
+  private async balanceAsOf(
+    studentId: string,
+    ledgerEntryId: string | null,
+  ): Promise<{ amount: number; sign: BalanceSign }> {
     const rows = ledgerEntryId
       ? await this.tenantPrisma.query<{ sum: string }>(
           `SELECT COALESCE(SUM(l.debit) - SUM(l.credit), 0) AS sum
@@ -238,7 +242,10 @@ export class BillReceiptDocumentService {
              FROM student_ledger_entries WHERE student_id = $1::uuid`,
           studentId,
         );
-    return toMoney(rows[0]?.sum ?? 0).toNumber();
+    const balance = toMoney(rows[0]?.sum ?? 0);
+    // The sign comes from Money via the ledger's own rule — a `< 0` float test
+    // here would be a second convention that collapses ZERO into a debit.
+    return { amount: balance.toNumber(), sign: balanceSign(balance) };
   }
 }
 

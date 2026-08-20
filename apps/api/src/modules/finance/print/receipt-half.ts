@@ -6,6 +6,7 @@ import {
 import {
   HalfBox, text, eyebrow, eyebrowH, money, mixed, rule, truncate,
   widthOf, logoBox, optionalImage, assertFits, AssetMiss, displayWebsite, PrintCapacityError,
+  drCrMarker,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -63,8 +64,10 @@ export interface ReceiptHalfData {
    * large figure and the slip does not foot.
    */
   advanceAmount: number;
-  /** Signed as of this payment's own ledger entry: positive = owes (DR). */
+  /** Magnitude as of this payment's own ledger entry. */
   balanceAfter: number;
+  /** The ledger's own three-way sign for that balance — never re-derived here. */
+  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO';
   receivedBy: string | null;
   locale: Locale;
   label: (key: LabelKey) => string;
@@ -405,16 +408,18 @@ export function renderReceiptHalf(
 
   // ── Balance after this payment — always renders, even at 0.00 ─────────────
   const balLabel = label('balanceAfterPayment');
-  const marker = data.balanceAfter < 0 ? '(CR)' : '(DR)';
+  const marker = drCrMarker(data.balanceAfterSign);
   const balW = ALLOC.installment + ALLOC.amount;
   const balX = R - balW;
   text(doc, balLabel, balX - mm(30), y + (balanceH - 8 * LINE_HEIGHT[locale]) / 2, {
     size: 8, weight: 600, width: mm(30) + balW * 0.5, align: 'left',
   });
-  const lw = widthOf(doc, balLabel, { size: 8, weight: 600 });
-  text(doc, marker, balX - mm(30) + lw + mm(1), y + (balanceH - EYEBROW_SIZE[locale]) / 2, {
-    size: EYEBROW_SIZE[locale], weight: 600, color: GREY_1, track: 0.09 * EYEBROW_SIZE[locale],
-  });
+  if (marker) {
+    const lw = widthOf(doc, balLabel, { size: 8, weight: 600 });
+    text(doc, marker, balX - mm(30) + lw + mm(1), y + (balanceH - EYEBROW_SIZE[locale]) / 2, {
+      size: EYEBROW_SIZE[locale], weight: 600, color: GREY_1, track: 0.09 * EYEBROW_SIZE[locale],
+    });
+  }
   text(doc, `Rs. ${money(Math.abs(data.balanceAfter))}`, balX, y, {
     size: 9, weight: 700, width: balW - CELL_PAD, align: 'right',
   });
