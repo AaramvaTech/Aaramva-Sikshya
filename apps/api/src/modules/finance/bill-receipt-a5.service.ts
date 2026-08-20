@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
-import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
+import { printLabel, PrintLanguage, LabelKey, methodLabel, GATEWAY_METHODS } from './bill-print-labels';
 import { PAGE, drawSheet, HalfRenderer, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderReceiptHalf, ReceiptHalfData } from './print/receipt-half';
+import { halfBox } from './print/a5-sheet';
 import { BillReceiptData } from './bill-receipt.service';
 import { BillPdfRender } from './bill-pdf.service';
 
@@ -53,9 +54,29 @@ export class BillReceiptA5Service {
     });
   }
 
+  /**
+   * Two passes. A receipt is short, so the first pass measures how far the
+   * content falls short of the footer and the second re-renders with the
+   * inter-group gaps scaled to close it (see ReceiptHalfResult.gapScaleForFit).
+   *
+   * The measurement pass draws into a throwaway document that is never
+   * serialised — using the real drawing code as the measurement keeps ONE
+   * source of truth for the layout, instead of a second height calculation
+   * that could drift from what is actually drawn.
+   */
   private halfFor(data: BillReceiptData, locale: Locale): HalfRenderer {
     const half = toReceiptHalf(data, locale);
-    return (doc, box, copyLabel) => renderReceiptHalf(doc, box, half, copyLabel).assetMisses;
+    return (doc, box, copyLabel) => {
+      // The probe MUST use the same copyLabel as the real draw: the copy
+      // eyebrow makes the identity block taller, so measuring without it
+      // overstates the slack and the fitted pass then overflows. (Found by
+      // real data; the earlier version probed with null and overran by 1.5mm.)
+      const probe = new PDFDocument({ size: [PAGE.width, PAGE.height], margin: 0 });
+      for (const [name, buf] of Object.entries(this.fonts)) probe.registerFont(name, buf);
+      const { gapScaleForFit } = renderReceiptHalf(probe, box, half, copyLabel);
+      probe.end();
+      return renderReceiptHalf(doc, box, half, copyLabel, gapScaleForFit).assetMisses;
+    };
   }
 }
 
@@ -87,7 +108,7 @@ export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHal
     className: data.className,
     section: data.sectionName,
     roll: data.rollNumber,
-    method: data.method,
+    method: methodLabel(data.method, lang),
     txnRef: data.txnRef,
     amount: data.amount,
     inWords: words ? `${words} ${only}` : null,
@@ -98,7 +119,14 @@ export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHal
     })),
     advanceAmount: data.advanceAmount,
     balanceAfter: data.balanceAfter,
-    receivedBy: data.receivedByName,
+    // A gateway payment has no human receiver. `bill_payments.received_by` is
+    // the user who SUBMITTED it, which for eSewa/Khalti is the parent paying —
+    // so the slot was printing the payer's own name under a label that reads
+    // "name of the person who received the money" (रकम बुझ्नेको नाम). Suppressed
+    // for gateways; the slot keeps its geometry and reads as not-applicable,
+    // the same convention the CASH transaction-ref slot already uses. The
+    // method is already named in the party block, so nothing is lost.
+    receivedBy: GATEWAY_METHODS.includes(data.method) ? null : data.receivedByName,
     locale,
     label: (key: LabelKey) => printLabel(key, lang),
   };

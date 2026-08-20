@@ -43,9 +43,22 @@ export class PrintOverflowError extends Error {
   }
 }
 
-/** Throws unless `bodyEnd` sits at or above `footerTop`. */
+/**
+ * Tolerance for "lands exactly on the footer". 0.01pt is 3.5 microns — orders
+ * of magnitude below anything printable, and orders of magnitude above the
+ * float residue left by summing mm-to-pt conversions.
+ *
+ * This is load-bearing, not cosmetic: the receipt's two-pass fit is DESIGNED
+ * to land content exactly on footerTop, which without a tolerance reads as a
+ * 5.7e-14 pt overflow and throws on every receipt.
+ */
+const FIT_EPSILON_PT = 0.01;
+
+/** Throws unless `bodyEnd` sits at or above `footerTop` (within FIT_EPSILON_PT). */
 export function assertFits(document: string, bodyEnd: number, footerTop: number): void {
-  if (bodyEnd > footerTop) throw new PrintOverflowError(document, bodyEnd - footerTop);
+  if (bodyEnd - footerTop > FIT_EPSILON_PT) {
+    throw new PrintOverflowError(document, bodyEnd - footerTop);
+  }
 }
 
 // ─── Geometry ────────────────────────────────────────────────────────────────
@@ -254,6 +267,19 @@ export function rule(
   doc.restore();
 }
 
+/**
+ * Drops the URL scheme (and any trailing slash) from a website for print.
+ * `https://demoschool.edu.np` -> `demoschool.edu.np`.
+ *
+ * Shared by both documents so they cannot drift: the scheme is noise on paper,
+ * it costs ~10mm of a contact line that also has to hold an address and a
+ * phone number, and nobody types it off a bill.
+ */
+export function displayWebsite(url: string | null): string | null {
+  if (!url) return null;
+  return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/+$/, '');
+}
+
 // ─── Asset misses ────────────────────────────────────────────────────────────
 
 /**
@@ -458,11 +484,18 @@ export function drawSheet(doc: PDFKit.PDFDocument, halves: HalfRenderer[], opts:
     misses.push(...(second(doc, halfBox(1), opts.stackMode === 'duplicate' ? opts.copyLabels[1] : null) ?? []));
   }
 
-  // Cut line at exactly 148.5mm, full width, plus the scissors marker sitting
-  // at left: 3mm on a white chip so it never collides with the dashed rule.
+  // Cut line at exactly 148.5mm, full width, plus the cut marker sitting at
+  // left: 3mm on a white chip so it never collides with the dashed rule.
+  //
+  // SPEC section 10 calls for a ✂ (U+2702). It is NOT in either embedded Noto
+  // Latin face — confirmed with fontkit: hasGlyphForCodePoint(0x2702) is false
+  // for Regular and Bold — so it rendered as tofu on every sheet of every
+  // document. The word alone carries the meaning next to a dashed line;
+  // embedding a symbol face for one glyph would add ~100KB to every PDF, and
+  // substituting a different dingbat just moves the coverage problem.
   rule(doc, 0, HALF_H, SHEET_W, RULE_HAIR, GREY_2, true);
   const markerY = HALF_H - mm(2.1);
-  const marker = `✂ ${opts.cutLabel}`;
+  const marker = opts.cutLabel;
   const markerW = widthOf(doc, marker, { size: 5, track: 0.12 * 5 }) + mm(2);
   doc.rect(mm(3) - mm(1), markerY - mm(0.4), markerW, mm(2.6)).fill('#ffffff');
   text(doc, marker, mm(3), markerY, { size: 5, color: GREY_2, track: 0.12 * 5 });

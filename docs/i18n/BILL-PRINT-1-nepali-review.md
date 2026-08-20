@@ -6,7 +6,7 @@ comes back. Every school currently prints English regardless of its setting.
 **Reviewer:** a native Nepali speaker, ideally one who has handled a Nepali school's fee bills or
 receipts. No code knowledge needed — you only read the English and Nepali columns.
 
-**Scope:** 22 new strings (Part A) and 5 disagreements with an earlier review (Part B). The
+**Scope:** 27 new strings (Part A) and 5 disagreements with an earlier review (Part B). The
 `Key` column is for the developer applying your answers; ignore it.
 
 ---
@@ -24,7 +24,7 @@ receipts. No code knowledge needed — you only read the English and Nepali colu
 
 ---
 
-## Part A — new strings (22)
+## Part A — new strings (27)
 
 None of these has been reviewed by anyone. They were taken from the approved design files, which
 means they are design-supplied, not native-speaker-approved.
@@ -35,7 +35,7 @@ means they are design-supplied, not native-speaker-approved.
 |---|---|---|---|---|---|
 | 1 | `studentCopy` | Student Copy | विद्यार्थी प्रति | Small tracked label at the very top of the upper half, marking which copy this is. *Fixed width, must not wrap.* | |
 | 2 | `officeCopy` | Office Copy | कार्यालय प्रति | Same position on the lower half. *Fixed width, must not wrap.* | |
-| 3 | `cut` | cut | काट्ने | Tiny 5pt word beside a ✂ mark on the dashed line separating the two copies. *Very small — keep it short.* | |
+| 3 | `cut` | cut | काट्ने | Tiny 5pt word on the dashed line separating the two copies. *Very small — keep it short.* (The ✂ glyph was dropped: it is absent from the embedded font and printed as a tofu box) | |
 
 ### A2. Invoice — header and party block
 
@@ -75,6 +75,23 @@ means they are design-supplied, not native-speaker-approved.
 | 20 | `receivedBy` | Received by | रकम बुझ्नेको नाम | Above the name of the staff member who took the money. *Fixed 40mm.* | |
 | 21 | `computerGeneratedReceipt` | This is a computer-generated receipt. | यो कम्प्युटरबाट तयार भएको रसिद हो। | Fine print, bottom-left of a receipt. *Free prose, 5.5pt.* | |
 | 22 | `moreAllocations` | more invoices | थप बिल | Only when a payment covers more invoices than fit. Prints as `+ ३ थप बिल ......... 1,240.00`. See the note below. | |
+
+### A6. Payment method names (added after the visual review)
+
+The stored values are database constants (`CASH`, `BANK_TRANSFER`, `ESEWA`...) and were printing
+raw — a parent's receipt literally read `ESEWA`. These are the printable names.
+
+**eSewa and Khalti are brand names and are proposed to stay in Latin script in the Nepali document
+too** — which is what the approved design does: the Nepali half of `Receipt.dc.html` reads
+`माध्यम / eSewa`. Please confirm, or give the Devanagari form if a school would expect it.
+
+| # | Key | English | Proposed Nepali | Where it appears | Approved / Corrected |
+|---|---|---|---|---|---|
+| 23 | `methodCash` | Cash | नगद | Receipt party block, under `माध्यम`. *Fixed-width grid cell.* Also on the 80mm thermal slip | |
+| 24 | `methodCheque` | Cheque | चेक | Same slot | |
+| 25 | `methodBankTransfer` | Bank Transfer | बैंक ट्रान्सफर | Same slot — the longest of the five, and the cell is narrow | |
+| 26 | `methodEsewa` | eSewa | eSewa *(brand, unchanged)* | Same slot | |
+| 27 | `methodKhalti` | Khalti | Khalti *(brand, unchanged)* | Same slot | |
 
 ### Note on #10 and #22 — the continuation rows
 

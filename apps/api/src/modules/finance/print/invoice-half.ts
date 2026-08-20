@@ -5,7 +5,7 @@ import {
 } from './mm';
 import {
   HalfBox, text, eyebrow, eyebrowH, money, parenMoney, mixed, rule, truncate,
-  clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits, AssetMiss,
+  clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits, AssetMiss, displayWebsite,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -252,7 +252,7 @@ export function renderInvoiceHalf(
   // few places on a fixed 148.5mm half where height can be reclaimed for fee
   // rows. `school.tagline` stays on the interface — the field still exists and
   // other documents may want it — it is simply not drawn here.
-  const contact = [data.school.address, data.school.phone, data.school.website]
+  const contact = [data.school.address, data.school.phone, displayWebsite(data.school.website)]
     .filter((p): p is string => !!p);
   if (contact.length > 0) {
     // Address is tenant-entered and may be Devanagari; phone/website are not.

@@ -5,7 +5,7 @@ import {
 } from './mm';
 import {
   HalfBox, text, eyebrow, eyebrowH, money, mixed, rule, truncate,
-  widthOf, logoBox, optionalImage, assertFits, AssetMiss,
+  widthOf, logoBox, optionalImage, assertFits, AssetMiss, displayWebsite,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -101,6 +101,24 @@ function rowHeight(d: Density, locale: Locale): number {
 /** See InvoiceHalfResult. */
 export interface ReceiptHalfResult extends AllocationPlan {
   assetMisses: AssetMiss[];
+  /**
+   * The gap scale that would make this receipt's content fill the half exactly.
+   * A receipt is a SHORT document — a one-allocation slip left ~38mm of dead
+   * space above the remarks block, which is bug #3 from the brief ("half the
+   * page empty with content floating at the top").
+   *
+   * The invoice does not have this problem because its fee table grows into
+   * the space. The receipt has no such elastic group, so the slack is instead
+   * distributed across the inter-group boundaries — PROPORTIONALLY, by
+   * multiplying every boundary step by one scale factor, so the design's
+   * 1.4/1.5/1.6mm rhythm keeps its relative proportions instead of flattening
+   * to one uniform gap. No single element absorbs the slack, and the remarks
+   * block keeps its specified height (3 lines at 5.6mm) as a hard floor —
+   * hand-annotation space is never traded away for fitting.
+   *
+   * Render once to obtain this, then render again passing it as `gapScale`.
+   */
+  gapScaleForFit: number;
 }
 
 export interface AllocationPlan {
@@ -166,8 +184,14 @@ export function renderReceiptHalf(
   box: HalfBox,
   data: ReceiptHalfData,
   copyLabel: string | null,
+  gapScale = 1,
 ): ReceiptHalfResult {
   const { locale, label } = data;
+  // The eight inter-group boundaries that share the slack. Scaling them by one
+  // factor preserves their relative rhythm; at gapScale = 1 this is exactly
+  // the unscaled layout.
+  const g = (step: number): number => step * gapScale;
+  const BASE_GAPS = STEP.md + STEP.lg + STEP.sm + STEP.sm + STEP.sm + STEP.lg + STEP.sm + STEP.lg;
   const assetMisses: AssetMiss[] = [];
   const L = box.x;
   const W = box.w;
@@ -186,7 +210,7 @@ export function renderReceiptHalf(
     size: 11, weight: 700, track: 0.01 * 11, width: textW,
   });
   ty += 11 * LINE_HEIGHT[locale];
-  const contact = [data.school.address, data.school.phone, data.school.website]
+  const contact = [data.school.address, data.school.phone, displayWebsite(data.school.website)]
     .filter((p): p is string => !!p);
   if (contact.length > 0) {
     const runs = contact.flatMap((p, i) => (i > 0 ? [{ text: '  ·  ' }, { text: p }] : [{ text: p }]));
@@ -213,7 +237,7 @@ export function renderReceiptHalf(
   // ── Header rule — accent 1 of 4 ────────────────────────────────────────────
   y += STEP.md;
   rule(doc, L, y, W, RULE_ACCENT, ACCENT);
-  y += STEP.md;
+  y += g(STEP.md);                                    // boundary 1
 
   // ── Identity: no three-row date stack, just Receipt No. and Date ───────────
   const rowH2 = Math.max(eyeH, 7.5 * LINE_HEIGHT[locale]);
@@ -244,9 +268,9 @@ export function renderReceiptHalf(
   idRow(label('receiptNo'), data.number, 8.5, 700, rightTop);
   idRow(label('date'), `${data.dateAd} (BS ${data.dateBs})`, 7.5, 600, rightTop + rowH2);
 
-  y += identityH + STEP.lg;
+  y += identityH + g(STEP.lg);                        // boundary 2
   rule(doc, L, y, W, RULE_HAIR, GREY_2);
-  y += STEP.sm;
+  y += g(STEP.sm);                                    // boundary 3
 
   // ── Party block — grid 1.6fr 1fr 0.55fr 1fr 1.5fr ─────────────────────────
   const fr = [1.6, 1, 0.55, 1, 1.5];
@@ -271,9 +295,9 @@ export function renderReceiptHalf(
     });
     cx += cw + gap;
   });
-  y += eyeH + 8 * LINE_HEIGHT[locale] + STEP.sm;
+  y += eyeH + 8 * LINE_HEIGHT[locale] + g(STEP.sm);   // boundary 4
   rule(doc, L, y, W, RULE_HAIR, GREY_2);
-  y += STEP.sm;
+  y += g(STEP.sm);                                    // boundary 5
 
   // ── Amount received band — flex row: words left, figure right ─────────────
   const tW = RECEIPT_TOTALS_W[locale];
@@ -294,7 +318,7 @@ export function renderReceiptHalf(
       size: 7.5, weight: 600, width: wordsW,
     });
   }
-  y = figureTop + figureH + STEP.lg;
+  y = figureTop + figureH + g(STEP.lg);               // boundary 6
 
   // ── Allocation table — "Paid towards" ─────────────────────────────────────
   const xs = {
@@ -313,7 +337,10 @@ export function renderReceiptHalf(
 
   const footerTop = box.bottom - footerHeight(locale);
   const balanceH = 9 * LINE_HEIGHT[locale];
-  const allocBudget = footerTop - y - RULE_INK - STEP.sm - balanceH;
+  // Reserve BOTH trailing boundaries (7: table -> balance, 8: balance ->
+  // footer) or a full allocation table overruns the footer by exactly the
+  // boundary-8 gap.
+  const allocBudget = footerTop - y - RULE_INK - g(STEP.sm) - balanceH - g(STEP.lg);
   // The advance row, when present, takes one row of the same height out of
   // the budget before the allocations are planned.
   const advanceRows = data.advanceAmount > 0 ? 1 : 0;
@@ -364,7 +391,7 @@ export function renderReceiptHalf(
   }
 
   rule(doc, L, y, W, RULE_INK, INK);
-  y += STEP.sm;
+  y += g(STEP.sm);                                    // boundary 7
 
   // ── Balance after this payment — always renders, even at 0.00 ─────────────
   const balLabel = label('balanceAfterPayment');
@@ -382,10 +409,19 @@ export function renderReceiptHalf(
     size: 9, weight: 700, width: balW - CELL_PAD, align: 'right',
   });
   y += balanceH;
+  const contentEnd = y + g(STEP.lg);                  // boundary 8 (balance -> footer)
 
-  assertFits('Receipt', y, footerTop);
+  assertFits('Receipt', contentEnd, footerTop);
   renderFooter(doc, box, data, footerTop, assetMisses);
-  return { ...plan, assetMisses };
+
+  // How much further the gaps would have to stretch to reach the footer. At
+  // gapScale = 1 this is the raw slack; on the second pass it lands at ~1.
+  const slack = footerTop - contentEnd;
+  const scaledGaps = BASE_GAPS * gapScale;
+  const gapScaleForFit = scaledGaps > 0
+    ? Math.max(1, gapScale * ((scaledGaps + slack) / scaledGaps))
+    : 1;
+  return { ...plan, assetMisses, gapScaleForFit };
 }
 
 function renderFooter(
