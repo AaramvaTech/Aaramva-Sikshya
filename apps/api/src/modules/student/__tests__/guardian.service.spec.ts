@@ -420,9 +420,11 @@ describe('GuardianService', () => {
       user_id: null, ...over,
     });
     // A guardian as it arrives on the create/update DTO.
+    // `email` is required on GuardianInputDto since REG-1 (credentials are
+    // delivered to the guardian's own address); this helper predates that.
     const gIn = (over: Record<string, unknown> = {}) => ({
       relation: 'Guardian', firstName: 'A', lastName: 'B', phone: '9800000000',
-      isPrimary: false, ...over,
+      email: 'guardian@example.com', isPrimary: false, ...over,
     });
     // The INSERT's last positional arg is `is_primary`.
     const isPrimaryArgOf = (i: number): unknown => {

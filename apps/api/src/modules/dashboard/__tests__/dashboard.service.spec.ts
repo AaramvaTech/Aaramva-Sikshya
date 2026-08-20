@@ -149,7 +149,7 @@ describe('DashboardService', () => {
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - 6);
 
-      const mockRows = [];
+      const mockRows: Array<{ date: string; present: string; total: string }> = [];
       for (let i = 0; i < 5; i++) {
         const d = new Date(weekStart);
         d.setDate(weekStart.getDate() + i);

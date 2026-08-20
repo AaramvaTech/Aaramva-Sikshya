@@ -49,7 +49,11 @@ describe('OptionalJwtGuard (QA-1 BUG-4) — does not weaken existing auth', () =
     const strict = new JwtAuthGuard();
     // With no valid token the passport strategy yields user=false; the strict
     // per-controller guard must still reject with 401 (UnauthorizedException).
-    expect(() => strict.handleRequest(null, false, null)).toThrow(
+    // JwtAuthGuard extends AuthGuard('jwt'), whose handleRequest takes
+    // (err, user, info, context, status?). The context is unused on this path —
+    // the default implementation throws as soon as it sees !user — but it is
+    // required by the signature, so the spec's own ctxFor helper supplies one.
+    expect(() => strict.handleRequest(null, false, null, ctxFor({}))).toThrow(
       UnauthorizedException,
     );
   });
