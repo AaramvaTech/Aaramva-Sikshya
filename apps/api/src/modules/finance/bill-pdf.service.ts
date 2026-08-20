@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
-import { printLabel, PrintLanguage, LabelKey } from './bill-print-labels';
+import { printLabel, PrintLanguage, LabelKey, continuationLabel } from './bill-print-labels';
 import { PAGE, drawSheet, HalfRenderer, StackMode, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderInvoiceHalf, InvoiceHalfData, InvoiceHalfLine } from './print/invoice-half';
@@ -273,5 +273,6 @@ export function toInvoiceHalf(data: BillPdfData, locale: Locale): InvoiceHalfDat
     inWords: words ? `${words} ${only}` : null,
     locale,
     label: (key: LabelKey) => printLabel(key, lang),
+    continuation: (count: number) => continuationLabel(count, 'fee', lang),
   };
 }

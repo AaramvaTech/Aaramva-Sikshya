@@ -92,8 +92,15 @@ const LABELS = {
   balanceAfterPayment: { en: 'Balance after this payment', ne: 'भुक्तानी पश्चात् बाँकी रकम' },
   remarks: { en: 'Remarks', ne: 'कैफियत' },
   receivedBy: { en: 'Received by', ne: 'रकम बुझ्नेको नाम' },
-  /** Decision 3's continuation row — "+ 3 more fee items". */
+  // Decision 3's continuation row — "+ 1 more fee item" / "+ 3 more fee items".
+  // English inflects, so singular and plural are separate keys. The Nepali is
+  // the SAME string for both: थप शुल्क शीर्षक does not take a count-driven
+  // plural the way English does. That is flagged in the review sheet rather
+  // than assumed — if a native speaker wants a distinct plural, the key is
+  // already there to hold it.
+  moreFeeItem: { en: 'more fee item', ne: 'थप शुल्क शीर्षक' },
   moreFeeItems: { en: 'more fee items', ne: 'थप शुल्क शीर्षक' },
+  moreAllocation: { en: 'more invoice', ne: 'थप बिल' },
   moreAllocations: { en: 'more invoices', ne: 'थप बिल' },
 
   // Payment methods. The stored values are enum constants (CASH, BANK_TRANSFER,
@@ -118,6 +125,14 @@ export function methodLabel(raw: string, lang: PrintLanguage): string {
   };
   const k = key[raw];
   return k ? printLabel(k, lang) : raw;
+}
+
+/** "+ 1 more fee item" vs "+ 3 more fee items". */
+export function continuationLabel(count: number, kind: 'fee' | 'invoice', lang: PrintLanguage): string {
+  const key: LabelKey = kind === 'fee'
+    ? (count === 1 ? 'moreFeeItem' : 'moreFeeItems')
+    : (count === 1 ? 'moreAllocation' : 'moreAllocations');
+  return `+ ${count} ${printLabel(key, lang)}`;
 }
 
 /** Methods where no human took the money — see the receipt's received-by slot. */

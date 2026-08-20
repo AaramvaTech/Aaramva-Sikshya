@@ -54,6 +54,29 @@ export class PrintOverflowError extends Error {
  */
 const FIT_EPSILON_PT = 0.01;
 
+/**
+ * Raised when a table has room for the continuation row but not for a single
+ * real line beneath it.
+ *
+ * "+ 9 more fee items ......... 12,500.00" as the ONLY row is not a bill: it
+ * itemises nothing, names no fee head, and asks a parent to pay a number with
+ * no stated basis. A document that fails to generate is recoverable — someone
+ * sees the error and fixes the data or the layout. A document that generates
+ * and says nothing is handed to a parent.
+ */
+export class PrintCapacityError extends Error {
+  constructor(
+    readonly document: string,
+    readonly rowsAvailable: number,
+  ) {
+    super(
+      `${document} has room for ${rowsAvailable} table row(s) — too few to print any real line ` +
+        'alongside a continuation row. Refusing to render a document that itemises nothing.',
+    );
+    this.name = 'PrintCapacityError';
+  }
+}
+
 /** Throws unless `bodyEnd` sits at or above `footerTop` (within FIT_EPSILON_PT). */
 export function assertFits(document: string, bodyEnd: number, footerTop: number): void {
   if (bodyEnd - footerTop > FIT_EPSILON_PT) {

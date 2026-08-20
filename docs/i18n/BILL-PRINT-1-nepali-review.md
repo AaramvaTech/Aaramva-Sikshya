@@ -93,14 +93,26 @@ too** — which is what the approved design does: the Nepali half of `Receipt.dc
 | 26 | `methodEsewa` | eSewa | eSewa *(brand, unchanged)* | Same slot | |
 | 27 | `methodKhalti` | Khalti | Khalti *(brand, unchanged)* | Same slot | |
 
-### Note on #10 and #22 — the continuation rows
+### Note on #10 and #22 — the continuation rows, and a PLURAL question
 
 These sit in a table row that also carries a money amount, so the printed lines still add up to the
 total. In English: `+ 3 more fee items ......... 1,240.00`.
 
-Please check two things: that the Nepali reads naturally in that position, and that
-number-then-words order (`+ ३ थप...`) is correct. **The count prints in Arabic digits** like every
-other number on the document.
+**English inflects for number and Nepali is assumed not to.** The software now prints:
+
+| Count | English | Nepali (proposed) |
+|---|---|---|
+| 1 | `+ 1 more fee item` | `+ 1 थप शुल्क शीर्षक` |
+| 3 | `+ 3 more fee items` | `+ 3 थप शुल्क शीर्षक` |
+| 1 | `+ 1 more invoice` | `+ 1 थप बिल` |
+| 3 | `+ 3 more invoices` | `+ 3 थप बिल` |
+
+**Please confirm the Nepali is genuinely the same for one and for many.** If it is not, write the
+plural form and it will get its own entry — the software already has a separate slot for it, so
+this costs nothing to change.
+
+Also check that the number-then-words order (`+ ३ थप...`) reads correctly. **The count prints in
+Arabic digits** like every other number on the document.
 
 ---
 
