@@ -7,13 +7,21 @@ function makeData(overrides: Partial<BillPdfData['invoice']> = {}): BillPdfData 
       registrationNumber: 'REG-KTM-2019-04521', address: 'Kathmandu', phone: '01-4780123',
       website: null, tagline: null, paymentInstructions: null, qrImageBuffer: null,
       principalName: 'Dr. Kamala Shrestha', principalSignatureBuffer: null, schoolStampBuffer: null,
-      accentColor: '#0f6e56', accentTint: '#eaf5f1',
+      // accentColor/accentTint were removed from BillPdfTenant: SPEC section 4
+      // fixes the accent and permits it in four places, none of them a fill, so
+      // a per-tenant accent has nowhere to go on the invoice. (The 80mm thermal
+      // slip keeps its own.)
     },
     invoice: {
       invoiceNumber: 'BINV-2083-000001', studentName: 'Om Subedi', admissionNumber: 'STU-001',
       className: 'Grade 9', bsYear: 2083, bsMonth: 3, issueDateAd: '2026-06-01', issueDateBs: '2083-02-18',
       dueDateAd: '2026-06-15', dueDateBs: '2083-03-01', taxRate: null, taxAmount: 0, netAmount: 1000,
+      // No previousBalanceSign here: BillPdfInvoice carries the magnitude and
+      // toInvoiceHalf derives the sign from it via the ledger's balanceSign.
       previousBalance: 0, totalReceivable: 1000, amountInWordsEn: 'One Thousand', amountInWordsNe: 'एक हजार',
+      // BILL-PRINT-1's party block and identity row; required, not optional.
+      sectionName: 'A', rollNumber: '14', guardianName: 'Ramesh Subedi',
+      fiscalYear: '2083/84', installment: 'Ashwin 2083',
       ...overrides,
     },
     items: [{ itemName: 'Tuition', grossAmount: 1000, concessionAmount: 0, apportionedConcession: 0, isTaxable: false }],
