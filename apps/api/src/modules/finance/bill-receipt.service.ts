@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit';
 import { loadPdfFonts, pickFont, drawMixedText } from '../../common/pdf/pdf-fonts';
 import { Money } from '../../common/money/money';
 import { printLabel, PrintLanguage, methodLabel } from './bill-print-labels';
+import { drCrMarker } from './print/a5-sheet';
 
 const MUTED = '#6b7280';
 const INK = '#111827';
@@ -58,11 +59,12 @@ export interface BillReceiptData {
   advanceAmount: number;
   /**
    * BILL-PRINT-1: the student's ledger balance AS OF this payment's own
-   * ledger entry — never the live balance. Signed on the ledger convention:
-   * positive = owes (DR), negative = advance (CR). A reprint must never
-   * contradict the slip that was originally handed over.
+   * ledger entry — never the live balance. A reprint must never contradict the
+   * slip that was originally handed over.
    */
   balanceAfter: number;
+  /** The ledger's own three-way sign. ZERO prints no DR/CR marker. */
+  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO';
   receivedByName: string | null;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
@@ -170,7 +172,9 @@ export class BillReceiptService {
       // a fee slip, and it must be on the counter copy too, not only the A5.
       {
         const y = doc.y;
-        const balLabel = `${label('balanceAfterPayment')} ${data.balanceAfter < 0 ? '(CR)' : '(DR)'}`;
+        // ZERO carries no marker — see drCrMarker.
+        const mk = drCrMarker(data.balanceAfterSign);
+        const balLabel = mk ? `${label('balanceAfterPayment')} ${mk}` : label('balanceAfterPayment');
         doc.font(pickFont(balLabel)).fontSize(8).fillColor(MUTED).text(balLabel, MARGIN, y, { width: w * 0.6 });
         doc.font('latin-bold').fontSize(9).fillColor(INK)
           .text(`Rs. ${num(Math.abs(data.balanceAfter))}`, MARGIN + w * 0.6, y, { width: w * 0.4, align: 'right' });

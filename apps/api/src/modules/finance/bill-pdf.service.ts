@@ -5,6 +5,8 @@ import { printLabel, PrintLanguage, LabelKey, continuationLabel } from './bill-p
 import { PAGE, drawSheet, HalfRenderer, StackMode, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderInvoiceHalf, InvoiceHalfData, InvoiceHalfLine } from './print/invoice-half';
+import { balanceSign } from './ledger.util';
+import { Money } from '../../common/money/money';
 
 export interface BillPdfLineItem {
   itemName: string;
@@ -269,6 +271,7 @@ export function toInvoiceHalf(data: BillPdfData, locale: Locale): InvoiceHalfDat
     // table foots against this figure exactly.
     subtotal: inv.netAmount - inv.taxAmount,
     previousBalance: inv.previousBalance,
+    previousBalanceSign: balanceSign(Money.fromNumber(inv.previousBalance)),
     totalReceivable: inv.totalReceivable,
     inWords: words ? `${words} ${only}` : null,
     locale,

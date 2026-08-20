@@ -291,6 +291,20 @@ export function rule(
 }
 
 /**
+ * The printed DR/CR marker for a ledger balance.
+ *
+ * ZERO prints NOTHING. A balance of Rs. 0.00 is neither owed nor in credit,
+ * and "(DR)" beside it tells a parent they owe zero rupees — an assertion the
+ * ledger never made. The sign comes from the ledger (balanceSign), so the
+ * document and the ledger can never disagree about which state a balance is in.
+ */
+export function drCrMarker(sign: 'OWES' | 'ADVANCE' | 'ZERO'): string {
+  if (sign === 'OWES') return '(DR)';
+  if (sign === 'ADVANCE') return '(CR)';
+  return '';
+}
+
+/**
  * Drops the URL scheme (and any trailing slash) from a website for print.
  * `https://demoschool.edu.np` -> `demoschool.edu.np`.
  *

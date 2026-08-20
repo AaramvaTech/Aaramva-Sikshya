@@ -98,7 +98,7 @@ function fixture(locale: Locale): InvoiceHalfData {
       { head: 'Tuition Fee', gross: 1000, concession: 100, nonTaxable: 0, taxable: 900, total: 900 },
       { head: 'Transportation Fee', gross: 500, concession: 50, nonTaxable: 450, taxable: 0, total: 450 },
     ],
-    subtotal: 1350, previousBalance: 1800, totalReceivable: 3150,
+    subtotal: 1350, previousBalance: 1800, previousBalanceSign: 'OWES' as const, totalReceivable: 3150,
     inWords: 'Three Thousand One Hundred Fifty Rupees only',
     locale, label: label(lang),
     continuation: (n: number) => continuationLabel(n, 'fee', lang),
@@ -140,7 +140,7 @@ function minContent(locale: Locale): InvoiceHalfData {
     },
     section: null, roll: null, studentId: null, guardian: null,
     lines: [{ head: 'Tuition Fee', gross: 1000, concession: 0, nonTaxable: 0, taxable: 1000, total: 1000 }],
-    subtotal: 1000, previousBalance: 0, totalReceivable: 1000,
+    subtotal: 1000, previousBalance: 0, previousBalanceSign: 'ZERO' as const, totalReceivable: 1000,
     inWords: 'One Thousand Rupees only',
   };
 }
@@ -161,7 +161,8 @@ function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
     method: 'eSewa', txnRef: 'ESW-8842190337',
     amount: allocations.reduce((a, x) => a + x.amount, 0) || 1000,
     inWords: 'One Thousand Rupees only',
-    allocations, advanceAmount: 0, balanceAfter: 2150, receivedBy: 'Sita Maharjan',
+    allocations, advanceAmount: 0, balanceAfter: 2150, balanceAfterSign: 'OWES' as const,
+    receivedBy: 'Sita Maharjan',
     locale, label: label(lang),
     continuation: (n: number) => continuationLabel(n, 'invoice', lang),
   };
@@ -356,10 +357,29 @@ describe.each(LOCALES)('BILL-PRINT-1 invoice half [%s]', (locale) => {
     expect(r.assetMisses).toEqual([]);
   });
 
-  it('a zero previous balance still renders its row, with a marker', () => {
+  it('a zero previous balance renders its row WITHOUT a DR/CR marker', () => {
     const data = minContent(locale);
     expect(data.previousBalance).toBe(0);
-    expect(() => renderInvoiceHalf(newDoc(), halfBox(0), data, null)).not.toThrow();
+    expect(data.previousBalanceSign).toBe('ZERO');
+    const doc = newDoc();
+    const seen: string[] = [];
+    const orig = doc.text.bind(doc);
+    (doc as unknown as { text: (...a: unknown[]) => unknown }).text = (
+      str: string, x?: number, y?: number, o?: Record<string, unknown>,
+    ) => { seen.push(String(str)); return orig(str as never, x as never, y as never, o as never); };
+    expect(() => renderInvoiceHalf(doc, halfBox(0), data, null)).not.toThrow();
+    expect(seen).not.toContain('(DR)');
+    expect(seen).not.toContain('(CR)');
+    // Same invoice with a real debt DOES carry the marker.
+    const owing = { ...data, previousBalance: 1800, previousBalanceSign: 'OWES' as const };
+    const doc2 = newDoc();
+    const seen2: string[] = [];
+    const o2 = doc2.text.bind(doc2);
+    (doc2 as unknown as { text: (...a: unknown[]) => unknown }).text = (
+      str: string, x?: number, y?: number, o?: Record<string, unknown>,
+    ) => { seen2.push(String(str)); return o2(str as never, x as never, y as never, o as never); };
+    renderInvoiceHalf(doc2, halfBox(0), owing, null);
+    expect(seen2).toContain('(DR)');
   });
 });
 
@@ -383,10 +403,35 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
   });
 
   it('renders the balance-after line for a zero balance and for an advance', () => {
-    for (const balanceAfter of [0, -500, 2150]) {
-      expect(() => renderReceiptHalf(newDoc(), halfBox(0), { ...receiptFixture(locale), balanceAfter }, null))
-        .not.toThrow();
+    const signs = [['ZERO', 0], ['ADVANCE', 500], ['OWES', 2150]] as const;
+    for (const [balanceAfterSign, balanceAfter] of signs) {
+      expect(() => renderReceiptHalf(newDoc(), halfBox(0),
+        { ...receiptFixture(locale), balanceAfter, balanceAfterSign }, null)).not.toThrow();
     }
+  });
+
+  it('prints NO DR/CR marker on a ZERO balance', () => {
+    // "Rs. 0.00 (DR)" tells a parent they owe zero rupees — an assertion the
+    // ledger never made. LedgerService distinguishes OWES/ADVANCE/ZERO and the
+    // print layer must not collapse the third state into a debit.
+    const drawn = (sign: 'OWES' | 'ADVANCE' | 'ZERO', amount: number) => {
+      const doc = newDoc();
+      const seen: string[] = [];
+      const orig = doc.text.bind(doc);
+      (doc as unknown as { text: (...a: unknown[]) => unknown }).text = (
+        str: string, x?: number, y?: number, o?: Record<string, unknown>,
+      ) => { seen.push(String(str)); return orig(str as never, x as never, y as never, o as never); };
+      renderReceiptHalf(doc, halfBox(0),
+        { ...receiptFixture(locale), balanceAfter: amount, balanceAfterSign: sign }, null);
+      return seen;
+    };
+    expect(drawn('OWES', 2150)).toContain('(DR)');
+    expect(drawn('ADVANCE', 500)).toContain('(CR)');
+    const zero = drawn('ZERO', 0);
+    expect(zero).not.toContain('(DR)');
+    expect(zero).not.toContain('(CR)');
+    // The amount itself still prints — the line always renders.
+    expect(zero.some((t) => t.includes('0.00'))).toBe(true);
   });
 
   it('an ADVANCE payment still foots: allocation rows + advance = amount received', () => {
