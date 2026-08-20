@@ -75,4 +75,16 @@ export function drawMixedText(
     doc.font(pickFont(r.text, r.bold)).text(r.text, cursorX, y, { lineBreak: false });
     cursorX += widths[i];
   });
+
+  // Leave the cursor on the NEXT line, the way doc.text() does when it is
+  // allowed to break. `lineBreak: false` suppresses that, so without this the
+  // helper returns with doc.y still on the line it just drew — and a caller
+  // that follows up with moveDown() advances by a FRACTION of a line and
+  // overprints. That is exactly what the 80mm receipt's signature block did:
+  // "For: {School}" and the principal's name landed 0.58mm apart with ~2.7mm
+  // type, on every slip since BILL-8.
+  //
+  // Callers that track their own cursor and pass an explicit y each time (the
+  // A5 halves) are unaffected — they never read doc.y back.
+  doc.y = y + doc.currentLineHeight();
 }

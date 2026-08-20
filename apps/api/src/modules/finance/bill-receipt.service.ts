@@ -96,13 +96,36 @@ export interface BillReceiptData {
 export class BillReceiptService {
   private readonly fonts = loadPdfFonts();
 
-  render(data: BillReceiptData): Promise<Buffer> {
-    const height = this.computeHeight(data);
+  /**
+   * Two passes. The first draws onto a generously-tall throwaway page purely to
+   * learn where the content actually ends; the second draws for real at exactly
+   * that height plus the bottom margin.
+   *
+   * computeHeight()'s per-section estimate ran ~30% over — every slip trailed
+   * 39-48mm of blank roll, which on a thermal printer is 4cm of paper fed and
+   * cut for nothing, on every receipt. Measuring beats estimating here for the
+   * same reason it did on the A5: the drawing code is the only thing that knows
+   * how tall the drawing is, and a parallel calculation drifts from it.
+   *
+   * Cost: one extra render, ~25ms, never serialised (the throwaway document is
+   * discarded without being written out).
+   */
+  async render(data: BillReceiptData): Promise<Buffer> {
+    const measured = await this.draw(data, this.computeHeight(data), true);
+    return (await this.draw(data, measured.contentEnd + MARGIN, false)).buffer;
+  }
+
+  private draw(data: BillReceiptData, height: number, measureOnly: boolean): Promise<{ buffer: Buffer; contentEnd: number }> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: [PAGE_W, height], margin: MARGIN, bufferPages: true });
       const chunks: Buffer[] = [];
+      let contentEnd = 0;
+      // Every draw call moves doc.y; the furthest it reaches is the content's
+      // true bottom. Recorded by watching the cursor rather than by re-deriving
+      // section heights.
+      const mark = () => { if (doc.y > contentEnd) contentEnd = doc.y; };
       doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentEnd }));
       doc.on('error', reject);
 
       for (const [name, buf] of Object.entries(this.fonts)) doc.registerFont(name, buf);
@@ -158,7 +181,13 @@ export class BillReceiptService {
       doc.moveDown(0.4);
 
       // ── Allocations ────────────────────────────────────────────────────
-      if (data.allocations.length > 0) {
+      // The header covers the WHOLE table, including the applied-to-balance and
+      // advance-credit rows — they are rows of it, not a separate list. An
+      // advance-only receipt was printing "Advance credit" with no heading
+      // above it, so the row appeared without its table.
+      const hasTableRows = data.allocations.length > 0
+        || data.appliedToBalance > 0 || data.advanceCredit > 0;
+      if (hasTableRows) {
         const paidLabel = label('paidTowards');
         doc.font(pickFont(paidLabel)).fontSize(8).fillColor(MUTED).text(paidLabel.toUpperCase(), MARGIN, doc.y);
         doc.moveDown(0.2);
@@ -169,9 +198,9 @@ export class BillReceiptService {
             .text(num(a.amount), MARGIN + w * 0.55, y, { width: w * 0.45, align: 'right' });
           doc.y = y + 12;
         }
-        doc.moveDown(0.2);
       }
-      // The unallocated money, split by what actually happened to it.
+      // The unallocated money, split by what actually happened to it. Drawn
+      // inside the same table as the allocations above (see hasTableRows).
       for (const [key, amt] of [
         ['appliedToBalance', data.appliedToBalance] as const,
         ['advanceCredit', data.advanceCredit] as const,
@@ -184,6 +213,7 @@ export class BillReceiptService {
           .text(num(amt), MARGIN + w * 0.55, y, { width: w * 0.45, align: 'right' });
         doc.y = y + 16;
       }
+      if (hasTableRows) doc.moveDown(0.2);
 
       // ── Balance after this payment (BILL-PRINT-1) ────────────────────
       // The one addition to this frozen renderer: the most-requested line on
@@ -234,7 +264,9 @@ export class BillReceiptService {
       const thankYou = label('thankYou');
       doc.font(pickFont(thankYou)).fontSize(8).fillColor(data.tenant.accentColor)
         .text(thankYou, MARGIN, doc.y, { width: w, align: 'center' });
+      mark();
 
+      void measureOnly;
       doc.end();
     });
   }
