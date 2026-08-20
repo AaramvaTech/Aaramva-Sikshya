@@ -9,11 +9,14 @@ const MUTED = '#6b7280';
 const INK = '#111827';
 const HAIRLINE = '#e5e2da';
 
-// 80mm thermal width (B8-2), minus small margins. Height is computed per
-// receipt (computeHeight) rather than fixed — a real thermal printer cuts
-// wherever content ends; a fixed PDF page size just needs to match that.
+// 80mm thermal width (B8-2). Height is MEASURED per receipt from the real
+// drawn extent (see render) rather than estimated — a thermal printer cuts
+// wherever content ends, so the page must match that and not a guess.
 const PAGE_W = 226.77; // 80mm in points
 const MARGIN = 10;
+/** Taller than any receipt can be, so the measure pass can never break a page
+ *  and its contentEnd is the true extent rather than a post-break artefact. */
+const MEASURE_HEIGHT = 4000;
 
 export interface BillReceiptAllocationLine {
   invoiceNumber: string;
@@ -109,15 +112,31 @@ export class BillReceiptService {
    *
    * Cost: one extra render, ~25ms, never serialised (the throwaway document is
    * discarded without being written out).
+   *
+   * Page breaks are made IMPOSSIBLE in both passes rather than merely unlikely,
+   * because the two passes use different page heights and pdfkit's break rule
+   * reads the page height — so any slack calculation is a way for them to
+   * disagree. The measure pass gets a page taller than any receipt can be; the
+   * real pass carries a ZERO bottom margin with the cut margin baked into the
+   * height instead. maxY is then the full page height, and content that ended
+   * at `contentEnd` on the measure pass cannot reach it.
+   *
+   * This replaced `contentEnd + MARGIN` with a normal bottom margin, which left
+   * EXACTLY zero slack: the last line ended precisely on maxY and pdfkit broke
+   * on the boundary, pushing "Thank you" onto a second page on every slip.
    */
   async render(data: BillReceiptData): Promise<Buffer> {
-    const measured = await this.draw(data, this.computeHeight(data), true);
-    return (await this.draw(data, measured.contentEnd + MARGIN, false)).buffer;
+    const measured = await this.draw(data, MEASURE_HEIGHT);
+    return (await this.draw(data, measured.contentEnd + MARGIN)).buffer;
   }
 
-  private draw(data: BillReceiptData, height: number, measureOnly: boolean): Promise<{ buffer: Buffer; contentEnd: number }> {
+  private draw(data: BillReceiptData, height: number): Promise<{ buffer: Buffer; contentEnd: number }> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: [PAGE_W, height], margin: MARGIN, bufferPages: true });
+      const doc = new PDFDocument({
+        size: [PAGE_W, height],
+        margins: { top: MARGIN, left: MARGIN, right: MARGIN, bottom: 0 },
+        bufferPages: true,
+      });
       const chunks: Buffer[] = [];
       let contentEnd = 0;
       // Every draw call moves doc.y; the furthest it reaches is the content's
@@ -266,27 +285,8 @@ export class BillReceiptService {
         .text(thankYou, MARGIN, doc.y, { width: w, align: 'center' });
       mark();
 
-      void measureOnly;
       doc.end();
     });
   }
 
-  /** Rough per-section point budget matching the draw calls above — a
-   *  reasonable fixed-ish estimate rather than a true two-pass measure,
-   *  same trade-off real thermal-receipt generators make (the printer
-   *  cuts wherever content ends; this just needs to not clip). Generous
-   *  padding at the end absorbs line-wrap variance in longer names/
-   *  addresses/amount-in-words. */
-  private computeHeight(data: BillReceiptData): number {
-    const header = 70;
-    const metaRows = 5 * 13;
-    const amountBlock = 70;
-    const allocations = data.allocations.length * 12 + (data.allocations.length > 0 ? 30 : 0);
-    const advance = (data.appliedToBalance > 0 ? 16 : 0) + (data.advanceCredit > 0 ? 16 : 0);
-    const balanceAfter = data.balanceAfter !== null ? 18 : 0; // BILL-PRINT-1 line above
-    const wordsLines = (data.language === 'BOTH' ? 2 : 1) * 22;
-    const footer = 90;
-    const padding = 40;
-    return header + metaRows + amountBlock + allocations + advance + balanceAfter + wordsLines + footer + padding;
-  }
 }
