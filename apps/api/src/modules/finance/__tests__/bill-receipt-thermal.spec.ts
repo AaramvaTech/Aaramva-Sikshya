@@ -179,6 +179,8 @@ describe('BillReceiptService — no two text runs may overprint', () => {
     }],
   ];
 
+  const pageShapes = shapes;
+
   it.each(shapes)('%s: nothing overprints', async (_name, d) => {
     expect(overprints(await runsOf(d))).toEqual([]);
   });
@@ -194,6 +196,16 @@ describe('BillReceiptService — no two text runs may overprint', () => {
     expect(principal).toBeDefined();
     expect(principal!.y - school!.y).toBeGreaterThanOrEqual(school!.size);
     // 0.58mm before the fix; a full line after it.
+  });
+
+  // The regression this file failed to catch: the trailing-blank assertion
+  // below passed at 9.9mm while "Thank you" sat on page 2. A height assertion
+  // that ignores page count is not a fit assertion — the A5 has asserted page
+  // count from the start and this must too.
+  it.each(pageShapes)('%s: renders as exactly ONE page', async (_n, d) => {
+    const buf = await service.render(d);
+    const pages = (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    expect(pages).toBe(1);
   });
 
   it('leaves no more than 10mm of blank roll after the last line', async () => {
