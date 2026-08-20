@@ -17,7 +17,10 @@ import { drCrMarker } from '../print/a5-sheet';
 describe('BillReceiptService (80mm thermal)', () => {
   const service = new BillReceiptService();
 
-  const data = (balanceAfter: number, balanceAfterSign: BalanceSign): BillReceiptData => ({
+  const data = (
+    balanceAfter: number | null,
+    balanceAfterSign: BalanceSign | null,
+  ): BillReceiptData => ({
     tenant: {
       name: 'Demo School Nepal', principalName: 'Dr. Kamala Shrestha', accentColor: '#0d5c43',
       address: 'Naya Baneshwor, Kathmandu-10, Nepal', phone: '01-4780123',
@@ -28,7 +31,8 @@ describe('BillReceiptService (80mm thermal)', () => {
     studentName: 'Binod Gurung', className: 'Grade 9', sectionName: 'B', rollNumber: '22',
     method: 'CASH', txnRef: null, amount: 1000,
     allocations: [{ invoiceNumber: 'BINV-2083-000003', amount: 1000, installment: 'Shrawan 2083' }],
-    advanceAmount: 0, balanceAfter, balanceAfterSign, receivedByName: 'Sita Maharjan',
+    advanceAmount: 0, appliedToBalance: 0, advanceCredit: 0,
+    balanceAfter, balanceAfterSign, receivedByName: 'Sita Maharjan',
     amountInWordsEn: 'One Thousand Rupees', amountInWordsNe: null, language: 'EN',
   });
 
@@ -71,6 +75,16 @@ describe('BillReceiptService (80mm thermal)', () => {
     expect(line).not.toContain('(CR)');
     // The line itself still renders, with the amount.
     expect(seen.some((t) => t.includes('0.00'))).toBe(true);
+  });
+
+  it('SUPPRESSES the balance line entirely for a payment that never posted', async () => {
+    // ledger_entry_id NULL means the instrument never cleared. There is no
+    // "after" — the line must not appear at all, rather than fall back to the
+    // live balance and caption it as this payment's outcome.
+    const seen = await drawnText(data(null, null));
+    expect(balanceLine(seen)).toBe('');
+    // The rest of the slip still renders.
+    expect(seen.some((t) => t.includes('RCPT-2083-000021'))).toBe(true);
   });
 });
 

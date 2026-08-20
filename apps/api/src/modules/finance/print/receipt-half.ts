@@ -57,17 +57,20 @@ export interface ReceiptHalfData {
   inWords: string | null;
   allocations: ReceiptAllocation[];
   /**
-   * Money received but not applied to any invoice (an ADVANCE_ONLY payment,
-   * or the remainder after allocation). It renders as its own row in the
-   * allocation table so the printed rows ALWAYS sum to the amount received —
-   * without it, a fully-unallocated payment prints an empty table under a
-   * large figure and the slip does not foot.
+   * Money received but not applied to any invoice (an ADVANCE_ONLY payment, or
+   * the remainder after allocation), SPLIT by what became of it:
+   * `appliedToBalance` went against existing debt, `advanceCredit` is held as
+   * credit. Each renders as its own row in the allocation table so the printed
+   * rows ALWAYS sum to the amount received — without them a fully-unallocated
+   * payment prints an empty table under a large figure and the slip does not
+   * foot.
    */
-  advanceAmount: number;
+  appliedToBalance: number;
+  advanceCredit: number;
   /** Magnitude as of this payment's own ledger entry. */
-  balanceAfter: number;
+  balanceAfter: number | null;
   /** The ledger's own three-way sign for that balance — never re-derived here. */
-  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO';
+  balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO' | null;
   receivedBy: string | null;
   locale: Locale;
   label: (key: LabelKey) => string;
@@ -351,14 +354,19 @@ export function renderReceiptHalf(
   y += eyeH + HEAD_PAD[locale];
 
   const footerTop = box.bottom - footerHeight(locale);
-  const balanceH = 9 * LINE_HEIGHT[locale];
+  const showBalance = data.balanceAfter !== null && data.balanceAfterSign !== null;
+  const balanceH = showBalance ? 9 * LINE_HEIGHT[locale] : 0;
   // Reserve BOTH trailing boundaries (7: table -> balance, 8: balance ->
   // footer) or a full allocation table overruns the footer by exactly the
   // boundary-8 gap.
   const allocBudget = footerTop - y - RULE_INK - g(STEP.sm) - balanceH - g(STEP.lg);
-  // The advance row, when present, takes one row of the same height out of
-  // the budget before the allocations are planned.
-  const advanceRows = data.advanceAmount > 0 ? 1 : 0;
+  // The unallocated rows (applied-to-balance and/or advance credit) take their
+  // height out of the budget before the allocations are planned.
+  const extraRows: Array<[LabelKey, number]> = [
+    ['appliedToBalance', data.appliedToBalance],
+    ['advanceCredit', data.advanceCredit],
+  ].filter(([, amt]) => (amt as number) > 0) as Array<[LabelKey, number]>;
+  const advanceRows = extraRows.length;
   const [, floorD] = densities(locale);
   const plan = planAllocations(
     data.allocations,
@@ -366,7 +374,7 @@ export function renderReceiptHalf(
     // The continuation residual must reconcile against what the ALLOCATION
     // rows are meant to total — the amount received minus the advance, which
     // gets its own row — not against the full amount.
-    data.amount - data.advanceAmount,
+    data.amount - data.appliedToBalance - data.advanceCredit,
     locale,
   );
   const rowH = rowHeight(plan.density, locale);
@@ -393,22 +401,27 @@ export function renderReceiptHalf(
     y += rowH;
   }
 
-  if (data.advanceAmount > 0) {
-    rule(doc, L, y, W, RULE_ROW, plan.visible.length === 0 && plan.omitted === 0 ? GREY_2 : GREY_3);
+  extraRows.forEach(([key, amt], i) => {
+    const first = plan.visible.length === 0 && plan.omitted === 0 && i === 0;
+    rule(doc, L, y, W, RULE_ROW, first ? GREY_2 : GREY_3);
     const ry = y + plan.density.rowPad;
-    text(doc, label('advanceCredit'), xs.invoice, ry, cellOpts);
-    text(doc, money(data.advanceAmount), xs.amount, ry, {
+    text(doc, label(key), xs.invoice, ry, cellOpts);
+    text(doc, money(amt), xs.amount, ry, {
       ...cellOpts, weight: 600, width: ALLOC.amount - CELL_PAD, align: 'right',
     });
     y += rowH;
-  }
+  });
 
   rule(doc, L, y, W, RULE_INK, INK);
   y += g(STEP.sm);                                    // boundary 7
 
-  // ── Balance after this payment — always renders, even at 0.00 ─────────────
+  // ── Balance after this payment ────────────────────────────────────────────
+  // Always renders when the payment POSTED. Suppressed when it did not: a
+  // payment with no ledger entry has no "after", and captioning the live
+  // balance as this payment's outcome would be a false statement.
+  if (showBalance) {
   const balLabel = label('balanceAfterPayment');
-  const marker = drCrMarker(data.balanceAfterSign);
+  const marker = drCrMarker(data.balanceAfterSign ?? 'ZERO');
   const balW = ALLOC.installment + ALLOC.amount;
   const balX = R - balW;
   text(doc, balLabel, balX - mm(30), y + (balanceH - 8 * LINE_HEIGHT[locale]) / 2, {
@@ -420,9 +433,10 @@ export function renderReceiptHalf(
       size: EYEBROW_SIZE[locale], weight: 600, color: GREY_1, track: 0.09 * EYEBROW_SIZE[locale],
     });
   }
-  text(doc, `Rs. ${money(Math.abs(data.balanceAfter))}`, balX, y, {
+  text(doc, `Rs. ${money(Math.abs(data.balanceAfter as number))}`, balX, y, {
     size: 9, weight: 700, width: balW - CELL_PAD, align: 'right',
   });
+  }
   y += balanceH;
   const contentEnd = y + g(STEP.lg);                  // boundary 8 (balance -> footer)
 

@@ -6,6 +6,7 @@ import { StorageService } from '../storage/storage.service';
 import { fetchImageBuffer } from '../branding/branding-color.service';
 import { Role } from '../common/enums/role.enum';
 import { toMoney } from './entities/finance.entity';
+import { Money } from '../../common/money/money';
 import { amountInWords } from '../../common/money/amount-in-words';
 import { BillPaymentService } from './bill-payment.service';
 import { resolveBillBrandColor } from '../../common/tenant-brand-color';
@@ -200,8 +201,9 @@ export class BillReceiptDocumentService {
         };
       }),
       advanceAmount: payment.advanceAmount ?? 0,
-      balanceAfter: balanceAfter.amount,
-      balanceAfterSign: balanceAfter.sign,
+      ...splitUnallocated(toMoney(payment.advanceAmount ?? 0), balanceAfter),
+      balanceAfter: balanceAfter?.amount ?? null,
+      balanceAfterSign: balanceAfter?.sign ?? null,
       receivedByName: receivedByRows[0]?.full_name ?? null,
       amountInWordsEn: amountInWords(totalAmount, 'en'),
       amountInWordsNe: amountInWords(totalAmount, 'ne'),
@@ -225,28 +227,66 @@ export class BillReceiptDocumentService {
    * only honest answer for a provisional receipt.
    */
   private async balanceAsOf(
-    studentId: string,
+    _studentId: string,
     ledgerEntryId: string | null,
-  ): Promise<{ amount: number; sign: BalanceSign }> {
-    const rows = ledgerEntryId
-      ? await this.tenantPrisma.query<{ sum: string }>(
-          `SELECT COALESCE(SUM(l.debit) - SUM(l.credit), 0) AS sum
-             FROM student_ledger_entries l, student_ledger_entries e
-            WHERE e.id = $1::uuid
-              AND l.student_id = e.student_id
-              AND (l.entry_date, l.created_at) <= (e.entry_date, e.created_at)`,
-          ledgerEntryId,
-        )
-      : await this.tenantPrisma.query<{ sum: string }>(
-          `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum
-             FROM student_ledger_entries WHERE student_id = $1::uuid`,
-          studentId,
-        );
+  ): Promise<{ amount: number; sign: BalanceSign } | null> {
+    // No ledger entry means the payment never posted (a bounced or voided
+    // instrument). There is NO "balance after this payment" for a payment that
+    // did not happen — returning the live balance would caption an unrelated
+    // figure as this payment's outcome, which is worse than saying nothing.
+    if (!ledgerEntryId) return null;
+    const rows = await this.tenantPrisma.query<{ sum: string }>(
+      `SELECT COALESCE(SUM(l.debit) - SUM(l.credit), 0) AS sum
+         FROM student_ledger_entries l, student_ledger_entries e
+        WHERE e.id = $1::uuid
+          AND l.student_id = e.student_id
+          AND (l.entry_date, l.created_at) <= (e.entry_date, e.created_at)`,
+      ledgerEntryId,
+    );
     const balance = toMoney(rows[0]?.sum ?? 0);
     // The sign comes from Money via the ledger's own rule — a `< 0` float test
     // here would be a second convention that collapses ZERO into a debit.
     return { amount: balance.toNumber(), sign: balanceSign(balance) };
   }
+}
+
+/**
+ * Splits the unallocated part of a payment into what it actually did.
+ *
+ * Unallocated money still credits the ledger, so it reduces the balance whether
+ * or not it is tied to an invoice. Whether any of it is genuinely ADVANCED
+ * depends on where the balance ended up:
+ *
+ *   student owed 1500, pays 1500 unallocated -> after 0      -> 0 advanced
+ *   student owed    0, pays 1500 unallocated -> after -1500  -> 1500 advanced
+ *   student owed  500, pays 1500 unallocated -> after -1000  -> 1000 advanced,
+ *                                                               500 applied
+ *
+ * So the advanced portion is the credit balance the payment created, capped at
+ * the unallocated amount; the rest went against existing debt. All in Money —
+ * these two numbers have to add back to the unallocated total exactly, because
+ * the allocation table foots against the amount received.
+ *
+ * With no balance (an unposted payment) the split cannot be determined, so the
+ * whole unallocated amount stays under one heading rather than asserting a
+ * division that was never computed.
+ */
+export function splitUnallocated(
+  unallocated: Money,
+  balance: { amount: number; sign: BalanceSign } | null,
+): { appliedToBalance: number; advanceCredit: number } {
+  if (unallocated.compare(Money.zero()) <= 0) return { appliedToBalance: 0, advanceCredit: 0 };
+  if (!balance || balance.sign !== 'ADVANCE') {
+    return balance
+      ? { appliedToBalance: unallocated.toNumber(), advanceCredit: 0 }
+      : { appliedToBalance: 0, advanceCredit: unallocated.toNumber() };
+  }
+  const credit = Money.fromNumber(Math.abs(balance.amount));
+  const advanced = credit.compare(unallocated) < 0 ? credit : unallocated;
+  return {
+    appliedToBalance: unallocated.sub(advanced).toNumber(),
+    advanceCredit: advanced.toNumber(),
+  };
 }
 
 /**

@@ -161,8 +161,8 @@ function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
     method: 'eSewa', txnRef: 'ESW-8842190337',
     amount: allocations.reduce((a, x) => a + x.amount, 0) || 1000,
     inWords: 'One Thousand Rupees only',
-    allocations, advanceAmount: 0, balanceAfter: 2150, balanceAfterSign: 'OWES' as const,
-    receivedBy: 'Sita Maharjan',
+    allocations, appliedToBalance: 0, advanceCredit: 0,
+    balanceAfter: 2150, balanceAfterSign: 'OWES' as const, receivedBy: 'Sita Maharjan',
     locale, label: label(lang),
     continuation: (n: number) => continuationLabel(n, 'invoice', lang),
   };
@@ -399,7 +399,8 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
     const plan = renderReceiptHalf(newDoc(), halfBox(1), data, null);
     expect(plan.omitted).toBeGreaterThan(0);
     const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
-    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+    expect(shown + plan.residual + data.appliedToBalance + data.advanceCredit)
+      .toBeCloseTo(data.amount, 2);
   });
 
   it('renders the balance-after line for a zero balance and for an advance', () => {
@@ -439,11 +440,42 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
     // explicit advance row the table would be EMPTY under a large figure and
     // the slip would not add up.
     const data: ReceiptHalfData = {
-      ...receiptFixture(locale, []), amount: 1500, advanceAmount: 1500,
+      ...receiptFixture(locale, []), amount: 1500, appliedToBalance: 0, advanceCredit: 1500,
     };
     const plan = renderReceiptHalf(newDoc(), halfBox(0), data, 'Student Copy');
     const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
-    expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
+    expect(shown + plan.residual + data.appliedToBalance + data.advanceCredit)
+      .toBeCloseTo(data.amount, 2);
+  });
+
+  it('SPLIT unallocated rows still foot to the amount received', () => {
+    // Option (b): a payment that both cleared debt and left credit shows two
+    // rows. Together with the real allocations they must equal the amount.
+    const data: ReceiptHalfData = {
+      ...receiptFixture(locale, [
+        { invoiceNumber: 'BINV-2083-000003', installment: 'Shrawan 2083', amount: 1000 },
+      ]),
+      amount: 2500, appliedToBalance: 500, advanceCredit: 1000,
+      balanceAfter: 1000, balanceAfterSign: 'ADVANCE',
+    };
+    const plan = renderReceiptHalf(newDoc(), halfBox(0), data, 'Student Copy');
+    const shown = plan.visible.reduce((a, x) => a + x.amount, 0);
+    expect(shown + plan.residual + data.appliedToBalance + data.advanceCredit)
+      .toBeCloseTo(data.amount, 2);
+  });
+
+  it('SUPPRESSES the balance-after line when the payment never posted', () => {
+    const data: ReceiptHalfData = {
+      ...receiptFixture(locale), balanceAfter: null, balanceAfterSign: null,
+    };
+    const doc = newDoc();
+    const seen: string[] = [];
+    const orig = doc.text.bind(doc);
+    (doc as unknown as { text: (...a: unknown[]) => unknown }).text = (
+      str: string, x?: number, y?: number, o?: Record<string, unknown>,
+    ) => { seen.push(String(str)); return orig(str as never, x as never, y as never, o as never); };
+    expect(() => renderReceiptHalf(doc, halfBox(0), data, 'Student Copy')).not.toThrow();
+    expect(seen.some((t) => t.includes('Balance after') || t.includes('बाँकी रकम'))).toBe(false);
   });
 
   it('a partially-allocated payment foots across allocations AND advance', () => {
@@ -464,7 +496,7 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
   // no test previously exercised the second pass.
   it('the fitted second pass renders without overflowing', () => {
     for (const shape of [
-      receiptFixture(locale, []),
+      { ...receiptFixture(locale, []), advanceCredit: 1000 },
       receiptFixture(locale),
       receiptFixture(locale, Array.from({ length: 6 }, (_, i) => ({
         invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`,

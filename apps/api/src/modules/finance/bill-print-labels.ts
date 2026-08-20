@@ -47,6 +47,10 @@ const LABELS = {
   method: { en: 'Method', ne: 'माध्यम' },
   paidTowards: { en: 'Paid towards', ne: 'तिरेको बापत' },
   advanceCredit: { en: 'Advance credit', ne: 'पेश्की जम्मा' },
+  // The unallocated part of a payment that went against EXISTING debt rather
+  // than being held as credit. "Advance credit" claims money is being held;
+  // when the student still owed, nothing was advanced.
+  appliedToBalance: { en: 'Applied to balance', ne: 'बाँकी रकममा समायोजन' },
   thankYou: { en: 'Thank you', ne: 'धन्यवाद' },
 
   // ── BILL-PRINT-1 — A5 print stationery ────────────────────────────────────
