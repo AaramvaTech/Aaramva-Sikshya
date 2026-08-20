@@ -25,7 +25,8 @@ Dev domain: `localhost` (use X-Tenant-Slug header for local testing)
 | API style | REST (primary) + WebSocket (real-time) | No GraphQL unless specified |
 | Auth | JWT (access + refresh tokens) | Stored in httpOnly cookies |
 | Containerization | Docker + docker-compose | Dev environment |
-| CI/CD | GitHub Actions | On push to main → staging, on tag → prod |
+| CI | GitHub Actions | `.github/workflows/ci.yml` ONLY — tests + typechecks on every push and PR (4 jobs + an `all-green` gate). **No deploy job, no tag trigger.** |
+| Deployment | Manual, SSH | Per `docs/api-contracts/DEPLOY-1-vps-deployment.md`: clone on the VPS, `docker compose build`, run migrations by hand. **Merging to `main` ships nothing.** |
 
 ---
 
