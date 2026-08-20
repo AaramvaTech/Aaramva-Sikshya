@@ -8,6 +8,65 @@ first — three web files this branch edits (`print-document.ts`, `bill-print.ap
 
 ---
 
+## 0. Merge order, and what merging does NOT do
+
+### Deploy does not trigger off `main`
+
+**Merging ships nothing.** Verified against the workflows, not taken from documentation:
+
+- `.github/workflows/` contains exactly one file, `ci.yml`. Its jobs are `api`, `web`, `mobile`,
+  `bs-calendar`, `all-green` — **there is no deploy job**.
+- Triggers are `push: branches: ['**']` and `pull_request`. No tag trigger, no `environment:`, no
+  `secrets.*`, no registry push — zero matches anywhere under `.github/`.
+- `DEPLOY-1-vps-deployment.md` describes a **manual, SSH-based, phased** process: clone on the VPS,
+  `docker compose build`, run migrations by hand.
+- Production is deliberately weeks behind `main` (deferred by ruling, 2026-08-14).
+
+**CLAUDE.md line 28 claims `CI/CD | GitHub Actions | On push to main → staging, on tag → prod`.
+That is not true and never was** — it describes intent that was never wired. It is the kind of line
+that makes someone believe a merge ships something. **Worth correcting in its own commit**; not
+done here because it is outside this ticket.
+
+**What this means for sequencing:** the cache cutover (§1) and BILL-RCPT-STATUS's unfixed
+bounced-receipt printing do not reach users on merge. They reach users at the **next manual
+deploy**, which is a separate deliberate act and the right moment to have the support note (§4) in
+hand and BILL-RCPT-STATUS decided.
+
+### Merge order — each rebased onto the previous, full gate re-run at each step
+
+```
+chore/ci-typecheck-gate   ->   feat/bill-8-ui   ->   feat/bill-print-1
+```
+
+1. **`chore/ci-typecheck-gate`** (branched off `main`). Adds `tsconfig.spec.json` + the CI
+   `Typecheck (specs)` step, and fixes the 18 stale spec fixtures that step immediately found.
+   Goes first so everything after it is measured by the fuller gate.
+2. **`feat/bill-8-ui`** rebased onto that. Must precede BILL-PRINT-1 regardless — three web files
+   BILL-PRINT-1 edits (`print-document.ts`, `bill-print.api.ts`, `print-document-button.tsx`) do
+   not exist on `main`.
+3. **`feat/bill-print-1`** rebased onto that.
+
+**Re-run the full gate at each step, not only at the end** — `npm test`, `npx tsc -p
+tsconfig.build.json --noEmit`, `npx tsc -p tsconfig.spec.json --noEmit`, and the web suite. The
+spec typecheck has never run against BILL-8-UI's or BILL-PRINT-1's spec files in CI; they were
+clean when run manually against each branch, but the branches have never been merged together.
+
+### BILL-8-UI's gates: two RETIRED, one STANDS
+
+Written down because **a retired gate looks identical to a skipped one**, and a future session
+reading the BILL-8-UI PR will otherwise re-open them.
+
+| BILL-8-UI gate | Status | Why |
+|---|---|---|
+| Devanagari / Nepali review | **RETIRED — moot** | It gated the Nepali output of the renderers **this ticket replaced**. Those renderers no longer exist, so passing it would prove nothing about what ships. Nepali is separately gated OFF at runtime (`BILL_PRINT_1_NEPALI_REVIEWED = false`), and its review is tracked here as open item 5.1 against the CURRENT strings. |
+| Physical thermal print at 100% scale | **RETIRED — superseded** | Same reason: it gated the pre-BILL-PRINT-1 thermal renderer, which has since had nine changes including a measured page height and a signature-overprint fix. **One physical print covers both tickets** — the kit in `thermal-print-kit/` prints the CURRENT renderer, so satisfying it satisfies BILL-8-UI's gate too. Do not print twice. |
+| Click-through of the print surfaces | **STANDS — satisfied** | Still meaningful: the surfaces are BILL-8-UI's and BILL-PRINT-1 only changed what they produce. Satisfied by the surface → format matrix in §6, which was read from code and confirms all seven entry points send the ruled format. |
+
+**Neither retirement is a shortcut.** Both gates verified artefacts that no longer exist. Re-running
+them would be verifying deleted code.
+
+---
+
 ## 1. PR description
 
 ### What changed
@@ -229,6 +288,37 @@ distributed; the A/B renders are in
 ### 5.6 BILL-RCPT-STATUS — blocking, ruled, not implemented
 `docs/api-contracts/BILL-RCPT-STATUS-phase0.md` §6 carries the ruling. **Follows BILL-PRINT-1
 immediately, ahead of STOR-1 and ERR-MAP-1.**
+
+---
+
+## 6. Surface → format matrix (read from code)
+
+Evidence for BILL-8-UI's click-through gate (§0). Seven entry points, **all staff-side**. Read from
+the call sites, not from memory.
+
+| Surface | File | Endpoint + params | Output | Cache |
+|---|---|---|---|---|
+| Payment-recorded confirmation | `finance/bill/payments/new/page.tsx:216` | `.../payments/:id/receipt?lang=` — **no `format`** | **Thermal 80mm** | get-or-generate |
+| Payment detail modal | `components/finance/payment-detail-modal.tsx:141` | same — **no `format`** | **Thermal 80mm** | get-or-generate |
+| Payments list row menu | `finance/bill/payments/page.tsx:198` | `...?lang=&format=a5` | **A5 two-up** | get-or-generate |
+| Student invoices panel | `components/finance/student-invoices-panel.tsx:74` | `.../invoices/:id/pdf?lang=` | **Invoice A4 two-up** | get-or-generate |
+| Bill run detail, per line | `finance/bill/runs/[id]/page.tsx:162` | same | **Invoice A4 two-up** | get-or-generate |
+| Bulk print — run scope | `runs/[id]/page.tsx:235` → `bulk-print-dialog.tsx:77` | `POST .../runs/:id/print?lang=` | **Merged A4**, 2/sheet | always generates |
+| Bulk print — class scope | `runs/page.tsx:195` → `:78` | `POST .../bill/print/class?lang=` | same | always generates |
+| Bulk job download | `bulk-job-progress.tsx:56` | `GET /finance/jobs/:id` → `downloadUrl` | the merged PDF | re-fetches at click |
+
+**Matches the ruling exactly, zero deviations:** counter moments (confirmation, detail modal) send
+no `format` and get the server default `thermal`; the payments-list reprint sends `format: 'a5'`;
+invoices are A4 two-up. Only the receipt endpoint accepts `format` — an invoice has one format by
+design.
+
+**No parent-portal or mobile print surface exists.** The endpoints permit PARENT; nothing calls
+them.
+
+**Two status observations, both pre-existing:** the payment detail modal already excludes VOIDED
+(`payment.status !== 'VOIDED'`) and the invoice panels exclude VOIDED invoices — but **the payments
+list does not**, so a bounced or voided payment is reprintable there today. That is
+BILL-RCPT-STATUS (§5.6), and the list is where it will be seen.
 
 ---
 
