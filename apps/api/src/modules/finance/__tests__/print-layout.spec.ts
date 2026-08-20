@@ -385,6 +385,69 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
     expect(shown + plan.residual + data.advanceAmount).toBeCloseTo(data.amount, 2);
   });
 
+  // The two-pass fit deliberately lands content EXACTLY on the footer line.
+  // Without a float tolerance in assertFits that reads as a ~1e-14pt overflow
+  // and throws — which would have broken every A5 receipt in production, since
+  // no test previously exercised the second pass.
+  it('the fitted second pass renders without overflowing', () => {
+    for (const shape of [
+      receiptFixture(locale, []),
+      receiptFixture(locale),
+      receiptFixture(locale, Array.from({ length: 6 }, (_, i) => ({
+        invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`,
+        installment: 'Shrawan 2083', amount: 500,
+      }))),
+    ]) {
+      const first = renderReceiptHalf(newDoc(), halfBox(0), shape, 'Student Copy');
+      expect(first.gapScaleForFit).toBeGreaterThanOrEqual(1);
+      expect(() => renderReceiptHalf(newDoc(), halfBox(0), shape, 'Student Copy', first.gapScaleForFit))
+        .not.toThrow();
+    }
+  });
+
+  it('the fit holds WITH a copy eyebrow, not just without one', () => {
+    // The copy eyebrow makes the identity block taller. Measuring the slack
+    // without it and then drawing with it overstates the available space and
+    // overflows — which is exactly what happened on real data (1.5mm over).
+    // Probe and draw must agree on the label.
+    for (const copy of ['Student Copy', 'Office Copy', null]) {
+      const data = receiptFixture(locale);
+      const probed = renderReceiptHalf(newDoc(), halfBox(0), data, copy);
+      expect(() => renderReceiptHalf(newDoc(), halfBox(0), data, copy, probed.gapScaleForFit))
+        .not.toThrow();
+    }
+    // And the mismatch it guards against is real: a scale measured WITHOUT the
+    // eyebrow is strictly larger than one measured with it.
+    const data = receiptFixture(locale);
+    const withoutLabel = renderReceiptHalf(newDoc(), halfBox(0), data, null).gapScaleForFit;
+    const withLabel = renderReceiptHalf(newDoc(), halfBox(0), data, 'Student Copy').gapScaleForFit;
+    expect(withoutLabel).toBeGreaterThan(withLabel);
+  });
+
+  it('the fitted pass closes the dead space above the footer', () => {
+    // Bug #3 from the brief: a one-allocation receipt floated its content and
+    // left ~43mm of contiguous white above the remarks block.
+    const data = receiptFixture(locale);
+    const gapsOf = (scale: number) => {
+      const doc = newDoc();
+      const ys: number[] = [];
+      const orig = doc.text.bind(doc);
+      (doc as unknown as { text: (...a: unknown[]) => unknown }).text = (
+        str: string, x?: number, y?: number, o?: Record<string, unknown>,
+      ) => {
+        if (typeof y === 'number') ys.push(y);
+        return orig(str as never, x as never, y as never, o as never);
+      };
+      renderReceiptHalf(doc, halfBox(0), data, 'Student Copy', scale);
+      const box = halfBox(0);
+      const inside = ys.filter((y) => y >= box.y && y <= box.bottom).sort((a, b) => a - b);
+      return Math.max(...inside.slice(1).map((y, i) => y - inside[i]));
+    };
+    const first = renderReceiptHalf(newDoc(), halfBox(0), data, 'Student Copy');
+    // The fitted pass must cut the largest gap by more than half.
+    expect(gapsOf(first.gapScaleForFit)).toBeLessThan(gapsOf(1) / 2);
+  });
+
   it('a cash receipt leaves the transaction-ref slot empty without shifting layout', () => {
     const data = { ...receiptFixture(locale), method: 'CASH', txnRef: null };
     expect(() => renderReceiptHalf(newDoc(), halfBox(0), data, 'Office Copy')).not.toThrow();

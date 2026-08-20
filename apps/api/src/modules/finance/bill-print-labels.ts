@@ -95,7 +95,33 @@ const LABELS = {
   /** Decision 3's continuation row — "+ 3 more fee items". */
   moreFeeItems: { en: 'more fee items', ne: 'थप शुल्क शीर्षक' },
   moreAllocations: { en: 'more invoices', ne: 'थप बिल' },
+
+  // Payment methods. The stored values are enum constants (CASH, BANK_TRANSFER,
+  // ESEWA…) and printing them raw put "ESEWA" on a parent's receipt.
+  // eSewa and Khalti are BRAND names and stay Latin in both locales — which is
+  // what the approved design files themselves do (the Nepali half of
+  // Receipt.dc.html reads "माध्यम / eSewa").
+  methodCash: { en: 'Cash', ne: 'नगद' },
+  methodCheque: { en: 'Cheque', ne: 'चेक' },
+  methodBankTransfer: { en: 'Bank Transfer', ne: 'बैंक ट्रान्सफर' },
+  methodEsewa: { en: 'eSewa', ne: 'eSewa' },
+  methodKhalti: { en: 'Khalti', ne: 'Khalti' },
 } satisfies Record<string, LabelPair>;
+
+/** Stored enum -> printable method name. Unknown values print as-is rather
+ *  than blank: an unmapped method is a bug, but a blank field on a receipt is
+ *  worse than an ugly one. */
+export function methodLabel(raw: string, lang: PrintLanguage): string {
+  const key: Partial<Record<string, LabelKey>> = {
+    CASH: 'methodCash', CHEQUE: 'methodCheque', BANK_TRANSFER: 'methodBankTransfer',
+    ESEWA: 'methodEsewa', KHALTI: 'methodKhalti',
+  };
+  const k = key[raw];
+  return k ? printLabel(k, lang) : raw;
+}
+
+/** Methods where no human took the money — see the receipt's received-by slot. */
+export const GATEWAY_METHODS: readonly string[] = ['ESEWA', 'KHALTI'];
 
 export type LabelKey = keyof typeof LABELS;
 

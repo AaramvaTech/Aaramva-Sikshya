@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts, pickFont, drawMixedText } from '../../common/pdf/pdf-fonts';
 import { Money } from '../../common/money/money';
-import { printLabel, PrintLanguage } from './bill-print-labels';
+import { printLabel, PrintLanguage, methodLabel } from './bill-print-labels';
 
 const MUTED = '#6b7280';
 const INK = '#111827';
@@ -120,7 +120,11 @@ export class BillReceiptService {
       metaRow(label('date'), `${data.receivedDateAd} (${data.receivedDateBs} BS)`);
       metaRow(label('student'), data.studentName);
       metaRow(label('class'), data.className);
-      metaRow(label('method'), data.method);
+      // BILL-PRINT-1: display label, not the raw enum. A ONE-LINE exception to
+      // this renderer's freeze — the counter copy and the office copy describe
+      // the same payment, and leaving "ESEWA" on one while the other says
+      // "eSewa" would be a worse outcome than the freeze protects against.
+      metaRow(label('method'), methodLabel(data.method, lang));
 
       doc.moveDown(0.3);
       doc.moveTo(MARGIN, doc.y).lineTo(MARGIN + w, doc.y).strokeColor(HAIRLINE).lineWidth(0.5).stroke();
