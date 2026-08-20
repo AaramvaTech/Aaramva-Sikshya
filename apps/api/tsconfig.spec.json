@@ -1,0 +1,15 @@
+{
+  // CI-1 follow-up: the SAME program as tsconfig.build.json, minus its
+  // "**/*spec.ts" exclusion — so src/**/*.spec.ts is type-checked too.
+  //
+  // Why this file exists: the build config deliberately excludes specs, and
+  // jest's ts-jest transform reports diagnostics only for the file it is
+  // transforming — measured, a type error inside a SRC file passes jest and is
+  // caught here, while one inside a SPEC file does the reverse. Neither gate
+  // covers both, so both run.
+  //
+  // "test" stays excluded (the e2e dir lives outside rootDir and trips TS6059,
+  // which is the whole reason plain `tsc --noEmit` cannot be used).
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "test", "dist", "scripts"]
+}

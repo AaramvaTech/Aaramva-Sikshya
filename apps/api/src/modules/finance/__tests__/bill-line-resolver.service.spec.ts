@@ -20,6 +20,9 @@ function makeAssignment(effectiveFromAd: string) {
     id: 'sfsa-1', student_id: 'student-1', fee_structure_id: 'bfs-1', academic_year_id: 'year-1',
     effective_from: new Date(`${effectiveFromAd}T00:00:00.000Z`), effective_to: null,
     assigned_by: 'user-1', created_at: new Date(), updated_at: new Date(), deleted_at: null,
+    // FEE-CLASS-GUARD's override stamp — all-or-nothing, so an ordinary
+    // (non-overridden) assignment carries the false/null triple.
+    class_mismatch_overridden: false, overridden_by_user_id: null, overridden_at: null,
   };
 }
 

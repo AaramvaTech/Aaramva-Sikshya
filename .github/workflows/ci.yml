@@ -50,8 +50,16 @@ jobs:
         run: npx prisma generate
       # Plain `tsc --noEmit` fails on TS6059 (test/ outside rootDir) — the build
       # config is the clean typecheck. See docs/ci/README.md.
-      - name: Typecheck
+      - name: Typecheck (src)
         run: npx tsc -p tsconfig.build.json --noEmit
+      # tsconfig.build.json excludes **/*spec.ts, and ts-jest reports diagnostics
+      # only for the file it is transforming — measured, a type error in a SRC
+      # file passes jest and is caught by the step above, while one in a SPEC
+      # file does the reverse. Neither covers both, so both run. Without this
+      # step spec type-safety rests entirely on ts-jest's default diagnostics,
+      # which any future `isolatedModules: true` would silently remove.
+      - name: Typecheck (specs)
+        run: npx tsc -p tsconfig.spec.json --noEmit
       - name: Unit tests (baseline 298 — informational; the gate is the exit code)
         run: npm test
 
