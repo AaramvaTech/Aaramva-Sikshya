@@ -5,7 +5,7 @@ import {
 } from './mm';
 import {
   HalfBox, text, eyebrow, eyebrowH, money, mixed, rule, truncate,
-  widthOf, logoBox, optionalImage, assertFits, AssetMiss, displayWebsite,
+  widthOf, logoBox, optionalImage, assertFits, AssetMiss, displayWebsite, PrintCapacityError,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -68,6 +68,8 @@ export interface ReceiptHalfData {
   receivedBy: string | null;
   locale: Locale;
   label: (key: LabelKey) => string;
+  /** See InvoiceHalfData.continuation — "+ 1 more invoice" / "+ 3 more invoices". */
+  continuation: (count: number) => string;
 }
 
 const LOGO = mm(12);
@@ -141,13 +143,23 @@ export function planAllocations(
   locale: Locale,
 ): AllocationPlan {
   const [spec, floor] = densities(locale);
+  // Nothing to lay out. Returned before the capacity guard because "no rows"
+  // is a legitimate receipt (an advance-only payment allocates to nothing),
+  // whereas "rows that do not fit" is the error the guard exists for.
+  if (allocations.length === 0) {
+    return { density: spec, visible: [], omitted: 0, residual: 0 };
+  }
   for (const density of [spec, floor]) {
     if (allocations.length * rowHeight(density, locale) <= available) {
       return { density, visible: allocations, omitted: 0, residual: 0 };
     }
   }
   const rowH = rowHeight(floor, locale);
-  const keep = Math.max(0, Math.floor(available / rowH) - 1);
+  const rowsAvailable = Math.floor(available / rowH);
+  const keep = rowsAvailable - 1;
+  // Identical defect to the fee table's: a receipt whose allocation table shows
+  // only "+ 5 more invoices" tells a parent nothing about what was paid.
+  if (keep < 1) throw new PrintCapacityError('Receipt', Math.max(0, rowsAvailable));
   const visible = allocations.slice(0, keep);
   const shown = visible.reduce((a, x) => a + x.amount, 0);
   return {
@@ -371,9 +383,7 @@ export function renderReceiptHalf(
   if (plan.omitted > 0) {
     rule(doc, L, y, W, RULE_ROW, plan.visible.length === 0 ? GREY_2 : GREY_3);
     const ry = y + plan.density.rowPad;
-    text(doc, `+ ${plan.omitted} ${label('moreAllocations')}`, xs.invoice, ry, {
-      ...cellOpts, color: GREY_1,
-    });
+    text(doc, data.continuation(plan.omitted), xs.invoice, ry, { ...cellOpts, color: GREY_1 });
     text(doc, money(plan.residual), xs.amount, ry, {
       ...cellOpts, weight: 600, width: ALLOC.amount - CELL_PAD, align: 'right',
     });

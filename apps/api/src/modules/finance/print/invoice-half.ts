@@ -6,6 +6,7 @@ import {
 import {
   HalfBox, text, eyebrow, eyebrowH, money, parenMoney, mixed, rule, truncate,
   clampWords, widthOf, logoBox, qrBox, optionalImage, assertFits, AssetMiss, displayWebsite,
+  PrintCapacityError,
 } from './a5-sheet';
 import { LabelKey } from '../bill-print-labels';
 
@@ -77,6 +78,9 @@ export interface InvoiceHalfData {
   inWords: string | null;
   locale: Locale;
   label: (key: LabelKey) => string;
+  /** Pluralised continuation-row text, e.g. "+ 1 more fee item". Bound to the
+   *  document's language by the caller (see continuationLabel). */
+  continuation: (count: number) => string;
 }
 
 /** Money-column widths, right-aligned, fixed mm (SPEC §6). Fee Head takes the rest. */
@@ -114,6 +118,25 @@ const INSTRUCTIONS_LINES = 3;
 
 const BODY = 8;
 const MONEY_SIZE = 8;
+
+/**
+ * The fee table always draws at least this many rows, padding with EMPTY ruled
+ * rows the way a bank pay-in slip or a ledger form does.
+ *
+ * Why, rather than stretching the gaps: a 1-line invoice left ~35mm of dead
+ * space, and closing that by scaling the inter-group boundaries needed a 4.31x
+ * factor — at which point the document is inflated, not distributed, and two
+ * invoices from the same school stop reading as the same template. Ruled blanks
+ * fill the space honestly: the table's rhythm is IDENTICAL at every line count,
+ * because it is always the same table.
+ *
+ * Second benefit, and it matters on a money document: a bill with no blank
+ * ruled space cannot have a line added to it by hand after issue.
+ *
+ * 6 is the measured spec-density capacity, so the minimum is exactly what the
+ * half holds without compressing anything.
+ */
+export const MIN_FEE_ROWS = 6;
 
 /** Spec density, then the compressed floor. Nothing below the floor. */
 interface Density {
@@ -165,6 +188,12 @@ export function planFeeRows(
   locale: Locale,
 ): FeeRowPlan {
   const [spec, floor] = densities(locale);
+  // An invoice with no lines is a data problem, not a layout one — it still
+  // renders (as an all-blank ruled table) rather than throwing the capacity
+  // error, which is specifically about lines that exist but cannot fit.
+  if (lines.length === 0) {
+    return { density: spec, visible: [], omitted: 0, residual: 0 };
+  }
   for (const density of [spec, floor]) {
     if (lines.length * rowHeight(density, locale) <= available) {
       return { density, visible: lines, omitted: 0, residual: 0 };
@@ -173,7 +202,11 @@ export function planFeeRows(
   // Still too many at the floor: keep as many as fit alongside the
   // continuation row, which occupies one row of the same height.
   const rowH = rowHeight(floor, locale);
-  const keep = Math.max(0, Math.floor(available / rowH) - 1);
+  const rowsAvailable = Math.floor(available / rowH);
+  const keep = rowsAvailable - 1;
+  // The continuation row may never be the only row. A table whose sole entry
+  // reads "+ 9 more fee items" itemises nothing — see PrintCapacityError.
+  if (keep < 1) throw new PrintCapacityError('Invoice', Math.max(0, rowsAvailable));
   const visible = lines.slice(0, keep);
   const shown = visible.reduce((a, l) => a + l.total, 0);
   return {
@@ -410,13 +443,25 @@ export function renderInvoiceHalf(
   if (plan.omitted > 0) {
     rule(doc, L, y, W, RULE_ROW, plan.visible.length === 0 ? GREY_2 : GREY_3);
     const ty2 = cellY(y);
-    text(doc, `+ ${plan.omitted} ${label('moreFeeItems')}`, xs.head, ty2, {
-      ...cellOpts, color: GREY_1,
-    });
+    text(doc, data.continuation(plan.omitted), xs.head, ty2, { ...cellOpts, color: GREY_1 });
     text(doc, money(plan.residual), xs.total, ty2, {
       ...cellOpts, weight: 600, width: COL.total - CELL_PAD, align: 'right',
     });
     y += rowH;
+  } else {
+    // Pad to MIN_FEE_ROWS with EMPTY ruled rows — same hairline, same pitch,
+    // no figures. A blank row must read as blank: printing 0.00 would put a
+    // number on the page that never came from the ledger, and the subtotal
+    // must keep footing against real lines only.
+    //
+    // Bounded by the remaining budget as well as by MIN_FEE_ROWS, so a tighter
+    // half draws fewer blanks instead of overflowing.
+    const roomLeft = Math.floor((tableBudget - plan.visible.length * rowH) / rowH);
+    const blanks = Math.max(0, Math.min(MIN_FEE_ROWS - plan.visible.length, roomLeft));
+    for (let i = 0; i < blanks; i++) {
+      rule(doc, L, y, W, RULE_ROW, plan.visible.length === 0 && i === 0 ? GREY_2 : GREY_3);
+      y += rowH;
+    }
   }
 
   rule(doc, L, y, W, RULE_INK, INK);

@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../../common/pdf/pdf-fonts';
 import { mm, HALF_H, SHEET_W, SHEET_H, CONTENT_H, TOTALS_W, Locale } from '../print/mm';
-import { PAGE, halfBox, PrintOverflowError, drawSheet, HalfRenderer } from '../print/a5-sheet';
+import { PAGE, halfBox, PrintOverflowError, PrintCapacityError, drawSheet, HalfRenderer } from '../print/a5-sheet';
 import { renderInvoiceHalf, densities, InvoiceHalfData, InvoiceHalfLine, footerHeight } from '../print/invoice-half';
 import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation } from '../print/receipt-half';
-import { printLabel, LabelKey, PrintLanguage } from '../bill-print-labels';
+import { printLabel, LabelKey, PrintLanguage, continuationLabel } from '../bill-print-labels';
 import { BillPdfService } from '../bill-pdf.service';
 import { BillReceiptA5Service } from '../bill-receipt-a5.service';
 import type { BillReceiptData } from '../bill-receipt.service';
@@ -101,6 +101,7 @@ function fixture(locale: Locale): InvoiceHalfData {
     subtotal: 1350, previousBalance: 1800, totalReceivable: 3150,
     inWords: 'Three Thousand One Hundred Fifty Rupees only',
     locale, label: label(lang),
+    continuation: (n: number) => continuationLabel(n, 'fee', lang),
   };
 }
 
@@ -162,6 +163,7 @@ function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
     inWords: 'One Thousand Rupees only',
     allocations, advanceAmount: 0, balanceAfter: 2150, receivedBy: 'Sita Maharjan',
     locale, label: label(lang),
+    continuation: (n: number) => continuationLabel(n, 'invoice', lang),
   };
 }
 
@@ -219,12 +221,36 @@ describe.each(LOCALES)('BILL-PRINT-1 invoice half [%s]', (locale) => {
     renderInvoiceHalf(newDoc(), box, build(), 'Student Copy');
   });
 
-  it('overflowing content FAILS the render rather than printing on top of itself', () => {
-    // A half whose footer cannot fit at all: the guard must throw, never clip.
+  it('a half too small to hold the document FAILS rather than printing on top of itself', () => {
     const data = fixture(locale);
     const tiny = { ...halfBox(0), bottom: halfBox(0).y + mm(10) };
+    expect(() => renderInvoiceHalf(newDoc(), halfBox(0), data, 'Student Copy')).not.toThrow();
+    // PrintCapacityError, not PrintOverflowError: the capacity guard sits
+    // earlier in the pipeline and gives the more specific diagnosis (the table
+    // cannot hold a real line). Either way it must never render.
     expect(() => renderInvoiceHalf(newDoc(), tiny, data, 'Student Copy'))
-      .toThrow(PrintOverflowError);
+      .toThrow(PrintCapacityError);
+  });
+
+  it('never prints a continuation row as the ONLY row', () => {
+    // "+ 9 more fee items" alone is not a bill — it itemises nothing. Squeeze
+    // the half progressively and assert that at every point it either renders
+    // with at least one real line, or refuses outright.
+    const many = { ...fixture(locale), lines: Array.from({ length: 20 }, (_, i) => feeLine(i)) };
+    many.subtotal = many.lines.reduce((a, l) => a + l.total, 0);
+    let refusals = 0;
+    for (const shrink of [10, 20, 30, 40, 50, 60]) {
+      const box = { ...halfBox(0), bottom: halfBox(0).bottom - mm(shrink) };
+      try {
+        const plan = renderInvoiceHalf(newDoc(), box, many, 'Student Copy');
+        if (plan.omitted > 0) expect(plan.visible.length).toBeGreaterThanOrEqual(1);
+      } catch (err) {
+        expect(err).toBeInstanceOf(PrintCapacityError);
+        refusals++;
+      }
+    }
+    // The squeeze must actually reach the refusal state, or this proves nothing.
+    expect(refusals).toBeGreaterThan(0);
   });
 
   it('too many fee lines compress, then continue — and always reconcile', () => {

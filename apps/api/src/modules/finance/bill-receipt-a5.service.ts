@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../common/pdf/pdf-fonts';
-import { printLabel, PrintLanguage, LabelKey, methodLabel, GATEWAY_METHODS } from './bill-print-labels';
+import { printLabel, PrintLanguage, LabelKey, methodLabel, GATEWAY_METHODS, continuationLabel } from './bill-print-labels';
 import { PAGE, drawSheet, HalfRenderer, AssetMiss } from './print/a5-sheet';
 import { Locale } from './print/mm';
 import { renderReceiptHalf, ReceiptHalfData } from './print/receipt-half';
@@ -129,5 +129,6 @@ export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHal
     receivedBy: GATEWAY_METHODS.includes(data.method) ? null : data.receivedByName,
     locale,
     label: (key: LabelKey) => printLabel(key, lang),
+    continuation: (count: number) => continuationLabel(count, 'invoice', lang),
   };
 }
