@@ -38,6 +38,66 @@ Consequences observed live:
 - `accept="image/*"` is a picker hint only, and is **looser** than the server: `image/gif` and
   `image/avif` pass the file picker and then fail the presign with a 400.
 
+## The logo is the only uncontrolled colour on the page
+
+Same root cause as everything above — nothing validates what a school uploads — but this one is
+about **colour** rather than shape, and it lands on the design's tightest constraint.
+
+`docs/design/billing-print/SPEC.md` builds the document greyscale-first: four greys
+(`#111111` ink, `#5a5a5a`, `#b0b0b0`, `#dcdcdc`) and **one** accent, `#0d5c43`. SPEC §Palette is
+explicit that "the accent appears in exactly four places per document":
+
+| # | Accent placement | Where |
+|---|---|---|
+| 1 | header rule (0.75pt) | `receipt-half.ts:259`, `invoice-half.ts:319` |
+| 2 | document title | `receipt-half.ts:275`, `invoice-half.ts:338` |
+| 3 | total rule | `receipt-half.ts:328`, `invoice-half.ts:513` |
+| 4 | **monogram border** | `a5-sheet.ts:375-380` (both halves) |
+
+**Placement 4 is the logo's fallback.** `logoBox` draws the accent-bordered box and accent monogram
+*only when there is no logo*; when a school has uploaded one, the image occupies that slot instead.
+
+So an uploaded logo does not add a fifth colour alongside four accent uses — it **substitutes an
+uncontrolled colour into the one slot the design reserved for accent #4**, in the header band,
+immediately beside the school name. Every other colour on the sheet is fixed in `print/mm.ts`. This
+one is whatever the school had on hand, at whatever saturation, and nothing anywhere constrains it.
+
+**What has not been checked: mono photocopy.** Greyscale legibility is the condition the whole
+design was built for — a fee slip is photocopied, faxed to a bank, and printed on a mono office
+laser far more often than it is seen in colour. Nobody has looked at what a saturated logo does to
+the header band under that conversion. Both failure directions are plausible and neither has been
+observed:
+
+- a dark saturated logo converting to near-black — a heavy ink blob against `#111111` type
+- a light or mid-saturation one converting to near-white — the logo simply vanishing, leaving the
+  header band visually unbalanced against the PAN/registration block on the right
+
+Worth checking before ASSET-VALID-1 decides what to recommend, because it may change the
+recommendation: a greyscale-conversion preview is a different (and more useful) hint than a
+dimensions hint, and the two would be built together.
+
+**Note the asymmetry this creates:** the *fallback* is in-palette and greyscale-safe by
+construction, and the *real* asset is the uncontrolled one. A school that has never uploaded a logo
+gets a document that provably meets the spec; a school that has uploaded one gets a document nobody
+has verified. That is the wrong way round.
+
+## Fixture-colour decision — demo's logo stays grey (2026-08-21)
+
+demo's branding fixtures were replaced with the repo's own generator output on 2026-08-21, and
+`makeLogoPng(tenant.primaryColor)` renders demo's `primaryColor` — `#484c56`, a grey. **Ruled: it
+stays grey** (Srijan).
+
+The reason is deliberate and belongs with this ticket rather than reading as an oversight: a coloured
+fixture would introduce a fifth colour into a greyscale-first document and make visual review
+*harder*, not more realistic. demo is what every visual review runs against, so its logo should not
+be quietly asserting a colour decision the design never made. A reviewer looking at a demo slip
+should see four greys and one accent — the palette as specified — and judge the layout against it.
+
+This is a fixture choice, not a claim that schools upload grey logos. The real-world case is exactly
+the uncontrolled-colour gap above, and it is tested by deliberately checking a saturated logo when
+someone gets to it — not by leaving one permanently in the review fixture, where it would colour
+every unrelated judgement made against demo from now on.
+
 ## A related gap, tracked under FILE-1-BLOB
 
 Confirm-time content-type is read from the stored object's HEAD, which is whatever the client sent
@@ -49,6 +109,9 @@ rest of FILE-1-BLOB's error mapping.
 
 ## Scope sketch (not a plan)
 
+0. **Check what a saturated logo does under mono photocopy** before choosing what to recommend —
+   see the colour section above. It may make a greyscale preview the more useful hint, in which case
+   it is built alongside (1) rather than after it.
 1. **Recommended dimensions at upload time** — per kind, shown next to the picker, with the
    rendered size named in mm so the number means something ("appears at 12 × 12 mm on a bill").
    Advisory. This is the agreed first step.
