@@ -8,13 +8,13 @@ ruling: none has a legitimate cross-entity case, so **no override flag and no ac
 stamp**, unlike FEE-CLASS-GUARD where overrides are routine.
 
 **Headline: the ruling holds for all four, but two findings need your attention before it locks.**
+One path's real leak is *not* the INSERT and a block there fixes nothing. One has an ordering
+workflow that a naive block would break. Details in §6.
 
 **Post-ruling update:** the §8 audit (ruling 3) found the soft-delete blindness is not confined to
 transport routes — `fee-preview.service.ts` filters `deleted_at` on nothing at all, a retired FEE
 HEAD is billed to every student on any structure containing it, and five academic-year existence
-guards accept a deleted year. The ticket is three parts, not one. See §8.2.
-One path's real leak is *not* the INSERT and a block there fixes nothing. One has an ordering
-workflow that a naive block would break. Details in §6.
+guards accept a deleted year. **The ticket is three parts, not one.** See §8.2.
 
 ---
 
