@@ -358,6 +358,16 @@ be written down as a decision. The three options, for whoever revisits the geome
    the uploaded file's internal cropping. Cheapest, and independent of whichever of 1 or 2 is
    chosen.
 
+**Preferred: option 3, and it does not need to wait for the geometry rework** (Srijan, 2026-08-21).
+It is cheap, it is independent of the 4.4 mm sizing question, and it does the one thing that is
+unambiguously right regardless of how 1 and 2 are eventually decided: it converts an accidental
+property of whatever file a school happened to upload into a guaranteed one. Ship it on its own
+whenever convenient.
+
+Options 1 and 2 are real design decisions — whether a stamp over a signature is the artefact we
+want, and how large a stamp has to be to read — and they belong with the rework, together, not
+piecemeal.
+
 ### 5.5 Real-world maximum fee-structure size — needed for a structural decision
 The invoice holds **6 fee lines at spec density, 7 compressed**, then a continuation row. The dev
 database is not evidence: `tenant_demo` maxes at **2** lines per invoice (avg 1.16 over 19),
