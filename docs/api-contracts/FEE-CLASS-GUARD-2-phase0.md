@@ -246,7 +246,10 @@ containing it**. And all four soft-deletes are reachable from the UI —
 `bill-catalog.controller.ts` has `@Delete` routes for fee-heads, discount-reasons, transport-routes
 and bill/fee-structures.
 
-**By design — NOT defects (do not "fix" these):** seven `students` joins in
+**By design — NOT defects (do not "fix" these).** *Ruling 6: keep this paragraph verbatim. The
+scoping-read versus display-join distinction is the only thing standing between these seven joins
+and someone "fixing" them later, which would erase history rather than protect it.*
+ seven `students` joins in
 `bill-invoice.service.ts:44`, `bill-run.service.ts:181`, `bill-receipt-document.service.ts:195`,
 `bill-correction.service.ts:412`, `bill-print-job.service.ts:87`, `dashboard.service.ts:273` and
 `concession-register-report.service.ts:76`. Each joins `students` to render a **name on a row that
@@ -308,3 +311,87 @@ backstop so its rate keeps meaning "a guard is missing". Phase 1 proposes the na
 a `CODE_MESSAGES` entry in `apps/web/lib/errors.ts`, and the new catalogue-completeness test
 (`errors/__tests__/catalog-completeness.spec.ts`) will fail if any is thrown without being
 cataloged.
+
+---
+
+## 10. Split and re-sequence (Srijan, 2026-08-21)
+
+**BILL-SOFTDEL-1** is opened, covering **D1-D4, D8 and the five academic-year guards (D5-D7)** —
+one root cause: *billing reads that ignore `deleted_at`*.
+
+**It runs BEFORE FEE-CLASS-GUARD-2**, which keeps only the four INSERT blocks.
+
+**Rationale, recorded because the sequencing is the point:**
+
+> The INSERT guards prevent future bad state; the read path is producing wrong bills today.
+
+Guarding the INSERTs first would leave the live defect running while the ticket that fixes it waits
+behind a ticket that prevents a problem nobody has yet.
+
+### 10.1 Final scope of each
+
+| Ticket | Owns |
+|---|---|
+| **BILL-SOFTDEL-1** (first) | D1-D4, D8 — soft-delete filters on the billing read path. D5-D7 — five academic-year existence guards that accept a deleted year. **Fail the run**, never skip the line (ruling 2, extended to all of D1-D4 and D8). Forensic FIRST (§11). |
+| **FEE-CLASS-GUARD-2** (second) | The four INSERT blocks only. Path 3 blocks **both** doors, `create()` and `update()`. Path 4 is accept-but-surface-as-inert plus the safe existence check. Per-path error codes; `RELATED_RECORD_NOT_FOUND` stays reserved. Path 1 blocks the soft-deleted student **and** the soft-deleted academic year; the enrolment-relationship check is deferred to its own ticket. |
+
+---
+
+## 11. Forensic — run BEFORE any fix (ruling 2 of the split)
+
+**Read-only. No writes.** Query preserved at
+`docs/api-contracts/BILL-SOFTDEL-1-forensic.sql`, parameterised per tenant schema.
+
+### 11.1 THE CAVEAT THAT MATTERS MOST
+
+**This was run against the DEV database. It is not evidence about production, and must not be read
+as any.** Production is a separate database on the VPS and this session has no access to it.
+
+The question "do wrong bills already exist?" is a **production** question. What follows tells you
+the shape of the answer and gives you the exact query to get it; it does not answer it.
+
+### 11.2 Dev results — 9 tenant schemas
+
+**Soft-deleted billing parents exist in exactly one tenant.**
+
+| Tenant | fee_heads | transport_routes | bill_fee_structures | academic_years |
+|---|---|---|---|---|
+| `tenant_demo` | **10** (2026-07-26 → 08-05) | **2** (07-27 → 08-05) | **8** (07-27 → 08-10) | **1** (08-16) |
+| every other tenant | 0 | 0 | 0 | 0 |
+
+*(`tenant_bill_scratch` is a partial leftover schema — it has no billing tables at all and errors on
+every billing query. Worth deleting separately; it is not a tenant.)*
+
+**BACKWARD — wrong bills already posted: ZERO, everywhere.**
+
+Every one of §2-§5 returned no rows on every schema. No invoice was ever posted referencing a fee
+head, transport route or fee structure that had already been soft-deleted, and no invoice, payment,
+correction or ledger entry was created against a deleted academic year.
+
+**FORWARD — what the fix would change on the next run: the defect is ARMED but currently harmless.**
+
+| Finding | Count |
+|---|---|
+| soft-deleted fee heads **still present in a live structure item** | **7** |
+| …of those, students on an assignment that would bill them next run | **0** |
+| deleted transport routes with a live student assignment | **0** |
+
+So the mechanism is real and in place — seven retired heads sit in structures that would bill them —
+but no live assignment points at those structures, so the next run bills nothing extra. All seven
+are named `…proof…` / `…Test…`: artifacts of earlier ticket verification, not school data.
+
+### 11.3 What this means for shipping
+
+On **dev**, the fix is behaviour-neutral: nothing billed wrongly before, nothing changes after.
+That is a clean baseline for building against, and it means the correctness tests will need crafted
+fixtures rather than found data.
+
+On **production, unknown.** Run §1-§6 per tenant before the fix ships. The decision rule:
+
+- **§2-§5 all zero** → no historical wrong bills; the fix can ship as an ordinary correction.
+- **§2-§5 non-zero** → money has already been charged for retired items. That needs a deliberate
+  answer — credit notes via BILL-6, or an explicit decision to let it stand — and it must be made
+  **before** the read path changes, because afterwards the evidence of what was billed and why gets
+  harder to reconstruct.
+- **§6 non-zero** → the next run after the fix will differ. Whoever ships it must be able to tell a
+  school *why* a bill dropped, per student, before they ask.
