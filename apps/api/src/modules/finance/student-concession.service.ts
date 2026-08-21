@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { assertUsable } from './soft-delete-guard.util';
 import {
   StudentConcessionRow,
   toStudentConcessionResponse,
@@ -16,6 +17,9 @@ export class StudentConcessionService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   async create(dto: CreateStudentConcessionDto, createdById: string): Promise<StudentConcessionResponseDto> {
+    // FEE-CLASS-GUARD-2 path 3, door 1 of 2.
+    await assertUsable(this.tenantPrisma, 'discount_reasons', dto.discountReasonId);
+
     const rows = await this.tenantPrisma.query<StudentConcessionRow>(
       `INSERT INTO student_concessions
          (student_id, fee_head_id, academic_year_id, type, value, cap_amount,
@@ -80,7 +84,13 @@ export class StudentConcessionService {
     if (dto.type !== undefined) { sets.push(`type = $${idx++}`); params.push(dto.type); }
     if (dto.value !== undefined) { sets.push(`value = $${idx++}::numeric`); params.push(dto.value); }
     if (dto.capAmount !== undefined) { sets.push(`cap_amount = $${idx++}::numeric`); params.push(dto.capAmount); }
-    if (dto.discountReasonId !== undefined) { sets.push(`discount_reason_id = $${idx++}::uuid`); params.push(dto.discountReasonId); }
+    // Door 2 of 2 (ruling 3). update() reaches the identical invalid state, so
+    // guarding only create() would leave a bypass one PATCH away — a guard that
+    // reads as protection in review while providing none.
+    if (dto.discountReasonId !== undefined) {
+      await assertUsable(this.tenantPrisma, 'discount_reasons', dto.discountReasonId);
+      sets.push(`discount_reason_id = $${idx++}::uuid`); params.push(dto.discountReasonId);
+    }
     if (dto.effectiveFrom !== undefined) { sets.push(`effective_from = $${idx++}::date`); params.push(dto.effectiveFrom); }
     if (dto.effectiveTo !== undefined) { sets.push(`effective_to = $${idx++}::date`); params.push(dto.effectiveTo); }
     if (dto.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(dto.notes); }

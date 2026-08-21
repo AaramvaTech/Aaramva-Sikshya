@@ -134,6 +134,17 @@ export interface StudentFeeOverrideResponseDto {
   effectiveTo: string | null;
   createdBy: string;
   createdAt: string;
+  /**
+   * FEE-CLASS-GUARD-2 path 4 — is there any assignment for this student whose
+   * fee structure actually contains this head? When false the override is
+   * INERT: it is stored, it is valid, and nothing will apply it.
+   *
+   * COMPUTED AT READ TIME, never stored. Inertness is derived state that
+   * changes without the override changing — assign the structure tomorrow and
+   * the same row becomes live. A stored flag would go stale in exactly the
+   * silent-wrong direction this ticket exists to fix.
+   */
+  appliesToAssignedStructure: boolean;
 }
 
 export interface StudentConcessionResponseDto {
@@ -215,8 +226,12 @@ export function toStudentFeeStructureAssignmentResponse(
   };
 }
 
-export function toStudentFeeOverrideResponse(row: StudentFeeOverrideRow): StudentFeeOverrideResponseDto {
+export function toStudentFeeOverrideResponse(
+  row: StudentFeeOverrideRow,
+  appliesToAssignedStructure = false,
+): StudentFeeOverrideResponseDto {
   return {
+    appliesToAssignedStructure,
     id: row.id,
     studentId: row.student_id,
     feeHeadId: row.fee_head_id,

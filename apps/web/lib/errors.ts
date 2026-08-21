@@ -59,6 +59,15 @@ const CODE_MESSAGES: Record<string, string> = {
   // ERR-MAP-1: a foreign-key violation on a caller-supplied column.
   RELATED_RECORD_NOT_FOUND:
     'One of the records this refers to no longer exists. Refresh and try again.',
+  // FEE-CLASS-GUARD-2: the referenced row exists but is retired or removed.
+  // Per-path codes so the message can name the field the user has to change —
+  // and so RELATED_RECORD_NOT_FOUND above keeps meaning "a guard is missing".
+  STUDENT_UNAVAILABLE: 'That student has been removed and cannot be used here.',
+  TRANSPORT_ROUTE_UNAVAILABLE:
+    'That transport route is no longer available. Pick a current route.',
+  DISCOUNT_REASON_UNAVAILABLE:
+    'That discount reason is no longer available. Pick a current reason.',
+  FEE_HEAD_UNAVAILABLE: 'That fee head is no longer available. Pick a current fee head.',
 };
 
 /**

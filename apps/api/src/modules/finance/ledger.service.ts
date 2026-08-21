@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
+import { assertUsable } from './soft-delete-guard.util';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
@@ -167,6 +168,18 @@ export class LedgerService {
 
   /** OWNER_ONLY. Reason and narration are both required by spec but the table has one text column — stored as "[reason] narration". */
   async adjustment(dto: LedgerAdjustmentDto, createdById: string): Promise<LedgerEntryResponseDto> {
+    // FEE-CLASS-GUARD-2 path 1. Ruling 5: the SOFT-DELETED student only.
+    // Departure is a status, not a delete — PASSED_OUT / EXPELLED /
+    // TRANSFERRED / DROPPED students keep deleted_at IS NULL and stay fully
+    // adjustable, which is the case that must not break. Deliberately NOT an
+    // enrolment-relationship check on academicYearId: that is a different
+    // shape, deferred to its own ticket, and would block legitimate back-year
+    // corrections.
+    //
+    // Outside withStudentLock: a validation read needs no advisory lock, and
+    // taking one to reject the request would serialise callers behind a check
+    // that never writes.
+    await assertUsable(this.tenantPrisma, 'students', dto.studentId);
     return this.withStudentLock(dto.studentId, async (tx) => {
       const { debit, credit } = directionToDebitCredit(dto.amount, dto.direction);
       const narration = `[${dto.reason}] ${dto.narration}`;

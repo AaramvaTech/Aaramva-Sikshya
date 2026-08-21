@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { assertUsable } from './soft-delete-guard.util';
 import {
   StudentTransportAssignmentRow,
   toStudentTransportAssignmentResponse,
@@ -19,6 +20,14 @@ export class StudentTransportAssignmentService {
     dto: CreateStudentTransportAssignmentDto,
     assignedById: string,
   ): Promise<StudentTransportAssignmentResponseDto> {
+    // FEE-CLASS-GUARD-2 path 2. Blocks assigning a student to a retired route.
+    //
+    // This does NOT stop a route retired AFTER assignment from being billed —
+    // that leak is in the read path (fee-preview reads transport_routes with no
+    // deleted_at filter) and belongs to BILL-SOFTDEL-1, which runs first. This
+    // guard closes the forward door only; do not read it as fixing the defect.
+    await assertUsable(this.tenantPrisma, 'transport_routes', dto.transportRouteId);
+
     const rows = await this.tenantPrisma.query<StudentTransportAssignmentRow>(
       `INSERT INTO student_transport_assignments
          (student_id, transport_route_id, effective_from, effective_to, assigned_by)

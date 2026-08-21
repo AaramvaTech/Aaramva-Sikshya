@@ -132,6 +132,8 @@ describe('LedgerService', () => {
 
   describe('adjustment', () => {
     it('combines reason and narration into the single narration column', async () => {
+      // FEE-CLASS-GUARD-2: adjustment() now guards the student first.
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'student-1' }]);
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([
         makeEntryRow({ narration: '[Fee waiver] Approved by principal' }),
       ]);
@@ -325,6 +327,47 @@ describe('LedgerService', () => {
       // correction UPDATE against student_account_balances follows it.
       expect(mockTx.$executeRawUnsafe).toHaveBeenCalledTimes(1);
       expect(mockTx.$executeRawUnsafe.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
+    });
+  });
+
+  // FEE-CLASS-GUARD-2 path 1 (ruling 5): the SOFT-DELETED student only.
+  describe('adjustment student guard (FEE-CLASS-GUARD-2)', () => {
+    it('FIRES: a removed student is refused, and no lock or insert is taken', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // guard: no live row
+
+      await expect(
+        service.adjustment(
+          {
+            studentId: 'gone', academicYearId: 'year-1', amount: '500.00',
+            direction: 'DEBIT', reason: 'CORRECTION', narration: 'x',
+          } as never,
+          'user-1',
+        ),
+      ).rejects.toMatchObject({ response: { code: 'STUDENT_UNAVAILABLE' } });
+
+      // Rejecting must not serialise callers behind an advisory lock.
+      expect(tenantPrisma.run).not.toHaveBeenCalled();
+      expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(mockTx.$queryRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    // THE case ruling 5 turns on. Departure is a STATUS, not a delete, so a
+    // student who has left still has deleted_at IS NULL and must stay
+    // adjustable — writing off what they owe is ordinary accounting.
+    it('PASSES: a DROPPED / TRANSFERRED student is still fully adjustable', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ id: 'departed-student' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([makeEntryRow({ student_id: 'departed-student' })]);
+
+      const result = await service.adjustment(
+        {
+          studentId: 'departed-student', academicYearId: 'year-1', amount: '500.00',
+          direction: 'DEBIT', reason: 'WRITE_OFF', narration: 'left owing',
+        } as never,
+        'user-1',
+      );
+
+      expect(result.id).toBe('entry-1');
+      expect(mockTx.$queryRawUnsafe.mock.calls[0][0]).toContain('INSERT INTO student_ledger_entries');
     });
   });
 });

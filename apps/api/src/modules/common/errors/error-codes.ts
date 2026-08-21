@@ -50,6 +50,28 @@ export const ERROR_CATALOG = {
     status: 422,
     message: 'One of the records this refers to no longer exists. Refresh and try again.',
   },
+  // FEE-CLASS-GUARD-2: the request references a row that exists in the table but
+  // is not usable — soft-deleted, or absent. Per-path codes rather than one
+  // shared one, and deliberately NOT RELATED_RECORD_NOT_FOUND: that code is
+  // reserved for the ERR-MAP-1 filter backstop, whose whole value is that a
+  // non-zero rate means "a guard is missing" (ERR-MAP-1-phase0.md §12.2).
+  // Throwing it from a guard would destroy exactly that signal.
+  STUDENT_UNAVAILABLE: {
+    status: 422,
+    message: 'That student has been removed and cannot be used here.',
+  },
+  TRANSPORT_ROUTE_UNAVAILABLE: {
+    status: 422,
+    message: 'That transport route is no longer available. Pick a current route.',
+  },
+  DISCOUNT_REASON_UNAVAILABLE: {
+    status: 422,
+    message: 'That discount reason is no longer available. Pick a current reason.',
+  },
+  FEE_HEAD_UNAVAILABLE: {
+    status: 422,
+    message: 'That fee head is no longer available. Pick a current fee head.',
+  },
   // ── Tenant ──────────────────────────────────────────────────────────────
   TENANT_NOT_FOUND: { status: 404, message: 'School not found. Check the school address (slug).' },
   TENANT_SUSPENDED: { status: 403, message: "This school's account is currently suspended." },
