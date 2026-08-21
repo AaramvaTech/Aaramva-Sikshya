@@ -339,3 +339,77 @@ should not silently treat them alike.
 **6. Fix `retryable` — here or a separate follow-up?**
 **Here, and broadened.** Ruling 3 promotes it to the ticket's main correctness fix and explicitly
 scopes it to every 500, not only FK violations.
+
+---
+
+## 12. Phase 1 — what shipped, and two things to carry forward
+
+### 12.1 Ruling 6 confirmed — all six drifted codes are reachable, all six fixed
+
+Each was traced to a throw site rather than assumed. `PASSWORD_CHANGE_REQUIRED` is thrown as a raw
+object literal rather than through `errorBody()`, which is why a first `errorBody('…')` grep missed
+it — worth knowing, because it means "no `errorBody` hit" does not mean "unreachable".
+
+| Code | Status | Reached from | Reachable |
+|---|---|---|---|
+| `PASSWORD_CHANGE_REQUIRED` | 403 | `common/guards/password-change-required.guard.ts:61` (raw literal, not `errorBody`) | **yes** |
+| `CLASS_MISMATCH` | 422 | `finance/student-fee-structure-assignment.service.ts:84` | **yes** |
+| `RECEIPT_PAYMENT_BOUNCED` | 409 | `finance/bill-receipt-document.service.ts:56` | **yes** |
+| `RECEIPT_PAYMENT_VOIDED` | 409 | `finance/bill-receipt-document.service.ts:58,61` | **yes** |
+| `BAD_REQUEST` | 400 | `defaultCodeForStatus(400)` — **104** bare `BadRequestException` throws carry no explicit code | **yes** |
+| `SERVICE_UNAVAILABLE` | 503 | `defaultCodeForStatus(503)` — e.g. bare `ServiceUnavailableException` at `credential-delivery.service.ts:437` | **yes** |
+
+All six now have their own entry in `apps/web/lib/errors.ts` `CODE_MESSAGES`, plus this ticket's
+`RELATED_RECORD_NOT_FOUND`, each pinned by a test asserting it resolves to its **own** message —
+not the generic fallback and not the server's string.
+
+The two `defaultCodeForStatus` rows are the ones worth noting: `BAD_REQUEST` and
+`SERVICE_UNAVAILABLE` are never *thrown* by name anywhere, so a grep for them finds nothing. They
+are synthesised by the filter for any uncoded 4xx/503, which makes them among the **most** commonly
+emitted codes in the system and the easiest to believe are dead.
+
+### 12.2 The mapper is unreachable on allowlisted paths — that is the end state, not a gap
+
+All four allowlisted constraints now have real existence checks in front of them, so in normal
+operation the filter mapping never fires for them. **This is correct and intended, and it should
+stay that way.**
+
+Per §11 Q2 the mapping is a **backstop**. The guard is what produces the specific, useful message
+("Academic year not found"); the mapping produces a generic one. So:
+
+> **A live-reachable backstop means a guard is missing.**
+
+If someone finds they can trigger `RELATED_RECORD_NOT_FOUND` from a normal request, the correct
+response is to add the guard at that call site — not to celebrate the coverage. The mapping exists
+for the omission nobody has noticed yet, and its proof is the unit suite
+(`errors/__tests__/fk-constraints.spec.ts`, `filters/__tests__/http-exception.filter.spec.ts`),
+deliberately not a live probe.
+
+The corollary for anyone measuring this: **do not treat a zero rate of
+`RELATED_RECORD_NOT_FOUND` as dead code.** Zero is the target. A non-zero rate is the alarm, and the
+WARN line naming the constraint (§10 ruling 4) is what makes it countable.
+
+### 12.3 Adjacent finding — two codes escape the catalog entirely (recorded, NOT fixed)
+
+While confirming ruling 6, a sweep of every `code: '…'` literal thrown in an exception body found
+**two codes that reach clients but are not in `ERROR_CATALOG` at all**:
+
+| Code | Thrown from | Status |
+|---|---|---|
+| `GATEWAY_DISABLED` | `finance/esewa/esewa.service.ts:164`, `finance/khalti/khalti.service.ts` | 503 |
+| `GATEWAY_INITIATE_FAILED` | `finance/khalti/khalti.service.ts` | — |
+
+`fromHttpException` preserves an explicit non-catalog code (its own comment says this "should not
+occur post-ERR-1"), so both are emitted verbatim. Nothing is broken — the web falls back to the
+server `message` — but they are outside the contract: they cannot be localised by code, and they do
+not appear in either catalog.
+
+**Not fixed here, deliberately.** The fix is not mechanical: `GATEWAY_DISABLED` means "this gateway
+is not configured on this server", which may belong under the existing `SERVICE_UNAVAILABLE`, or
+may deserve its own code precisely because a school can act on it (choose the other gateway) in a
+way a generic 503 does not convey. That is a PAY-1/PAY-2 product decision, not an error-mapping
+one, and closing ERR-MAP-1 should not smuggle it in.
+
+**Suggested follow-up:** a test asserting every code thrown anywhere in `src/` exists in
+`ERROR_CATALOG`, which would have caught both at the moment they were written and would stop the
+next one. That is a ten-line test and the natural home for it is whoever rules on the two codes.
