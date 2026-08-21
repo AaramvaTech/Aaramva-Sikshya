@@ -7,7 +7,7 @@ comes back. Every school currently prints English regardless of its setting.
 receipts. No code knowledge needed — you only read the English and Nepali columns.
 
 **Scope:** 28 new strings (Part A), 5 disagreements with an earlier review (Part B), and — added
-later, as its own round — 3 strings for the uncleared-cheque slip (Part D). The `Key` column is for
+later, as its own round — 4 strings for the uncleared-cheque slip (Part D). The `Key` column is for
 the developer applying your answers; ignore it.
 
 **Part D was added after this sheet first went out.** If you have already answered Parts A and B,
@@ -187,7 +187,7 @@ already in use on the same document.
 
 ---
 
-## Part D — the uncleared-cheque slip (3 strings) — BILL-RCPT-STATUS
+## Part D — the uncleared-cheque slip (4 strings) — BILL-RCPT-STATUS
 
 **Added 2026-08-21, after Parts A-C went out. This is a separate round; it was not part of the
 original sheet.**
@@ -198,25 +198,26 @@ When a parent pays by **cheque**, the school has the paper but the bank has not 
 clears, the school must be able to hand over *something* — but that something must not say the money
 was received, because it has not been.
 
-So the slip changes in exactly three ways:
+So the slip changes in exactly four ways:
 
 - the **title** at the top reads **Acknowledgement** instead of **Receipt**
 - the big amount is labelled **tendered** instead of **received**
 - a line underneath states plainly that it is **subject to clearance and is not a receipt**
+- the tiny footer note reads **computer-generated acknowledgement** instead of **receipt**
 
 Everything else on the slip is unchanged.
 
-### Why these three matter more than the rest of the sheet
+### Why these matter more than the rest of the sheet
 
 Every other string on this sheet names a field — `Roll`, `Remarks`, `Class / Sec.`. If one of those
 is slightly off, it reads as a clumsy translation.
 
-These three are the *entire difference* between **"we have your money"** and **"we have your cheque."**
+Together these are the *entire difference* between **"we have your money"** and **"we have your cheque."**
 If the Nepali here is weak, ambiguous, or too polite to be clear, the slip reads as a receipt — and a
 parent may reasonably believe the fee is settled when the cheque later bounces. That is a dispute at
 the counter, and the school will be holding a document that appears to agree with the parent.
 
-So please read these three for **force and clarity**, not just correctness. If the phrasing is
+So please read these for **force and clarity**, not just correctness. If the phrasing is
 grammatically fine but would be understood as "paid", say so.
 
 | # | Key | English | Proposed Nepali | Where it appears | Approved / Corrected |
@@ -224,6 +225,7 @@ grammatically fine but would be understood as "paid", say so.
 | 1 | `acknowledgement` | Acknowledgement | निस्सा | **The document's title**, in large accent type at the top of the slip, exactly where `रसिद` ("Receipt") appears on a normal one. It **replaces** that title. *Fixed width; a long phrase will run into the Receipt No. / Date column beside it.* | |
 | 2 | `amountTendered` | Amount tendered | बुझाइएको रकम | Small caps label directly under the largest number on the slip, where `प्राप्त रकम` ("Amount received") normally sits. It **replaces** that label — both never appear together. *Fixed width, must not wrap.* | |
 | 3 | `subjectToClearance` | Subject to clearance. This is not a receipt for money received. | भुक्तानी नभएसम्म मान्य हुने छैन। यो प्राप्त रकमको रसिद होइन। | A full-width sentence immediately under the amount, in normal dark text (not faint grey). It is the line that stops the slip reading as a receipt. Room for roughly one line on the 80mm counter roll, so **shorter is better** — but not at the cost of being clear. | |
+| 4 | `computerGeneratedAcknowledgement` | This is a computer-generated acknowledgement. | यो कम्प्युटरबाट तयार भएको निस्सा हो। | The tiny 5.5pt grey note at the very bottom of the A5 sheet. It replaces `यो कम्प्युटरबाट तयार भएको रसिद हो।` (already approved, Part C) on this slip only. **Whatever you choose for string 1 must be used here too** — the two have to agree, or the footer contradicts the heading. | |
 
 ### The primary question — the title (string 1)
 
@@ -252,6 +254,10 @@ So, in order:
 3. **If neither, what should it say?** A short phrase is fine if no single word works, but the
    title slot is narrow (see the table) — roughly the width of `भुक्तानी सूचना` at most.
 
+**Your answer to this one decides string 4 as well.** The footer note names the same document, so
+whatever word you pick for the title has to appear there too. If you correct string 1, please
+correct string 4 to match — or just write "same as 1" and we will apply it.
+
 ### Two further questions
 
 4. **Does `बुझाइएको रकम` clearly mean "handed over / tendered" rather than "received"?** The whole
@@ -261,7 +267,7 @@ So, in order:
    deliberately blunt. If normal Nepali school practice uses a softer standard phrase for an
    uncleared cheque, that phrase is probably better than ours — please write it in.
 
-**Note:** unlike Parts A and B, these three strings are **not design-supplied** — the approved design
+**Note:** unlike Parts A and B, these four strings are **not design-supplied** — the approved design
 files only ever drew a cleared receipt, so there was no reference to lift from. They were written by
 the developer and have been read by nobody.
 

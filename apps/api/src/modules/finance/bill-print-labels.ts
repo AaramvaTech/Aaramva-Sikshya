@@ -72,6 +72,16 @@ const LABELS = {
   // slip/token/counterfoil rather than a receipt-for-money, so it is proposed
   // here — but it is Part D's PRIMARY question, not a settled choice.
   acknowledgement: { en: 'Acknowledgement', ne: 'निस्सा' },
+  // The footer fine print, same swap as the title. "This is a computer-
+  // generated receipt." under an ACKNOWLEDGEMENT heading reads as an
+  // oversight rather than a distinction - and a slip that looks careless is
+  // a slip a parent argues with.
+  //
+  // Only the A5 carries this line; the 80mm thermal footer has never had one.
+  computerGeneratedAcknowledgement: {
+    en: 'This is a computer-generated acknowledgement.',
+    ne: 'यो कम्प्युटरबाट तयार भएको निस्सा हो।',
+  },
   amountTendered: { en: 'Amount tendered', ne: 'बुझाइएको रकम' },
   subjectToClearance: {
     en: 'Subject to clearance. This is not a receipt for money received.',

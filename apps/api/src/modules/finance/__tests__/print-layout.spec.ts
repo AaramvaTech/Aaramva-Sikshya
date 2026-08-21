@@ -611,6 +611,15 @@ describe('BILL-RCPT-STATUS: the A5 acknowledgement', () => {
     expect(seen).not.toContain(printLabel('receipt', 'EN').toUpperCase());
   });
 
+  it('the footer fine print says acknowledgement too, not receipt', () => {
+    // A title change alone leaves "This is a computer-generated receipt." at
+    // the foot of a document headed ACKNOWLEDGEMENT - the same contradiction
+    // one line lower, which reads as an oversight rather than a distinction.
+    const seen = drawnText(receiptFixture('en', undefined, true));
+    expect(seen).toContain(printLabel('computerGeneratedAcknowledgement', 'EN'));
+    expect(seen).not.toContain(printLabel('computerGeneratedReceipt', 'EN'));
+  });
+
   it.each<Locale>(['en', 'ne'])(
     'the longer title still clears the identity values (%s)',
     (locale) => {
@@ -636,6 +645,8 @@ describe('BILL-RCPT-STATUS: the A5 acknowledgement', () => {
     const seen = drawnText(receiptFixture('en'));
     expect(seen).toContain(printLabel('receipt', 'EN').toUpperCase());
     expect(seen).not.toContain(printLabel('acknowledgement', 'EN').toUpperCase());
+    expect(seen).toContain(printLabel('computerGeneratedReceipt', 'EN'));
+    expect(seen).not.toContain(printLabel('computerGeneratedAcknowledgement', 'EN'));
     expect(seen).toContain(printLabel('amountReceived', 'EN').toUpperCase());
     expect(seen).not.toContain(printLabel('amountTendered', 'EN').toUpperCase());
     expect(seen).not.toContain(printLabel('subjectToClearance', 'EN'));

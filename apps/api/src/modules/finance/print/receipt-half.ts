@@ -527,7 +527,8 @@ function renderFooter(
   eyebrow(doc, label('principal'), sigX, sy, locale, { width: SIG_W });
 
   const fineY = box.bottom - 5.5 * LINE_HEIGHT[locale];
-  text(doc, label('computerGeneratedReceipt'), L, fineY, {
+  // BILL-RCPT-STATUS: matches the title. See the label's own note.
+  text(doc, label(data.provisional ? 'computerGeneratedAcknowledgement' : 'computerGeneratedReceipt'), L, fineY, {
     size: 5.5, color: GREY_1, track: 0.03 * 5.5,
   });
   text(doc, data.number, L, fineY, {
