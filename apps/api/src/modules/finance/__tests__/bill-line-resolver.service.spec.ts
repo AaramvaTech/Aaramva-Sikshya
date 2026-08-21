@@ -87,6 +87,58 @@ describe('BillLineResolverService', () => {
     expect(result.items[0].prorationNote).toBeNull();
   });
 
+  // FEE-CLASS-GUARD indifference. An overridden cross-class assignment is
+  // DELIBERATE and legitimate — Transport and Hostel are routinely assigned
+  // across classes — so it must bill exactly like a matched one.
+  //
+  // This asserts BEHAVIOUR, not the columns. The resolver never reads the
+  // override stamp (grep it: nothing), so asserting `class_mismatch_overridden`
+  // on a fixture would only check the fixture. What is worth pinning is the
+  // invariant that rests on the ABSENCE of code, and which would break silently
+  // the day someone adds a `WHERE class_mismatch_overridden = false` or a
+  // "skip overridden assignments" branch.
+  it('an OVERRIDDEN cross-class assignment bills byte-identically to a matched one', async () => {
+    const heads = [
+      { feeHeadId: 'fh-1', feeHeadName: 'Transport Levy', grossAmount: 3000, overrideAmount: null, effectiveBase: 3000, concessions: [], netAmount: 3000 },
+    ];
+    const headMeta = [{ id: 'fh-1', is_taxable: true, recurrence: 'MONTHLY', proration_policy: 'MONTHLY' }];
+    const taxRate = [{ id: 'tax-1', rate: 13, applies_to: 'ALL' }];
+
+    // Run 1 — an ordinary, class-matching assignment.
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(
+      makeAssignment(MID_EFFECTIVE_FROM),
+    );
+    feePreviewService.preview.mockResolvedValueOnce(makePreview(heads) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce(headMeta)
+      .mockResolvedValueOnce(taxRate);
+    const matched = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+
+    jest.clearAllMocks();
+
+    // Run 2 — same everything, except the assignment carries the full override
+    // stamp: a Grade 1 structure deliberately assigned to a Grade 5 student.
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce({
+      ...makeAssignment(MID_EFFECTIVE_FROM),
+      class_mismatch_overridden: true,
+      overridden_by_user_id: 'user-9',
+      overridden_at: new Date('2026-08-21T00:00:00.000Z'),
+    });
+    feePreviewService.preview.mockResolvedValueOnce(makePreview(heads) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce(headMeta)
+      .mockResolvedValueOnce(taxRate);
+    const overridden = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+
+    // Byte-identical: outcome, money, tax, proration and every line item.
+    expect(overridden).toEqual(matched);
+    // Proved against a case that actually computes something — a prorated,
+    // taxed line — so an accidental pass on two empty results is impossible.
+    expect(matched.outcome).toBe('DRAFT');
+    expect(matched.taxAmount).toBeGreaterThan(0);
+    expect(matched.items[0].prorationNote).not.toBeNull();
+  });
+
   it('mid-period join: MONTHLY head is prorated by the day fraction; a NONE head in the same invoice is not', async () => {
     assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment(MID_EFFECTIVE_FROM));
     feePreviewService.preview.mockResolvedValueOnce(makePreview([
