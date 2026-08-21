@@ -318,6 +318,46 @@ school at it in the meantime.
 stretch bug. It is not — see ASSET-VALID-1 for the upload-side half. demo's fixtures were replaced
 with the repo's own generator output on 2026-08-21, so the next visual review shows real shapes.)*
 
+#### The stamp sits on the signature rule — decide it, don't inherit it (added 2026-08-21)
+
+`design-brief-invoice-receipt.md:191` is unambiguous: **"No two elements overlap at any point,
+including watermark and signature."** The stamp and the signature rule are the one place on the
+document where that is even in question, so it should be settled explicitly rather than left as
+whatever the numbers happen to produce.
+
+**Measured, with demo's current stamp fixture** (200×200 double ring, drawn in the 4.4 mm box):
+
+| | pt (y down) |
+|---|---|
+| stamp box | top 349.56, bottom 362.03 |
+| stamp **ink** bottom | 361.60 |
+| signature rule (0.5pt, centred on y) | spans 361.78 – 362.28 |
+
+So the ring **clears the rule by 0.187 pt = 0.066 mm**. It does not technically overlap — but that
+clearance is *below the resolution of the output device*: **1.6 dots at 600 dpi, half a dot at
+203 dpi.** On paper it reads as touching. The checklist line is satisfied in geometry and not in
+appearance, which is the worst of both readings and the reason to decide it rather than inherit it.
+
+**The clearance is not ours — it belongs to the uploaded file.** It exists only because the seed's
+stamp PNG happens to carry a 3.5% transparent margin below its ink (ink occupies rows 8–192 of 200).
+A school that uploads a stamp scan cropped tight to the ring has **zero** margin, putting ink at the
+box edge — `rule` strokes centred on that same y, so the ring would genuinely cross it by 0.25 pt.
+Whether this document satisfies its own acceptance checklist currently depends on a property of a
+file nobody validates (ASSET-VALID-1).
+
+**Real stamps do overlap signatures**, so the honest answer may well be that this is correct and the
+checklist line needs an explicit exception naming the stamp. That is a fine outcome — but it should
+be written down as a decision. The three options, for whoever revisits the geometry:
+
+1. **Accept and document the exception** — the stamp is the one permitted overlap, because a stamp
+   over a signature is what the real artefact looks like. Requires amending line 191.
+2. **Separate them** — give the stamp its own band clear of the rule. Cleanest against the
+   checklist, and interacts with the 4.4 mm sizing above: a stamp large enough to read probably
+   cannot sit inside the signature band at all.
+3. **Guarantee the margin ourselves** — inset the stamp's draw box so clearance stops depending on
+   the uploaded file's internal cropping. Cheapest, and independent of whichever of 1 or 2 is
+   chosen.
+
 ### 5.5 Real-world maximum fee-structure size — needed for a structural decision
 The invoice holds **6 fee lines at spec density, 7 compressed**, then a continuation row. The dev
 database is not evidence: `tenant_demo` maxes at **2** lines per invoice (avg 1.16 over 19),

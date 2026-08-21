@@ -81,6 +81,42 @@ construction, and the *real* asset is the uncontrolled one. A school that has ne
 gets a document that provably meets the spec; a school that has uploaded one gets a document nobody
 has verified. That is the wrong way round.
 
+## Ink density, not just colour
+
+Colour is one half; **how much ink** is the other, and it fails the same way for the same reason —
+nothing looks at the file.
+
+Measured on demo's current logo fixture (`makeLogoPng`, the repo's own generator), drawn into the
+12 mm header box:
+
+| | |
+|---|---|
+| opaque coverage of the box | **66.5%** |
+| ink density (coverage × darkness, 100% = solid black) | **47.8%** |
+| interior negative space within the disc | **none — it is solid** |
+
+The 66.5% is simply the area of an inscribed disc (`π × 0.46²`); the point is what is *inside* it.
+The generator draws three concentric bands of a single hue with no gaps, so at 12 mm on a mono laser
+it is a **near-solid dark disc**, and a heavier or darker upload is worse without limit.
+
+**This is the failure mode the design already rejected once.** BILL-PRINT-1 deleted `WARM_PANEL`
+outright ("the design has no filled backgrounds", handoff §2) and removed the solid accent-filled
+total pill in favour of "weight, size and a 0.75pt rule" (handoff §1). Both renderers still carry
+the comment `// No filled shape` at the point where the dominant figure is drawn
+(`receipt-half.ts:327`, `invoice-half.ts:517`). A heavy logo reintroduces exactly the filled shape
+the document was rewritten to remove — in the header band, where nothing else on the sheet exceeds a
+0.75 pt rule.
+
+**So the hint must cover density, not only dimensions and aspect.** A school can satisfy every
+dimensional recommendation and still hand over a solid black square. Density is the harder thing to
+express usefully to a non-designer, which is an argument for the rendered preview in step (2) rather
+than a number: "here is your logo at the size it prints, in black and white" communicates a blob
+immediately, where "keep ink coverage under 40%" communicates nothing.
+
+Note this compounds with the colour gap above rather than duplicating it: a saturated logo is a
+*colour* problem in colour and a *density* problem in mono, and the mono photocopy check will
+surface both at once.
+
 ## Fixture-colour decision — demo's logo stays grey (2026-08-21)
 
 demo's branding fixtures were replaced with the repo's own generator output on 2026-08-21, and
@@ -112,9 +148,10 @@ rest of FILE-1-BLOB's error mapping.
 0. **Check what a saturated logo does under mono photocopy** before choosing what to recommend —
    see the colour section above. It may make a greyscale preview the more useful hint, in which case
    it is built alongside (1) rather than after it.
-1. **Recommended dimensions at upload time** — per kind, shown next to the picker, with the
-   rendered size named in mm so the number means something ("appears at 12 × 12 mm on a bill").
-   Advisory. This is the agreed first step.
+1. **Recommended dimensions *and density* at upload time** — per kind, shown next to the picker,
+   with the rendered size named in mm so the number means something ("appears at 12 × 12 mm on a
+   bill"). Advisory. This is the agreed first step. Density belongs here too: dimensions alone let a
+   school satisfy every recommendation and still upload a solid block.
 2. A client-side preview at the true rendered size would tell a school more than any number, and
    needs no server change.
 3. Server-side *warnings* (accept, record, surface in settings) before any consideration of
