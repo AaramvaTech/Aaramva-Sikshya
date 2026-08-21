@@ -49,3 +49,25 @@ reprint would re-render rather than return the stored artifact, and a document t
 handed to a parent would no longer be reproducible. A fix must **rule on this cache explicitly** —
 either exclude the prefixes, or teach the reference set to reconstruct the keys — not merely add the
 three missing columns and consider the job done.
+
+---
+
+## `tenant_bill_scratch` — a partial schema, deliberately left in place
+
+Found 2026-08-21 during BILL-SOFTDEL-1's forensic sweep across all tenant schemas.
+
+`tenant_bill_scratch` is registered as a schema but has **no billing tables at all** — every billing
+query against it fails with `relation "tenant_bill_scratch.bill_invoice_items" does not exist`. It is
+a leftover scratch schema, not a tenant.
+
+**Ruling (Srijan, 2026-08-21): leave it in place.**
+
+1. **It is a useful negative case.** A registered-but-structurally-incomplete schema is exactly the
+   input that breaks fleet-wide tooling — the migration runner, the orphan pruner, any "for each
+   tenant" loop. Having one in dev means that class of bug surfaces here rather than in production.
+2. **Dropping it is the obviously-safe cleanup this ticket exists to be careful about.** The
+   pruner's own history is the argument: its reference set looked complete and would have deleted
+   live data. "This is clearly unused, delete it" is the reasoning that produces those incidents.
+
+STOR-1 should decide deliberately how fleet-wide tooling handles a partial schema — skip with a
+warning, or fail loudly — rather than assuming every schema in the list is a working tenant.
