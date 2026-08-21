@@ -13,6 +13,7 @@ import { AmountDisplay } from '@/components/finance/amount-display';
 import { BillPaymentStatusBadge } from '@/components/finance/bill-payment-status-badge';
 import { PaymentDetailModal } from '@/components/finance/payment-detail-modal';
 import { PrintLanguageItems } from '@/components/finance/print-document-button';
+import { canPrintReceipt, receiptPrintLabel } from '@/lib/print-document';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import {
@@ -152,9 +153,11 @@ export default function BillPaymentsPage() {
         const p = row.original;
         const isPendingCheque = p.method === 'CHEQUE' && p.status === 'PENDING';
         const canVoid = isOwner && p.status !== 'VOIDED';
-        // BILL-8-UI: a VOIDED payment must never produce a receipt — it is
-        // not evidence of money received. Everything else is reprintable.
-        const canPrint = p.status !== 'VOIDED';
+        // BILL-RCPT-STATUS: was an inline `!== 'VOIDED'` here and a second
+        // copy of the same test in the detail modal — neither covered BOUNCED,
+        // which is the state where a receipt is most actively wrong. Now one
+        // shared rule, mirroring the server's own; the server refuses anyway.
+        const canPrint = canPrintReceipt(p.status);
         return (
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -197,7 +200,7 @@ export default function BillPaymentsPage() {
               {canPrint && (
                 <PrintLanguageItems
                   doc={{ kind: 'receipt', paymentId: p.id, format: 'a5' }}
-                  heading="Print receipt (A5)"
+                  heading={`${receiptPrintLabel(p.status)} (A5)`}
                 />
               )}
             </DropdownMenuContent>

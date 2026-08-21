@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { PublicPrismaService } from '../super-admin/public-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -27,6 +28,46 @@ import { BS_MONTH_NAMES_EN } from 'bs-calendar';
  * formats read the same figure.
  */
 export type ReceiptFormat = 'thermal' | 'a5';
+
+/**
+ * BILL-RCPT-STATUS — whether a payment in this state may produce a document
+ * at all, and whether that document is a receipt or an acknowledgement.
+ *
+ * CLEARED    — money is in. A receipt, unchanged.
+ * PENDING    — the school holds an uncleared cheque. An acknowledgement: the
+ *              amount is labelled TENDERED and the slip says so explicitly.
+ * BOUNCED    — the instrument failed. No money, ever.
+ * VOIDED     — recorded and then reversed.
+ *
+ * The last two REFUSE. Printing "Amount received — Rs. 1,500.00" for either is
+ * a false statement on a document a parent keeps, and 16 of demo's 31 payments
+ * are in one of those two states today.
+ *
+ * Unknown values refuse. The CHECK constraint admits exactly four, so a fifth
+ * means the enum grew without this rule being revisited — and defaulting to
+ * "print it" would silently hand out a receipt for a state nobody has ruled on.
+ */
+export function assertReceiptPrintable(status: string): void {
+  switch (status) {
+    case 'CLEARED':
+    case 'PENDING':
+      return;
+    case 'BOUNCED':
+      throw new ConflictException(errorBody('RECEIPT_PAYMENT_BOUNCED'));
+    case 'VOIDED':
+      throw new ConflictException(errorBody('RECEIPT_PAYMENT_VOIDED'));
+    default:
+      throw new ConflictException(
+        errorBody('RECEIPT_PAYMENT_VOIDED', `Payments with status ${status} cannot produce a receipt.`),
+      );
+  }
+}
+
+/** PENDING prints an acknowledgement, not a receipt. The one bit either
+ *  renderer needs — BOUNCED and VOIDED never reach them. */
+export function isProvisional(status: string): boolean {
+  return status === 'PENDING';
+}
 
 export const RECEIPT_FORMATS: readonly ReceiptFormat[] = ['thermal', 'a5'];
 
@@ -69,12 +110,22 @@ export class BillReceiptDocumentService {
     private readonly billReceiptA5Service: BillReceiptA5Service,
   ) {}
 
-  private keyFor(slug: string, paymentId: string, format: ReceiptFormat, language: string): string {
+  private keyFor(
+    slug: string, paymentId: string, format: ReceiptFormat, language: string, provisional: boolean,
+  ): string {
     // BILL-PRINT-1 bumped v1 -> v2 (both formats changed: A5 is new, thermal
     // gained the balance-after line) and added the format segment — a thermal
     // receipt and an A5 receipt for the same payment are two artifacts. v1
     // objects are deliberately not backfilled.
-    return `tenant_${slug}/bill-receipt/${paymentId}-v2-${format}-${language}.pdf`;
+    // BILL-RCPT-STATUS: an acknowledgement and a receipt for the SAME payment
+    // are two different documents — a cheque printed while PENDING, then
+    // cleared, must not reprint the "subject to clearance" slip. The segment is
+    // appended only in the provisional case, so every CLEARED key is byte-
+    // identical to what BILL-PRINT-1 already stored and nothing is invalidated.
+    // The provisional artifact survives clearance as a true record of what was
+    // handed over at the counter.
+    const suffix = provisional ? '-pending' : '';
+    return `tenant_${slug}/bill-receipt/${paymentId}-v2-${format}-${language}${suffix}.pdf`;
   }
 
   async getOrGenerateReceiptPdf(
@@ -87,6 +138,15 @@ export class BillReceiptDocumentService {
     // Scoping (PARENT -> own child only) happens here, before anything
     // storage-related — same discipline as the bill endpoint.
     const payment = await this.billPaymentService.findOne(paymentId, callerId, callerRole);
+    // BILL-RCPT-STATUS, and the reason it sits HERE rather than beside the
+    // render: a receipt issued and cached while the payment was CLEARED must
+    // refuse on reprint once that payment has bounced or been voided. Below the
+    // headObject call this rule would do nothing for exactly the population it
+    // exists to protect. The cache stores the document, not the permission to
+    // serve it — and refusing to serve is not deleting: the stored object stays
+    // as a true record of what was issued.
+    assertReceiptPrintable(payment.status);
+    const provisional = isProvisional(payment.status);
     const { tenantId, slug } = this.tenantContext.getOrThrow();
 
     const tenantRows = await this.publicPrisma.query<TenantHeaderRow>(
@@ -95,14 +155,14 @@ export class BillReceiptDocumentService {
     );
     const tenant = tenantRows[0];
     const language = resolvePrintLanguage(tenant.print_language, languageOverride);
-    const key = this.keyFor(slug, paymentId, format, language);
+    const key = this.keyFor(slug, paymentId, format, language, provisional);
 
     const existing = await this.storageService.headObject(key);
     if (existing) {
       return { presignedUrl: await this.storageService.presignRead(key), generated: false };
     }
 
-    const pdfData = await this.buildReceiptData(payment, tenant, language, format);
+    const pdfData = await this.buildReceiptData(payment, tenant, language, format, provisional);
     let buffer: Buffer;
     if (format === 'a5') {
       const render = await this.billReceiptA5Service.render(pdfData);
@@ -124,6 +184,7 @@ export class BillReceiptDocumentService {
     tenant: TenantHeaderRow,
     language: ReturnType<typeof resolvePrintLanguage>,
     format: ReceiptFormat,
+    provisional: boolean,
   ): Promise<BillReceiptData> {
     const allocationIds = (payment.allocations ?? []).map((a) => a.billInvoiceId);
     const [studentRows, invoiceRows, receivedByRows, balanceAfter, logoBuffer,
@@ -205,6 +266,7 @@ export class BillReceiptDocumentService {
       balanceAfter: balanceAfter?.amount ?? null,
       balanceAfterSign: balanceAfter?.sign ?? null,
       receivedByName: receivedByRows[0]?.full_name ?? null,
+      provisional,
       amountInWordsEn: amountInWords(totalAmount, 'en'),
       amountInWordsNe: amountInWords(totalAmount, 'ne'),
       language,

@@ -82,6 +82,16 @@ export interface BillReceiptData {
   balanceAfter: number | null;
   balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO' | null;
   receivedByName: string | null;
+  /**
+   * BILL-RCPT-STATUS: this payment is an uncleared cheque (PENDING). The slip
+   * becomes an acknowledgement — the amount is labelled TENDERED, not received,
+   * and a subject-to-clearance line renders under the figure.
+   *
+   * A boolean rather than the raw status because only two states can reach a
+   * renderer: BOUNCED and VOIDED are refused in the service, above the cache
+   * lookup. This is the whole information content of the distinction.
+   */
+  provisional: boolean;
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
   language: PrintLanguage;
@@ -160,7 +170,10 @@ export class BillReceiptService {
       doc.moveTo(MARGIN, doc.y).lineTo(MARGIN + w, doc.y).strokeColor(data.tenant.accentColor).lineWidth(1.5).stroke();
       doc.moveDown(0.5);
 
-      const receiptTitle = label('receipt');
+      // BILL-RCPT-STATUS: the title changes too. A slip headed RECEIPT
+      // contradicts the tendered label below it, and the title is what a
+      // parent reads first.
+      const receiptTitle = label(data.provisional ? 'acknowledgement' : 'receipt');
       doc.font(pickFont(receiptTitle, true)).fontSize(11).fillColor(INK)
         .text(receiptTitle, MARGIN, doc.y, { width: w, align: 'center' });
       doc.moveDown(0.4);
@@ -188,12 +201,24 @@ export class BillReceiptService {
       doc.moveDown(0.5);
 
       // ── Amount received — the one large, accent figure ───────────────
-      const amountLabel = label('amountReceived');
+      // BILL-RCPT-STATUS: an uncleared cheque REPLACES this label rather than
+      // qualifying it. "Amount received" is the false statement; leaving it up
+      // and adding a note beneath would still put the claim on the slip.
+      const amountLabel = label(data.provisional ? 'amountTendered' : 'amountReceived');
       doc.font(pickFont(amountLabel)).fontSize(8).fillColor(MUTED)
         .text(amountLabel.toUpperCase(), MARGIN, doc.y, { width: w, align: 'center' });
       doc.moveDown(0.15);
       doc.font('latin-bold').fontSize(18).fillColor(data.tenant.accentColor)
         .text(`Rs. ${num(data.amount)}`, MARGIN, doc.y, { width: w, align: 'center' });
+      // Directly under the figure, in ink rather than muted grey: this is the
+      // one line that stops the slip reading as a receipt, so it is not
+      // de-emphasised to the weight of a caption.
+      if (data.provisional) {
+        doc.moveDown(0.3);
+        const clearance = label('subjectToClearance');
+        doc.font(pickFont(clearance)).fontSize(7.5).fillColor(INK)
+          .text(clearance, MARGIN, doc.y, { width: w, align: 'center' });
+      }
       doc.moveDown(0.5);
 
       doc.moveTo(MARGIN, doc.y).lineTo(MARGIN + w, doc.y).strokeColor(HAIRLINE).lineWidth(0.5).stroke();

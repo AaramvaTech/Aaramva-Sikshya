@@ -117,6 +117,7 @@ export function toReceiptHalf(data: BillReceiptData, locale: Locale): ReceiptHal
       installment: a.installment,
       amount: a.amount,
     })),
+    provisional: data.provisional,
     appliedToBalance: data.appliedToBalance,
     advanceCredit: data.advanceCredit,
     balanceAfter: data.balanceAfter === null ? null : Math.abs(data.balanceAfter),

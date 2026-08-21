@@ -72,6 +72,8 @@ export interface ReceiptHalfData {
   /** The ledger's own three-way sign for that balance — never re-derived here. */
   balanceAfterSign: 'OWES' | 'ADVANCE' | 'ZERO' | null;
   receivedBy: string | null;
+  /** BILL-RCPT-STATUS: an uncleared cheque. See BillReceiptData.provisional. */
+  provisional: boolean;
   locale: Locale;
   label: (key: LabelKey) => string;
   /** See InvoiceHalfData.continuation — "+ 1 more invoice" / "+ 3 more invoices". */
@@ -268,7 +270,8 @@ export function renderReceiptHalf(
     ly += eyeH;
   }
   // Document title — accent 2 of 4.
-  text(doc, label('receipt').toUpperCase(), L, ly, {
+  // BILL-RCPT-STATUS: ACKNOWLEDGEMENT, not RECEIPT, for an uncleared cheque.
+  text(doc, label(data.provisional ? 'acknowledgement' : 'receipt').toUpperCase(), L, ly, {
     size: 14, weight: 700, color: ACCENT, track: locale === 'en' ? 0.04 * 14 : 0,
   });
 
@@ -327,7 +330,10 @@ export function renderReceiptHalf(
   text(doc, `Rs. ${money(data.amount)}`, tX, figureTop, {
     size: 16, weight: 700, track: -0.01 * 16, width: tW, align: 'right',
   });
-  eyebrow(doc, label('amountReceived'), tX, figureTop + figureH - eyeH - mm(0.6), locale);
+  // BILL-RCPT-STATUS: the label is REPLACED, not qualified — see the thermal
+  // renderer's note. "Amount received" is the claim that must not appear.
+  eyebrow(doc, label(data.provisional ? 'amountTendered' : 'amountReceived'),
+    tX, figureTop + figureH - eyeH - mm(0.6), locale);
 
   if (data.inWords) {
     const wordsW = W - tW - mm(4);
@@ -336,7 +342,17 @@ export function renderReceiptHalf(
       size: 7.5, weight: 600, width: wordsW,
     });
   }
-  y = figureTop + figureH + g(STEP.lg);               // boundary 6
+  let bandEnd = figureTop + figureH;
+  if (data.provisional) {
+    // Full width, under both the words and the figure, in INK at body size —
+    // the same weight as the party block, not the weight of a caption. This is
+    // the line that stops the slip reading as a receipt.
+    bandEnd += STEP.xs;
+    const clearance = label('subjectToClearance');
+    text(doc, clearance, L, bandEnd, { size: 7.5, weight: 600, width: W, color: INK });
+    bandEnd += 7.5 * LINE_HEIGHT[locale];
+  }
+  y = bandEnd + g(STEP.lg);                          // boundary 6
 
   // ── Allocation table — "Paid towards" ─────────────────────────────────────
   const xs = {

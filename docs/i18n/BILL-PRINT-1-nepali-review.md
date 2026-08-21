@@ -6,8 +6,12 @@ comes back. Every school currently prints English regardless of its setting.
 **Reviewer:** a native Nepali speaker, ideally one who has handled a Nepali school's fee bills or
 receipts. No code knowledge needed — you only read the English and Nepali columns.
 
-**Scope:** 28 new strings (Part A) and 5 disagreements with an earlier review (Part B). The
-`Key` column is for the developer applying your answers; ignore it.
+**Scope:** 28 new strings (Part A), 5 disagreements with an earlier review (Part B), and — added
+later, as its own round — 3 strings for the uncleared-cheque slip (Part D). The `Key` column is for
+the developer applying your answers; ignore it.
+
+**Part D was added after this sheet first went out.** If you have already answered Parts A and B,
+you only need to read Part D. It is short, but it is the highest-stakes pair on the sheet.
 
 ---
 
@@ -180,16 +184,102 @@ already in use on the same document.
 `Total receivable` (B4) also begins with `कुल`. On the printed fee table a `कुल` column and a
 `जम्मा` column sit side by side. Please confirm that reads correctly to a parent, or suggest a fix.
 
+
+---
+
+## Part D — the uncleared-cheque slip (3 strings) — BILL-RCPT-STATUS
+
+**Added 2026-08-21, after Parts A-C went out. This is a separate round; it was not part of the
+original sheet.**
+
+### What this is for
+
+When a parent pays by **cheque**, the school has the paper but the bank has not paid yet. Until it
+clears, the school must be able to hand over *something* — but that something must not say the money
+was received, because it has not been.
+
+So the slip changes in exactly three ways:
+
+- the **title** at the top reads **Acknowledgement** instead of **Receipt**
+- the big amount is labelled **tendered** instead of **received**
+- a line underneath states plainly that it is **subject to clearance and is not a receipt**
+
+Everything else on the slip is unchanged.
+
+### Why these three matter more than the rest of the sheet
+
+Every other string on this sheet names a field — `Roll`, `Remarks`, `Class / Sec.`. If one of those
+is slightly off, it reads as a clumsy translation.
+
+These three are the *entire difference* between **"we have your money"** and **"we have your cheque."**
+If the Nepali here is weak, ambiguous, or too polite to be clear, the slip reads as a receipt — and a
+parent may reasonably believe the fee is settled when the cheque later bounces. That is a dispute at
+the counter, and the school will be holding a document that appears to agree with the parent.
+
+So please read these three for **force and clarity**, not just correctness. If the phrasing is
+grammatically fine but would be understood as "paid", say so.
+
+| # | Key | English | Proposed Nepali | Where it appears | Approved / Corrected |
+|---|---|---|---|---|---|
+| 1 | `acknowledgement` | Acknowledgement | निस्सा | **The document's title**, in large accent type at the top of the slip, exactly where `रसिद` ("Receipt") appears on a normal one. It **replaces** that title. *Fixed width; a long phrase will run into the Receipt No. / Date column beside it.* | |
+| 2 | `amountTendered` | Amount tendered | बुझाइएको रकम | Small caps label directly under the largest number on the slip, where `प्राप्त रकम` ("Amount received") normally sits. It **replaces** that label — both never appear together. *Fixed width, must not wrap.* | |
+| 3 | `subjectToClearance` | Subject to clearance. This is not a receipt for money received. | भुक्तानी नभएसम्म मान्य हुने छैन। यो प्राप्त रकमको रसिद होइन। | A full-width sentence immediately under the amount, in normal dark text (not faint grey). It is the line that stops the slip reading as a receipt. Room for roughly one line on the 80mm counter roll, so **shorter is better** — but not at the cost of being clear. | |
+
+### The primary question — the title (string 1)
+
+**What is this document called in Nepali?**
+
+This is the single most important answer on the whole sheet, and the one we are least sure of.
+
+The obvious candidates all mean *receipt for money* — which is precisely the meaning this title
+exists to avoid:
+
+- **भर्पाई** — commonly used for a receipt / acknowledgement of payment received
+- **प्राप्ति** — "receipt" in the sense of having received something
+- **रसिद** — the word already used for a real receipt, so it cannot be reused here
+
+We have proposed **निस्सा**, on the reasoning that it denotes a *slip / token / counterfoil* rather
+than a receipt-for-money. **We do not know whether that is what a Nepali school or bank would
+actually call this document**, and it may read as odd or archaic.
+
+So, in order:
+
+1. **Is there an established Nepali term** that Nepali schools or banks already use for a slip given
+   when an uncleared cheque is handed over? If one exists, we should adopt it and discard our guess
+   entirely.
+2. **If there is no standard term, is `निस्सा` acceptable** as the title of this document — and does
+   it clearly NOT mean "receipt for money received"?
+3. **If neither, what should it say?** A short phrase is fine if no single word works, but the
+   title slot is narrow (see the table) — roughly the width of `भुक्तानी सूचना` at most.
+
+### Two further questions
+
+4. **Does `बुझाइएको रकम` clearly mean "handed over / tendered" rather than "received"?** The whole
+   design rests on a parent being able to tell these two apart at a glance. If the distinction is
+   too fine in Nepali, a different construction is better than a literal translation.
+5. **Is `भुक्तानी नभएसम्म मान्य हुने छैन` the right register for a school fee slip?** It is
+   deliberately blunt. If normal Nepali school practice uses a softer standard phrase for an
+   uncleared cheque, that phrase is probably better than ours — please write it in.
+
+**Note:** unlike Parts A and B, these three strings are **not design-supplied** — the approved design
+files only ever drew a cleared receipt, so there was no reference to lift from. They were written by
+the developer and have been read by nobody.
+
 ---
 
 ## What happens next
 
-1. Part A corrections and Part B decisions are applied to `bill-print-labels.ts`.
-2. Two switches are turned on together, in one reviewable commit:
-   `BILL_PRINT_1_NEPALI_REVIEWED` (this sheet), and a staging check that Devanagari renders
-   correctly in the production container.
-3. Until both are on, every school prints English regardless of its setting, and a school cannot
-   turn Nepali on early — the setting is rejected at save time.
+1. Part A corrections, Part B decisions, and Part D corrections are applied to
+   `bill-print-labels.ts`.
+2. Three switches are turned on together, in one reviewable commit:
+   `BILL_PRINT_1_NEPALI_REVIEWED` (Parts A/B), `BILL_RCPT_STATUS_NEPALI_REVIEWED` (Part D), and a
+   staging check that Devanagari renders correctly in the production container.
+3. Until all three are on, every school prints English regardless of its setting, and a school
+   cannot turn Nepali on early — the setting is rejected at save time.
+
+Part D has its own switch rather than riding on Parts A/B deliberately: it arrived after this sheet
+had already gone out, so if Parts A and B come back and get flipped, these two strings would
+otherwise ship having been read by nobody.
 
 *Amounts in words (e.g. `तीन हजार एक सय पचास रुपैयाँ मात्र`) were approved on 2026-07-30 and are
 not re-opened here.*

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { loadPdfFonts } from '../../../common/pdf/pdf-fonts';
 import { mm, HALF_H, SHEET_W, SHEET_H, CONTENT_H, TOTALS_W, Locale } from '../print/mm';
-import { PAGE, halfBox, PrintOverflowError, PrintCapacityError, drawSheet, HalfRenderer } from '../print/a5-sheet';
+import { PAGE, halfBox, PrintOverflowError, PrintCapacityError, drawSheet, HalfRenderer, widthOf } from '../print/a5-sheet';
 import { renderInvoiceHalf, densities, InvoiceHalfData, InvoiceHalfLine, footerHeight } from '../print/invoice-half';
 import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation } from '../print/receipt-half';
 import { printLabel, LabelKey, PrintLanguage, continuationLabel } from '../bill-print-labels';
@@ -147,7 +147,7 @@ function minContent(locale: Locale): InvoiceHalfData {
 
 function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
   { invoiceNumber: 'BINV-2083-000003', installment: 'Shrawan 2083', amount: 1000 },
-]): ReceiptHalfData {
+], provisional = false): ReceiptHalfData {
   const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
   return {
     school: {
@@ -156,6 +156,7 @@ function receiptFixture(locale: Locale, allocations: ReceiptAllocation[] = [
       pan: '301234567', regNo: 'REG-KTM-2019-04521',
       logo: null, signatoryName: 'Dr. Kamala Shrestha', signature: null, stamp: null,
     },
+    provisional,
     number: 'RCPT-2083-000021', dateAd: '2026-08-12', dateBs: '2083-04-27',
     studentName: 'Binod Gurung', className: 'Grade 9', section: 'B', roll: '22',
     method: 'eSewa', txnRef: 'ESW-8842190337',
@@ -573,6 +574,87 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
   });
 });
 
+describe('BILL-RCPT-STATUS: the A5 acknowledgement', () => {
+  /** Every string drawn into one half. */
+  function drawnText(data: ReceiptHalfData): string[] {
+    const seen: string[] = [];
+    const doc = newDoc();
+    const proto = PDFDocument.prototype as unknown as { text: (...a: unknown[]) => unknown };
+    const original = proto.text;
+    proto.text = function patched(this: unknown, str: unknown, ...rest: unknown[]) {
+      seen.push(String(str));
+      return original.call(this, str, ...rest);
+    };
+    try {
+      renderReceiptHalf(doc, halfBox(0), data, null);
+    } finally {
+      proto.text = original;
+    }
+    doc.end();
+    return seen;
+  }
+
+  it('labels the amount TENDERED and drops the received claim entirely', () => {
+    const seen = drawnText(receiptFixture('en', undefined, true));
+    expect(seen).toContain(printLabel('amountTendered', 'EN').toUpperCase());
+    expect(seen).not.toContain(printLabel('amountReceived', 'EN').toUpperCase());
+  });
+
+  it('carries the subject-to-clearance line', () => {
+    const seen = drawnText(receiptFixture('en', undefined, true));
+    expect(seen).toContain(printLabel('subjectToClearance', 'EN'));
+  });
+
+  it('is titled ACKNOWLEDGEMENT, never RECEIPT', () => {
+    const seen = drawnText(receiptFixture('en', undefined, true));
+    expect(seen).toContain(printLabel('acknowledgement', 'EN').toUpperCase());
+    expect(seen).not.toContain(printLabel('receipt', 'EN').toUpperCase());
+  });
+
+  it.each<Locale>(['en', 'ne'])(
+    'the longer title still clears the identity values (%s)',
+    (locale) => {
+      // ACKNOWLEDGEMENT is more than twice the length of RECEIPT, and the
+      // title is drawn at the half's left edge with NO width constraint,
+      // sharing its band with the right-aligned Receipt No. / Date column.
+      // Nothing would clip - it would simply print over them. This is the
+      // guard for a long Part D translation as much as for the English.
+      const lang: PrintLanguage = locale === 'ne' ? 'NE' : 'EN';
+      const title = printLabel('acknowledgement', lang);
+      const doc = newDoc();
+      const width = widthOf(doc, locale === 'en' ? title.toUpperCase() : title, {
+        size: 14, weight: 700, track: locale === 'en' ? 0.04 * 14 : 0, locale,
+      });
+      doc.end();
+      // mm(40) mirrors receipt-half's `valueW`, mm(3) its label gutter. Two
+      // constants restated so this fires if the title outgrows its space.
+      expect(width).toBeLessThan(halfBox(0).w - mm(40) - mm(3));
+    },
+  );
+
+  it('a CLEARED receipt keeps the received label and shows no clearance line', () => {
+    const seen = drawnText(receiptFixture('en'));
+    expect(seen).toContain(printLabel('receipt', 'EN').toUpperCase());
+    expect(seen).not.toContain(printLabel('acknowledgement', 'EN').toUpperCase());
+    expect(seen).toContain(printLabel('amountReceived', 'EN').toUpperCase());
+    expect(seen).not.toContain(printLabel('amountTendered', 'EN').toUpperCase());
+    expect(seen).not.toContain(printLabel('subjectToClearance', 'EN'));
+  });
+
+  it('the extra line does not push a full allocation table through the footer', () => {
+    // The clearance line eats vertical budget above the table. assertFits is
+    // the guard that fires rather than letting content overlap the footer, so
+    // a busy acknowledgement is the case that would trip it first.
+    const many: ReceiptAllocation[] = Array.from({ length: 8 }, (_, i) => ({
+      invoiceNumber: `BINV-2083-${String(i + 1).padStart(6, '0')}`,
+      installment: 'Shrawan 2083',
+      amount: 1000,
+    }));
+    expect(() => renderReceiptHalf(newDoc(), halfBox(0), receiptFixture('en', many, true), null))
+      .not.toThrow();
+  });
+});
+
 describe('BILL-PRINT-1 sheet output', () => {
   const svc = new BillPdfService();
   const pdfData = (n: number, language: PrintLanguage = 'EN') => ({
@@ -705,6 +787,7 @@ describe('BILL-PRINT-1 sheet output', () => {
         logoBuffer: null, principalSignatureBuffer: null, schoolStampBuffer: null,
       },
       receiptNumber: 'RCPT-2083-000021', receivedDateAd: '2026-08-12', receivedDateBs: '2083-04-27',
+      provisional: false,
       studentName: 'Binod Gurung', className: 'Grade 9', sectionName: 'B', rollNumber: '22',
       method, txnRef: method === 'CASH' ? null : 'ESW-8842190337',
       amount: allocations * 1000 + advance,

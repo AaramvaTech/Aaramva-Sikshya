@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   defaultPrintLanguage, isStorageUnavailable, printErrorMessage, openPresignedUrl,
   PRINT_LANGUAGES, PRINT_LANGUAGE_LABELS, STORAGE_UNAVAILABLE_MESSAGE, THERMAL_SCALE_WARNING,
-  needsThermalScaleWarning,
+  needsThermalScaleWarning, canPrintReceipt, receiptPrintLabel, RECEIPT_REFUSED_MESSAGES,
 } from '@/lib/print-document';
 
 // Spec §Language — the print-time choice defaults to the tenant's own
@@ -60,6 +60,64 @@ describe('storage-unavailable error path', () => {
   it('uses the caller fallback for everything else', () => {
     expect(printErrorMessage(new Error('boom'), 'Failed to open the bill PDF'))
       .toBe('Failed to open the bill PDF');
+  });
+});
+
+
+// BILL-RCPT-STATUS — the server refuses a receipt for a payment that is not
+// evidence of money received. Before this, the payments list and the payment
+// detail modal each carried their own inline `!== 'VOIDED'` test and NEITHER
+// covered BOUNCED, which is the state where a receipt is most actively wrong.
+describe('canPrintReceipt', () => {
+  it('offers a document for the two states that have one', () => {
+    expect(canPrintReceipt('CLEARED')).toBe(true);
+    expect(canPrintReceipt('PENDING')).toBe(true);
+  });
+
+  it('refuses BOUNCED as well as VOIDED', () => {
+    expect(canPrintReceipt('BOUNCED')).toBe(false);
+    expect(canPrintReceipt('VOIDED')).toBe(false);
+  });
+
+  it('refuses anything it does not recognise, matching the server default', () => {
+    expect(canPrintReceipt('REVERSED')).toBe(false);
+    expect(canPrintReceipt('')).toBe(false);
+  });
+});
+
+describe('receiptPrintLabel', () => {
+  it('promises an acknowledgement for an uncleared cheque, not a receipt', () => {
+    // The button must not say "receipt" when the server will produce a slip
+    // headed "Amount tendered - subject to clearance".
+    expect(receiptPrintLabel('PENDING')).toBe('Print acknowledgement');
+  });
+
+  it('says receipt for a cleared payment', () => {
+    expect(receiptPrintLabel('CLEARED')).toBe('Print receipt');
+  });
+});
+
+describe('receipt refusal messages', () => {
+  const refusal = (code: string) => ({ response: { status: 409, data: { error: { code } } } });
+
+  it('explains a bounced cheque as no money received', () => {
+    const msg = printErrorMessage(refusal('RECEIPT_PAYMENT_BOUNCED'), 'Failed to open the receipt');
+    expect(msg).toBe(RECEIPT_REFUSED_MESSAGES.RECEIPT_PAYMENT_BOUNCED);
+    expect(msg).toMatch(/bounced/i);
+    expect(msg).not.toBe('Failed to open the receipt');
+  });
+
+  it('explains a voided payment separately from a bounced one', () => {
+    const msg = printErrorMessage(refusal('RECEIPT_PAYMENT_VOIDED'), 'Failed to open the receipt');
+    expect(msg).toBe(RECEIPT_REFUSED_MESSAGES.RECEIPT_PAYMENT_VOIDED);
+    expect(msg).toMatch(/voided/i);
+    // Two codes exist precisely so these two never collapse into one sentence.
+    expect(msg).not.toBe(RECEIPT_REFUSED_MESSAGES.RECEIPT_PAYMENT_BOUNCED);
+  });
+
+  it('leaves the storage message alone', () => {
+    const storage503 = { response: { status: 503, data: { error: { code: 'STORAGE_UNAVAILABLE' } } } };
+    expect(printErrorMessage(storage503, 'x')).toBe(STORAGE_UNAVAILABLE_MESSAGE);
   });
 });
 

@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { BillReceiptService, BillReceiptData } from '../bill-receipt.service';
+import { printLabel } from '../bill-print-labels';
 import { BalanceSign } from '../ledger.util';
 import { drCrMarker } from '../print/a5-sheet';
 
@@ -17,6 +18,7 @@ import { drCrMarker } from '../print/a5-sheet';
 const data = (
   balanceAfter: number | null,
   balanceAfterSign: BalanceSign | null,
+  provisional = false,
 ): BillReceiptData => ({
   tenant: {
     name: 'Demo School Nepal', principalName: 'Dr. Kamala Shrestha', accentColor: '#0d5c43',
@@ -31,10 +33,46 @@ const data = (
   advanceAmount: 0, appliedToBalance: 0, advanceCredit: 0,
   balanceAfter, balanceAfterSign, receivedByName: 'Sita Maharjan',
   amountInWordsEn: 'One Thousand Rupees', amountInWordsNe: null, language: 'EN',
+  provisional,
 });
 
 describe('BillReceiptService (80mm thermal)', () => {
   const service = new BillReceiptService();
+
+  // -- BILL-RCPT-STATUS: the PENDING (uncleared cheque) variant --------------
+  describe('an uncleared cheque prints an acknowledgement, not a receipt', () => {
+    it('replaces the amount label rather than qualifying it', async () => {
+      const seen = await drawnText(data(null, null, true));
+
+      expect(seen).toContain(printLabel('amountTendered', 'EN').toUpperCase());
+      // The whole point: the received claim must be ABSENT, not merely
+      // accompanied by a caveat. A slip carrying both statements still says
+      // the school has the money.
+      expect(seen).not.toContain(printLabel('amountReceived', 'EN').toUpperCase());
+    });
+
+    it('carries the subject-to-clearance line', async () => {
+      const seen = await drawnText(data(null, null, true));
+      expect(seen).toContain(printLabel('subjectToClearance', 'EN'));
+    });
+
+    it('is titled ACKNOWLEDGEMENT, never RECEIPT', async () => {
+      // The title is the line a parent reads first, and RECEIPT above
+      // "Amount tendered" contradicts itself on the same slip.
+      const seen = await drawnText(data(null, null, true));
+      expect(seen).toContain(printLabel('acknowledgement', 'EN'));
+      expect(seen).not.toContain(printLabel('receipt', 'EN'));
+    });
+
+    it('a CLEARED receipt is untouched by any of it', async () => {
+      const seen = await drawnText(data(2260, 'OWES'));
+      expect(seen).toContain(printLabel('receipt', 'EN'));
+      expect(seen).not.toContain(printLabel('acknowledgement', 'EN'));
+      expect(seen).toContain(printLabel('amountReceived', 'EN').toUpperCase());
+      expect(seen).not.toContain(printLabel('amountTendered', 'EN').toUpperCase());
+      expect(seen).not.toContain(printLabel('subjectToClearance', 'EN'));
+    });
+  });
 
 
   /** Every string the renderer draws during one render. */
@@ -169,6 +207,11 @@ describe('BillReceiptService — no two text runs may overprint', () => {
     ['zero balance', data(0, 'ZERO')],
     ['advance credit', { ...data(-1500, 'ADVANCE'), allocations: [], advanceCredit: 1500, amount: 1500 }],
     ['unposted (no balance line)', data(null, null)],
+    // BILL-RCPT-STATUS: an uncleared cheque. Never posts, so it has no
+    // balance line, and it carries an extra line under the figure - which
+    // is exactly the kind of addition that re-broke the roll onto a second
+    // page once before.
+    ['pending cheque (acknowledgement)', data(null, null, true)],
     ['long school + long principal', {
       ...data(2150, 'OWES'),
       tenant: {

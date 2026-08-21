@@ -11,6 +11,7 @@ import { BsDateInput } from '@/components/shared/bs-date-input';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
 import { PrintDocumentButton } from '@/components/finance/print-document-button';
+import { receiptPrintLabel } from '@/lib/print-document';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -213,7 +214,15 @@ export default function RecordPaymentPage() {
               the parent in front of them right now — the receipt has to be
               here, not only in payment history. */}
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <PrintDocumentButton doc={{ kind: 'receipt', paymentId: result.id }} />
+            {/* BILL-RCPT-STATUS: a cheque is born PENDING, so this counter
+                moment is exactly where an acknowledgement gets handed over. No
+                canPrintReceipt gate — a just-recorded payment is CLEARED or
+                PENDING and never the two refused states — but the button must
+                still say which document it produces. */}
+            <PrintDocumentButton
+              doc={{ kind: 'receipt', paymentId: result.id }}
+              label={receiptPrintLabel(result.status)}
+            />
             <Button variant="outline" onClick={reset}>Record Another</Button>
             <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={() => router.push('/finance/bill/payments')}>
               Done

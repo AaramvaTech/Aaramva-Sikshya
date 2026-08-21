@@ -47,6 +47,19 @@ export const ERROR_CATALOG = {
   // ── Payments ────────────────────────────────────────────────────────────
   PAYMENT_GATEWAY_UNAVAILABLE: { status: 502, message: 'The payment service is temporarily unavailable. Please try again shortly.' },
   PAYMENT_VERIFICATION_FAILED: { status: 400, message: 'Payment could not be verified. If money was deducted, it will be reconciled — contact your school.' },
+  // BILL-RCPT-STATUS: the payment is in a state that cannot produce a receipt.
+  // Two codes rather than one-plus-details because ERR-1 §1.1 has clients key
+  // off `code` and add Nepali by mapping code -> string; a single code would
+  // leave a Nepali client unable to tell a bounced cheque from a voided
+  // payment, which are different things to say to a parent.
+  RECEIPT_PAYMENT_BOUNCED: {
+    status: 409,
+    message: 'This payment bounced, so no money was received. There is no receipt to print.',
+  },
+  RECEIPT_PAYMENT_VOIDED: {
+    status: 409,
+    message: 'This payment was voided. A voided payment is not evidence of money received, so no receipt can be printed.',
+  },
   // ── Infrastructure ──────────────────────────────────────────────────────
   STORAGE_UNAVAILABLE: { status: 503, message: 'File storage is temporarily unavailable. Please try again shortly.' },
   RATE_LIMITED: { status: 429, message: 'Too many attempts. Please wait a moment and try again.' },

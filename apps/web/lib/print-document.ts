@@ -41,9 +41,47 @@ export function isStorageUnavailable(err: unknown): boolean {
 export const STORAGE_UNAVAILABLE_MESSAGE =
   'Printing is unavailable because document storage is not configured. This is a server setup issue — contact your administrator.';
 
-/** The message to surface for a failed print. Storage gets its own text. */
+/**
+ * BILL-RCPT-STATUS — the server refuses a receipt for a payment that is not
+ * evidence of money received. Keyed off `code` (ERR-1 §1.1), never the
+ * message, so the wording stays this client's to own and to translate.
+ */
+export const RECEIPT_REFUSED_MESSAGES: Record<string, string> = {
+  RECEIPT_PAYMENT_BOUNCED:
+    'This cheque bounced, so no money was received — there is no receipt to print.',
+  RECEIPT_PAYMENT_VOIDED:
+    'This payment was voided, so it is not evidence of money received. No receipt can be printed.',
+};
+
+/** The message to surface for a failed print. Storage and the two refusal
+ *  states each get their own text; everything else falls back. */
 export function printErrorMessage(err: unknown, fallback: string): string {
-  return isStorageUnavailable(err) ? STORAGE_UNAVAILABLE_MESSAGE : fallback;
+  if (isStorageUnavailable(err)) return STORAGE_UNAVAILABLE_MESSAGE;
+  return RECEIPT_REFUSED_MESSAGES[apiErrorCode(err) ?? ''] ?? fallback;
+}
+
+/**
+ * Whether to OFFER a receipt for a payment in this state — the same rule the
+ * server enforces in `assertReceiptPrintable`, mirrored here so a clerk is not
+ * shown a button that always fails.
+ *
+ * Advisory only, exactly like FEE-CLASS-GUARD's client-side class rule: the
+ * server is authoritative, its 409 is handled above, and a row whose status is
+ * stale in a cached list still refuses server-side. What this buys is one rule
+ * in one place — before this, the payments list and the detail modal each
+ * carried their own inline `!== 'VOIDED'` test and neither covered BOUNCED.
+ */
+export function canPrintReceipt(status: string): boolean {
+  return status === 'CLEARED' || status === 'PENDING';
+}
+
+/**
+ * A PENDING cheque produces an acknowledgement, not a receipt — so the button
+ * must not promise one. The server swaps the document's own wording; this
+ * keeps the affordance honest about what will come out.
+ */
+export function receiptPrintLabel(status: string): string {
+  return status === 'PENDING' ? 'Print acknowledgement' : 'Print receipt';
 }
 
 /**

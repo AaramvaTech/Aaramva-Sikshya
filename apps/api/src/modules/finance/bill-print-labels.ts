@@ -53,6 +53,31 @@ const LABELS = {
   appliedToBalance: { en: 'Applied to balance', ne: 'बाँकी रकममा समायोजन' },
   thankYou: { en: 'Thank you', ne: 'धन्यवाद' },
 
+  // ── BILL-RCPT-STATUS — the PENDING (uncleared cheque) variant ─────────────
+  // The school holds the instrument; the bank has not paid. `amountTendered`
+  // REPLACES amountReceived on that slip — it does not sit beside it — because
+  // the whole point is that the received claim must not appear.
+  //
+  // NOT design-supplied (the approved references only ever drew a cleared
+  // receipt) and NOT reviewed — gated behind BILL_RCPT_STATUS_NEPALI_REVIEWED,
+  // its own round on the review sheet. See the gate's comment for why these
+  // two carry more risk than an ordinary label.
+  // The document's own title on a PENDING slip. A slip headed RECEIPT
+  // contradicts the 'Amount tendered' label beneath it, and the title is the
+  // line a parent actually reads.
+  //
+  // The Nepali is the LEAST confident string in this ticket: the obvious
+  // candidates (भर्पाई, प्राप्ति) all carry the sense of 'receipt for money',
+  // which is the exact meaning this title exists to avoid. निस्सा denotes a
+  // slip/token/counterfoil rather than a receipt-for-money, so it is proposed
+  // here — but it is Part D's PRIMARY question, not a settled choice.
+  acknowledgement: { en: 'Acknowledgement', ne: 'निस्सा' },
+  amountTendered: { en: 'Amount tendered', ne: 'बुझाइएको रकम' },
+  subjectToClearance: {
+    en: 'Subject to clearance. This is not a receipt for money received.',
+    ne: 'भुक्तानी नभएसम्म मान्य हुने छैन। यो प्राप्त रकमको रसिद होइन।',
+  },
+
   // ── BILL-PRINT-1 — A5 print stationery ────────────────────────────────────
   // Every Nepali value below is lifted VERBATIM from the approved design
   // references (docs/design/billing-print/Invoice.dc.html + Receipt.dc.html),

@@ -54,5 +54,25 @@ export const NEPALI_PRINT_REVIEWED = true;
  */
 export const BILL_PRINT_1_NEPALI_REVIEWED = false;
 
+/**
+ * BILL-RCPT-STATUS — a THIRD gate, for this ticket's two keys.
+ *
+ * `amountTendered` and `subjectToClearance` are the PENDING (uncleared cheque)
+ * variant's wording. They land after the BILL-PRINT-1 review sheet had already
+ * gone out, so they cannot ride on its round: if that sheet comes back and its
+ * flag is flipped, these two would otherwise ship to a parent having been read
+ * by nobody.
+ *
+ * They also carry more risk than an ordinary label. Every other string on the
+ * slip names a field; these two are the entire difference between "we have
+ * your money" and "we have your cheque". A mistranslation here does not read
+ * as a typo, it reads as a receipt.
+ *
+ * Same rule as the two above: ONLY Srijan flips it, in its own reviewable
+ * commit, once the review sheet's Part C comes back.
+ */
+export const BILL_RCPT_STATUS_NEPALI_REVIEWED = false;
+
 /** Nepali/bilingual print is permitted only when EVERY keyset is reviewed. */
-export const NEPALI_PRINT_PERMITTED = NEPALI_PRINT_REVIEWED && BILL_PRINT_1_NEPALI_REVIEWED;
+export const NEPALI_PRINT_PERMITTED =
+  NEPALI_PRINT_REVIEWED && BILL_PRINT_1_NEPALI_REVIEWED && BILL_RCPT_STATUS_NEPALI_REVIEWED;
