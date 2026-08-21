@@ -265,6 +265,17 @@ bucket-qualified, and `motherland-school.principalSignatureUrl` holds a legacy 3
 to the designed blank slot, with a WARN naming the cause. **The underlying defect is untouched and
 every other reader still trips on it.** Do not read this ticket as having fixed it.
 
+**Fold in: the failure is silent to the school** (added 2026-08-21). Confirm-time content-type comes
+from the stored object's HEAD, which is whatever the client sent on the PUT — so a file mislabelled
+`image/png` passes every policy check (`storage.policy.ts` validates MIME, size and role, nothing
+else) and only fails later, inside pdfkit. `optionalImage` / `logoBox` catch the decode error, fall
+back to the blank slot or the monogram, and push an `AssetMiss` that the document services log as a
+WARN. That WARN goes to the server log. **Nothing reaches the school**: settings still shows the
+asset as uploaded, and every bill and receipt prints without it. A school can be issuing unsigned
+documents for months with no indication anything is wrong — the only signal is a log line nobody at
+the school can see. The fix belongs with this ticket's error mapping, not with ASSET-VALID-1, which
+covers uploads that decode fine but render badly.
+
 ### 5.4 BILL-PRINT-2 — real tenant columns
 Four columns do not exist: **bank name, account, branch, signatory designation**. Today the footer
 renders `tenants.paymentInstructions` free text unbolded (clamped to a measured 183-char / 3-line
@@ -272,6 +283,40 @@ budget so unbounded tenant text cannot grow the fixed half), and the designation
 label catalogue as `Principal`. SPEC §6 wants the bank name and account bolded as separate values.
 **Also fold in:** a forced-regenerate path for cached documents (§4), and the `data:`-URI-should-be-
 4xx-not-500 half of FILE-1-BLOB.
+
+#### Signature block geometry — the reserve is the wrong shape (added 2026-08-21)
+
+Measured from the `cm` placement matrices in a real render, not inferred. The draw itself is
+**correct**: both paths use pdfkit `fit: [w, h]`, which is contain-within, so nothing is ever
+stretched — a 300×120 signature draws at aspect exactly 2.500, a 200×200 stamp at exactly 1.000.
+The defect is the space reserved for them.
+
+| | reserved | a real asset draws at | fill |
+|---|---|---|---|
+| signature | 41.60 × 4.40 mm (**9.455 : 1**) | 11.00 × 4.40 mm (from 300×120) | **26.4%** of the width |
+| stamp | 4.40 × 4.40 mm | 4.40 × 4.40 mm | full, but the box is the problem |
+
+Two separate faults:
+
+1. **The signature reserve is 9.455 : 1.** No real signature approaches that — scans run roughly
+   2.5:1 to 5:1 — so every one is height-constrained and leaves two-thirds to three-quarters of the
+   reserved width empty. The band is also only **4.4 mm tall**, so a signature renders at about the
+   height of a lowercase letter.
+2. **`SIGN_GAP = mm(4.4)` does double duty** (`print/receipt-half.ts`, same pattern in
+   `invoice-half.ts`): it is the band height *and* the stamp's width, via
+   `const stampW = data.school.stamp ? SIGN_GAP : 0`. So a school stamp is drawn in a **4.4 mm
+   square**. Real stamps are 30–40 mm. Nothing in the code says the two measurements were ever meant
+   to be the same number.
+
+**Until this lands, signature and stamp upload does not usefully work for a school.** The upload
+path is complete and correct — presign, PUT, confirm, store, fetch, draw — and the output is too
+small to read. A school that uploads a real signature gets a 4.4 mm smudge; one that uploads a real
+stamp gets a 4.4 mm dot. Treat the feature as unshipped rather than working, and do not point a
+school at it in the meantime.
+
+*(Found because demo's fixtures were three solid colour blocks, which made the geometry look like a
+stretch bug. It is not — see ASSET-VALID-1 for the upload-side half. demo's fixtures were replaced
+with the repo's own generator output on 2026-08-21, so the next visual review shows real shapes.)*
 
 ### 5.5 Real-world maximum fee-structure size — needed for a structural decision
 The invoice holds **6 fee lines at spec density, 7 compressed**, then a continuation row. The dev
@@ -287,7 +332,18 @@ distributed; the A/B renders are in
 
 ### 5.6 BILL-RCPT-STATUS — blocking, ruled, not implemented
 `docs/api-contracts/BILL-RCPT-STATUS-phase0.md` §6 carries the ruling. **Follows BILL-PRINT-1
-immediately, ahead of STOR-1 and ERR-MAP-1.**
+immediately, ahead of STOR-1 and ERR-MAP-1.** *(Implemented 2026-08-21 on branch
+`feat/bill-rcpt-status`; the ruling doc remains the spec of record.)*
+
+### 5.7 Two tickets opened 2026-08-21, both recorded not fixed
+- `docs/api-contracts/STOR-1-notes.md` — accumulating notes for STOR-1. Carries the two genuinely
+  orphaned logo JPEGs under `tenant_demo/school-logo/` (exact keys, sizes, dates) as the first known
+  TRUE positive for a pruner whose reference set BILL-8-UI proved unsafe, plus the ruling STOR-1 owes
+  on the bill-pdf/bill-receipt cache.
+- `docs/api-contracts/ASSET-VALID-1-branding-upload-validation.md` — branding uploads have no
+  dimension, aspect, resolution or transparency validation. Agreed first step is a
+  recommended-dimensions hint at upload time, **not** server-side rejection. Interacts with §5.4:
+  fixing validation without fixing the reserve leaves a school no better off.
 
 ---
 
