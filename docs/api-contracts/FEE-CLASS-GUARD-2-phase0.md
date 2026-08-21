@@ -8,6 +8,11 @@ ruling: none has a legitimate cross-entity case, so **no override flag and no ac
 stamp**, unlike FEE-CLASS-GUARD where overrides are routine.
 
 **Headline: the ruling holds for all four, but two findings need your attention before it locks.**
+
+**Post-ruling update:** the §8 audit (ruling 3) found the soft-delete blindness is not confined to
+transport routes — `fee-preview.service.ts` filters `deleted_at` on nothing at all, a retired FEE
+HEAD is billed to every student on any structure containing it, and five academic-year existence
+guards accept a deleted year. The ticket is three parts, not one. See §8.2.
 One path's real leak is *not* the INSERT and a block there fixes nothing. One has an ordering
 workflow that a naive block would break. Details in §6.
 
@@ -195,16 +200,111 @@ fixes the *silence* — which is the actual harm in this path — without forbid
 
 ---
 
-## 7. Open questions for the ruling
+## 7. THE RULINGS (Srijan, 2026-08-21)
 
-1. **Path 2's consumer fix** — in this ticket, or handed off? And if in: skip the line, or fail the
-   run, when an assigned route has been retired? (§6.2)
-2. **Path 4's block definition** — A, B, or B-with-recheck? (§6.4)
-3. **Path 3's second door** — `update()` sets `discount_reason_id` as well as `create()`. Both
-   blocked, or is update out of scope?
-4. **Path 1's academic year** — block only the soft-deleted student, or also validate that the
-   `academicYearId` exists and belongs to that student's enrolment? The second is a wider check than
-   the ruling names.
-5. **Consistency of the 4xx** — all four are "the referenced thing exists but is not usable",
-   which is what ERR-MAP-1's new `RELATED_RECORD_NOT_FOUND` (422) already describes. Reuse it, or
-   mint per-path codes so a client can tell *which* reference was bad?
+| # | Ruling |
+|---|---|
+| 1 | **Path 2 owns the consumer.** Blocking the INSERT alone would discharge the concern without removing the defect — the realistic sequence never passes the guard. Fee preview and any other billing consumer must filter `deleted_at`. |
+| 2 | **Fail the run, don't skip the line.** Silently changing what a school charges is worse than halting a supervised act with a named cause. |
+| 3 | **Audit the same pattern across all six tables before Phase 1** (below). |
+| 4 | **Path 4 takes the third option** — accept but surface as inert, plus the safe half (head must exist and not be deleted). The harm is the silence, not the ordering; forbidding override-before-assignment would invent a constraint nobody enforces today. |
+| 5 | **Mint per-path error codes.** Do NOT reuse `RELATED_RECORD_NOT_FOUND` — that code must keep meaning "a guard is missing" for ERR-MAP-1 §12.2's alarm to work. |
+| 6 | **Path 1's counter-example is dismissed** — the soft-delete/status orthogonality settles it. |
+
+---
+
+## 8. Ruling 3 — the audit, and it changes the ticket's shape
+
+**Method.** Every backtick SQL literal under `modules/finance` (plus the dashboard and finance-report
+consumers) was extracted, matched against the six soft-deletable tables by `FROM|JOIN|INTO|UPDATE`,
+and checked for a `deleted_at IS NULL` in the same statement. **63 literals** touch the six tables —
+51 reads, 12 writes. Each raw hit was then triaged by hand, because the scanner cannot see a filter
+built in a `${where}` conditions array outside the literal.
+
+### 8.1 The answer to "if fee-preview misses it on transport routes, does it miss it elsewhere?"
+
+**Yes. `fee-preview.service.ts` contains ZERO occurrences of `deleted_at` — it filters nothing at
+all.** The transport route was not an oversight in one query; it is the whole file's posture. The
+same is true of the resolver's fee-head metadata read.
+
+**Real defects — a billing decision consumes a soft-deleted parent:**
+
+| # | Site | Table | Effect |
+|---|---|---|---|
+| D1 | `fee-preview.service.ts:180` | `transport_routes` | **Retired route still billed** (the known one) |
+| D2 | `fee-preview.service.ts:120-131` | `fee_heads` | **Retired fee head still billed** — `JOIN fee_heads fh` with no filter, and the item's amount comes through with it |
+| D3 | `fee-preview.service.ts:114` | `bill_fee_structures` | Retired structure still named and priced (gated by the assignment, so lower risk) |
+| D4 | `bill-line-resolver.service.ts:121` | `fee_heads` | A retired head's `is_taxable` / `recurrence` / `proration_policy` still drive the line |
+| D5 | `bill-correction.service.ts:56,154,206` | `academic_years` | `SELECT id FROM academic_years WHERE id = $1` — an existence guard that **accepts a soft-deleted year** |
+| D6 | `bill-payment.service.ts:74` | `academic_years` | same guard, same hole — on the payment path |
+| D7 | `opening-balance-import.service.ts:60` | `academic_years` | same |
+| D8 | `bulk-assign-runner.service.ts:87` | `bill_fee_structures` | reads the structure's class/section scope unfiltered — and this feeds FEE-CLASS-GUARD's own mismatch check |
+
+**D2 is bigger than the transport case that started this ticket.** A retired transport route affects
+students assigned to that route; a retired fee head affects **every student on any structure
+containing it**. And all four soft-deletes are reachable from the UI —
+`bill-catalog.controller.ts` has `@Delete` routes for fee-heads, discount-reasons, transport-routes
+and bill/fee-structures.
+
+**By design — NOT defects (do not "fix" these):** seven `students` joins in
+`bill-invoice.service.ts:44`, `bill-run.service.ts:181`, `bill-receipt-document.service.ts:195`,
+`bill-correction.service.ts:412`, `bill-print-job.service.ts:87`, `dashboard.service.ts:273` and
+`concession-register-report.service.ts:76`. Each joins `students` to render a **name on a row that
+is already scoped** by its invoice/payment/correction. A soft-deleted student's historical invoice
+must still show who it belonged to; filtering here would erase history rather than protect it.
+
+**False positives — the filter lives in a `${where}` array outside the literal** (verified
+individually): `transport-route.service.ts:49`, `discount-reason.service.ts:49`,
+`fee-head.service.ts:51`, `bill-fee-structure.service.ts:98`, `bulk-assign-job.service.ts:45`
+(`['class_id = $1', 'deleted_at IS NULL', "status = 'ACTIVE'"]`), `bill-print-job.service.ts:87`.
+
+**Not affected:** `bill_fee_structure_items` has **no** `deleted_at` column — it hard-deletes, so
+the unfiltered `bfsi` half of D2 is correct as written.
+
+### 8.2 How this changes the ticket
+
+Phase 0 scoped one consumer fix behind one INSERT block. The real shape is three parts:
+
+1. **Four INSERT blocks** (unchanged).
+2. **The billing read path's soft-delete blindness** — D1-D4, D8, concentrated in two files.
+3. **Five academic-year existence guards that accept a deleted year** — D5-D7. These are a
+   *different* fix from the reads: they are already guards, they just ask the wrong question.
+
+Part 3 also answers §9 Q4 below: the academic-year hole is not a path-1 concern, it is five sites
+on the correction, payment and opening-balance paths.
+
+---
+
+## 9. Remaining questions — answered against the rulings
+
+**Q1. Path 2's consumer — in this ticket, and skip or fail?**
+Ruled: in this ticket (ruling 1), and **fail the run** (ruling 2). Extend to D1-D4 and D8 by the
+same reasoning — the argument "silently changing what a school charges is worse than halting a
+supervised act" is about billing consuming retired data, and does not depend on which parent table
+was retired.
+
+**Q2. Path 4's block definition.**
+Ruled (4): the safe half — the head must exist and not be soft-deleted — plus surfacing an
+unmatched override as **inert** rather than rejecting it. Ordering stays legal.
+
+**Q3. Path 3's second door — is `update()` in scope?**
+**Yes, block both.** `student-concession.service.ts:83` sets `discount_reason_id` in `update()` and
+reaches exactly the same invalid state as `create()`. Blocking only the create leaves a bypass that
+is one PATCH away, and a guard with a trivially reachable hole is worse than none: it reads as
+protection in review while providing none.
+
+**Q4. Path 1's academic year — block the deleted year only, or also validate it belongs to the
+student's enrolment?**
+**Block the soft-deleted year; do NOT add the enrolment-relationship check.** The first is this
+ticket's shape (referenced-but-unusable) and the audit shows it is five sites, not one (§8.1 D5-D7).
+The second is a different shape — a *relationship* constraint, not a soft-delete one — and no ruling
+covers it. It also carries real risk: a correction or opening balance legitimately targets a year
+the student may not be currently enrolled in, so enforcing the relationship could block ordinary
+back-year accounting. If it is wanted, it deserves its own decision.
+
+**Q5. Error codes.**
+Ruled (5): mint per-path codes; `RELATED_RECORD_NOT_FOUND` stays reserved for the ERR-MAP-1 filter
+backstop so its rate keeps meaning "a guard is missing". Phase 1 proposes the names; each also needs
+a `CODE_MESSAGES` entry in `apps/web/lib/errors.ts`, and the new catalogue-completeness test
+(`errors/__tests__/catalog-completeness.spec.ts`) will fail if any is thrown without being
+cataloged.
