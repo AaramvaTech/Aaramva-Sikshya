@@ -16,6 +16,7 @@ import {
   isErrorCode,
   type ErrorCode,
 } from '../errors/error-codes';
+import { callerSuppliedFkViolation } from '../errors/fk-constraints';
 
 interface ErrorBody {
   success: false;
@@ -68,10 +69,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       ({ status, code, message, details } = this.fromHttpException(exception));
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      // Raw Prisma message → logs/Sentry ONLY, never the response body.
-      this.logger.error(`[prisma ${exception.code}] ${exception.message}`);
-      this.captureToSentry(req, exception);
-      code = this.codeForPrisma(exception.code);
+      // ERR-MAP-1 ruling 4: a foreign-key violation on an ALLOWLISTED
+      // caller-supplied column is the caller's fault, so it is a 4xx and NOT a
+      // Sentry event — leaving it there trains people to ignore the channel the
+      // allowlist exists to protect. A WARN keeps it countable per constraint.
+      // Everything else keeps the Sentry capture unchanged: an unlisted
+      // constraint firing is either our bug or a missing allowlist entry, and
+      // both need to be seen.
+      const fk = callerSuppliedFkViolation(exception.code, exception.meta);
+      if (fk) {
+        this.logger.warn(
+          `[prisma ${exception.code}] caller-supplied FK violation on ${fk.constraint}`,
+        );
+        code = 'RELATED_RECORD_NOT_FOUND';
+      } else {
+        // Raw Prisma message → logs/Sentry ONLY, never the response body.
+        this.logger.error(`[prisma ${exception.code}] ${exception.message}`);
+        this.captureToSentry(req, exception);
+        code = this.codeForPrisma(exception.code);
+      }
       status = ERROR_CATALOG[code as ErrorCode].status;
       message = ERROR_CATALOG[code as ErrorCode].message;
       details = null;
@@ -174,6 +190,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
   }
 
+  /**
+   * P2003 is deliberately absent: ERR-MAP-1 ruling 2 removed its single
+   * reachable call site with a real existence check rather than mapping it, so
+   * a P2003 arriving here now means a NEW unchecked typed-client write exists
+   * — which is exactly the 500-plus-Sentry it gets.
+   */
   private codeForPrisma(prismaCode: string): ErrorCode {
     if (prismaCode === 'P2002') return 'CONFLICT_DUPLICATE';
     if (prismaCode === 'P2025') return 'RESOURCE_NOT_FOUND';

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, NotFoundException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -63,6 +63,16 @@ export class TenantProvisioningService {
     }
 
     let planId = input.planId;
+    if (planId) {
+      // ERR-MAP-1 ruling 2: the ONLY reachable Prisma P2003 in the codebase was
+      // here — a super-admin-supplied planId that is @IsUUID-shape-checked and
+      // went straight into the nested `subscription.create`, surfacing as an
+      // opaque 500. Removed at source rather than mapped in the filter: one
+      // call site does not justify filter-level work, and a 404 that names the
+      // plan is a better answer than any generic mapping could produce.
+      const chosen = await this.prisma.plan.findUnique({ where: { id: planId } });
+      if (!chosen) throw new NotFoundException(`Plan ${planId} not found`);
+    }
     if (!planId) {
       const plan = await this.prisma.plan.findFirst({
         where: { isActive: true },

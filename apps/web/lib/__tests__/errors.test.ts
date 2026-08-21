@@ -44,12 +44,59 @@ describe('getErrorDisplay — enveloped server errors', () => {
     expect(d.kind).toBe('session-expired');
   });
 
-  it('INTERNAL_ERROR (500) → server kind, generic message + Ref requestId, retryable', () => {
+  // ERR-MAP-1 ruling 3 CHANGED this contract. It used to assert retryable:true.
+  // A 500 is unexplained by definition, so a Retry affordance asserts a
+  // transience nobody established — and re-sending the same request with the
+  // same bad data fails identically, forever. The kind, message and Ref are
+  // unchanged; only the affordance goes.
+  it('INTERNAL_ERROR (500) → server kind, Ref requestId, and NOT retryable', () => {
     const d = getErrorDisplay({ response: { status: 500, data: { error: { code: 'INTERNAL_ERROR', requestId: 'req_9f8a' } } } });
     expect(d.kind).toBe('server');
     expect(d.requestId).toBe('req_9f8a');
     expect(d.message).toMatch(/Ref: req_9f8a/);
+    expect(d.retryable).toBe(false);
+  });
+
+  it('a 5xx with no cataloged code is also not retryable', () => {
+    const d = getErrorDisplay({ response: { status: 502, data: {} } });
+    expect(d.kind).toBe('server');
+    expect(d.retryable).toBe(false);
+  });
+
+  // Only genuinely transient errors opt in — the SAME request may later succeed
+  // without the caller changing anything.
+  it.each([
+    ['STORAGE_UNAVAILABLE', 503],
+    ['SERVICE_UNAVAILABLE', 503],
+    ['PAYMENT_GATEWAY_UNAVAILABLE', 502],
+    ['RATE_LIMITED', 429],
+  ])('%s opts in to retryable', (code, status) => {
+    const d = getErrorDisplay({ response: { status, data: { error: { code } } } });
     expect(d.retryable).toBe(true);
+  });
+
+  it('transport failure stays retryable — no request reached the server', () => {
+    expect(getErrorDisplay({ code: 'ERR_NETWORK', request: {} }).retryable).toBe(true);
+  });
+
+  // ERR-MAP-1 ruling 6 — the six codes that had drifted out of CODE_MESSAGES,
+  // plus this ticket's new one. Each must resolve to its OWN message, not the
+  // generic fallback and not the server's string.
+  it.each([
+    ['PASSWORD_CHANGE_REQUIRED', /temporary password/i],
+    ['CLASS_MISMATCH', /different class/i],
+    ['RECEIPT_PAYMENT_BOUNCED', /bounced/i],
+    ['RECEIPT_PAYMENT_VOIDED', /voided/i],
+    ['BAD_REQUEST', /could not be processed/i],
+    ['SERVICE_UNAVAILABLE', /temporarily unavailable/i],
+    ['RELATED_RECORD_NOT_FOUND', /no longer exists/i],
+  ])('%s has its own client message', (code, pattern) => {
+    const d = getErrorDisplay({
+      response: { status: 400, data: { error: { code, message: 'SERVER STRING' } } },
+    });
+    expect(d.message).toMatch(pattern);
+    expect(d.message).not.toBe('SERVER STRING');
+    expect(d.message).not.toBe('Something went wrong. Please try again.');
   });
 
   it('cataloged business code → mapped message, not retryable', () => {

@@ -84,6 +84,19 @@ export class AssignmentService {
     if (!subjectRows[0]) throw new NotFoundException('Subject not found');
 
     let academicYearId = dto.academicYearId ?? null;
+    if (academicYearId) {
+      // ERR-MAP-1: the omission this whole ticket was diagnosed from. The three
+      // checks above guard class/section/subject with clear 404s; a SUPPLIED
+      // academicYearId skipped straight into the INSERT and produced 23503 →
+      // opaque 500. Phase 0 §11 Q2 ruled the filter mapping is a BACKSTOP, not
+      // a replacement — so the guard is the fix and the mapping only catches
+      // the next omission of this shape.
+      const yearRows = await this.tenantPrisma.query<{ id: string }>(
+        `SELECT id FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
+        academicYearId,
+      );
+      if (!yearRows[0]) throw new NotFoundException('Academic year not found');
+    }
     if (!academicYearId) {
       const current = await this.tenantPrisma.query<{ id: string }>(
         `SELECT id FROM academic_years WHERE is_current = true AND deleted_at IS NULL`,

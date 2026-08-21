@@ -41,6 +41,15 @@ export const ERROR_CATALOG = {
   // target student's. `details` carries { feeStructure, target } so the client
   // can name both sides; retry with allowCrossClassAssignment to override.
   CLASS_MISMATCH: { status: 422, message: "This fee structure is for a different class than the student's." },
+  // ERR-MAP-1: the request is well-formed but references a related record that
+  // does not exist — a foreign-key violation on a column the CALLER supplied
+  // (see fk-constraints.ts for how fault is decided). 422 rather than 404
+  // because the missing thing is not the resource being addressed, it is a
+  // reference inside an otherwise valid body — same reasoning as CLASS_MISMATCH.
+  RELATED_RECORD_NOT_FOUND: {
+    status: 422,
+    message: 'One of the records this refers to no longer exists. Refresh and try again.',
+  },
   // ── Tenant ──────────────────────────────────────────────────────────────
   TENANT_NOT_FOUND: { status: 404, message: 'School not found. Check the school address (slug).' },
   TENANT_SUSPENDED: { status: 403, message: "This school's account is currently suspended." },

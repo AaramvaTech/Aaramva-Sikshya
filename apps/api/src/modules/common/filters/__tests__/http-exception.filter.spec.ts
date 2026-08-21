@@ -37,6 +37,14 @@ function prismaKnownError(code: string, message: string) {
   });
 }
 
+/** ERR-MAP-1: the raw-SQL shape — P2010 carrying the Postgres SQLSTATE in meta. */
+function prismaRawError(sqlstate: string, pgMessage: string) {
+  return new Prisma.PrismaClientKnownRequestError(
+    `Raw query failed. Code: \`${sqlstate}\`. Message: \`${pgMessage}\``,
+    { code: 'P2010', clientVersion: 'test', meta: { code: sqlstate, message: pgMessage } },
+  );
+}
+
 describe('HttpExceptionFilter — ERR-1 envelope', () => {
   it('honors a custom catalog code from the exception body', () => {
     const { status, body } = capture(
@@ -109,6 +117,60 @@ describe('HttpExceptionFilter — ERR-1 envelope', () => {
       expect(status).toHaveBeenCalledWith(500);
       expect(body.error.code).toBe('INTERNAL_ERROR');
       expect(JSON.stringify(body)).not.toMatch(/raw query/i);
+    });
+  });
+
+  // ── ERR-MAP-1 ───────────────────────────────────────────────────────────
+  describe('foreign-key violations (ERR-MAP-1)', () => {
+    const fkMsg = (c: string) =>
+      `insert or update on table "assignments" violates foreign key constraint "${c}"`;
+
+    it('an allowlisted caller-supplied FK → RELATED_RECORD_NOT_FOUND (422)', () => {
+      const { status, body } = capture(
+        prismaRawError('23503', fkMsg('assignments_academic_year_id_fkey')),
+      );
+      expect(status).toHaveBeenCalledWith(422);
+      expect(body.error.code).toBe('RELATED_RECORD_NOT_FOUND');
+    });
+
+    it('still leaks nothing — no constraint, table or Prisma text in the body', () => {
+      const { body } = capture(prismaRawError('23503', fkMsg('assignments_class_id_fkey')));
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toMatch(/constraint/i);
+      expect(serialized).not.toMatch(/assignments/i);
+      expect(serialized).not.toMatch(/prisma/i);
+      expect(serialized).not.toMatch(/23503/);
+    });
+
+    // Ruling 4: same table, same SQLSTATE, server-supplied column → stays 500.
+    it('a server-supplied column on the same table stays INTERNAL_ERROR (500)', () => {
+      const { status, body } = capture(
+        prismaRawError('23503', fkMsg('assignments_created_by_fkey')),
+      );
+      expect(status).toHaveBeenCalledWith(500);
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+    });
+
+    // Ruling 1, at the filter boundary rather than only in the mapper.
+    it('a non-FK P2010 stays INTERNAL_ERROR (500)', () => {
+      const { status, body } = capture(
+        prismaRawError('42703', 'column "no_such_column" does not exist'),
+      );
+      expect(status).toHaveBeenCalledWith(500);
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+    });
+
+    // Ruling 2: the one call site was removed, so a P2003 arriving here now
+    // means a NEW unchecked typed-client write exists — it must be loud.
+    it('P2003 is NOT mapped — it stays INTERNAL_ERROR (500)', () => {
+      const err = new Prisma.PrismaClientKnownRequestError('FK constraint failed', {
+        code: 'P2003',
+        clientVersion: 'test',
+        meta: { modelName: 'Subscription', constraint: 'subscriptions_planId_fkey' },
+      });
+      const { status, body } = capture(err);
+      expect(status).toHaveBeenCalledWith(500);
+      expect(body.error.code).toBe('INTERNAL_ERROR');
     });
   });
 

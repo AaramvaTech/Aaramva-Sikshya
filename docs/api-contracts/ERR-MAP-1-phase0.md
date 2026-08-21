@@ -217,8 +217,17 @@ then maps it:
 | 404 `RESOURCE_NOT_FOUND` | `business` | "The requested record was not found." | false |
 
 **`retryable: true` is actively wrong for a FK violation.** Re-submitting the same onboard with the
-same bad `planId` fails identically, forever. The UI offers a Retry affordance that cannot succeed —
-a concrete, present-day harm of the current mapping, independent of the message being opaque.
+same bad `planId` fails identically, forever.
+
+> **CORRECTION (2026-08-21, during Phase 1).** This section originally called that "a concrete,
+> present-day harm — the UI offers a Retry affordance that cannot succeed." **That was wrong.**
+> `retryable` currently has **no consumers**: every `getErrorDisplay` call site reads only
+> `.message` (a toast), and the "Try again" buttons that do exist come from `QueryErrorState`'s
+> `isError`/`refetch`, not from this flag. Verified by grep across `apps/web` in Phase 1.
+>
+> The value is still wrong and ruling 3 still stands — but the fix is **preventive**, not the
+> repair of a live defect. It would have become real the moment the first consumer read the flag,
+> which is the cheapest possible moment to have it already correct.
 
 Per-surface: the finance/print surfaces have specific handling for `STORAGE_UNAVAILABLE`,
 `RECEIPT_PAYMENT_*` and `CLASS_MISMATCH` (`lib/print-document.ts`, `lib/class-guard.ts`); everything
@@ -252,15 +261,81 @@ else funnels into `getErrorDisplay` or a generic `extractApiErrors` toast.
 
 ---
 
-## Open questions for the ruling
+## 10. THE RULINGS (Srijan, 2026-08-21)
 
-1. **Is the scope P2003, or `23503` regardless of Prisma code?** The evidence says the second; the
-   ticket title says the first.
-2. **Backstop or replacement?** Does the mapping license removing per-site guards, or must guards
-   stay and the mapping only catch omissions?
-3. **How to tell client-supplied from server-supplied violations** (§9.4) — allowlist, or accept the
-   imprecision?
-4. **Keep or drop the Sentry capture on mapped errors**, and if kept, at what level?
-5. **`409` for `NO ACTION` delete rejections** — worth designing for, given it may be unreachable
-   under this codebase's soft-delete convention?
-6. **Fix `retryable` for these codes** — in scope here, or a separate web-side follow-up?
+| # | Ruling |
+|---|---|
+| 1 | **Key on SQLSTATE `23503`, NEVER on `P2010`.** P2010 also covers `42703` and other query faults; mapping it would turn our SQL bugs into 4xx. **This is the hard rule of the ticket.** |
+| 2 | **The P2003 case is removed, not mapped.** Add the existence check on `planId` in super-admin onboard, returning a 404 that names the plan. No filter-level work for one call site. |
+| 3 | **`retryable: true` is now the ticket's main correctness fix.** Reclassify it as a property of the specific error, defaulting to `false`, with errors opting in. Offering Retry on a permanent failure is present-day harm across **every** 500, not just these. |
+| 4 | **Fault attribution: an explicit allowlist of caller-supplied columns.** Map to 4xx only when the offending column is on it; everything else stays 5xx. |
+| 5 | **AssetMiss stays out of scope.** A notification gap, not a response to map. Already recorded against FILE-1-BLOB. |
+| 6 | **Name the six server codes missing from the web `CODE_MESSAGES` map.** If any are reachable, fix them in this ticket. |
+
+**Rationale to carry forward, on ruling 4** (Srijan's wording, recorded because it is the reasoning
+that makes the asymmetry deliberate rather than cautious):
+
+> Our bug reported as 400 tells a caller to fix something they can't, and gets closed as user error.
+> A caller error reported as 500 is merely a poor message.
+
+The two failure directions are **not** symmetric, so the allowlist fails closed: an unlisted
+constraint stays 5xx even when it probably was the caller's fault.
+
+---
+
+## 11. Open questions — answered against the rulings
+
+**1. Is the scope P2003, or `23503` regardless of Prisma code?**
+`23503`. Rulings 1 and 2 together settle it: the mapping is keyed on the SQLSTATE, and the single
+P2003 site is removed at source rather than mapped. **This is a P2010/23503 ticket; P2003 is a
+footnote that gets deleted.**
+
+**2. Backstop, or replacement for per-site guards?**
+**Backstop. The guards stay and remain the primary mechanism.** Ruling 4 forces this: the mapping
+only fires for allowlisted constraints, so every non-allowlisted path still depends entirely on its
+guard. A mapping that licensed removing guards would also have to be trusted for the
+server-supplied columns it deliberately refuses to cover.
+
+Consequence for Phase 1: the proven omission (`assignments.academic_year_id`, §4) gets **an actual
+guard**, and its constraint also goes on the allowlist. The guard is the fix; the allowlist entry is
+what catches the next omission of the same shape.
+
+**3. How to tell client-supplied from server-supplied?**
+Explicit allowlist (ruling 4), **keyed on constraint name rather than column name** — because the
+constraint name is what the error actually carries. Prisma's `meta.message` for `23503` is the
+Postgres primary message, `…violates foreign key constraint "assignments_academic_year_id_fkey"`;
+the `Key (col)=(val)` detail line is **not** included. Postgres's default naming
+(`<table>_<column>_fkey`) means the constraint name already encodes the column, so nothing is lost,
+and an explicit list of names is greppable and reviewable in a way a derived column never is.
+
+`assignments` is the worked example — six FKs, and the split is exactly the one ruling 4 draws:
+
+| Constraint | Source | Allowlist |
+|---|---|---|
+| `assignments_class_id_fkey` | `dto.classId` | yes |
+| `assignments_section_id_fkey` | `dto.sectionId` | yes |
+| `assignments_subject_id_fkey` | `dto.subjectId` | yes |
+| `assignments_academic_year_id_fkey` | `dto.academicYearId` | yes |
+| `assignments_created_by_fkey` | `user.userId` (token) | **no** |
+| `assignments_updated_by_fkey` | `user.userId` (token) | **no** |
+
+**4. Keep or drop the Sentry capture on mapped errors?**
+**Drop the Sentry *error event* for mapped 4xx; keep a WARN log line naming the constraint.**
+A mapped error is, by the allowlist's own assertion, the caller's fault — so it is not a fault
+report, and leaving it in Sentry trains people to ignore the channel that ruling 4 exists to
+protect. Unmapped violations keep the Sentry capture unchanged, which is the case that matters:
+an unlisted constraint firing is either our bug or a missing allowlist entry, and both need to be
+seen. The WARN keeps mapped ones countable per constraint without the noise.
+
+**5. `409` for `ON DELETE NO ACTION` rejections — worth designing for?**
+**No. Unreachable today; do not build it.** Every hard `DELETE` in the request path targets a child
+or leaf table — `refresh_tokens`, `device_tokens`, `class_subjects`,
+`student_subject_results`, `credential_delivery_secrets`. A `NO ACTION` rejection fires only when
+deleting a **parent** that still has children, and no request path does that; the codebase
+soft-deletes parents (`deletedAt`) throughout. Revisit if a hard parent delete is ever introduced —
+`23503` on a `DELETE` is a genuinely different case from `23503` on an `INSERT`, and the mapper
+should not silently treat them alike.
+
+**6. Fix `retryable` — here or a separate follow-up?**
+**Here, and broadened.** Ruling 3 promotes it to the ticket's main correctness fix and explicitly
+scopes it to every 500, not only FK violations.
