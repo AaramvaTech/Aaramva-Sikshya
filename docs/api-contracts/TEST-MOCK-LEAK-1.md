@@ -1,7 +1,9 @@
 # TEST-MOCK-LEAK-1 — leaked `Once` queues can make a test pass that should fail
 
-**Status: open, exposure recorded, nothing fixed.** Found 2026-08-21 during FEE-CLASS-GUARD-2
-Phase 1.
+**Status: BUILT (detection only). Repair of any leak it finds is a separate ticket.**
+Found 2026-08-21 during FEE-CLASS-GUARD-2 Phase 1; guard shipped 2026-08-22.
+
+**Live leak count at full coverage: ZERO of 69 surviving mocks.** See §Implementation.
 
 ## The failure mode that matters
 
@@ -119,3 +121,99 @@ touches every assertion in the file.
 Both are real work across 32 files, and both are pure test-infrastructure churn with **no behaviour
 change** — which is exactly why neither was smuggled into FEE-CLASS-GUARD-2 alongside four INSERT
 guards, where it would have buried the reviewable part of the diff.
+
+---
+
+# Implementation (2026-08-22)
+
+## What shipped
+
+- `src/testing/mock-leak-guard.ts` — registered via `setupFilesAfterEnv`. Fails the test that
+  **leaves** an unconsumed `...Once(` queue on a registered mock, naming that test and the mock's
+  declaration site.
+- `src/testing/__tests__/mock-leak-registration.spec.ts` — the standing gate (§Registration gate).
+- 31 spec files instrumented by wrapping their module-scope mock object in `guardSurvivingMocks({…})`.
+
+## Corrected numbers — the earlier audit over-counted
+
+The Phase-0 figure of "75 module-scope `jest.fn()`" was **wrong, and wrong twice**. Both errors were
+in the scanner, not the code:
+
+1. The first count treated everything before the first `describe(` as module scope, including the
+   bodies of top-level factory functions. `esewa`/`khalti` each declare a `makeService(env)` helper
+   that is called **per test** — its seven `jest.fn()`s are rebuilt on every call and cannot leak, so
+   they were never exposure at all.
+2. The corrected scanner had a `.strip()` comparison against strings with trailing spaces, so
+   `async function` never matched and the same seven were counted again.
+
+**The true figures:**
+
+| | |
+|---|---|
+| spec files carrying module-scope survivor mocks | **32** |
+| surviving `jest.fn()` total | **69** |
+| registered with the guard | **61** |
+| excluded (see below) | **8** |
+| unwatched and *not* excluded | **0** |
+
+So `esewa` and `khalti` are **2/2 — fully covered**; there were never 14 misses to close.
+
+## KNOWN EXCLUSION — `modules/storage/__tests__/storage.service.spec.ts` (8 mocks)
+
+**Reason:** its mocks live inside a `jest.mock()` factory rather than a module-scope object literal:
+
+```ts
+jest.mock('@aws-sdk/client-s3', () => {
+  const send = jest.fn();
+  return { S3Client: jest.fn(() => ({ send })), PutObjectCommand: jest.fn(…), … };
+});
+```
+
+There is no object for `guardSurvivingMocks()` to wrap — the mocks are created inside a factory Jest
+hoists and calls, and the values are consumed by the module under test rather than held in a
+variable the spec can pass anywhere. Covering it means restructuring that factory, which would have
+been **the riskiest single change in a ticket that touched 31 spec files**, in the file with the
+least to gain: its mocks are AWS SDK constructors, not the query-sequence mocks where leaked queues
+actually cause damage.
+
+**What it would take, so this is revisitable rather than merely recorded:**
+
+1. Hoist `send` (and the command constructors) into module-scope `const`s the factory closes over,
+   then wrap those in `guardSurvivingMocks({ send, … })`. Jest's hoisting of `jest.mock()` above
+   imports is the obstacle — the factory runs before module-scope `const`s initialise, so the
+   current shape cannot simply be lifted; the usual workaround is a `var` binding assigned inside
+   the factory, which the guard can then register afterwards.
+2. Or expose the mocks via `jest.requireMock('@aws-sdk/client-s3')` in a module-scope statement and
+   register what comes back — no factory restructuring, but it depends on the returned object
+   identity being the same one the SUT holds, which needs checking before relying on it.
+
+Either is a contained change to one file. Neither belonged in this ticket.
+
+## Registration gate — why a standing test, not a one-time audit
+
+Explicit registration has exactly one failure mode: **the next spec file is uncovered by default.** A
+guard that only watches what someone remembered to instrument decays into a false sense of coverage —
+the suite is green, the audit says "31 files instrumented", and the file added last week is watching
+nothing.
+
+`mock-leak-registration.spec.ts` re-derives the exposed set on every run and fails if any file in it
+has an unregistered surviving mock. That turns the exposure audit from a report into a **gate**.
+
+Modelled on ERR-MAP-1's catalogue-completeness test, including the self-cleaning property: the
+`storage` exclusion is asserted to *still match the hazard*, so if someone restructures or registers
+it, the gate fails until the stale exclusion is deleted.
+
+Pinned against a deliberate unregistered mock before shipping: injecting a stray module-scope
+`jest.fn()` into `tax-rate.service.spec.ts` failed the gate with
+`tax-rate.service.spec.ts (2/3 registered)`, and reverting returned it to green.
+
+## The count, at full coverage
+
+**Zero of 69.** No test in the suite currently leaves an unconsumed queue on a surviving mock.
+
+That number is only meaningful because the guard was proved live *after* rollout, not just before:
+injecting one leak into `ledger.service.spec.ts` fired it — naming the injected test and
+`ledger.service.spec.ts:9:35` — and the leaked value then poisoned `postEntry`, reproducing the
+original cascade in miniature with the correct test blamed first.
+
+**Caveat that survives the zero:** the 8 excluded `storage` mocks are unmeasured, not proven clean.
