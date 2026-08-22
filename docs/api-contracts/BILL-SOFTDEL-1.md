@@ -16,7 +16,20 @@ running while the ticket that fixes it waits behind a ticket that prevents a pro
 `${where}` false positives) is the part that rots if it exists in two places.
 
 **Scope:** D1-D4 and D8 (soft-delete filters on the billing read path) plus D5-D7 (five
-academic-year existence guards that accept a deleted year). **Fail the run, never skip the line.**
+academic-year existence guards that accept a deleted year), plus **D9** below. **Fail the run, never
+skip the line.**
+
+### D9 — inherited from FEE-CLASS-GUARD-2 Phase 1 (deviation 3)
+
+`StudentFeeOverrideService.reachablePairs()` computes `appliesToAssignedStructure` by joining
+`student_fee_structure_assignments → bill_fee_structure_items` **without filtering the structure's
+own `deleted_at`**. So an override can report `appliesToAssignedStructure: true` on the strength of a
+structure the school has since retired.
+
+It was left that way deliberately: it is a display computation, not a billing decision, and reads of
+soft-deleted parents belong to this ticket rather than to a ticket about INSERT guards. **Revisit it
+here, with the same decision that settles D3** — whatever rule the billing path adopts for a retired
+structure should apply to this flag too, or the UI will disagree with the invoice.
 
 ---
 

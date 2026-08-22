@@ -395,3 +395,34 @@ On **production, unknown.** Run §1-§6 per tenant before the fix ships. The dec
   harder to reconstruct.
 - **§6 non-zero** → the next run after the fix will differ. Whoever ships it must be able to tell a
   school *why* a bill dropped, per student, before they ask.
+
+---
+
+## 13. Why this landed before BILL-SOFTDEL-1
+
+**The recorded order still stands on priority.** §10's rationale is unchanged: the INSERT guards
+prevent future bad state, while the read path is producing wrong bills today, so BILL-SOFTDEL-1 is
+the more urgent of the two.
+
+**It landed second for a reason that has nothing to do with priority: BILL-SOFTDEL-1 is blocked on a
+production forensic that cannot be run from a coding session.** Production is a separate database on
+the VPS (see OPS-1 and `docs/ops/RUNBOOK.md`); no session reaches it, and every forensic number
+recorded so far is from dev. `BILL-SOFTDEL-1.md` §1.1 makes that a hard pre-ship gate, because the
+fix changes what the next run bills and that difference may be money a school has already been
+charged.
+
+So the sequencing is: **BILL-SOFTDEL-1 is first in priority and second in wall-clock**, because it
+waits on a human with production access. FEE-CLASS-GUARD-2 was buildable in the meantime and does
+not depend on it. Do not read the merge order as a reversal of the ruling — if the two ever conflict
+in review, BILL-SOFTDEL-1's reading of the read path wins.
+
+### 13.1 Deviation 3 hands work to BILL-SOFTDEL-1
+
+Phase 1's `appliesToAssignedStructure` reachability query joins
+`student_fee_structure_assignments → bill_fee_structure_items` and **does not filter the structure's
+own `deleted_at`**. That was deliberate — reads of soft-deleted parents on the billing path are
+BILL-SOFTDEL-1's scope, and this is a display computation rather than a billing decision — but it
+means the flag can report `true` off a retired structure.
+
+**This is now in BILL-SOFTDEL-1's scope, not just noted here**, so it is revisited when the read
+path is corrected rather than surviving as a stray inconsistency.
