@@ -69,13 +69,46 @@ Remaining 24: `attendance/staff-attendance` (4), `attendance/student-attendance`
 *Scan method: a `jest.fn(` appearing before the first `describe(`, plus any `...Once(`, plus
 `clearAllMocks`. Files whose mocks are built inside `beforeEach` are excluded by construction.*
 
-## Two candidate fixes, and why neither is one word
+## RECOMMENDED: an `afterEach` that fails a test which left a queue unconsumed
+
+**This is the approach to try first** (Srijan, 2026-08-22). A shared `afterEach` assertion that
+fails any test ending with an undrained `...Once(` queue.
+
+**Why this one, over the two structural fixes below:**
+
+- **It rewrites no tests.** Both alternatives are 32-file sweeps of pure test-infrastructure churn
+  with no behaviour change. This adds an assertion.
+- **It converts a silent false pass into a loud, correctly-attributed failure** — and attribution is
+  the point. The cascade blamed `LedgerService › reverse`, a test that had nothing to do with the
+  cause. This fails the test that *left* the queue, naming it.
+- **That property is the one that was missing every time this project shipped a green suite over a
+  real defect.** The `useDefaulters` crash, the stale `.js` build artifacts the jest resolver was
+  silently preferring over TypeScript source, `retryable: true` on permanent failures — each was
+  green until someone looked. A check that makes the failure loud at the moment it is introduced is
+  worth more here than a tidier mock structure.
+
+**Two caveats, both of which must be handled before this ships:**
+
+1. **It must not fire on specs that legitimately assert on a throw and leave a queue behind.** A
+   test whose whole point is `await expect(...).rejects.toThrow()` may reasonably have queued a
+   value for a call the throw prevented. Those need an opt-out — an explicit marker at the test or
+   file level — and the opt-out has to be visible enough that it is not reached for casually.
+2. **It is detection only.** A leak it catches still needs a hand repair: the test that queued the
+   value has to be corrected to match the real call order. This finds the bug and attributes it; it
+   does not fix it, and it does not make the 32 files safe on its own.
+
+Jest exposes no queue length directly, so this needs a small helper wrapping the mocks it guards
+rather than a global switch. Scope that before committing to either sweep below.
+
+## Fallbacks, if the `afterEach` proves unworkable
+
+Neither is one word.
 
 **A. `clearAllMocks()` → `resetAllMocks()`.** Drains the queues, which is the actual bug. But
 `mockReset` also **removes default implementations**, and several of these specs set a default in
-`beforeEach` (or rely on one set at module scope) and then layer `Once` values on top. Swapping the
-call turns those defaults into `undefined` and breaks tests that have nothing to do with this. Each
-file needs its defaults re-established inside `beforeEach` before the swap is safe.
+`beforeEach` (or at module scope) and then layer `Once` values on top. Swapping the call turns those
+defaults into `undefined` and breaks tests that have nothing to do with this. Each file needs its
+defaults re-established inside `beforeEach` before the swap is safe.
 
 **B. Move module-scope mocks into `beforeEach`.** Structurally correct — a fresh object per test
 cannot leak. But the module-scope object is usually referenced directly by assertions throughout the
@@ -84,15 +117,5 @@ rebinding every reference, usually through a `let` the `beforeEach` assigns. Mec
 touches every assertion in the file.
 
 Both are real work across 32 files, and both are pure test-infrastructure churn with **no behaviour
-change** — which is exactly why it was not smuggled into FEE-CLASS-GUARD-2 alongside four INSERT
+change** — which is exactly why neither was smuggled into FEE-CLASS-GUARD-2 alongside four INSERT
 guards, where it would have buried the reviewable part of the diff.
-
-## A cheaper thing worth considering first
-
-A single assertion in a shared `afterEach` that fails a test which **left a queue unconsumed** would
-catch every instance of this at the moment it is introduced, without rewriting any existing mock.
-Jest does not expose a queue length directly, so this needs a small helper around the mocks it
-guards rather than a global switch — but it is a much smaller change than A or B, and it converts a
-silent false pass into a loud, correctly-attributed failure.
-
-Worth scoping before committing to a 32-file sweep.

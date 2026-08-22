@@ -426,3 +426,36 @@ means the flag can report `true` off a retired structure.
 
 **This is now in BILL-SOFTDEL-1's scope, not just noted here**, so it is revisited when the read
 path is corrected rather than surviving as a stray inconsistency.
+
+---
+
+## 14. Phase 2 verification — the one method deviation (D3)
+
+Every guard was exercised live against demo in both directions, and the actual statuses and codes
+are in the Phase 2 report. One probe was **not** run as specified, and the substitution is recorded
+here rather than left to be rediscovered.
+
+**Asked for:** an override reports `appliesToAssignedStructure: true` *once a structure containing
+that head is assigned* — i.e. exercise the transition.
+
+**Run instead:** two heads for the same student in the same state of the world — one inside her
+assigned structure (`true`), one outside it (`false`) — then both re-read through `findAll` and
+confirmed to report the same two values.
+
+**Why.** Demo has exactly **one** live fee head, and no live head sits in a structure Chameli is not
+already assigned to, so the transition was not constructible from existing data. Building it would
+have meant fabricating a fee structure purely to satisfy a checklist step — inventing data to make
+a test look complete, which is worse evidence than an honest gap. **Ruled: do not build the
+structure** (Srijan, 2026-08-22).
+
+**What covers the property between them:**
+
+- the live two-head probe shows the flag tracks structure membership and is recomputed per read
+  (both rows re-read correctly through a second endpoint);
+- the unit test `'PASSES: once the structure contains the head, the SAME row reports as applying'`
+  flips **only** the reachability result between two otherwise identical runs, which is the
+  transition, isolated.
+
+**What is still not covered:** a single live request sequence crossing the boundary. If a future
+ticket adds a second live fee head in an unassigned structure to demo for its own reasons, this is
+worth ten minutes to close properly.
