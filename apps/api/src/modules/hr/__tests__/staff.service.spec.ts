@@ -6,11 +6,12 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
 import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const baseUserRow = {
   id: 'user-1',

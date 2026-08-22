@@ -4,8 +4,9 @@ import { BillFineService } from '../bill-fine.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { LedgerService } from '../ledger.service';
 import { CalendarService } from '../../calendar/calendar.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = { $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() };
+const mockTx = guardSurvivingMocks({ $queryRawUnsafe: jest.fn(), $executeRawUnsafe: jest.fn() });
 
 function runRow(overrides: Record<string, unknown> = {}) {
   return {

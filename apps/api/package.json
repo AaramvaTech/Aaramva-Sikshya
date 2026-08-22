@@ -112,6 +112,9 @@
     "moduleNameMapper": {
       "^bs-calendar$": "<rootDir>/../../../packages/bs-calendar/src/index.ts",
       "^expo-server-sdk$": "<rootDir>/testing/expo-server-sdk.jest.ts"
-    }
+    },
+    "setupFilesAfterEnv": [
+      "<rootDir>/testing/mock-leak-guard.ts"
+    ]
   }
 }

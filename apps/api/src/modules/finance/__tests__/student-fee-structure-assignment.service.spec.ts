@@ -2,11 +2,12 @@ import { BadRequestException, NotFoundException, UnprocessableEntityException } 
 import { Test } from '@nestjs/testing';
 import { StudentFeeStructureAssignmentService } from '../student-fee-structure-assignment.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const mockAssignmentRow = {
   id: 'sfsa-1',

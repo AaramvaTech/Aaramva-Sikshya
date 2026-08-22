@@ -3,11 +3,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NoticeService } from '../notice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 describe('NoticeService', () => {
   let service: NoticeService;

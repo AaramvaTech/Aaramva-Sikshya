@@ -2,11 +2,12 @@ import { Test } from '@nestjs/testing';
 import { StaffAttendanceService } from '../staff-attendance.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { StaffAttendanceStatus } from '../dto/staff-attendance.dto';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const TODAY = '2024-04-15';
 

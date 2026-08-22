@@ -2,11 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { BookService } from '../book.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const baseBookRow = {
   id: 'book-1',

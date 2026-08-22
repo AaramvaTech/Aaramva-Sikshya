@@ -7,11 +7,12 @@ import { BillLineResolverService } from '../bill-line-resolver.service';
 import { FinanceSettingsService } from '../finance-settings.service';
 import { amountInWords } from '../../../common/money/amount-in-words';
 import { Money } from '../../../common/money/money';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const mockRun = {
   id: 'run-1',

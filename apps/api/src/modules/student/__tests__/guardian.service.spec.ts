@@ -7,11 +7,12 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
 import { CreateGuardianAccountDto } from '../dto/create-guardian-account.dto';
 import { Role } from '../../common/enums/role.enum';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTenantPrisma = {
+const mockTenantPrisma = guardSurvivingMocks({
   query: jest.fn(),
   run: jest.fn(),
-};
+});
 
 describe('GuardianService', () => {
   let service: GuardianService;

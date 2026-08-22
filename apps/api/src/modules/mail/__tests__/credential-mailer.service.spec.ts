@@ -3,11 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { CredentialMailer } from '../credential-mailer.service';
 import { MailService } from '../mail.service';
 import { PublicPrismaService } from '../../super-admin/public-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockMail = { send: jest.fn().mockResolvedValue({ status: 'MOCK', logId: 'l1' }) };
-const mockPublicPrisma = {
+const mockMail = guardSurvivingMocks({ send: jest.fn().mockResolvedValue({ status: 'MOCK', logId: 'l1' }) });
+const mockPublicPrisma = guardSurvivingMocks({
   query: jest.fn().mockResolvedValue([{ name: 'Sunrise School', slug: 'sunrise' }]),
-};
+});
 
 describe('CredentialMailer', () => {
   let mailer: CredentialMailer;

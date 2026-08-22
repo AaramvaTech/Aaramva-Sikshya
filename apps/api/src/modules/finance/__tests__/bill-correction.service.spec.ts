@@ -8,11 +8,12 @@ import { FinanceSettingsService } from '../finance-settings.service';
 import { Role } from '../../common/enums/role.enum';
 import { CreateCreditNoteDto, CreateRefundDto, CreateWriteOffDto, RefundMethod } from '../dto/bill-correction.dto';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const mockCorrectionRow = {
   id: 'corr-1',

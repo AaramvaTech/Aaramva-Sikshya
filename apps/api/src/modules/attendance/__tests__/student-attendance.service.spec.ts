@@ -8,11 +8,12 @@ import { StudentAttendanceStatus } from '../dto/student-attendance.dto';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
 import { CalendarService } from '../../calendar/calendar.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const TODAY = '2024-04-15';
 // Tomorrow as a LOCAL calendar date. toISOString() yields the UTC date, which

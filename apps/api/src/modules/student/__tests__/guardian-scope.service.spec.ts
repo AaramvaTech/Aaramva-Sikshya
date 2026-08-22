@@ -2,8 +2,9 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GuardianScopeService } from '../guardian-scope.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTenantPrisma = { query: jest.fn() };
+const mockTenantPrisma = guardSurvivingMocks({ query: jest.fn() });
 
 describe('GuardianScopeService', () => {
   let service: GuardianScopeService;

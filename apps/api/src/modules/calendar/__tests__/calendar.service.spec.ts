@@ -2,8 +2,9 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import { Test, TestingModule } from '@nestjs/testing';
 import { CalendarService } from '../calendar.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTenantPrisma = { query: jest.fn(), execute: jest.fn() };
+const mockTenantPrisma = guardSurvivingMocks({ query: jest.fn(), execute: jest.fn() });
 
 const govtRow = (over: Record<string, unknown> = {}) => ({
   id: 'govt-1',

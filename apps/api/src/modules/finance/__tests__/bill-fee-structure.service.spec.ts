@@ -2,11 +2,12 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { BillFeeStructureService } from '../bill-fee-structure.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const mockStructureRow = {
   id: 'bfs-1',

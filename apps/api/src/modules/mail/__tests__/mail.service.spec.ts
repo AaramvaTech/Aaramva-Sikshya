@@ -2,13 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail.service';
 import { PublicPrismaService } from '../../super-admin/public-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockPublicPrisma = { query: jest.fn(), execute: jest.fn() };
+const mockPublicPrisma = guardSurvivingMocks({ query: jest.fn(), execute: jest.fn() });
 // MAIL-1 adaptation: config-driven. Tests mutate this map per case.
 const configValues: Record<string, unknown> = {};
-const mockConfig = {
+const mockConfig = guardSurvivingMocks({
   get: jest.fn((key: string, def?: unknown) => configValues[key] ?? def),
-};
+});
 
 describe('MailService', () => {
   let service: MailService;

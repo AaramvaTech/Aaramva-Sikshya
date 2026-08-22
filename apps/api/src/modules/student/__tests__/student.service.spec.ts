@@ -7,6 +7,7 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { StorageService } from '../../storage/storage.service';
 import { CredentialDeliveryService } from '../../credential-delivery/credential-delivery.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
 const mockTenantCtx = {
   tenantId: 'tid-1',
@@ -16,9 +17,9 @@ const mockTenantCtx = {
 
 // MIG-2: StudentService delegates the guardian write to GuardianService and
 // reads guardians from the normalized table. Both are mocked here.
-const mockGuardianService = {
+const mockGuardianService = guardSurvivingMocks({
   insertGuardiansTx: jest.fn().mockResolvedValue([]),
-};
+});
 
 const admissionDateAd = '2024-07-16'; // corresponds to BS 2081-04-01
 

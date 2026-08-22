@@ -14,11 +14,12 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
 import type { AuthUser } from '../../auth/auth.types';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const parentUser: AuthUser = {
   userId: 'parent-1',

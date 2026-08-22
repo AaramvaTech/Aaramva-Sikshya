@@ -4,11 +4,12 @@ import { LedgerService } from '../ledger.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 function makeEntryRow(overrides: Record<string, unknown> = {}) {
   return {

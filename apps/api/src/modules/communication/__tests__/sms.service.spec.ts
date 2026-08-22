@@ -3,11 +3,12 @@ import { Test } from '@nestjs/testing';
 import { SmsService, normaliseNepalPhone } from '../sms.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { GuardianService } from '../../student/guardian.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 describe('normaliseNepalPhone()', () => {
   // Nepal local 10-digit numbers start with 97 or 98.

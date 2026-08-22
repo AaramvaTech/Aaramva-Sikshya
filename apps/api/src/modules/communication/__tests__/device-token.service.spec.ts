@@ -3,11 +3,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DeviceTokenService } from '../device-token.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { RegisterDeviceDto } from '../dto/device-token.dto';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTenantPrisma = {
+const mockTenantPrisma = guardSurvivingMocks({
   query: jest.fn(),
   execute: jest.fn(),
-};
+});
 
 describe('DeviceTokenService', () => {
   let service: DeviceTokenService;

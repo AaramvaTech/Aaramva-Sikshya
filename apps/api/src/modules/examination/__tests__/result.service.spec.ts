@@ -7,11 +7,12 @@ import { GradingScaleService } from '../grading-scale.service';
 import { PdfService } from '../pdf.service';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 const baseExamType = {
   id: 'et-1',

@@ -2,11 +2,12 @@ import { Test } from '@nestjs/testing';
 import { BulkAssignRunnerService } from '../bulk-assign-runner.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { BulkAssignJobRow } from '../entities/bill-assignment.entity';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
-const mockTx = {
+const mockTx = guardSurvivingMocks({
   $queryRawUnsafe: jest.fn(),
   $executeRawUnsafe: jest.fn(),
-};
+});
 
 function makeJob(overrides: Partial<BulkAssignJobRow> = {}): BulkAssignJobRow {
   return {
