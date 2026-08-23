@@ -37,6 +37,10 @@ export interface BillInvoiceRow {
   guardian_name?: string | null;
   paid_amount?: string | number;
   balance?: string | number;
+  /** BILL-CHECKOUT-1: the fee-head / transport names this bill covers, for the
+   *  list rows' secondary line. Names only — the full item rows stay on the
+   *  single-invoice endpoint. */
+  item_names?: string[] | null;
 }
 
 export interface BillInvoiceItemRow {
@@ -83,6 +87,10 @@ export interface BillInvoiceResponseDto {
   totalReceivable: number;
   paidAmount: number;
   balance: number;
+  /** Names of what this bill covers, in the order they were billed. Populated
+   *  on list rows (BILL-CHECKOUT-1) so a card can say what its amount is for;
+   *  the single-invoice endpoint returns the full `items` array instead. */
+  itemNames?: string[];
   amountInWordsEn: string | null;
   amountInWordsNe: string | null;
   status: string;
@@ -151,6 +159,7 @@ export function toBillInvoiceResponse(
     totalReceivable: toMoney(row.total_receivable).toNumber(),
     paidAmount: toMoney(row.paid_amount ?? 0).toNumber(),
     balance: toMoney(row.balance ?? row.total_receivable).toNumber(),
+    ...(row.item_names ? { itemNames: row.item_names } : {}),
     amountInWordsEn: row.amount_in_words_en,
     amountInWordsNe: row.amount_in_words_ne,
     status: row.status,

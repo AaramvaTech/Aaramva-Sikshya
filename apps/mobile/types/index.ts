@@ -230,6 +230,8 @@ export interface Invoice {
   paidAmount: number;
   /** This invoice's OWN balance, floored at zero. The only figure payable. */
   balance: number;
+  /** What this bill covers, names only — the card's secondary line. */
+  itemNames?: string[];
   items?: { id: string; feeCategoryName: string; originalAmount: number; discountedAmount: number }[];
 }
 

@@ -45,9 +45,12 @@ function invoicePeriod(inv: Invoice, locale: Parameters<typeof bsLang>[0]): stri
 }
 
 // The heads this month's bill bundles, plus the invoice number — what a parent
-// quotes at the office.
+// quotes at the office. Reads `itemNames`, which the LIST endpoint populates;
+// the old code read `items`, which that endpoint never returns, so this line
+// silently degraded to a bare invoice number (found in BILL-CHECKOUT-1 Phase 2
+// live verification, not by inspection).
 function invoiceDetail(inv: Invoice, t: TFunction): string {
-  const names = (inv.items ?? []).map((i) => i.feeCategoryName);
+  const names = inv.itemNames ?? [];
   const heads = names.length === 0
     ? null
     : names.length <= 3

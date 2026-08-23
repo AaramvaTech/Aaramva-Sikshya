@@ -4,6 +4,9 @@ import { BillInvoiceService } from '../bill-invoice.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
+import { toBillInvoiceResponse, type BillInvoiceRow } from '../entities/bill-invoice.entity';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const mockInvoiceRow = {
   id: 'invoice-1',
@@ -146,5 +149,28 @@ describe('BillInvoiceService', () => {
         'student-1', 20, 0,
       );
     });
+  });
+});
+
+// ─── BILL-CHECKOUT-1 Phase 3 — item names on list rows ───────────────────────
+
+describe('list rows carry what the bill covers', () => {
+  it('findAll selects item_names, so a card can name what its amount is for', () => {
+    // The list endpoint returned no item detail at all — verified live in
+    // Phase 2, where every list row came back with items undefined and the
+    // mobile card's secondary line degraded to a bare invoice number.
+    // Names only; the full item rows stay on the single-invoice endpoint.
+    const src = readFileSync(join(__dirname, '..', 'bill-invoice.service.ts'), 'utf8');
+    expect(src).toContain('ARRAY_AGG(bii.item_name');
+    expect(src).toContain('AS item_names');
+  });
+
+  it('maps item_names through to itemNames', () => {
+    const row = { ...mockInvoiceRow, item_names: ['Tuition Fee', 'Transport Fee'] } as BillInvoiceRow;
+    expect(toBillInvoiceResponse(row).itemNames).toEqual(['Tuition Fee', 'Transport Fee']);
+  });
+
+  it('omits itemNames when the row has none, rather than sending an empty array', () => {
+    expect(toBillInvoiceResponse(mockInvoiceRow as BillInvoiceRow).itemNames).toBeUndefined();
   });
 });

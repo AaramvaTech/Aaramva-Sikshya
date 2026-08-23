@@ -178,3 +178,29 @@ describe('the confirmed overcharge (BILLING-CALC-AUDIT-1 D32)', () => {
     expect(later.balance).toBe(2260); // not 4260
   });
 });
+
+describe('itemNames — the card secondary line (BILL-CHECKOUT-1 Phase 3)', () => {
+  // The list endpoint returns `itemNames` and NOT `items`. Reading `items`
+  // here is what made the secondary line degrade to a bare invoice number on
+  // every real list row — found live, not by inspection.
+  it('takes itemNames from the list endpoint', () => {
+    const inv = mapBillInvoiceToLegacy(
+      { ...baseApiInvoice, items: undefined, itemNames: ['Tuition Fee', 'Transport Fee'] },
+      NOW,
+    );
+    expect(inv.itemNames).toEqual(['Tuition Fee', 'Transport Fee']);
+  });
+
+  it('falls back to items[].itemName so the single-invoice endpoint renders the same line', () => {
+    const inv = mapBillInvoiceToLegacy({ ...baseApiInvoice, itemNames: undefined }, NOW);
+    expect(inv.itemNames).toEqual(['Tuition Fee', 'Transport Fee']);
+  });
+
+  it('is undefined when the payload carries neither — the line degrades to the invoice number', () => {
+    const inv = mapBillInvoiceToLegacy(
+      { ...baseApiInvoice, items: undefined, itemNames: undefined },
+      NOW,
+    );
+    expect(inv.itemNames).toBeUndefined();
+  });
+});

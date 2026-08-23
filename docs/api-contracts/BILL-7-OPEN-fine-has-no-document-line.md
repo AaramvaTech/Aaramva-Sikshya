@@ -41,6 +41,35 @@ So today a fine is:
 The statement screen is the *minimum* that keeps the balance explainable. It is not a
 resolution: it tells a parent what they owe and gives them no way to pay it.
 
+## Worked example — live, demo tenant, 2026-08-23
+
+**Binod Gurung** (`tenant_demo`), read through the real PARENT-scoped endpoints during
+BILL-CHECKOUT-1 Phase 2 verification:
+
+| Source | Figure |
+|---|---|
+| Sum of his invoice cards' own balances | **2,260** |
+| `GET /finance/students/:id/balance` — the account tile | **2,300** |
+| **Gap** | **40** |
+
+The 40 is a late fee. `GET /finance/students/:id/statement` renders it:
+
+```
+2083-04-10  INVOICE  DR 1000   run=1000   Invoice BINV-2083-000003
+2083-04-10  INVOICE  DR 2260   run=3260   Invoice BINV-2083-000005
+2083-04-26  PAYMENT  CR 2000   run=1260   Payment RCPT-2083-000015
+2083-04-26  PAYMENT  DR 2000   run=3260   Reversal of entry c377cb69…
+2083-04-27  PAYMENT  CR 1000   run=2260   Payment RCPT-2083-000021
+2083-04-31  FINE     DR   40   run=2300   Late fee — 4 day(s) overdue
+```
+
+So for this parent, today: **40 rupees are owed, appear on no card, and are payable
+nowhere.** The tile shows 2,300; every Pay button on the screen adds up to 2,260; the
+statement explains the difference and offers no way to settle it.
+
+That is the whole item in one student. It is not hypothetical and it is not an edge case —
+Binod is one of nine demo students carrying a live `FINE` entry.
+
 ## The decision BILL-7 owns
 
 Whether a fine should:

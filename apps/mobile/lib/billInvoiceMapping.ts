@@ -38,6 +38,11 @@ export interface BillInvoiceApi {
   paidAmount: number;
   balance: number;
   status: string; // POSTED | SETTLED | PARTIALLY_PAID | VOIDED
+  /** BILL-CHECKOUT-1: what this bill covers, names only. The list endpoint
+   *  returns this; it does NOT return `items` (verified live — every list row
+   *  had items undefined, which is why the card's secondary line used to
+   *  degrade to a bare invoice number). */
+  itemNames?: string[];
   items?: BillInvoiceItemApi[];
 }
 
@@ -100,6 +105,10 @@ export function mapBillInvoiceToLegacy(inv: BillInvoiceApi, today?: Date): Invoi
     totalAmount: inv.netAmount,
     paidAmount: inv.paidAmount,
     balance: ownBalanceOf(inv),
+    // Names of what this bill covers, for the card's secondary line. The list
+    // endpoint sends `itemNames`; the single-invoice endpoint sends full
+    // `items` — take whichever is present so both paths render the same line.
+    itemNames: inv.itemNames ?? inv.items?.map((it) => it.itemName),
     items: inv.items?.map((it) => ({
       id: it.id,
       feeCategoryName: it.itemName,
