@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { todayBs, formatBs } from 'bs-calendar';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 
-import { useMyChildren, useChildAttendanceSummary, useChildLedger, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
+import { useMyChildren, useChildAttendanceSummary, useChildLedger, useChildBalance, useChildTimetable, useGuardianProfile } from '../../hooks/useParentChild';
 import { guardianDisplayName, guardianInitials } from '../../lib/guardian';
 import { todayAttendanceStatus } from '../../lib/todayStatus';
 import { useAuthStore } from '../../store/auth';
@@ -81,11 +81,14 @@ export default function ParentDashboard() {
   const summaryQuery = useChildAttendanceSummary(effectiveChildId ?? '', academicYearId);
   const timetableQuery = useChildTimetable(sectionId);
   const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
+  // BILL-CHECKOUT-1: ledger-sourced, never summed across invoice cards — see
+  // useChildBalance's docblock and apps/web/lib/invoice-totals.ts.
+  const balanceQuery = useChildBalance(effectiveChildId ?? '');
 
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      childrenQuery.refetch(), summaryQuery.refetch(), timetableQuery.refetch(), ledgerQuery.refetch(),
+      childrenQuery.refetch(), summaryQuery.refetch(), timetableQuery.refetch(), ledgerQuery.refetch(), balanceQuery.refetch(),
     ]);
     setRefreshing(false);
   };
@@ -156,7 +159,7 @@ export default function ParentDashboard() {
       ? t(statusMeta.labelKey)
       : t('today.notMarked');
 
-  const outstanding = ledgerQuery.data?.summary.totalBalance ?? 0;
+  const outstanding = balanceQuery.data?.balance ?? 0;
   const todayBsLabel = formatBs(todayBs(), bsLang(locale));
   const todayPeriods: TodayPeriod[] = slots
     .filter((slot) => slot.dayOfWeek === todayDow)

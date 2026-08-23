@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   BadRequestException,
   ForbiddenException,
@@ -36,8 +38,10 @@ const accountantUser: AuthUser = {
   tenantSlug: 'demo',
 };
 
-// bill_invoices row + the join-computed `outstanding` column (CLEARED-only
-// allocation sum subtracted from total_receivable) — BILL-5 Checkpoint C.
+// bill_invoices row + the join-computed `own_balance` column (CLEARED-only
+// allocation sum subtracted from NET_AMOUNT — BILL-CHECKOUT-1 repointed this
+// off total_receivable, which carried every earlier unpaid month into the
+// figure the gateway signs (BILLING-CALC-AUDIT-1 D32).
 const baseBillInvoiceRow = {
   id: 'inv-1',
   invoice_number: 'BINV-2081-000001',
@@ -45,8 +49,12 @@ const baseBillInvoiceRow = {
   academic_year_id: 'year-1',
   due_date: new Date('2025-07-15'),
   status: 'PARTIALLY_PAID',
+  // The D32 shape: this invoice's own charge is 800, but it restates 200 of
+  // arrears, so total_receivable is 1000. Only the 800 is ever chargeable.
+  net_amount: '800.00',
+  previous_balance: '200.00',
   total_receivable: '1000.00',
-  outstanding: '600.00', // the ONLY amount the gateway may charge
+  own_balance: '600.00', // net_amount 800 less 200 already allocated — the ONLY chargeable figure
   created_by: 'user-1',
   created_at: new Date('2025-07-01'),
   updated_at: new Date('2025-07-01'),
@@ -226,7 +234,7 @@ describe('EsewaService', () => {
     it('rejects a bill_invoice with no outstanding balance', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([
-        { ...baseBillInvoiceRow, status: 'SETTLED', outstanding: '0.00' },
+        { ...baseBillInvoiceRow, status: 'SETTLED', own_balance: '0.00' },
       ]);
       await expect(
         service.initiate({ invoiceId: 'inv-1' }, accountantUser),
@@ -276,7 +284,7 @@ describe('EsewaService', () => {
         .mockResolvedValueOnce([
           { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
         ]) // conditional claim wins
-        .mockResolvedValueOnce([{ outstanding: '600.00' }]); // outstanding unchanged since initiate
+        .mockResolvedValueOnce([{ own_balance: '600.00' }]); // outstanding unchanged since initiate
 
       const first = await service.verify(baseTxnRow.transaction_uuid, { hint: true });
       expect(first.state).toBe('VERIFIED');
@@ -319,7 +327,7 @@ describe('EsewaService', () => {
         .mockResolvedValueOnce([
           { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
         ]) // claim
-        .mockResolvedValueOnce([{ outstanding: '200.00' }]); // shrank: a cash payment already covered 400
+        .mockResolvedValueOnce([{ own_balance: '200.00' }]); // shrank: a cash payment already covered 400
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
 
@@ -351,7 +359,7 @@ describe('EsewaService', () => {
         .mockResolvedValueOnce([
           { ...baseTxnRow, status: 'VERIFIED', gateway_ref: '0007G36' },
         ])
-        .mockResolvedValueOnce([{ outstanding: '0.00' }]); // fully settled already
+        .mockResolvedValueOnce([{ own_balance: '0.00' }]); // fully settled already
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
 
@@ -540,5 +548,61 @@ describe('EsewaService', () => {
       );
       expect(global.fetch).not.toHaveBeenCalled(); // terminal state — no re-check needed
     });
+  });
+});
+
+// ─── BILL-CHECKOUT-1 ─────────────────────────────────────────────────────────
+
+describe('EsewaService — the charged figure is the invoice\'s OWN balance (D32)', () => {
+  it('initiate reads net_amount and never total_receivable', async () => {
+    const { service, tenantPrisma } = await makeService(ENABLED_ENV);
+    tenantPrisma.query.mockResolvedValueOnce([{ ...baseBillInvoiceRow }]);
+
+    const result = await service.initiate({ invoiceId: 'inv-1' }, accountantUser);
+
+    const sql = tenantPrisma.query.mock.calls[0][0] as string;
+    expect(sql).toContain('bi.net_amount');
+    expect(sql).not.toContain('total_receivable');
+    // 600 = net_amount 800 - 200 allocated. NOT 1000 (total_receivable), and
+    // NOT 800 (own charge before allocations).
+    expect(result.amount).toBe(600);
+  });
+
+  // Lexical guard over BOTH gateway files, covering all four call sites —
+  // the two initiates AND the two claim-path race guards. The mocked-service
+  // tests above can only reach initiate; a revert inside verify()'s locked
+  // transaction would sail past them. Same shape as no-float-coercion.spec.ts:
+  // a rule this codebase cares about, enforced by reading the source.
+  //
+  // If initiate and the claim guard ever disagreed on which figure to use,
+  // the allocation would over-book the invoice all over again — which is
+  // exactly how BINV-2083-000004 ended up with 4,260 booked against a 2,260
+  // charge (BILLING-CALC-AUDIT-1 Ruling 3).
+  it.each([
+    ['esewa/esewa.service.ts'],
+    ['khalti/khalti.service.ts'],
+  ])('%s reads total_receivable nowhere in its executable code', (relPath) => {
+    const src = readFileSync(join(__dirname, '..', relPath), 'utf8');
+    // Comments are stripped first: both files deliberately NAME
+    // total_receivable in prose to explain why they must not read it, and a
+    // guard that banned the word outright would ban its own rationale.
+    // no-float-coercion.spec.ts hits the same self-reference problem and
+    // solves it by excluding itself by filename.
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^[^\n]*?\/\/.*$/gm, '');
+    expect(code).not.toContain('total_receivable');
+    // ...and does reach for the shared rule rather than re-spelling the SQL.
+    expect(code).toContain('OWN_BALANCE_SELECT');
+    expect(code).toContain('clampOwnBalance');
+  });
+
+  it('the comment-stripper does not neuter the guard', () => {
+    // Without this, a bug in the regex above would silently turn the real
+    // assertion into a no-op — the exact "assertion that cannot fail" shape
+    // BILLING-CALC-AUDIT-1 catalogued (D14/D18/D36).
+    const src = readFileSync(join(__dirname, '..', 'esewa/esewa.service.ts'), 'utf8');
+    const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[^\n]*?\/\/.*$/gm, '');
+    expect(strip(`${src}\nconst x = bi.total_receivable;`)).toContain('total_receivable');
   });
 });

@@ -56,7 +56,9 @@
     "nMore": "{{first}} +{{count}} more",
     "paidAmount": "Paid: {{amount}}",
     "dueBalance": "Due: {{amount}}",
-    "paymentError": "Could not start the {{gateway}} payment. Please try again."
+    "paymentError": "Could not start the {{gateway}} payment. Please try again.",
+    "viewStatement": "View full statement",
+    "advanceHeld": "Amount held in credit — view statement"
   },
   "notices": {
     "title": "Notices",
@@ -120,5 +122,29 @@
   },
   "settingsRow": {
     "changePassword": "Change password"
+  },
+  "statement": {
+    "title": "Account statement",
+    "subtitle": "Every charge and payment on this account",
+    "closingLabel": "Account balance",
+    "owes": "Payable to the school",
+    "advance": "Held in credit for you",
+    "settled": "Fully settled",
+    "runningBalance": "Balance: {{amount}}",
+    "footnote": "Late fees and adjustments appear here only — they are not billed on a monthly invoice. Pay any outstanding month from the Fee Status screen.",
+    "errorTitle": "Failed to load statement",
+    "emptyTitle": "No account activity",
+    "emptySubtitle": "Charges and payments will appear here.",
+    "type": {
+      "openingBalance": "Opening balance",
+      "invoice": "Monthly bill",
+      "payment": "Payment received",
+      "deposit": "Advance deposit",
+      "refund": "Refund",
+      "creditNote": "Credit note",
+      "fine": "Late fee",
+      "writeOff": "Written off",
+      "adjustment": "Adjustment"
+    }
   }
 }

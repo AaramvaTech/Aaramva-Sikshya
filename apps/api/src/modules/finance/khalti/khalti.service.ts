@@ -18,18 +18,21 @@ import { BillPaymentAllocationMode, BillPaymentMethod } from '../dto/bill-paymen
 import { InitiateKhaltiPaymentDto } from '../dto/khalti.dto';
 import { toMoney } from '../entities/finance.entity';
 import { Money } from '../../../common/money/money';
+import { OWN_BALANCE_SELECT, CLEARED_ALLOCATIONS_JOIN, clampOwnBalance } from '../bill-own-balance.util';
 import { Role } from '../../common/enums/role.enum';
 import type { AuthUser } from '../../auth/auth.types';
 import type { PaymentTransactionRow } from '../esewa/esewa.service';
 import { toPaisa, parseGatewayPaisa } from './khalti.util';
 
-/** bill_invoices row + the CLEARED-only allocation-sum-derived `outstanding` column. */
-interface BillInvoiceOutstandingRow {
+/** bill_invoices row + the CLEARED-only allocation-sum-derived `own_balance` column. */
+interface BillInvoiceOwnBalanceRow {
   id: string;
   invoice_number: string;
   student_id: string;
   academic_year_id: string;
-  outstanding: string | number;
+  /** BILL-CHECKOUT-1: this invoice's OWN balance (net_amount less its own
+   *  cleared allocations) — never total_receivable. See bill-own-balance.util.ts. */
+  own_balance: string | number;
 }
 
 // ─── Result shapes (same vocabulary as eSewa's — states are gateway-agnostic) ──
@@ -144,9 +147,11 @@ export class KhaltiService implements OnModuleInit {
   // ─── Initiate (server-to-server) ────────────────────────────────────────────
 
   /**
-   * Compute the outstanding balance server-side, create the INITIATED row,
-   * then POST /epayment/initiate/ to Khalti. The returned payment_url is where
-   * the payer's browser goes; pidx (Khalti's transaction id) is stored in
+   * Compute this invoice's OWN balance server-side (BILL-CHECKOUT-1 — never
+   * total_receivable, which folds in every earlier unpaid month and gets the
+   * same arrears collected twice), create the INITIATED row, then POST
+   * /epayment/initiate/ to Khalti. The returned payment_url is where the
+   * payer's browser goes; pidx (Khalti's transaction id) is stored in
    * gateway_ref and drives every later lookup. PARENT callers are
    * object-scoped to their own children's invoices.
    */
@@ -154,13 +159,10 @@ export class KhaltiService implements OnModuleInit {
     this.assertEnabled();
     const { slug } = this.tenantContext.getOrThrow();
 
-    const [invoice] = await this.tenantPrisma.query<BillInvoiceOutstandingRow>(
-      `SELECT bi.*,
-              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+    const [invoice] = await this.tenantPrisma.query<BillInvoiceOwnBalanceRow>(
+      `SELECT bi.*, ${OWN_BALANCE_SELECT}
        FROM bill_invoices bi
-       LEFT JOIN bill_payment_allocations bpa
-         ON bpa.bill_invoice_id = bi.id
-         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       ${CLEARED_ALLOCATIONS_JOIN}
        WHERE bi.id = $1::uuid AND bi.deleted_at IS NULL
        GROUP BY bi.id`,
       dto.invoiceId,
@@ -171,7 +173,9 @@ export class KhaltiService implements OnModuleInit {
       await this.guardianScope.assertOwnsStudent(user.userId, invoice.student_id);
     }
 
-    const outstanding = toMoney(invoice.outstanding).toNumber();
+    const outstanding = clampOwnBalance(
+      toMoney(invoice.own_balance), invoice.invoice_number, this.logger,
+    ).toNumber();
     if (outstanding <= 0) {
       throw new BadRequestException('Invoice has no outstanding balance to pay');
     }
@@ -336,8 +340,12 @@ export class KhaltiService implements OnModuleInit {
     lookup: KhaltiLookupResponse,
   ): Promise<KhaltiVerifyResult> {
     const reference = lookup.transaction_id || txn.gateway_ref || txn.transaction_uuid;
-    const [invoiceRow] = await this.tenantPrisma.query<{ student_id: string; academic_year_id: string }>(
-      `SELECT student_id, academic_year_id FROM bill_invoices WHERE id = $1::uuid`,
+    // invoice_number is selected purely so clampOwnBalance's WARN can name
+    // the invoice a human would have to go and look at (BILL-CHECKOUT-1).
+    const [invoiceRow] = await this.tenantPrisma.query<{
+      student_id: string; academic_year_id: string; invoice_number: string;
+    }>(
+      `SELECT student_id, academic_year_id, invoice_number FROM bill_invoices WHERE id = $1::uuid`,
       txn.bill_invoice_id,
     );
     // invoiceRow is guaranteed by the FK — bill_invoice_id was validated at initiate() time.
@@ -353,22 +361,24 @@ export class KhaltiService implements OnModuleInit {
       );
       if (!claimed) return null; // lost the race — someone else settled it
 
-      // Race guard: the invoice's outstanding may have shrunk since initiate()
+      // Race guard: the invoice's own balance may have shrunk since initiate()
       // (e.g. a cash payment landed on it first). Cap the MANUAL target at
       // whatever's left; anything beyond that becomes advance credit (B5-7),
-      // never a rejection of a gateway-confirmed payment.
-      const [{ outstanding }] = await tx.$queryRawUnsafe<{ outstanding: string | number }[]>(
-        `SELECT bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+      // never a rejection of a gateway-confirmed payment. BILL-CHECKOUT-1:
+      // the cap is this invoice's OWN balance, matching what initiate()
+      // charged — the two must agree or the allocation over-books again.
+      const [{ own_balance: ownBalanceRaw }] = await tx.$queryRawUnsafe<{ own_balance: string | number }[]>(
+        `SELECT ${OWN_BALANCE_SELECT}
          FROM bill_invoices bi
-         LEFT JOIN bill_payment_allocations bpa
-           ON bpa.bill_invoice_id = bi.id
-           AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+         ${CLEARED_ALLOCATIONS_JOIN}
          WHERE bi.id = $1::uuid
          GROUP BY bi.id`,
         claimed.bill_invoice_id,
       );
       const claimedAmount = toMoney(claimed.amount);
-      const currentOutstanding = toMoney(outstanding);
+      const currentOutstanding = clampOwnBalance(
+        toMoney(ownBalanceRaw), invoiceRow.invoice_number, this.logger,
+      );
       const targetAmount = currentOutstanding.compare(Money.zero()) > 0
         ? (claimedAmount.compare(currentOutstanding) <= 0 ? claimedAmount : currentOutstanding)
         : Money.zero();
