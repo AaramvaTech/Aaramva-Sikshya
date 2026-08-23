@@ -7,6 +7,15 @@ feature listed here. Not a general backlog — only items that would silently
 break or expose something in production if skipped. Close an item by fixing
 it and deleting its line here.
 
+- **BILL-CHECKOUT-1 — the parent checkout can overcharge.** The mobile
+  "Pay with eSewa/Khalti" button asks for the invoice's own charge **plus all
+  arrears carried forward from earlier months**, while the earlier invoices
+  stay separately payable — so the same arrears can be collected twice.
+  Confirmed to have fired on dev (`demo` / Aarav Shrestha: charged 4,260,
+  collected 6,260). **Production has not been checked.** Run the two
+  read-only queries in `docs/ops/BILLING-CHECKOUT-PROD-CHECK.md` — five
+  minutes, no app downtime — before any real school takes an online payment.
+  Detail: `docs/api-contracts/BILLING-CALC-AUDIT-1-phase0b.md` §1.
 - ~~**PAY-UI-REPOINT**~~ — closed by UI-4 Checkpoint B (`0ce43d1`, #52):
   `apps/mobile/lib/billInvoiceMapping.ts` repoints the parent Fees screen's
   "Pay with eSewa/Khalti" flow to `bill_invoices`/`bill_payments`, consumed
