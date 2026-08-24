@@ -1,12 +1,13 @@
-import { View, Text, ScrollView, RefreshControl, StyleSheet, Alert, AppState } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Alert, AppState, Pressable } from 'react-native';
 import { useLocale, bsLang } from '../../hooks/useLocale';
 import type { TFunction } from 'i18next';
 import NpText from '../../components/NpText';
 import { useEffect, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
-import { adToBs, formatBs } from 'bs-calendar';
+import { adToBs, formatBs, BS_MONTH_NAMES_EN, BS_MONTH_NAMES_NP } from 'bs-calendar';
+import { router } from 'expo-router';
 
-import { useMyChildren, useChildLedger } from '../../hooks/useParentChild';
+import { useMyChildren, useChildLedger, useChildBalance } from '../../hooks/useParentChild';
 import { useInitiateEsewaPayment } from '../../hooks/useEsewaPayment';
 import { useInitiateKhaltiPayment, usePaymentGateways } from '../../hooks/usePayments';
 import { useAuthStore } from '../../store/auth';
@@ -30,13 +31,32 @@ const FEE_STATUS: Record<string, { bg: string; text: string; label: string; labe
 const feeStatus = (status: string) => FEE_STATUS[status?.toUpperCase()] ?? FEE_STATUS.UNPAID;
 const formatNPR = (amount: number) => `NPR ${amount.toLocaleString('en-IN')}`;
 
-// An invoice may bundle several fee categories; show the categories when known,
-// else fall back to the invoice number.
-function invoiceTitle(inv: Invoice, t: TFunction): string {
-  const items = inv.items ?? [];
-  if (items.length === 1) return items[0].feeCategoryName;
-  if (items.length > 1) return t('fees.nMore', { first: items[0].feeCategoryName, count: items.length - 1 });
-  return inv.invoiceNumber;
+// BILL-CHECKOUT-1: an invoice is a MONTH'S BILL, not a fee. The heading names
+// the BS period it bills; the fee heads it bundles drop to a secondary line.
+// Previously this returned items[0].feeCategoryName, so a bundled figure was
+// labelled with whichever head happened to sort first — "Tuition Fee" over a
+// figure that was never just tuition.
+function invoicePeriod(inv: Invoice, locale: Parameters<typeof bsLang>[0]): string {
+  // Direct month-name lookup rather than formatBs()-then-strip-the-day —
+  // bs-calendar exports both name arrays, and formatting a fake day-1 just to
+  // regex it back off is a string trick waiting to break on a format change.
+  const names = bsLang(locale) === 'np' ? BS_MONTH_NAMES_NP : BS_MONTH_NAMES_EN;
+  return `${names[inv.period.bsMonth - 1]} ${inv.period.bsYear}`;
+}
+
+// The heads this month's bill bundles, plus the invoice number — what a parent
+// quotes at the office. Reads `itemNames`, which the LIST endpoint populates;
+// the old code read `items`, which that endpoint never returns, so this line
+// silently degraded to a bare invoice number (found in BILL-CHECKOUT-1 Phase 2
+// live verification, not by inspection).
+function invoiceDetail(inv: Invoice, t: TFunction): string {
+  const names = inv.itemNames ?? [];
+  const heads = names.length === 0
+    ? null
+    : names.length <= 3
+      ? names.join(', ')
+      : t('fees.nMore', { first: names.slice(0, 2).join(', '), count: names.length - 2 });
+  return heads ? `${heads} · ${inv.invoiceNumber}` : inv.invoiceNumber;
 }
 
 function InvoiceCard({
@@ -59,7 +79,10 @@ function InvoiceCard({
     <Card padded style={styles.feeCard}>
       <View style={styles.feeTop}>
         <View style={styles.feeInfo}>
-          <NpText className="text-foreground" style={styles.feeName}>{invoiceTitle(inv, t)}</NpText>
+          <NpText className="text-foreground" style={styles.feeName}>{invoicePeriod(inv, locale)}</NpText>
+          <NpText className="text-muted-foreground" style={styles.feeDetail} numberOfLines={2}>
+            {invoiceDetail(inv, t)}
+          </NpText>
           {bsDue && (
             <View style={styles.dueRow}>
               <Icon name="schedule" size={12} color={c.mutedForeground} />
@@ -69,6 +92,7 @@ function InvoiceCard({
         </View>
         <View style={styles.feeRight}>
           <StatusBadge label={t(cfg.labelKey)} bg={cfg.bg} color={cfg.text} />
+          {/* This invoice's own charge — never total_receivable (BILL-CHECKOUT-1). */}
           <Text className="text-foreground" style={styles.amount}>{formatNPR(inv.totalAmount)}</Text>
           {inv.paidAmount > 0 && inv.paidAmount < inv.totalAmount && (
             <NpText className="text-muted-foreground" style={styles.subAmount}>{t('fees.paidAmount', { amount: formatNPR(inv.paidAmount) })}</NpText>
@@ -107,6 +131,11 @@ export default function ParentFees() {
   const academicYearId = selectedChild?.currentEnrollment?.academicYearId ?? null;
 
   const ledgerQuery = useChildLedger(effectiveChildId ?? '', academicYearId);
+  // BILL-CHECKOUT-1: the account position comes from the LEDGER, never from
+  // summing invoice cards — each card's total_receivable already carries every
+  // earlier unpaid month, so summing them counts the same arrears once per
+  // month outstanding. Same rule apps/web/lib/invoice-totals.ts already states.
+  const balanceQuery = useChildBalance(effectiveChildId ?? '');
 
   const slug = useAuthStore((s) => s.slug);
   const initiateEsewa = useInitiateEsewaPayment();
@@ -120,15 +149,19 @@ export default function ParentFees() {
   // The payment happens in the system browser; when the payer comes back to
   // the app, refetch so the invoice reflects the recorded payment.
   const refetchLedger = ledgerQuery.refetch;
+  // The account tile is a separate query now, so it has to be refetched too —
+  // a payment moves the ledger balance, not just the invoice cards.
+  const refetchBalance = balanceQuery.refetch;
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && paymentLaunched.current) {
         paymentLaunched.current = false;
         void refetchLedger();
+        void refetchBalance();
       }
     });
     return () => sub.remove();
-  }, [refetchLedger]);
+  }, [refetchLedger, refetchBalance]);
 
   const handlePay = async (inv: Invoice, gateway: PayGateway) => {
     if (!slug || paying) return;
@@ -165,11 +198,14 @@ export default function ParentFees() {
   const invoices = ledger?.invoices ?? [];
   const totalFees = ledger?.summary.totalInvoiced ?? 0;
   const totalPaid = ledger?.summary.totalPaid ?? 0;
-  const outstanding = ledger?.summary.totalBalance ?? 0;
+  // Ledger-sourced, not summed. Also picks up fines, credit notes and
+  // adjustments, none of which have an invoice card to appear on — which is
+  // why the tile drills into the statement.
+  const outstanding = balanceQuery.data?.balance ?? 0;
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await ledgerQuery.refetch();
+    await Promise.all([ledgerQuery.refetch(), balanceQuery.refetch()]);
     setRefreshing(false);
   };
 
@@ -203,10 +239,24 @@ export default function ParentFees() {
               <View className="border-l border-border" style={styles.summaryItem}>
                 <NpText className="text-muted-foreground" style={styles.summaryLabel}>{t('fees.outstanding')}</NpText>
                 <Text style={[styles.summaryValue, { color: outstanding > 0 ? c.danger : c.success }]}>
-                  {formatNPR(outstanding)}
+                  {formatNPR(Math.abs(outstanding))}
                 </Text>
               </View>
             </View>
+            {/* The drill-down. Under own-charge a fine appears on no card, so
+                without this the account balance is unexplainable — and a
+                parent can neither account for nor pay a charge they can see. */}
+            <Pressable
+              className="border-t border-border"
+              style={styles.statementLink}
+              onPress={() => router.push('/(parent)/statement')}
+              accessibilityRole="button"
+            >
+              <NpText className="text-primary" style={styles.statementLinkText}>
+                {outstanding < 0 ? t('fees.advanceHeld') : t('fees.viewStatement')}
+              </NpText>
+              <Icon name="chevron_right" size={14} color={c.primary} />
+            </Pressable>
           </Card>
         )}
 
@@ -247,7 +297,10 @@ const styles = StyleSheet.create({
   feeCard: { padding: 18 },
   feeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feeInfo: { flex: 1, marginRight: 12 },
-  feeName: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  feeName: { fontSize: 14, fontWeight: '700' },
+  feeDetail: { fontSize: 11, marginTop: 2, marginBottom: 4 },
+  statementLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12 },
+  statementLinkText: { fontSize: 12, fontWeight: '700' },
   dueRow: { flexDirection: 'row', alignItems: 'center' },
   dueText: { fontSize: 12, marginLeft: 4 },
   feeRight: { alignItems: 'flex-end' },

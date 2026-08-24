@@ -37,8 +37,10 @@ const accountantUser: AuthUser = {
   tenantSlug: 'demo',
 };
 
-// bill_invoices row + the join-computed `outstanding` column (CLEARED-only
-// allocation sum subtracted from total_receivable) — BILL-5 Checkpoint C.
+// bill_invoices row + the join-computed `own_balance` column (CLEARED-only
+// allocation sum subtracted from NET_AMOUNT — BILL-CHECKOUT-1 repointed this
+// off total_receivable, which carried every earlier unpaid month into the
+// figure the gateway signs (BILLING-CALC-AUDIT-1 D32).
 const baseBillInvoiceRow = {
   id: 'inv-1',
   invoice_number: 'BINV-2081-000001',
@@ -46,8 +48,12 @@ const baseBillInvoiceRow = {
   academic_year_id: 'year-1',
   due_date: new Date('2025-07-15'),
   status: 'PARTIALLY_PAID',
+  // The D32 shape: this invoice's own charge is 800, but it restates 200 of
+  // arrears, so total_receivable is 1000. Only the 800 is ever chargeable.
+  net_amount: '800.00',
+  previous_balance: '200.00',
   total_receivable: '1000.00',
-  outstanding: '600.00', // the ONLY amount the gateway may charge
+  own_balance: '600.00', // net_amount 800 less 200 already allocated — the ONLY chargeable figure
   created_by: 'user-1',
   created_at: new Date('2025-07-01'),
   updated_at: new Date('2025-07-01'),
@@ -257,7 +263,7 @@ describe('KhaltiService', () => {
     it('rejects a bill_invoice with no outstanding balance', async () => {
       const { service, tenantPrisma } = await makeService(ENABLED_ENV);
       tenantPrisma.query.mockResolvedValueOnce([
-        { ...baseBillInvoiceRow, status: 'SETTLED', outstanding: '0.00' },
+        { ...baseBillInvoiceRow, status: 'SETTLED', own_balance: '0.00' },
       ]);
       await expect(
         service.initiate({ invoiceId: 'inv-1' }, accountantUser),
@@ -289,7 +295,7 @@ describe('KhaltiService', () => {
       mockFetchOnce({ pidx: PIDX, total_amount: 60000, status: 'Completed', transaction_id: 'khalti-txn-001' });
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ ...baseTxnRow, status: 'VERIFIED' }]) // claim wins
-        .mockResolvedValueOnce([{ outstanding: '600.00' }]); // outstanding unchanged since initiate
+        .mockResolvedValueOnce([{ own_balance: '600.00' }]); // outstanding unchanged since initiate
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
 
@@ -327,7 +333,7 @@ describe('KhaltiService', () => {
       mockFetchOnce({ pidx: PIDX, total_amount: 60000, status: 'Completed', transaction_id: 'khalti-txn-001' });
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ ...baseTxnRow, status: 'VERIFIED' }])
-        .mockResolvedValueOnce([{ outstanding: '200.00' }]); // shrank: another channel covered 400
+        .mockResolvedValueOnce([{ own_balance: '200.00' }]); // shrank: another channel covered 400
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
 
@@ -352,7 +358,7 @@ describe('KhaltiService', () => {
       mockFetchOnce({ pidx: PIDX, total_amount: 60000, status: 'Completed', transaction_id: 'khalti-txn-001' });
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ ...baseTxnRow, status: 'VERIFIED' }])
-        .mockResolvedValueOnce([{ outstanding: '0.00' }]); // fully settled already
+        .mockResolvedValueOnce([{ own_balance: '0.00' }]); // fully settled already
 
       const result = await service.verify(baseTxnRow.transaction_uuid);
 
@@ -502,5 +508,21 @@ describe('KhaltiService', () => {
       expect(target).toContain('/payment/success?');
       expect(target).toContain('gw=khalti');
     });
+  });
+});
+
+// ─── BILL-CHECKOUT-1 ─────────────────────────────────────────────────────────
+
+describe('KhaltiService — the charged figure is the invoice\'s OWN balance (D32)', () => {
+  it('initiate reads net_amount and never total_receivable', async () => {
+    const { service, tenantPrisma } = await makeService(ENABLED_ENV);
+    tenantPrisma.query.mockResolvedValueOnce([{ ...baseBillInvoiceRow }]);
+    mockFetchOnce({ pidx: 'pidx-1', payment_url: 'https://test-pay.khalti.com/?pidx=pidx-1' });
+
+    await service.initiate({ invoiceId: 'inv-1' }, accountantUser);
+
+    const sql = tenantPrisma.query.mock.calls[0][0] as string;
+    expect(sql).toContain('bi.net_amount');
+    expect(sql).not.toContain('total_receivable');
   });
 });

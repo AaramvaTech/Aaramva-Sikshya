@@ -440,6 +440,14 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   open** — this hotfix deliberately did not attempt it; the 2070-era vectors in `date.util.spec.ts`
   still deliberately key to the current (still-unaudited-elsewhere) table and must be updated
   whenever that fuller audit lands.
+- **Verify a running server by its UPTIME against the build time, never by `dist`'s mtime.**
+  A fresh `dist` with a stale process has cost time four times now, and twice `dist` itself
+  was current — orphaned `nest start:dev` watchers were faithfully recompiling it while the
+  process actually bound to the port (`node dist/main`) still held code loaded at its own
+  start. `GET /health` returns `uptimeSec`; if that predates your build, the code you are
+  probing is not the code you wrote. `Get-CimInstance Win32_Process -Filter "Name='node.exe'"`
+  shows each PID's `CreationDate` and command line. Safest fix: build, then run your own
+  instance on a spare port rather than fighting for :3001.
 - Run tests AND the typecheck — the suite alone is NOT a type gate:
   `cd apps/api && npm test && npx tsc -p tsconfig.build.json --noEmit`
   ts-jest reports diagnostics only for the file it is transforming, so a type

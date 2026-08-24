@@ -24,11 +24,25 @@ export interface BillInvoiceApi {
   admissionNumber?: string;
   className?: string;
   academicYearId: string;
+  /** The BS period this invoice bills. Already on BillInvoiceResponseDto —
+   *  this interface simply never declared it (BILL-CHECKOUT-1). */
+  bsYear: number;
+  bsMonth: number;
   dueDate: string; // date-only AD string (e.g. "2026-08-15") — no {ad,bs} pair on this rail
+  /** This invoice's OWN charge. The figure a parent may be asked to pay. */
+  netAmount: number;
+  /** Arrears carried in from earlier months. Displayed nowhere on a card —
+   *  the account tile shows the student's position, sourced from the ledger. */
+  previousBalance: number;
   totalReceivable: number;
   paidAmount: number;
   balance: number;
   status: string; // POSTED | SETTLED | PARTIALLY_PAID | VOIDED
+  /** BILL-CHECKOUT-1: what this bill covers, names only. The list endpoint
+   *  returns this; it does NOT return `items` (verified live — every list row
+   *  had items undefined, which is why the card's secondary line used to
+   *  degrade to a bare invoice number). */
+  itemNames?: string[];
   items?: BillInvoiceItemApi[];
 }
 
@@ -48,24 +62,53 @@ export function mapBillInvoiceStatus(status: string, dueDate: string, today: Dat
   return dueDate < todayStr ? 'OVERDUE' : 'UNPAID';
 }
 
+/**
+ * BILL-CHECKOUT-1 — this invoice's OWN balance: its own charge less the
+ * payments booked against it, floored at zero.
+ *
+ * The floor is not cosmetic. A negative result means cleared allocations
+ * exceed this invoice's own charge — the invoice breaches the allocation cap
+ * (BILLING-CALC-AUDIT-1 Ruling 3). The server logs a WARN naming the invoice
+ * when it sees the same thing at checkout; here there is no logger to reach,
+ * and a negative Pay button is worse than a hidden one, so the card simply
+ * stops offering payment. The server is the authority either way — it
+ * recomputes this independently and would refuse the charge.
+ */
+export function ownBalanceOf(inv: Pick<BillInvoiceApi, 'netAmount' | 'paidAmount'>): number {
+  return Math.max(inv.netAmount - inv.paidAmount, 0);
+}
+
 export function mapBillInvoiceToLegacy(inv: BillInvoiceApi, today?: Date): Invoice {
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber ?? '',
     studentId: inv.studentId,
     academicYearId: inv.academicYearId,
+    period: { bsYear: inv.bsYear, bsMonth: inv.bsMonth },
     dueDate: { ad: inv.dueDate, bs: formatBs(adToBs(new Date(inv.dueDate)), 'en') },
     status: mapBillInvoiceStatus(inv.status, inv.dueDate, today),
     // The new rail has no single invoice-level subtotal/discount figure the
-    // way the old `invoices` table did (concession is per-item); totalAmount
-    // is the only reliable analogue for both.
-    subtotal: inv.totalReceivable,
+    // way the old `invoices` table did (concession is per-item); the own
+    // charge is the only reliable analogue for both.
+    subtotal: inv.netAmount,
     discountAmount: 0,
     // BILL-7 fines aren't exposed on this endpoint yet — 0, not fabricated.
+    // Under own-charge they never will be: a late fee is a ledger entry with
+    // no invoice row, so it reaches the parent through the account tile's
+    // statement drill-down, not through any card. Whether a fine should
+    // produce a document line of its own is BILL-7's call.
     fineAmount: 0,
-    totalAmount: inv.totalReceivable,
+    // netAmount, NOT totalReceivable. totalReceivable is netAmount plus every
+    // earlier unpaid month; charging it gets the same arrears collected twice
+    // (BILLING-CALC-AUDIT-1 D32, confirmed live). Arrears stay visible because
+    // each unpaid month is already its own card — the list IS the arrears.
+    totalAmount: inv.netAmount,
     paidAmount: inv.paidAmount,
-    balance: inv.balance,
+    balance: ownBalanceOf(inv),
+    // Names of what this bill covers, for the card's secondary line. The list
+    // endpoint sends `itemNames`; the single-invoice endpoint sends full
+    // `items` — take whichever is present so both paths render the same line.
+    itemNames: inv.itemNames ?? inv.items?.map((it) => it.itemName),
     items: inv.items?.map((it) => ({
       id: it.id,
       feeCategoryName: it.itemName,
@@ -79,7 +122,24 @@ export function mapBillInvoiceToLegacy(inv: BillInvoiceApi, today?: Date): Invoi
  * are filtered out entirely (ruled: a voided invoice was never really
  * billed) before mapping or summing. `student`/`academicYear` are populated
  * best-effort from the row data that's actually present — fees.tsx never
- * reads either field, only `.invoices` and `.summary`. */
+ * reads either field, only `.invoices` and `.summary`.
+ *
+ * BILL-CHECKOUT-1: the summary carries NO balance figure, deliberately.
+ * Mobile adopts the rule the web side already wrote down in
+ * `apps/web/lib/invoice-totals.ts`:
+ *
+ *   "`netAmount` (this invoice's own charge), never `totalReceivable`
+ *    (netAmount + carried-forward previousBalance) — summing totalReceivable
+ *    across a student's invoices double-counts every carried balance.
+ *    Balance Due is intentionally NOT derived here — it comes from the
+ *    separate, authoritative GET /finance/students/:studentId/balance
+ *    (same double-counting trap applies to `balance` even more directly)."
+ *
+ * This mapper previously summed `balance` across cards, which is exactly the
+ * double-count that docblock warns about — shown to a parent as their
+ * "Outstanding". The tile now reads the ledger via `useChildBalance`. The
+ * field is removed rather than left correct-but-unused, so it cannot be
+ * reintroduced by accident. */
 export function mapBillInvoicesToLedger(
   studentId: string,
   academicYearId: string,
@@ -92,9 +152,8 @@ export function mapBillInvoicesToLedger(
     (acc, inv) => ({
       totalInvoiced: acc.totalInvoiced + inv.totalAmount,
       totalPaid: acc.totalPaid + inv.paidAmount,
-      totalBalance: acc.totalBalance + inv.balance,
     }),
-    { totalInvoiced: 0, totalPaid: 0, totalBalance: 0 },
+    { totalInvoiced: 0, totalPaid: 0 },
   );
   const first = live[0];
   return {

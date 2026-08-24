@@ -217,14 +217,21 @@ export interface Invoice {
   invoiceNumber: string;
   studentId: string;
   academicYearId: string;
+  /** The BS month this invoice bills — the card's heading. An invoice is a
+   *  month's bill, not a fee (BILL-CHECKOUT-1). */
+  period: { bsYear: number; bsMonth: number };
   dueDate: { ad: string; bs: string };
   status: string; // UNPAID | PARTIAL | PAID | OVERDUE
   subtotal: number;
   discountAmount: number;
   fineAmount: number;
+  /** This invoice's OWN charge — never total_receivable. See billInvoiceMapping.ts. */
   totalAmount: number;
   paidAmount: number;
+  /** This invoice's OWN balance, floored at zero. The only figure payable. */
   balance: number;
+  /** What this bill covers, names only — the card's secondary line. */
+  itemNames?: string[];
   items?: { id: string; feeCategoryName: string; originalAmount: number; discountedAmount: number }[];
 }
 
@@ -232,7 +239,39 @@ export interface StudentLedger {
   student: { id: string; admissionNumber: string; fullName: string; className: string };
   academicYear: { id: string; name: string };
   invoices: Invoice[];
-  summary: { totalInvoiced: number; totalPaid: number; totalBalance: number };
+  /** No balance figure by design — summing cards double-counts carried
+   *  arrears. The account position comes from `useChildBalance`. */
+  summary: { totalInvoiced: number; totalPaid: number };
+}
+
+/** GET /finance/students/:studentId/balance — the authoritative account position. */
+export interface StudentBalance {
+  studentId: string;
+  balance: number;
+  sign: 'OWES' | 'ADVANCE' | 'ZERO';
+}
+
+export interface LedgerEntry {
+  id: string;
+  entryDate: string;
+  entryBs: { year: number; month: number; day: number } | null;
+  entryType: string;
+  debit: number;
+  credit: number;
+  narration: string | null;
+  runningBalance?: number;
+}
+
+/** GET /finance/students/:studentId/statement — what the account tile drills into. */
+export interface StudentStatement {
+  student: { id: string; admissionNumber: string; fullName: string; className: string | null };
+  range: { from: string; to: string };
+  openingBalance: number;
+  closingBalance: number;
+  advanceCredit: number;
+  totalDebit: number;
+  totalCredit: number;
+  entries: LedgerEntry[];
 }
 
 /** POST /finance/payments/esewa/initiate — amount is server-computed (outstanding balance). */

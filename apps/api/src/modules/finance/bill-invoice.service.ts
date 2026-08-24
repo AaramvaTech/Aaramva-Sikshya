@@ -45,6 +45,12 @@ export class BillInvoiceService {
               s.student_id AS admission_number, c.name AS class_name,
               COALESCE(SUM(bpa.amount), 0) AS paid_amount,
               bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance,
+              -- BILL-CHECKOUT-1: names only, so a list card can say what its
+              -- amount covers. A correlated subquery rather than a second
+              -- round trip per row (N+1) or a third join whose fan-out the
+              -- SUM(bpa.amount) above would have to be de-duplicated against.
+              (SELECT ARRAY_AGG(bii.item_name ORDER BY bii.created_at)
+                 FROM bill_invoice_items bii WHERE bii.bill_invoice_id = bi.id) AS item_names,
               COUNT(*) OVER() AS total_count
        FROM bill_invoices bi
        JOIN students s ON s.id = bi.student_id

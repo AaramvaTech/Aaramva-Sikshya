@@ -9,6 +9,8 @@ import type {
   ExamResult,
   ReportCard,
   StudentLedger,
+  StudentBalance,
+  StudentStatement,
 } from '../types';
 import { mapBillInvoicesToLedger, type BillInvoiceApi } from '../lib/billInvoiceMapping';
 
@@ -220,5 +222,44 @@ export function useChildLedger(
       return mapBillInvoicesToLedger(childId, academicYearId as string, apiInvoices);
     },
     enabled: !!childId && !!academicYearId,
+  });
+}
+
+/**
+ * BILL-CHECKOUT-1 — the authoritative account position, straight from the
+ * ledger. NEVER derive this by summing invoice cards: each invoice's
+ * total_receivable already carries every earlier unpaid month, so summing
+ * them counts the same arrears once per month they have been outstanding.
+ * `apps/web/lib/invoice-totals.ts` states the same rule for the web side.
+ *
+ * Not year-scoped, deliberately — the ledger balance is a lifetime position
+ * and the endpoint takes no academicYearId. It also picks up fines, credit
+ * notes and adjustments, none of which have an invoice to appear on.
+ */
+export function useChildBalance(childId: string) {
+  return useQuery<StudentBalance>({
+    queryKey: ['parent', 'child', childId, 'balance'],
+    queryFn: async () => {
+      const res = await api.get(`/finance/students/${childId}/balance`);
+      return res.data.data as StudentBalance;
+    },
+    enabled: !!childId,
+  });
+}
+
+/**
+ * BILL-CHECKOUT-1 — the account tile's drill-down. Under own-charge, a late
+ * fee appears on no card (it is a ledger entry with no invoice row), so
+ * without this a parent would see a balance they can neither account for nor
+ * pay. This is the minimum that keeps the balance explainable.
+ */
+export function useChildStatement(childId: string, enabled = true) {
+  return useQuery<StudentStatement>({
+    queryKey: ['parent', 'child', childId, 'statement'],
+    queryFn: async () => {
+      const res = await api.get(`/finance/students/${childId}/statement`);
+      return res.data.data as StudentStatement;
+    },
+    enabled: !!childId && enabled,
   });
 }
