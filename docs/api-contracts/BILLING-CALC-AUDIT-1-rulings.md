@@ -205,3 +205,42 @@ Recorded, with the two reasons it is not urgent and the one reason it is not clo
 ---
 
 *Read-only session. No fix, test, migration, or schema change was made.*
+
+---
+
+## Note — `bsYear` is not in the bill-run idempotency key
+
+*Not a ticket. Found 2026-08-25 while building currency for ALLOCATION-CAP-1's live
+verification, recorded here so it is not lost.*
+
+`buildBillRunIdempotencyKey(slug, academicYearId, bsMonth, scope, classId)`
+(`bill-run.util.ts`, used at `bill-run.service.ts:61`) omits `bsYear`. A request for
+academic year 2082-83 with `bsYear: 2083, bsMonth: 8` is therefore rejected as a duplicate
+of the existing **2082/8** run:
+
+```
+CONFLICT_DUPLICATE — A bill run already exists for this period and scope
+(id=4474785d-…, status=POSTED)
+```
+
+**This is defensible and was not changed.** A BS month occurs exactly once inside one
+academic year, so `(academicYearId, bsMonth)` does identify a period, and the request that
+tripped it was itself incoherent — BS 2083/8 (≈ Nov–Dec 2026) does not fall inside
+2082-83 (2025-07-16 → 2026-07-15). The guard arguably caught a real error.
+
+Two things are worth keeping in view anyway:
+
+1. **The message says "this period" while the two periods differ in year**, and names a run
+   the caller cannot see is from a different `bs_year`. It cost a detour to diagnose. Naming
+   the conflicting run's own `bs_year`/`bs_month` in the message would have made it
+   self-explanatory.
+2. **`bs_year` is stored on the row and stamped onto every invoice** (`bill_invoices.bs_year`),
+   so the column the product treats as part of a run's identity is not part of the key that
+   enforces its uniqueness. Nothing today can exploit that gap — it needs a tenant whose
+   academic year spans one BS month twice, which the fiscal-year model does not produce. It
+   is a latent disagreement between two definitions of "period", of the same family as D19:
+   inert only because of a property nothing enforces.
+
+No behaviour was changed. Anyone touching bill-run identity should decide deliberately
+whether the key or the message is the thing to fix.
+
