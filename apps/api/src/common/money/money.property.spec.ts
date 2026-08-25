@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { Money } from './money';
 
 /**
@@ -7,18 +8,57 @@ import { Money } from './money';
  * Needs a live Postgres connection, which CI does not provision (see
  * .github/workflows/ci.yml — the `api` job has no DATABASE_URL / no Postgres
  * service). Loads apps/api/.env directly (a standalone jest test doesn't go
- * through Nest's ConfigModule bootstrap) and skips cleanly when unavailable,
- * so this runs for real in local/dev sessions and no-ops (not fails) in CI.
+ * through Nest's ConfigModule bootstrap).
+ *
+ * ALLOCATION-CAP-1: the gate used to key on DATABASE_URL merely being SET,
+ * which is not the same question as "can we reach the database". On
+ * 2026-08-25 apps/api/.env held a DATABASE_URL whose password contained
+ * unescaped `?`, `&` and `@`, so Prisma could not even parse it ("invalid
+ * port number in database URL") — and the password did not authenticate
+ * either. The variable was present, so this file ran and produced 7 red
+ * tests on every local run. A gate that is always partially red is not a
+ * gate: people learn to read past it, and the next real failure hides in the
+ * noise it taught them to ignore.
+ *
+ * So the check is now the real thing — one connection attempt, whose failure
+ * (unset / unparseable / unreachable / wrong password, all the same to a
+ * caller) skips the suite instead of failing it. Skipped is honest; green
+ * would not be, which is why this is a synchronous probe feeding
+ * describe.skip rather than a `beforeAll` flag that leaves seven tests
+ * passing while asserting nothing.
+ *
+ * ponytail: costs one ~1.5s node boot per run of this file, against the ~280
+ * DB round-trips it gates. If that ever matters, move the probe to a jest
+ * globalSetup so it runs once for the whole suite instead of once per file.
  */
-let DATABASE_URL: string | undefined;
 try {
   process.loadEnvFile(`${__dirname}/../../../.env`);
-  DATABASE_URL = process.env.DATABASE_URL;
 } catch {
-  DATABASE_URL = process.env.DATABASE_URL; // still allow an already-exported env var
+  // No .env (CI) — an already-exported DATABASE_URL, if any, still applies.
 }
 
-const describeIfDb = DATABASE_URL ? describe : describe.skip;
+/**
+ * A child process, because the answer has to be known BEFORE `describe` runs
+ * and Prisma's client is async-only; jest gives a spec file no way to await
+ * anything at collection time.
+ */
+function databaseReachable(): boolean {
+  if (!process.env.DATABASE_URL) return false;
+  try {
+    execFileSync(
+      process.execPath,
+      ['-e', `const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();`
+        + `p.$queryRawUnsafe('SELECT 1').then(()=>p.$disconnect()).then(()=>process.exit(0))`
+        + `.catch(()=>process.exit(1));`],
+      { stdio: 'ignore', timeout: 20_000, cwd: `${__dirname}/../../..` },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const describeIfDb = databaseReachable() ? describe : describe.skip;
 
 describeIfDb('Money vs Postgres NUMERIC (property test, live DB)', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires

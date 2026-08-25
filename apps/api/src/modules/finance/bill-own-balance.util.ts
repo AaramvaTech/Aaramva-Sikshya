@@ -5,6 +5,12 @@ import { Money } from '../../common/money/money';
  * BILL-CHECKOUT-1 — the one definition of "what THIS invoice alone is still
  * owed", and the only figure a payer may be charged at checkout.
  *
+ * ALLOCATION-CAP-1 widened its remit: this is also the CEILING on any
+ * bill_payment_allocations row booked against the invoice, in every path
+ * that writes one. Charging the right figure but still booking the whole
+ * payment against one invoice leaves the same defect one layer down — the
+ * invoice is over-booked and the earlier months it swallowed stay payable.
+ *
  * `net_amount`, never `total_receivable`. `total_receivable` is
  * `net_amount + previous_balance` — a statement-of-account figure that
  * restates the student's whole carried-forward position on every month's
@@ -25,7 +31,15 @@ import { Money } from '../../common/money/money';
  * reason bill-class-guard.util.ts exists: a rule duplicated in four places
  * is a rule that eventually disagrees with itself.
  */
-export const OWN_BALANCE_SELECT = `bi.net_amount - COALESCE(SUM(bpa.amount), 0) AS own_balance`;
+/**
+ * The bare expression, for a HAVING/CASE where an output alias is not
+ * visible (Postgres does not resolve SELECT aliases in HAVING).
+ * ALLOCATION-CAP-1 needs it in three such places; keeping it one constant is
+ * why the SELECT below is built from it rather than repeating the arithmetic.
+ */
+export const OWN_BALANCE_EXPR = `bi.net_amount - COALESCE(SUM(bpa.amount), 0)`;
+
+export const OWN_BALANCE_SELECT = `${OWN_BALANCE_EXPR} AS own_balance`;
 
 /** Only a CLEARED payment's allocations reduce an invoice's balance — a
  *  PENDING cheque or a VOIDED/BOUNCED payment must not make an invoice look
@@ -50,8 +64,37 @@ export function clampOwnBalance(raw: Money, invoiceRef: string, logger: Logger):
   logger.warn(
     `[BILL-CHECKOUT-1] Invoice ${invoiceRef} has a negative own balance (${raw.toDb()}): ` +
       `cleared allocations exceed its own net_amount, so this invoice breaches the allocation cap. ` +
-      `Charging 0.00 instead. This invoice needs per-student reconstruction before any ` +
+      `Treating it as 0.00 instead. This invoice needs per-student reconstruction before any ` +
       `compensating entry — see BILLING-CALC-AUDIT-1 Ruling 3.`,
   );
   return Money.zero();
 }
+
+/** The same CLEARED-only sum as CLEARED_ALLOCATIONS_JOIN, as a correlated
+ *  subquery for use inside an UPDATE that has no `bi` alias. `$1` is the
+ *  invoice id. */
+const CLEARED_ALLOCATION_SUM = `SELECT COALESCE(SUM(bpa.amount), 0)
+           FROM bill_payment_allocations bpa
+           JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+           WHERE bpa.bill_invoice_id = $1::uuid`;
+
+/**
+ * ALLOCATION-CAP-1: settlement is judged against the invoice's OWN charge,
+ * for the same reason the cap is. Under the cap an invoice's allocations can
+ * never exceed `net_amount`, so leaving this comparing against
+ * `total_receivable` would make SETTLED unreachable for every invoice that
+ * carries a previous balance — it would sit at PARTIALLY_PAID forever with
+ * nothing left to pay. The cap and this expression have to move together.
+ *
+ * Two writers (BillPaymentService.recomputeInvoiceStatus and
+ * BillRunPostRunnerService's advance auto-apply) had a byte-identical copy
+ * each; one constant so they cannot drift. `$1` is the invoice id.
+ */
+export const INVOICE_STATUS_RECOMPUTE_SQL = `UPDATE bill_invoices SET
+         status = CASE
+           WHEN net_amount <= (${CLEARED_ALLOCATION_SUM}) THEN 'SETTLED'
+           WHEN (${CLEARED_ALLOCATION_SUM}) > 0 THEN 'PARTIALLY_PAID'
+           ELSE 'POSTED'
+         END,
+         updated_at = NOW()
+       WHERE id = $1::uuid`;

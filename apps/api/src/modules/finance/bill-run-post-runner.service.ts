@@ -11,6 +11,7 @@ import { amountInWords } from '../../common/money/amount-in-words';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { buildInvoiceSequenceKey, buildInvoiceNumber, fiscalYearBs } from './bill-post.util';
 import { planAdvanceConsumption } from './bill-advance-consumption.util';
+import { INVOICE_STATUS_RECOMPUTE_SQL } from './bill-own-balance.util';
 import { BillRunRow } from './entities/bill-run.entity';
 
 /**
@@ -261,17 +262,25 @@ export class BillRunPostRunnerService {
         studentId,
       );
 
-      // total_receivable = netAmount + previousBalance can itself already be
-      // <= 0 when a student's pre-existing advance exceeds this invoice's own
-      // charge (previousBalance negative and large) — BILL-4's own field,
-      // uncapped. Nothing to consume via THIS mechanism in that case (the
-      // negative figure already reflects the advance for display purposes);
-      // guarded here so planAdvanceConsumption is never handed a negative
-      // "invoiceOutstanding", which would otherwise attempt a negative
-      // bill_payment_allocations.amount and hit that table's CHECK (amount > 0).
-      if (advanceCandidates.length > 0 && totalReceivable.compare(Money.zero()) > 0) {
+      // ALLOCATION-CAP-1: the ceiling is netAmount, NOT totalReceivable.
+      // This is the fifth writer of bill_payment_allocations and the one the
+      // ticket does not name — but it breaches the cap the same way every
+      // payment path did: a student holding an unconsumed advance while
+      // earlier months are unpaid has a positive previousBalance, so
+      // totalReceivable exceeds this invoice's own charge and the advance
+      // gets booked past it. The leftover advance stays unconsumed, which is
+      // Ruling 2's outcome — unallocated credit on the ledger, from which
+      // the earlier invoices can be paid on their own terms.
+      //
+      // netAmount cannot be negative (gross - concession + tax), so the
+      // guard has no negative case left to catch; all it now excludes is the
+      // zero-net invoice (BILL-4-ZERO-NET, a full concession).
+      // planAdvanceConsumption would return an empty plan there anyway —
+      // the guard is kept because a zero ceiling is easier to see here than
+      // inside the util, not because it is load-bearing.
+      if (advanceCandidates.length > 0 && netAmount.compare(Money.zero()) > 0) {
         const plan = planAdvanceConsumption(
-          totalReceivable,
+          netAmount,
           advanceCandidates.map((r) => ({ billPaymentId: r.id, remaining: toMoney(r.remaining) })),
         );
         for (const consumption of plan.consumptions) {
@@ -282,25 +291,7 @@ export class BillRunPostRunnerService {
           );
         }
         if (plan.consumptions.length > 0) {
-          await tx.$executeRawUnsafe(
-            `UPDATE bill_invoices SET
-               status = CASE
-                 WHEN total_receivable <= (
-                   SELECT COALESCE(SUM(bpa.amount), 0) FROM bill_payment_allocations bpa
-                   JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
-                   WHERE bpa.bill_invoice_id = $1::uuid
-                 ) THEN 'SETTLED'
-                 WHEN (
-                   SELECT COALESCE(SUM(bpa.amount), 0) FROM bill_payment_allocations bpa
-                   JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
-                   WHERE bpa.bill_invoice_id = $1::uuid
-                 ) > 0 THEN 'PARTIALLY_PAID'
-                 ELSE 'POSTED'
-               END,
-               updated_at = NOW()
-             WHERE id = $1::uuid`,
-            invoice.id,
-          );
+          await tx.$executeRawUnsafe(INVOICE_STATUS_RECOMPUTE_SQL, invoice.id);
         }
       }
 

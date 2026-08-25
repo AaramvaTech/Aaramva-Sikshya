@@ -341,16 +341,19 @@ describe('BillRunPostRunnerService', () => {
     // BILL-4's own invariant: exactly one postEntryInTx call (the INVOICE entry) — advance consumption posts NONE.
     expect(ledgerService.postEntryInTx).toHaveBeenCalledTimes(1);
     expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({ entryType: 'INVOICE' }));
-    // totalReceivable = net(3000) + previousBalance(-2000) = 1000 — only 1000
-    // of the 2000 available advance gets consumed, correctly leaving 1000 of
-    // the original advance payment unconsumed for a future invoice.
+    // ALLOCATION-CAP-1: the ceiling is this invoice's OWN charge (net 3000),
+    // not totalReceivable (net 3000 + previousBalance -2000 = 1000). All
+    // 2000 of the available advance is consumed against a 3000 charge — well
+    // inside the cap — leaving 1000 still owed on the invoice. The old
+    // totalReceivable ceiling consumed only 1000 here and left the student
+    // holding 1000 of advance against an invoice that was still short.
     expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO bill_payment_allocations'),
-      'pay-advance-1', 'invoice-2', '1000.00',
+      'pay-advance-1', 'invoice-2', '2000.00',
     );
   });
 
-  it('consumes nothing when total_receivable is already <= 0 (pre-existing advance exceeds this invoice charge) — no negative allocation attempted', async () => {
+  it('ALLOCATION-CAP-1: an advance larger than the invoice own charge is consumed only up to that charge — the rest stays unconsumed credit', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
       .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
@@ -362,13 +365,52 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce([{ sum: '-5000.00' }]) // previous balance: 5000 advance, more than this 3000 charge
       .mockResolvedValueOnce([{ value: BigInt(3) }])
       .mockResolvedValueOnce([{ id: 'invoice-3' }])
-      .mockResolvedValueOnce([{ id: 'pay-advance-2', remaining: '5000.00' }]); // candidates ARE found...
+      .mockResolvedValueOnce([{ id: 'pay-advance-2', remaining: '5000.00' }]);
 
     ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-3' } as any);
 
     const result = await service.drainCurrentTenant();
 
-    // total_receivable = 3000 + (-5000) = -2000 <= 0 -> guarded, zero consumption attempted
+    expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
+    // Exactly the own charge, never the whole 5000 advance.
+    expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO bill_payment_allocations'),
+      'pay-advance-2', 'invoice-3', '3000.00',
+    );
+    // Previously totalReceivable was 3000 + (-5000) = -2000, so the guard
+    // fired and NOTHING was consumed — the invoice sat unpaid while the
+    // student held 5000 of credit. That was the negative-ceiling artifact,
+    // not a rule worth keeping.
+    const allocInserts = mockTx.$executeRawUnsafe.mock.calls
+      .filter((c: unknown[]) => String(c[0]).includes('INSERT INTO bill_payment_allocations'));
+    expect(allocInserts).toHaveLength(1);
+  });
+
+  it('ALLOCATION-CAP-1: a zero-net invoice consumes no advance at all — bill_payment_allocations CHECKs amount > 0', async () => {
+    // A full concession leaves a zero ceiling, and a zero-amount allocation
+    // is not a legal row. Held by two mechanisms now: the call-site guard,
+    // and planAdvanceConsumption breaking immediately on a zero remaining.
+    // netAmount (unlike totalReceivable) can never be negative, so the guard
+    // no longer has a negative case to catch — it is kept because a zero
+    // ceiling is easier to see at the call site than inside the util.
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce({
+      ...mockResolved, gross: 100, concession: 100, net: 0,
+      items: [{ ...mockResolved.items[0], grossAmount: 100, concessionAmount: 100, netAmount: 0 }],
+    } as any);
+
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '100.00', concession: '100.00', tax: '0.00', net: '0.00' }])
+      .mockResolvedValueOnce([{ sum: '0.00' }])
+      .mockResolvedValueOnce([{ value: BigInt(4) }])
+      .mockResolvedValueOnce([{ id: 'invoice-4' }])
+      .mockResolvedValueOnce([{ id: 'pay-advance-3', remaining: '5000.00' }]); // advance IS available
+
+    const result = await service.drainCurrentTenant();
+
     expect(result).toEqual({ runsProcessed: 1, linesPosted: 1, linesFailed: 0 });
     expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO bill_payment_allocations'),

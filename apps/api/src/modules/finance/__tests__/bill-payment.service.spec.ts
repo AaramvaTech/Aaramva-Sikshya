@@ -123,7 +123,7 @@ describe('BillPaymentService', () => {
     it('allocates the full amount to the one unpaid invoice, one PAYMENT ledger entry, zero remainder', async () => {
       mockExistenceChecks();
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '8500.00' }]) // unpaid invoices, oldest-first
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '8500.00' }]) // unpaid invoices, oldest-first
         .mockResolvedValueOnce([{ value: BigInt(1) }]) // sequence upsert
         .mockResolvedValueOnce([{ id: 'payment-1' }]) // bill_payments insert RETURNING id
         .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-1', bill_invoice_id: 'invoice-1', amount: '5000.00', created_at: new Date() }]) // allocations re-select
@@ -152,9 +152,9 @@ describe('BillPaymentService', () => {
       mockExistenceChecks();
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([
-          { id: 'invoice-1', outstanding: '2000.00' },
-          { id: 'invoice-2', outstanding: '3000.00' },
-          { id: 'invoice-3', outstanding: '1500.00' },
+          { id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '2000.00' },
+          { id: 'invoice-2', invoice_number: 'BINV-2083-000002', own_balance: '3000.00' },
+          { id: 'invoice-3', invoice_number: 'BINV-2083-000003', own_balance: '1500.00' },
         ])
         .mockResolvedValueOnce([{ value: BigInt(2) }])
         .mockResolvedValueOnce([{ id: 'payment-2' }])
@@ -203,7 +203,7 @@ describe('BillPaymentService', () => {
   describe('recordPayment — MANUAL over-allocation rejected', () => {
     it('rejects a target amount exceeding that invoice outstanding balance', async () => {
       mockExistenceChecks();
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '1000.00' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '1000.00' }]);
 
       await expect(
         service.recordPayment(
@@ -220,8 +220,8 @@ describe('BillPaymentService', () => {
     it('rejects when the sum of targets exceeds the payment amount', async () => {
       mockExistenceChecks();
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([
-        { id: 'invoice-1', outstanding: '3000.00' },
-        { id: 'invoice-2', outstanding: '3000.00' },
+        { id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '3000.00' },
+        { id: 'invoice-2', invoice_number: 'BINV-2083-000002', own_balance: '3000.00' },
       ]);
 
       await expect(
@@ -244,7 +244,7 @@ describe('BillPaymentService', () => {
     it('records a PENDING cheque payment: allocations inserted, status PENDING, no ledger entry', async () => {
       mockExistenceChecks();
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '8500.00' }]) // AUTO_FIFO candidates
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '8500.00' }]) // AUTO_FIFO candidates
         .mockResolvedValueOnce([{ value: BigInt(5) }]) // sequence upsert
         .mockResolvedValueOnce([{ id: 'payment-cheque-1' }]) // bill_payments insert
         .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-cheque-1', bill_invoice_id: 'invoice-1', amount: '5000.00', created_at: new Date() }])
@@ -401,10 +401,180 @@ describe('BillPaymentService', () => {
     });
   });
 
+
+  /**
+   * ALLOCATION-CAP-1 (BILLING-CALC-AUDIT-1 Ruling 3). An allocation means
+   * "money applied to THIS invoice", bounded by its own charge (net_amount).
+   * Before the cap, a payment against an invoice carrying a previous balance
+   * booked the whole total_receivable against that one invoice — over-booking
+   * it while the prior months it swallowed stayed separately payable. 8 of 32
+   * allocations on the dev DB breach it, across CASH, MANUAL and ESEWA.
+   */
+  describe('ALLOCATION-CAP-1 — allocations are bounded by the invoice own charge', () => {
+    // One shape reused below, from the confirmed live case: BINV-…000004 has
+    // an own charge of 2,260 and carries 2,000 of arrears (total_receivable
+    // 4,260). Only the 2,260 may ever be booked against it.
+    const OWN_CHARGE = '2260.00';
+
+    it('a payment exactly equal to the own balance allocates in full, nothing left over', async () => {
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-4', invoice_number: 'BINV-2083-000004', own_balance: OWN_CHARGE }])
+        .mockResolvedValueOnce([{ value: BigInt(11) }])
+        .mockResolvedValueOnce([{ id: 'payment-cap-1' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-cap-1', bill_invoice_id: 'invoice-4', amount: OWN_CHARGE, created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cap-1', amount: OWN_CHARGE }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-1' } as any);
+
+      const result = await service.recordPayment(baseDto({ amount: OWN_CHARGE }), 'user-1');
+
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations'),
+        'payment-cap-1', 'invoice-4', OWN_CHARGE,
+      );
+      expect(result.allocatedAmount).toBe(2260);
+      expect(result.advanceAmount).toBe(0);
+      // PAYMENT, not DEPOSIT — it landed on an invoice.
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'PAYMENT', credit: OWN_CHARGE,
+      }));
+    });
+
+    it('a payment exceeding the own balance books only the own charge — the surplus becomes unallocated credit', async () => {
+      // The confirmed live overcharge: 4,260 taken against an invoice whose
+      // own charge is 2,260. Pre-cap all 4,260 was booked here, and
+      // BINV-…000002 stayed payable for the 2,000 already collected.
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-4', invoice_number: 'BINV-2083-000004', own_balance: OWN_CHARGE }])
+        .mockResolvedValueOnce([{ value: BigInt(12) }])
+        .mockResolvedValueOnce([{ id: 'payment-cap-2' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-cap-2', bill_invoice_id: 'invoice-4', amount: OWN_CHARGE, created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cap-2', amount: '4260.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-2' } as any);
+
+      const result = await service.recordPayment(baseDto({ amount: '4260.00' }), 'user-1');
+
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations'),
+        'payment-cap-2', 'invoice-4', OWN_CHARGE,
+      );
+      // Exactly one allocation, and it is NOT the whole payment.
+      const allocInserts = mockTx.$executeRawUnsafe.mock.calls
+        .filter((c: unknown[]) => String(c[0]).includes('INSERT INTO bill_payment_allocations'));
+      expect(allocInserts).toHaveLength(1);
+      expect(allocInserts[0][3]).not.toBe('4260.00');
+
+      expect(result.allocatedAmount).toBe(2260);
+      expect(result.advanceAmount).toBe(2000); // the surplus, held as credit
+      // The student's position stays correct: the ledger is credited the full
+      // amount received; only the allocation is bounded.
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        credit: '4260.00',
+      }));
+    });
+
+    it('a payment against an invoice with zero own balance books nothing against it — the whole payment is credit', async () => {
+      // Already fully allocated: the HAVING in fetchUnpaidInvoicesOldestFirst
+      // leaves it out of the candidate list entirely, so there is no invoice
+      // to over-book and the payment lands as a DEPOSIT.
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([]) // no candidate has own balance left
+        .mockResolvedValueOnce([{ value: BigInt(13) }])
+        .mockResolvedValueOnce([{ id: 'payment-cap-3' }])
+        .mockResolvedValueOnce([]) // allocations re-select: none
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cap-3', amount: '2000.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-3' } as any);
+
+      const result = await service.recordPayment(baseDto({ amount: '2000.00' }), 'user-1');
+
+      expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations'),
+        expect.anything(), expect.anything(), expect.anything(),
+      );
+      expect(result.allocations).toEqual([]);
+      expect(result.advanceAmount).toBe(2000);
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'DEPOSIT', credit: '2000.00',
+      }));
+    });
+
+    it('MANUAL rejects a target above the invoice own charge, even when the payment covers it', async () => {
+      // The cashier path — 2 of the 8 breaching invoices came through it.
+      // Against total_receivable this 4,260 would have been accepted.
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { id: 'invoice-4', invoice_number: 'BINV-2083-000004', own_balance: OWN_CHARGE },
+      ]);
+
+      await expect(
+        service.recordPayment(
+          baseDto({
+            amount: '4260.00',
+            allocationMode: BillPaymentAllocationMode.MANUAL,
+            targets: [{ billInvoiceId: 'invoice-4', amount: '4260.00' }],
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(/own outstanding charge of 2260\.00/);
+
+      // The ceiling comes from SQL, not the message: pin the expression too.
+      const sql = String(mockTx.$queryRawUnsafe.mock.calls[0][0]);
+      expect(sql).toContain('bi.net_amount');
+      expect(sql).not.toContain('total_receivable');
+    });
+
+    it('the FIFO candidate query reads net_amount and never total_receivable', async () => {
+      // Every assertion above runs against mocked rows, so this is the one
+      // that fails if the SQL itself regresses.
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ value: BigInt(14) }])
+        .mockResolvedValueOnce([{ id: 'payment-cap-4' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cap-4', amount: '100.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-4' } as any);
+
+      await service.recordPayment(baseDto({ amount: '100.00' }), 'user-1');
+
+      const sql = String(mockTx.$queryRawUnsafe.mock.calls[0][0]);
+      expect(sql).toContain('bi.net_amount');
+      expect(sql).not.toContain('total_receivable');
+      // The capacity filter, not just the selected column — a HAVING left on
+      // total_receivable would still admit an over-booked invoice as a
+      // candidate with room it does not have.
+      expect(sql).toContain('HAVING bi.net_amount - COALESCE(SUM(bpa.amount), 0) > 0');
+    });
+
+    it('settlement is judged against net_amount too, or SETTLED is unreachable for a carried-forward invoice', async () => {
+      // Under the cap an invoice can never accumulate total_receivable worth
+      // of allocations, so a status check left on total_receivable would pin
+      // every carried-forward invoice at PARTIALLY_PAID with nothing left to
+      // pay. The cap and this comparison have to move together.
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-4', invoice_number: 'BINV-2083-000004', own_balance: OWN_CHARGE }])
+        .mockResolvedValueOnce([{ value: BigInt(15) }])
+        .mockResolvedValueOnce([{ id: 'payment-cap-5' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-cap-5', bill_invoice_id: 'invoice-4', amount: OWN_CHARGE, created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-cap-5', amount: OWN_CHARGE }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-5' } as any);
+
+      await service.recordPayment(baseDto({ amount: OWN_CHARGE }), 'user-1');
+
+      const statusCall = mockTx.$executeRawUnsafe.mock.calls
+        .find((c: unknown[]) => String(c[0]).includes('status = CASE'));
+      expect(statusCall).toBeDefined();
+      expect(String(statusCall![0])).toContain('WHEN net_amount <=');
+      expect(String(statusCall![0])).not.toContain('total_receivable');
+    });
+  });
   describe('recordPaymentInTx — callable directly with resolved params, bypassing recordPayment\'s own validation', () => {
     it('records an ESEWA payment (a method recordPayment() itself would reject) when called directly, without acquiring its own lock', async () => {
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ id: 'invoice-1', outstanding: '5000.00' }]) // fetchInvoicesByIds (MANUAL target)
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000001', own_balance: '5000.00' }]) // fetchInvoicesByIds (MANUAL target)
         .mockResolvedValueOnce([{ value: BigInt(9) }]) // sequence upsert
         .mockResolvedValueOnce([{ id: 'payment-esewa-1' }]) // bill_payments insert
         .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-esewa-1', bill_invoice_id: 'invoice-1', amount: '5000.00', created_at: new Date() }])

@@ -18,7 +18,9 @@ export interface AdvanceConsumptionPlan {
 /**
  * B5-4 advance auto-apply: walk the student's unconsumed CLEARED payments
  * (caller must pass them already ordered oldest-first) and apply as much of
- * each as needed to cover the newly-posted invoice's total_receivable.
+ * each as needed to cover the newly-posted invoice's own charge
+ * (net_amount — ALLOCATION-CAP-1; it was total_receivable, which let an
+ * advance be booked past the invoice's own charge).
  * Deliberately NOT a reuse of planAutoFifoAllocation (bill-payment-
  * allocation.util.ts) despite the identical walk shape — this direction is
  * "many old payments -> one new invoice" rather than "one payment -> many

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { adToBs } from 'bs-calendar';
 import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -11,6 +11,10 @@ import { todayAdInNepal } from '../common/utils/date.util';
 import { fiscalYearBs } from './bill-post.util';
 import { buildReceiptNumber, buildReceiptSequenceKey } from './bill-payment.util';
 import { AllocationPlanItem, planAutoFifoAllocation, UnpaidInvoiceCandidate } from './bill-payment-allocation.util';
+import {
+  OWN_BALANCE_EXPR, OWN_BALANCE_SELECT, CLEARED_ALLOCATIONS_JOIN,
+  INVOICE_STATUS_RECOMPUTE_SQL, clampOwnBalance,
+} from './bill-own-balance.util';
 import { BillPaymentAllocationMode, BillPaymentMethod, BillPaymentQueryDto, CreateBillPaymentDto } from './dto/bill-payment.dto';
 import { UpdateChequeStatusDto, VoidPaymentDto } from './dto/cheque-status.dto';
 import {
@@ -56,6 +60,8 @@ export interface RecordPaymentInTxParams {
  */
 @Injectable()
 export class BillPaymentService {
+  private readonly logger = new Logger(BillPaymentService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly tenantContext: TenantContextService,
@@ -149,9 +155,18 @@ export class BillPaymentService {
           throw new NotFoundException(`Invoice ${target.billInvoiceId} not found for this student`);
         }
         const targetAmount = toMoney(target.amount);
+        // ALLOCATION-CAP-1: `outstanding` is now the invoice's OWN balance,
+        // not total_receivable. MANUAL rejects rather than silently clamping
+        // — the operator named both the invoice and the figure, so quietly
+        // booking a different one would hide the very thing they need to
+        // decide. Allocating less than the payment is already supported
+        // (sum <= amount), and the shortfall lands as advance credit, which
+        // is Ruling 2's outcome reached deliberately instead of by accident.
         if (targetAmount.compare(invoice.outstanding) > 0) {
           throw new BadRequestException(
-            `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s outstanding balance of ${invoice.outstanding.toDb()}`,
+            `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s own outstanding charge of ` +
+            `${invoice.outstanding.toDb()}. An invoice can only be credited up to its own net amount; ` +
+            `allocate up to that and the remainder of the payment is held as advance credit.`,
           );
         }
         sum = sum.add(targetAmount);
@@ -293,39 +308,51 @@ export class BillPaymentService {
    * to be zeroed out with a CASE.
    */
   private async fetchUnpaidInvoicesOldestFirst(tx: TenantTx, studentId: string): Promise<UnpaidInvoiceCandidate[]> {
-    const rows = await tx.$queryRawUnsafe<{ id: string; outstanding: string }[]>(
-      `SELECT bi.id,
-              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+    const rows = await tx.$queryRawUnsafe<{ id: string; own_balance: string }[]>(
+      `SELECT bi.id, ${OWN_BALANCE_SELECT}
        FROM bill_invoices bi
-       LEFT JOIN bill_payment_allocations bpa
-         ON bpa.bill_invoice_id = bi.id
-         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       ${CLEARED_ALLOCATIONS_JOIN}
        WHERE bi.student_id = $1::uuid AND bi.deleted_at IS NULL
          AND bi.status IN ('POSTED', 'PARTIALLY_PAID')
-       GROUP BY bi.id, bi.total_receivable, bi.issue_date, bi.created_at
-       HAVING bi.total_receivable - COALESCE(SUM(bpa.amount), 0) > 0
+       GROUP BY bi.id
+       HAVING ${OWN_BALANCE_EXPR} > 0
        ORDER BY bi.issue_date ASC, bi.created_at ASC`,
       studentId,
     );
-    return rows.map((r) => ({ billInvoiceId: r.id, outstanding: toMoney(r.outstanding) }));
+    // The HAVING is the cap for this path: an invoice with no own balance
+    // left is simply not a candidate, so planAutoFifoAllocation — which
+    // never allocates past a candidate's stated capacity — cannot over-book
+    // it. An already-breaching invoice (own balance negative) is excluded by
+    // the same clause, which is right: it has no room, not negative room.
+    return rows.map((r) => ({ billInvoiceId: r.id, outstanding: toMoney(r.own_balance) }));
   }
 
+  /**
+   * MANUAL's per-target ceiling. Same own-charge rule as AUTO_FIFO's
+   * candidate capacity — a cashier hand-picking an invoice is the exact
+   * path 2 of the 8 breaching invoices came through (BILLING-CALC-AUDIT-1
+   * §3a), so it cannot be the one path left uncapped.
+   *
+   * Clamped, because a pre-cap breaching invoice reads negative here and a
+   * negative ceiling would produce a nonsense error message; the clamp's own
+   * WARN is what says the invoice needs reconstruction.
+   */
   private async fetchInvoicesByIds(
     tx: TenantTx, studentId: string, ids: string[],
   ): Promise<Map<string, UnpaidInvoiceCandidate>> {
-    const rows = await tx.$queryRawUnsafe<{ id: string; outstanding: string }[]>(
-      `SELECT bi.id,
-              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS outstanding
+    const rows = await tx.$queryRawUnsafe<{ id: string; invoice_number: string; own_balance: string }[]>(
+      `SELECT bi.id, bi.invoice_number, ${OWN_BALANCE_SELECT}
        FROM bill_invoices bi
-       LEFT JOIN bill_payment_allocations bpa
-         ON bpa.bill_invoice_id = bi.id
-         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       ${CLEARED_ALLOCATIONS_JOIN}
        WHERE bi.student_id = $1::uuid AND bi.deleted_at IS NULL
          AND bi.status != 'VOIDED' AND bi.id = ANY($2::uuid[])
        GROUP BY bi.id`,
       studentId, ids,
     );
-    return new Map(rows.map((r) => [r.id, { billInvoiceId: r.id, outstanding: toMoney(r.outstanding) }]));
+    return new Map(rows.map((r) => [r.id, {
+      billInvoiceId: r.id,
+      outstanding: clampOwnBalance(toMoney(r.own_balance), r.invoice_number, this.logger),
+    }]));
   }
 
   /**
@@ -337,29 +364,16 @@ export class BillPaymentService {
    * reversion case since allocations there only ever got added; Checkpoint B
    * introduces BOUNCED-after-CLEARED and VOID, both of which can drop a
    * previously-counted allocation back to zero.
+   *
+   * ALLOCATION-CAP-1: the comparison moved from total_receivable to
+   * net_amount along with the cap, and now lives in
+   * INVOICE_STATUS_RECOMPUTE_SQL so this and the post-runner's copy cannot
+   * disagree. Under the cap an invoice's allocations can never reach
+   * total_receivable when it carries a previous balance, so leaving it would
+   * have made SETTLED unreachable for exactly those invoices.
    */
   private async recomputeInvoiceStatus(tx: TenantTx, billInvoiceId: string): Promise<void> {
-    await tx.$executeRawUnsafe(
-      `UPDATE bill_invoices SET
-         status = CASE
-           WHEN total_receivable <= (
-             SELECT COALESCE(SUM(bpa.amount), 0)
-             FROM bill_payment_allocations bpa
-             JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
-             WHERE bpa.bill_invoice_id = $1::uuid
-           ) THEN 'SETTLED'
-           WHEN (
-             SELECT COALESCE(SUM(bpa.amount), 0)
-             FROM bill_payment_allocations bpa
-             JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
-             WHERE bpa.bill_invoice_id = $1::uuid
-           ) > 0 THEN 'PARTIALLY_PAID'
-           ELSE 'POSTED'
-         END,
-         updated_at = NOW()
-       WHERE id = $1::uuid`,
-      billInvoiceId,
-    );
+    await tx.$executeRawUnsafe(INVOICE_STATUS_RECOMPUTE_SQL, billInvoiceId);
   }
 
   async updateChequeStatus(
