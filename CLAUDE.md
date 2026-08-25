@@ -1526,6 +1526,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   a real thermal print at 100% scale himself (artifacts at
   `~/Documents/aaramva-print-review/2026-08-18-BILL-8-UI/`).
 
+- [x] ALLOCATION-CAP-1 — allocation cap bounds `bill_payment_allocations` by the invoice's own
+  charge (`net_amount`), repoints `fetchUnpaidInvoicesOldestFirst` and the advance auto-apply
+  path, and fixes settlement status. CASH/MANUAL/gateway paths all capped. Two pre-existing
+  breaches (2,500 across 2 invoices) await compensating entries.
+
 > Update this checklist as modules are completed.
 
 ---
