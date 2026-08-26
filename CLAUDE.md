@@ -1539,6 +1539,10 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   are soft-deleted. Nine sites via shared `assertNoneRetired`, per-line FAILED on bill runs,
   D9 reachability fixed. Forensic: zero backward exposure on dev.
 
+- [x] D24-D27-REVERSAL — reversed corrections restore cap headroom, reversed fine accruals are
+  treated as waivers that survive recomputation. One shared predicate (`bill-reversal.util.ts`)
+  enforces both via the existing reversal chain.
+
 > Update this checklist as modules are completed.
 
 ---

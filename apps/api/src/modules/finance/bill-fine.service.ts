@@ -6,6 +6,7 @@ import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { CalendarService } from '../calendar/calendar.service';
 import { pickApplicableRule, computeTotalFine, addDaysAd, FineRule } from './bill-fine.util';
+import { reversedExpr, notReversedExpr } from './bill-reversal.util';
 import {
   BillFineAccrualRow, BillFineRunRow, BillFineAccrualResponseDto, BillFineRunResponseDto,
   toBillFineAccrualResponse, toBillFineRunResponse,
@@ -188,7 +189,9 @@ export class BillFineService {
     postedById: string | null,
   ): Promise<Money | null> {
     return this.ledgerService.withStudentLock(candidate.student_id, async (tx: TenantTx) => {
-      const [state] = await tx.$queryRawUnsafe<{ due_date: Date | string; outstanding: string; already_posted: string }[]>(
+      const [state] = await tx.$queryRawUnsafe<{
+        due_date: Date | string; outstanding: string; already_posted: string; waived: string;
+      }[]>(
         `SELECT
            bi.due_date,
            -- D15-REPOINT: net_amount (this invoice's own charge), never
@@ -208,10 +211,18 @@ export class BillFineService {
              - COALESCE((SELECT SUM(bc.amount) FROM bill_corrections bc
                          WHERE bc.target_invoice_id = bi.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'), 0)
              AS outstanding,
+           -- D24-D27-REVERSAL. Two terms over the SAME accrual rows, split by
+           -- the reversal chain, because they answer different questions:
+           --   already_posted = fine currently standing on the ledger
+           --   waived         = fine that was posted and then reversed
            COALESCE((SELECT SUM(bfa.delta_posted) FROM bill_fine_accruals bfa
                      WHERE bfa.bill_invoice_id = bi.id
-                       AND NOT EXISTS (SELECT 1 FROM student_ledger_entries sle WHERE sle.reverses_entry_id = bfa.ledger_entry_id)
-                    ), 0) AS already_posted
+                       AND ${notReversedExpr('bfa.ledger_entry_id')}
+                    ), 0) AS already_posted,
+           COALESCE((SELECT SUM(bfa.delta_posted) FROM bill_fine_accruals bfa
+                     WHERE bfa.bill_invoice_id = bi.id
+                       AND ${reversedExpr('bfa.ledger_entry_id')}
+                    ), 0) AS waived
          FROM bill_invoices bi
          WHERE bi.id = $1::uuid`,
         candidate.invoice_id,
@@ -232,9 +243,23 @@ export class BillFineService {
       if (outstanding.compare(Money.zero()) <= 0) return null; // B7-2: settled
 
       const alreadyPosted = toMoney(state.already_posted);
+      // D24-D27-REVERSAL. Reversing an accrual is a WAIVER, and a waiver has to
+      // survive the next run's recomputation or it lasts exactly one day.
+      //
+      // Before this, `already_posted` dropped the reversed row and nothing
+      // replaced it, so the very next run recomputed the same totalFine against
+      // a smaller subtrahend, found a positive delta, and re-posted the fine the
+      // operator had just cancelled — under a fresh `accrued_through`, so the
+      // UNIQUE(bill_invoice_id, accrued_through) backstop never saw it.
+      //
+      // Subtracting `waived` reduces the fine this invoice is owed by the amount
+      // already forgiven, so a reversed accrual can never come back. It does NOT
+      // freeze the invoice: a PER_DAY rule that keeps running still yields a
+      // positive delta for days accrued AFTER the waiver, which posts normally.
+      const waived = toMoney(state.waived);
       const totalFine = computeTotalFine(rule, daysOverdue, outstanding);
-      const delta = totalFine.sub(alreadyPosted);
-      if (delta.compare(Money.zero()) <= 0) return null; // B7-1: fully accrued already, or capped
+      const delta = totalFine.sub(waived).sub(alreadyPosted);
+      if (delta.compare(Money.zero()) <= 0) return null; // B7-1: fully accrued, waived, or capped
 
       // Checkpoint A only ever calls this with 'MANUAL' (always a real user
       // id from the controller) — a null actor can't happen yet. Guarded

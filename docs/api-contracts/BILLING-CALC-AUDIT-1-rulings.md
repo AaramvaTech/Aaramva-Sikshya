@@ -290,3 +290,37 @@ move together, and both are figures a school reconciles against. It also interac
 still-open compensating entries from Ruling 3 — those will post corrections against exactly
 the invoices whose allocations already breach the cap.
 
+
+---
+
+## Correction — the D27 "armed fuse" in the triage was inert (2026-08-26, found during D24-D27-REVERSAL Phase 2)
+
+The triage classified **D27 as LIVE with a dated fuse**, on this evidence: `tenant_demo` holds one
+reversed fine accrual (120.00, reversed 2026-08-16), the last fine run was also 2026-08-16, and
+`already_posted` excluded reversed accruals — so "the next fine run re-posts that 120.00."
+
+**The amount could never have re-posted.** Its invoice, `CAL1-TEST-INV-0001`, is itself
+soft-deleted (`deleted_at = 2026-08-16` — it was a CAL-1 test fixture, cleaned up that way), and
+`fetchCandidateInvoices` filters `bi.deleted_at IS NULL`. The invoice is not a candidate and cannot
+become one, so no run would ever have reached that accrual.
+
+**What the triage got wrong, precisely:** it verified the accrual row and the run date and stopped
+there, without checking the state of the *parent* the accrual hangs off. The reversal chain said
+"reversed", the run history said "no run since" — and both were true. The row that decided the
+outcome was one join away and was never looked at.
+
+**D27 itself was real** and is fixed: `already_posted` dropping the reversed row while nothing
+replaced it did re-post a cancelled fine, on any invoice that *is* a candidate. What was wrong was
+the LIVE-vs-LATENT call for this dev database, not the defect.
+
+**Consequence for the live proof:** with the only dev instance unreachable, Phase 2 could not use
+found data. It crafted a fixture instead — a `FEE_HEAD`-scoped rule keyed to a head appearing on
+exactly one candidate invoice, which held the run to 1 invoice of 14 scanned — then posted 100.00,
+reversed it, and re-ran: `totalFine 140 − waived 100 − alreadyPosted 40 = 0`, nothing re-posted, and
+no error in the server log (a pre-fix run would have attempted the INSERT and hit
+`UNIQUE (bill_invoice_id, accrued_through)`, reporting the same `fined: 0` for the wrong reason).
+All probe entries were reversed; accrual counts returned to 14 / 440.00 / 1 reversed.
+
+**The general lesson, since this is the second time a `deleted_at` on a parent changed an
+answer in this module** (the first was BILL-SOFTDEL-1's whole premise): a row's own state does not
+establish whether it is reachable. Reachability is a property of the query that would select it.

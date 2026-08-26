@@ -6,6 +6,7 @@ import { LedgerService } from './ledger.service';
 import { FinanceSettingsService } from './finance-settings.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
+import { notReversedExpr } from './bill-reversal.util';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { buildCorrectionSequenceKey, buildCorrectionNumber } from './bill-correction.util';
 import {
@@ -471,12 +472,19 @@ export class BillCorrectionService {
    * service to net_amount. Both branches now cap against own charge, which
    * is also what the line-level branch has always done. Same rule
    * apps/web/lib/invoice-totals.ts's docblock states for the web side. */
+  /**
+   * D24: `credited` excludes corrections whose ledger entry has been reversed.
+   * `reverse()` leaves the row APPROVED on purpose, so a status filter alone
+   * can never see one — the headroom a reversed credit note consumed comes
+   * back, which is what lets an operator reverse a wrong one and re-issue.
+   */
   private async creditableAmount(tx: TenantTx, invoiceId: string, itemId: string | null): Promise<Money> {
     if (itemId) {
       const [row] = await tx.$queryRawUnsafe<{ net_amount: string; credited: string }[]>(
         `SELECT bii.net_amount,
                 COALESCE((SELECT SUM(bc.amount) FROM bill_corrections bc
-                          WHERE bc.target_invoice_item_id = bii.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'), 0) AS credited
+                          WHERE bc.target_invoice_item_id = bii.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'
+                            AND ${notReversedExpr('bc.ledger_entry_id')}), 0) AS credited
          FROM bill_invoice_items bii WHERE bii.id = $1::uuid`,
         itemId,
       );
@@ -489,7 +497,8 @@ export class BillCorrectionService {
                         JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
                         WHERE bpa.bill_invoice_id = bi.id), 0) AS paid,
               COALESCE((SELECT SUM(bc.amount) FROM bill_corrections bc
-                        WHERE bc.target_invoice_id = bi.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'), 0) AS credited
+                        WHERE bc.target_invoice_id = bi.id AND bc.type IN ('CREDIT_NOTE','WRITE_OFF') AND bc.status = 'APPROVED'
+                          AND ${notReversedExpr('bc.ledger_entry_id')}), 0) AS credited
        FROM bill_invoices bi WHERE bi.id = $1::uuid`,
       invoiceId,
     );
