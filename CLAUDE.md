@@ -1543,6 +1543,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   treated as waivers that survive recomputation. One shared predicate (`bill-reversal.util.ts`)
   enforces both via the existing reversal chain.
 
+- [x] D13-CLUSTER-FOOTING — bill items now foot the invoice header on every new invoice
+  (`bill-footing.util.ts`); D14's post-time guard compares actual figures, not just the enum;
+  D34's collection-report weights sum to 1.0 on new invoices. Forward-only — 11 historical
+  non-footing invoices are documented, not rewritten.
+
 > Update this checklist as modules are completed.
 
 ---
