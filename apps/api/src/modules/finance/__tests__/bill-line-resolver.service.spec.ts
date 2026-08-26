@@ -281,7 +281,7 @@ describe('BillLineResolverService', () => {
     expect(result.net).toBeCloseTo(expectedProratedGross - expectedProratedConcession, 2);
   });
 
-  it('MUST-RESOLVE-BEFORE-BILL-8: whole-bill concession + transport together — header net is correct, but item nets do not sum to it (simple version, not apportioned)', async () => {
+  it('D13-CLUSTER-FOOTING (was MUST-RESOLVE-BEFORE-BILL-8): whole-bill concession + transport together — items now foot the header exactly, apportioned by gross share', async () => {
     assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
     feePreviewService.preview.mockResolvedValueOnce(makePreview(
       [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 }],
@@ -295,14 +295,64 @@ describe('BillLineResolverService', () => {
     const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
     expect(result.gross).toBe(1300);
     expect(result.concession).toBe(200);
-    expect(result.net).toBe(1100); // header is correct: 1300 - 200
+    expect(result.net).toBe(1100); // header is correct: 1300 - 200, unchanged by this fix
 
+    // 200 apportioned by gross share (1000:300): tuition 153.85, transport
+    // 46.15 — sums to 200.00 exactly, no remainder left over (this is
+    // apportionWholeBillConcession's own already-tested exact-remainder
+    // guarantee, reused rather than reimplemented).
+    const tuitionItem = result.items.find((i) => i.feeHeadId === 'fh-1')!;
     const transportItem = result.items.find((i) => i.transportRouteId === 'route-1')!;
-    expect(transportItem.concessionAmount).toBe(0);
-    expect(transportItem.netAmount).toBe(300); // not apportioned a share of the 200
+    expect(tuitionItem.concessionAmount).toBe(153.85);
+    expect(tuitionItem.netAmount).toBe(846.15);
+    expect(transportItem.concessionAmount).toBe(46.15);
+    expect(transportItem.netAmount).toBe(253.85); // previously 300, unapportioned — the D13 defect
 
     const itemNetSum = result.items.reduce((s, i) => s + i.netAmount, 0);
-    expect(itemNetSum).toBe(1300); // documented: does NOT equal result.net (1100) when a whole-bill concession is active
-    expect(itemNetSum).not.toBe(result.net);
+    expect(itemNetSum).toBeCloseTo(result.net, 2); // items now foot the header — the fix
+  });
+
+  describe('D13-CLUSTER-FOOTING — footing invariant on new invoices', () => {
+    it('a plain invoice with no whole-bill concession still foots (the common case, unaffected by the fix)', async () => {
+      assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
+      feePreviewService.preview.mockResolvedValueOnce(makePreview(
+        [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 }],
+        null,
+        [],
+      ) as any);
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'NONE' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+      const itemNetSum = result.items.reduce((s, i) => s + i.netAmount, 0);
+      expect(itemNetSum).toBe(result.net);
+    });
+
+    it('D8 overshoot reaching the header (a whole-bill concession bigger than the entire bill) still foots exactly, clamped at net=0 — does NOT throw', async () => {
+      // A single 50-gross item against a 200 whole-bill concession: the
+      // HEADER's own pre-existing clamp (unchanged by this ticket) floors
+      // net at 0 rather than going negative, and reconciliation only ever
+      // has to foot items to THAT already-safe target — it can always do so
+      // exactly, because a single item's own [≤gross] ceiling gives it
+      // exactly enough room to absorb whatever the header already reduced
+      // the target to. FOOTING_MISMATCH is a real assertion (see
+      // bill-footing.util.spec.ts for a case where it genuinely fires) but
+      // this — the scenario it looks like it exists for — is not it.
+      assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment('2025-04-13'));
+      feePreviewService.preview.mockResolvedValueOnce(makePreview(
+        [{ feeHeadId: 'fh-1', feeHeadName: 'Tuition', grossAmount: 50, overrideAmount: null, effectiveBase: 50, concessions: [], netAmount: 50 }],
+        null,
+        [{ amount: 200 }],
+      ) as any);
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'fh-1', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'NONE' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+      expect(result.net).toBe(0); // header's own pre-existing clamp, unrelated to this ticket
+      expect(result.items[0].netAmount).toBe(0);
+      expect(result.items[0].concessionAmount).toBe(50); // capped at this item's own gross, not 200
+    });
   });
 });

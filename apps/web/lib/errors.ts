@@ -72,6 +72,10 @@ const CODE_MESSAGES: Record<string, string> = {
   // than about picking a replacement in a form.
   BILL_FEE_STRUCTURE_UNAVAILABLE:
     'That fee structure has been retired, so it cannot be billed. Assign a current structure.',
+  // D13-CLUSTER-FOOTING: a concession/override exceeds what this bill can
+  // absorb, so the resolved items can't be reconciled to the invoice total.
+  FOOTING_MISMATCH:
+    "This student's fee items don't add up to the invoice total. Check their concessions and overrides for this period.",
 };
 
 /**

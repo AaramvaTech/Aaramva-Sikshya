@@ -13,6 +13,7 @@ import { buildInvoiceSequenceKey, buildInvoiceNumber, fiscalYearBs } from './bil
 import { planAdvanceConsumption } from './bill-advance-consumption.util';
 import { INVOICE_STATUS_RECOMPUTE_SQL } from './bill-own-balance.util';
 import { BillRunRow } from './entities/bill-run.entity';
+import { describeFrozenLineDrift } from './bill-footing.util';
 
 /**
  * BILL-4-SPEC.md §3 "Post" + §4 (the ledger-posting invariant). For each
@@ -142,6 +143,33 @@ export class BillRunPostRunnerService {
     if (resolved.outcome !== 'DRAFT') {
       throw new Error(resolved.skipReason ?? 'Fee resolution no longer returns DRAFT at post time');
     }
+
+    // D14 (D13-CLUSTER-FOOTING). The check above reads as "the fresh resolve
+    // still agrees with the draft" but only ever inspected the enum — the
+    // catalog could change everything about the figures and this line would
+    // never notice, because on ordinary data `outcome` is always 'DRAFT'
+    // regardless of what changed. Read the frozen line's own figures BEFORE
+    // the lock (a cheap read-by-id, same read-only-work-outside-the-lock
+    // shape as resolve() itself above — the idempotency-safety-net re-read
+    // inside the lock below is unrelated and untouched: it asks "has this
+    // line already been posted", not "do the figures still agree") and
+    // compare them to what a mid-window catalog change would have produced.
+    const [frozenLine] = await this.tenantPrisma.query<{ gross: string; tax: string; net: string }>(
+      `SELECT gross, tax, net FROM bill_run_lines WHERE id = $1::uuid`,
+      lineId,
+    );
+    if (frozenLine) {
+      const drifted = describeFrozenLineDrift(resolved, frozenLine);
+      if (drifted.length > 0) {
+        throw new Error(
+          `Fee resolution changed between draft and post: ${drifted.join('; ')}`,
+        );
+      }
+    }
+    // frozenLine missing here means the line was deleted between draft and
+    // this read — the idempotency check inside the lock below is what
+    // actually owns that case (a concurrent run already handled this line);
+    // nothing to compare against, so nothing more to do here.
 
     const todayBs = adToBs(new Date(todayAdInNepal()));
     const fiscalYear = fiscalYearBs(todayBs.year, todayBs.month);

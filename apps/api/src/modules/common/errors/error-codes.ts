@@ -80,6 +80,15 @@ export const ERROR_CATALOG = {
     status: 422,
     message: 'That fee structure has been retired and cannot be billed. Assign a current structure.',
   },
+  // D13-CLUSTER-FOOTING: the resolved fee items could not be reconciled to
+  // the invoice's own pre-tax total (a concession/override overshoots what
+  // the bill can absorb, D8's overshoot condition met at the header level).
+  // Billing halts rather than posting an invoice whose stored items don't
+  // sum to its own header.
+  FOOTING_MISMATCH: {
+    status: 422,
+    message: "This student's fee items could not be reconciled to the invoice total.",
+  },
   // ── Tenant ──────────────────────────────────────────────────────────────
   TENANT_NOT_FOUND: { status: 404, message: 'School not found. Check the school address (slug).' },
   TENANT_SUSPENDED: { status: 403, message: "This school's account is currently suspended." },
