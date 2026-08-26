@@ -72,6 +72,14 @@ export const ERROR_CATALOG = {
     status: 422,
     message: 'That fee head is no longer available. Pick a current fee head.',
   },
+  // BILL-SOFTDEL-1: the billing READ path met a retired parent. Same family as
+  // the four above (a row that exists but is not usable), minted here because
+  // no write path ever needed to name a fee structure — assign() rejects a
+  // retired one by filtering, so it could 404 without a code.
+  BILL_FEE_STRUCTURE_UNAVAILABLE: {
+    status: 422,
+    message: 'That fee structure has been retired and cannot be billed. Assign a current structure.',
+  },
   // ── Tenant ──────────────────────────────────────────────────────────────
   TENANT_NOT_FOUND: { status: 404, message: 'School not found. Check the school address (slug).' },
   TENANT_SUSPENDED: { status: 403, message: "This school's account is currently suspended." },

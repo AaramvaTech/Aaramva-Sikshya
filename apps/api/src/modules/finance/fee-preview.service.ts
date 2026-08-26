@@ -11,6 +11,7 @@ import { StudentConcessionRow } from './entities/bill-assignment.entity';
 import { FeePreviewQueryDto } from './dto/fee-preview.dto';
 import { Role } from '../common/enums/role.enum';
 import { GuardianScopeService } from '../student/guardian-scope.service';
+import { assertNoneRetired } from './soft-delete-guard.util';
 
 export interface FeePreviewConcessionLine {
   concessionId: string;
@@ -110,17 +111,41 @@ export class FeePreviewService {
       );
     }
 
-    const structureRows = await this.tenantPrisma.query<{ name: string }>(
-      `SELECT name FROM bill_fee_structures WHERE id = $1::uuid`,
+    // BILL-SOFTDEL-1 D3. Note what is NOT here: `AND deleted_at IS NULL`.
+    // Filtering would turn a retired structure into `feeStructureName: ''` and
+    // then bill every one of its lines anyway — the name is all this query was
+    // ever used for. Reading the flag and halting is the fix; filtering is the
+    // symptom.
+    //
+    // This also closes a hole the D-list didn't name: findActiveAssignment
+    // filters the ASSIGNMENT's deleted_at but never joins the structure, so an
+    // assignment happily outlives the structure it points at. That case lands
+    // here.
+    const structureRows = await this.tenantPrisma.query<{ name: string; deleted_at: Date | null }>(
+      `SELECT name, deleted_at FROM bill_fee_structures WHERE id = $1::uuid`,
       assignment.fee_structure_id,
     );
+    if (!structureRows[0]) {
+      throw new NotFoundException(`Fee structure ${assignment.fee_structure_id} not found`);
+    }
+    assertNoneRetired('bill_fee_structures', structureRows, {
+      feeStructureId: assignment.fee_structure_id,
+      studentId,
+    });
 
+    // BILL-SOFTDEL-1 D2 — the biggest of the set: a retired head hits every
+    // student on any structure containing it. Same reasoning as D3 above; the
+    // JOIN stays unfiltered on purpose and `fh.deleted_at` comes back with the
+    // row. bfsi is not filtered because bill_fee_structure_items has no
+    // deleted_at column at all — it hard-deletes (phase0 §8.1).
     const items = await this.tenantPrisma.query<{
       fee_head_id: string;
       fee_head_name: string;
       amount: string | number;
+      fee_head_deleted_at: Date | null;
     }>(
-      `SELECT bfsi.fee_head_id, fh.name AS fee_head_name, bfsi.amount
+      `SELECT bfsi.fee_head_id, fh.name AS fee_head_name, bfsi.amount,
+              fh.deleted_at AS fee_head_deleted_at
        FROM bill_fee_structure_items bfsi
        JOIN fee_heads fh ON fh.id = bfsi.fee_head_id
        WHERE bfsi.fee_structure_id = $1::uuid
@@ -129,6 +154,11 @@ export class FeePreviewService {
        ORDER BY bfsi.created_at`,
       assignment.fee_structure_id,
       asOfDate,
+    );
+    assertNoneRetired(
+      'fee_heads',
+      items.map((i) => ({ name: i.fee_head_name, deleted_at: i.fee_head_deleted_at })),
+      { feeStructureId: assignment.fee_structure_id, studentId },
     );
 
     const overrides = await this.overrideService.findActiveForStudent(studentId, query.academicYearId, asOfDate);
@@ -176,10 +206,19 @@ export class FeePreviewService {
     let transportAmount = Money.zero();
     const transportAssignment = await this.transportService.findActiveForStudent(studentId, asOfDate);
     if (transportAssignment) {
-      const routeRows = await this.tenantPrisma.query<{ name: string; monthly_amount: string | number }>(
-        `SELECT name, monthly_amount FROM transport_routes WHERE id = $1::uuid`,
+      // BILL-SOFTDEL-1 D1 — the case that started the ticket.
+      const routeRows = await this.tenantPrisma.query<{
+        name: string;
+        monthly_amount: string | number;
+        deleted_at: Date | null;
+      }>(
+        `SELECT name, monthly_amount, deleted_at FROM transport_routes WHERE id = $1::uuid`,
         transportAssignment.transport_route_id,
       );
+      assertNoneRetired('transport_routes', routeRows, {
+        transportRouteId: transportAssignment.transport_route_id,
+        studentId,
+      });
       if (routeRows[0]) {
         transportAmount = toMoney(routeRows[0].monthly_amount);
         grossTotal = grossTotal.add(transportAmount);

@@ -68,6 +68,10 @@ const CODE_MESSAGES: Record<string, string> = {
   DISCOUNT_REASON_UNAVAILABLE:
     'That discount reason is no longer available. Pick a current reason.',
   FEE_HEAD_UNAVAILABLE: 'That fee head is no longer available. Pick a current fee head.',
+  // BILL-SOFTDEL-1: read-path code, so the wording is about the bill rather
+  // than about picking a replacement in a form.
+  BILL_FEE_STRUCTURE_UNAVAILABLE:
+    'That fee structure has been retired, so it cannot be billed. Assign a current structure.',
 };
 
 /**

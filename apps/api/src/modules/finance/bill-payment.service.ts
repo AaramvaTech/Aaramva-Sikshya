@@ -77,7 +77,7 @@ export class BillPaymentService {
     if (!studentRows[0]) throw new NotFoundException(`Student ${dto.studentId} not found`);
 
     const yearRows = await this.tenantPrisma.query<{ id: string }>(
-      `SELECT id FROM academic_years WHERE id = $1::uuid`, dto.academicYearId,
+      `SELECT id FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`, dto.academicYearId,
     );
     if (!yearRows[0]) throw new NotFoundException(`Academic year ${dto.academicYearId} not found`);
 

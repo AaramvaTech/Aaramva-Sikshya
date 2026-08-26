@@ -4,6 +4,38 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## ERR-WEB-MESSAGE-DEAD — every server-supplied error message is discarded by the web client (found during BILL-SOFTDEL-1 Phase 1, 2026-08-26, NOT FIXED — flagging only)
+
+**`apps/web/lib/errors.ts:172` is `message: CODE_MESSAGES[code] ?? serverMessageOf(env) ?? GENERIC_MESSAGE`.** The catalog string wins; the server's own `message` is only ever reached for a code the web catalog does not list. So **any message a service passes as `errorBody(code, message, details)`'s second argument is dead on arrival at the web UI** — it is computed, serialised, sent over the wire, and thrown away in favour of a fixed string.
+
+**How it surfaced.** BILL-SOFTDEL-1's read-path guards deliberately name the offending row, because the accountant's next action is to go and fix that specific fee head. Live-proved against `demo`: the API returns
+
+    "This student's fee schedule references a retired fee head: \"SOFTDEL-PROBE lab\". Billing is halted..."
+
+and the web client will render *"That fee head is no longer available. Pick a current fee head."* — which names nothing, and is a **write-path instruction** ("pick a current one") shown on a read path where the user is not picking anything. `FEE_HEAD_UNAVAILABLE` and `TRANSPORT_ROUTE_UNAVAILABLE` are now dual-use codes (FEE-CLASS-GUARD-2's INSERT guards and BILL-SOFTDEL-1's read guards), and one fixed string cannot serve both.
+
+**Not fixed in BILL-SOFTDEL-1, and the reason is the blast radius.** Reversing the `??` to prefer the server message is a one-character-class change that alters **every error message in the web app at once**, including every already-shipped, already-reviewed string. That is not a billing ticket's call to make. The catalog-first design is also defensible on its own terms — it is what makes ERR-1 §1.1's "clients key off `code`, add Nepali by mapping code → string" work, and preferring server text would put untranslated English in front of a Nepali user.
+
+**The shape of a real fix**, for whoever takes it: keep catalog-first as the default, and let a throw site opt in to its own message — e.g. an explicit `detail`/`reason` field in `details` that the UI renders *underneath* the catalog string rather than instead of it. That keeps i18n intact and still lets a read-path error name the row. BILL-SOFTDEL-1 already puts the names in `details.retired` (and `details.feeHeadIds`), so the data a fix needs is on the wire today; only the rendering is missing.
+
+**Scope note:** this is not specific to BILL-SOFTDEL-1. It applies to every `errorBody(code, message, ...)` call in the API that passes a custom second argument, past and future.
+
+---
+
+## SOFTDEL-PARENT-422 — the parent-facing fee preview now returns 422, and ruling 2's rationale does not actually cover that case (BILL-SOFTDEL-1 Phase 1, 2026-08-26, shipped deliberately — recording the reasoning gap)
+
+**The behaviour is intended and was live-proved.** `GET /finance/students/:studentId/fee-preview` is PARENT-reachable (`bill-assignment.controller.ts`, object-scoped via `guardians`). After BILL-SOFTDEL-1 it returns **422** when the student's structure references a retired fee head, structure, or transport route, where it previously returned 200 with a silently wrong (too small, or wrongly-inclusive) total.
+
+**Why it ships that way:** showing a parent a number the school will not actually bill is worse than showing them an error. The alternative — filter for parents, halt for staff — would mean the fees screen and the invoice disagree, which is the exact failure mode BILL-SOFTDEL-1 exists to remove.
+
+**The gap being recorded.** Ruling 2 (`FEE-CLASS-GUARD-2-phase0.md` §7) justifies halting as *"better than silently changing what a school charges … halting a **supervised act** with a named cause."* A parent opening a fees screen on their phone is **not a supervised act**: nobody is standing by to read the cause and act on it, and the parent cannot fix a retired fee head. The ruling's conclusion still holds here, but by a *different* argument (wrong money is worse than an error) than the one the ruling actually gives. Recorded so a future reader does not mistake this case for one the ruling reasoned through — it did not.
+
+**Compounding factor, tracked separately as `ERR-WEB-MESSAGE-DEAD` above:** the message the parent is shown is not even the server's. It is the catalog string *"That fee head is no longer available. Pick a current fee head."* — an instruction to pick a replacement, addressed to a user with no such power and no such control on screen. The honest parent-facing wording ("this school is still setting up this month's fees — contact the office") cannot currently be delivered at all, because the server's message is discarded before render.
+
+**Not actioned here.** If the parent experience is judged unacceptable, the options are (a) fix `ERR-WEB-MESSAGE-DEAD` so the read path can speak for itself, (b) give the parent-facing preview its own code with parent-appropriate catalog text, or (c) revisit ruling 2 for non-staff callers specifically. All three are product calls, not this ticket's.
+
+---
+
 ## BILL6-REVERSED-STAYS-CREDITED — a reversed credit note/write-off permanently shrinks an invoice's correction headroom (found live, UI-5 Tier 2 proof, 2026-08-12, NOT FIXED — flagging only)
 
 **Found while live-proving UI-5's cap preview against real Postgres**, not part of UI-5's own diff — a real, pre-existing defect in `BillCorrectionService.creditableAmount` (`bill-correction.service.ts`), shipped with BILL-6 Checkpoint A. Reproduced live on `demo`: posted a 1200 credit note against invoice `BINV-2083-000020` (auto-posted, below threshold), confirmed `creditableAmount` correctly dropped to 10800; reversed the correction via `POST /:id/reverse` (correct behavior per its own doc comment — "the correction row stays APPROVED, `ledger_entry_id` still points at the original entry"); recomputed `creditableAmount` afterward and it **still showed `credited = 1200.00`** — unchanged by the reversal, even though the reversal ledger entry (a real, confirmed `debit=1200.00` row with `reverses_entry_id` pointing at the original) had already restored the student's actual owed balance.

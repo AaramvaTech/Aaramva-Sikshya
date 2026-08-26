@@ -57,7 +57,7 @@ export class OpeningBalanceImportService {
       if (!studentRows[0]) errors.push('Student not found');
 
       const yearRows = await this.tenantPrisma.query<{ id: string }>(
-        `SELECT id FROM academic_years WHERE id = $1::uuid`,
+        `SELECT id FROM academic_years WHERE id = $1::uuid AND deleted_at IS NULL`,
         row.academicYearId,
       );
       if (!yearRows[0]) errors.push('Academic year not found');

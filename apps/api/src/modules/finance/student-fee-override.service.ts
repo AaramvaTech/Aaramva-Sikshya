@@ -63,9 +63,14 @@ export class StudentFeeOverrideService {
    * not inert, and flagging it would recreate the false alarm in the other
    * direction.
    *
-   * Does NOT filter the structure's own `deleted_at`: reads of soft-deleted
-   * parents on the billing path are BILL-SOFTDEL-1's scope, and this is a
-   * display computation rather than a billing decision.
+   * BILL-SOFTDEL-1 D9 (the handover this comment used to describe). The
+   * structure's own `deleted_at` IS now filtered, and note that this is the one
+   * site in the ticket where FILTERING is right while everywhere else it is
+   * wrong. The rule is the same rule seen from the other side: billing halts on
+   * a retired structure, so nothing on it is reachable, so the flag must read
+   * false. There is no "fail" available to a boolean — reporting `true` for a
+   * structure the bill run refuses to touch is exactly the UI/invoice
+   * disagreement the ticket says to prevent.
    */
   private async reachablePairs(
     pairs: { studentId: string; feeHeadId: string }[],
@@ -74,6 +79,7 @@ export class StudentFeeOverrideService {
     const rows = await this.tenantPrisma.query<{ student_id: string; fee_head_id: string }>(
       `SELECT DISTINCT a.student_id, i.fee_head_id
          FROM student_fee_structure_assignments a
+         JOIN bill_fee_structures s ON s.id = a.fee_structure_id AND s.deleted_at IS NULL
          JOIN bill_fee_structure_items i ON i.fee_structure_id = a.fee_structure_id
         WHERE a.deleted_at IS NULL
           AND a.student_id = ANY($1::uuid[])

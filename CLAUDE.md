@@ -1535,6 +1535,10 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   own-outstanding figures. Invoice list, aging, credit-note cap, fine base and collection
   apportionment no longer double-count carried-forward balances.
 
+- [x] BILL-SOFTDEL-1 — read-path guards halt billing when fee heads, structures or routes
+  are soft-deleted. Nine sites via shared `assertNoneRetired`, per-line FAILED on bill runs,
+  D9 reachability fixed. Forensic: zero backward exposure on dev.
+
 > Update this checklist as modules are completed.
 
 ---

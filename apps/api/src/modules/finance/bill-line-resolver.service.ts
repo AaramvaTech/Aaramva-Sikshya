@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { bsToAd, daysInBsMonth } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { StudentFeeStructureAssignmentService } from './student-fee-structure-assignment.service';
@@ -7,6 +7,7 @@ import { Money } from '../../common/money/money';
 import { toMoney, toAdString } from './entities/finance.entity';
 import { bsOf } from './ledger.util';
 import { formatLocalDate } from '../common/utils/date.util';
+import { errorBody } from '../common/errors/error-codes';
 
 interface FeeHeadMeta {
   id: string;
@@ -115,14 +116,33 @@ export class BillLineResolverService {
 
     const preview = await this.feePreviewService.preview(studentId, { academicYearId, asOfDate: periodEnd });
 
+    // BILL-SOFTDEL-1 D4. Every id here came out of preview(), which now halts
+    // on a retired head — so the filter below can only bite in the narrow race
+    // where a head is retired BETWEEN those two queries. It is kept anyway
+    // because of what the old code did with a missing row: `meta?.is_taxable`
+    // silently resolved to false and `meta?.recurrence` to null, so a head that
+    // vanished mid-resolve was billed as untaxed rather than noticed. Filter
+    // plus completeness check is what makes this fail instead of drift.
     const feeHeadIds = preview.heads.map((h) => h.feeHeadId);
     const feeHeadMeta = feeHeadIds.length
       ? await this.tenantPrisma.query<FeeHeadMeta>(
-          `SELECT id, is_taxable, recurrence, proration_policy FROM fee_heads WHERE id = ANY($1::uuid[])`,
+          `SELECT id, is_taxable, recurrence, proration_policy FROM fee_heads
+            WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
           feeHeadIds,
         )
       : [];
     const metaMap = new Map(feeHeadMeta.map((m) => [m.id, m]));
+    const missingMeta = feeHeadIds.filter((id) => !metaMap.has(id));
+    if (missingMeta.length > 0) {
+      throw new UnprocessableEntityException(
+        errorBody(
+          'FEE_HEAD_UNAVAILABLE',
+          'A fee head in this fee structure was retired while the bill was being resolved. ' +
+            'Nothing was billed — run it again.',
+          { studentId, feeHeadIds: missingMeta },
+        ),
+      );
+    }
 
     const taxRateRows = await this.tenantPrisma.query<ActiveTaxRate>(
       `SELECT rate, applies_to FROM tax_rates

@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { BulkAssignFailure, BulkAssignJobRow } from './entities/bill-assignment.entity';
 import { ClassScope, isClassMismatch, mismatchMessage } from './bill-class-guard.util';
 import { ScopeRow, toScope } from './student-fee-structure-assignment.service';
+import { errorBody } from '../common/errors/error-codes';
 
 const CHUNK_SIZE = 200;
 
@@ -81,17 +82,38 @@ export class BulkAssignRunnerService {
     return { studentsProcessed };
   }
 
-  /** The fee structure's own class/section + display names (FEE-CLASS-GUARD). */
+  /**
+   * The fee structure's own class/section + display names (FEE-CLASS-GUARD).
+   *
+   * BILL-SOFTDEL-1 D8. The `?? {all nulls}` fallback this replaces was the
+   * worst shape of the bug: a retired structure produced an EMPTY scope, an
+   * empty scope matches every student, so FEE-CLASS-GUARD's own mismatch check
+   * waved the whole job through. Silence that disables another guard.
+   *
+   * bulk-assign-job.service.ts already filters `deleted_at` when the job is
+   * created, so this only fires when the structure is retired after the job is
+   * queued. Throwing marks the job FAILED via drainCurrentTenant's catch —
+   * which is "fail the run" for the bulk path.
+   */
   private async loadStructureScope(feeStructureId: string): Promise<ClassScope> {
     const rows = await this.tenantPrisma.query<ScopeRow>(
       `SELECT bfs.class_id, bfs.section_id, c.name AS class_name, sec.name AS section_name
          FROM bill_fee_structures bfs
          LEFT JOIN classes  c   ON c.id   = bfs.class_id
          LEFT JOIN sections sec ON sec.id = bfs.section_id
-        WHERE bfs.id = $1::uuid`,
+        WHERE bfs.id = $1::uuid AND bfs.deleted_at IS NULL`,
       feeStructureId,
     );
-    return toScope(rows[0] ?? { class_id: null, section_id: null, class_name: null, section_name: null });
+    if (!rows[0]) {
+      throw new UnprocessableEntityException(
+        errorBody(
+          'BILL_FEE_STRUCTURE_UNAVAILABLE',
+          'This fee structure was retired after the bulk assignment was queued. No students were assigned.',
+          { feeStructureId },
+        ),
+      );
+    }
+    return toScope(rows[0]);
   }
 
   private async processChunk(
