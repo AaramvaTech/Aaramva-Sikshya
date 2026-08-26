@@ -8,6 +8,7 @@ import { toMoney, toAdString } from './entities/finance.entity';
 import { bsOf } from './ledger.util';
 import { formatLocalDate } from '../common/utils/date.util';
 import { errorBody } from '../common/errors/error-codes';
+import { reconcileItemsToFootTarget, FOOTING_TOLERANCE } from './bill-footing.util';
 
 interface FeeHeadMeta {
   id: string;
@@ -61,19 +62,25 @@ function clampNonNegative(amount: Money): Money {
  * assignment is found by preview()'s OWN internal check too), and prorates
  * only the per-head amounts flagged fee_heads.proration_policy='MONTHLY'.
  *
- * NOT prorated (documented, narrow simplification — see BILL-BUGS.md):
- * whole-bill concessions (FeePreviewService's own computed dollar amount is
- * used as-is, not re-derived against prorated head totals) — this also means
- * a whole-bill concession is never attributed to any single item, including
- * the transport item below, so item nets can sum to less than the header net
- * when both are present (TRANSPORT-ITEM's "simple version" ruling: the
- * header stays correct; per-item apportionment is deferred, logged
- * must-resolve-before-BILL-8, not accepted permanently).
+ * The whole-bill concession IS prorated by the same `fraction` as per-head
+ * MONTHLY amounts (BILL-4-ZERONET-CRASH root cause #1, BILL-BUGS.md) — this
+ * docstring previously said otherwise; that was stale the moment that fix
+ * landed, not a second, still-open gap.
+ *
+ * D13-CLUSTER-FOOTING (was TRANSPORT-ITEM's "simple version" ruling, logged
+ * must-resolve-before-BILL-8 and left open when BILL-8 shipped its own
+ * render-time-only plug, `bill-pdf.util.ts::apportionWholeBillConcession`,
+ * instead): items are reconciled to the header's own pre-tax net via
+ * `reconcileItemsToFootTarget` (`bill-footing.util.ts`) right below, so a
+ * NEW invoice's STORED items already foot — BILL-8's plug now has nothing
+ * left to do for a new invoice and stays only for the already-posted rows
+ * from before this fix, which are immutable and are not rewritten.
  *
  * TRANSPORT-ITEM: transport gets its own item (transportRouteId set,
  * feeHeadId null — mirrors the CHECK constraint on bill_invoice_items),
- * unprorated (it has no fee_heads.proration_policy to key on) and with
- * concessionAmount always 0 (the "simple version" above).
+ * unprorated (it has no fee_heads.proration_policy to key on) and its own
+ * concessionAmount starts at 0 before whole-bill reconciliation, same as
+ * every other item — reconciliation is what gives it a real share.
  */
 @Injectable()
 export class BillLineResolverService {
@@ -223,6 +230,45 @@ export class BillLineResolverService {
     const taxAmount = activeTaxRate ? taxableBaseTotal.percentOf(taxRateValue as number) : Money.zero();
     const net = netPreTax.add(taxAmount);
 
+    // D13-CLUSTER-FOOTING (D13/D34). `items` were built above with only
+    // their HEAD-level concession subtracted — the whole-bill concession
+    // above is a header-only figure that no item has felt yet, and each
+    // item's own individual rounding can drift a paisa from the aggregate
+    // total rounded separately. Reconcile items to the header's own
+    // pre-tax net (never to `net` itself — tax is a header-only figure
+    // with no line of its own, matching the print layer's `subtotal =
+    // net - tax` convention and collection-report.service.ts's own
+    // documented rule) so a NEW invoice's stored items already foot,
+    // instead of relying on BILL-8's render-time plug to paper over it.
+    const netPreTaxRounded = Money.fromDb(netPreTax.toDb());
+    const { items: footedItems, residual } = reconcileItemsToFootTarget(items, netPreTaxRounded);
+
+    // Cannot fire through this call site: `netPreTaxRounded` is already
+    // clamped non-negative above, and reconcileItemsToFootTarget's own spec
+    // proves `residual` is exactly zero for every target >= 0 (its docstring
+    // has the full argument). Even D8's overshoot condition — a
+    // misconfigured concession that already exceeds the bill — is absorbed
+    // gracefully: the header floors at net=0, and reconciliation drives every
+    // item to net=0 too, footing exactly. Kept as a real assertion, not a
+    // comment, because it is the backstop for an invariant this file does
+    // not fully control (FeePreviewService's own per-head clamp) — if a
+    // future change ever lets `netPreTax` go negative, this is what turns
+    // that into a named FAILED line instead of a silently non-footing
+    // invoice, the same "fail the run, don't skip the line" doctrine
+    // BILL-SOFTDEL-1 and D14 (below) already use for this module.
+    if (residual.compare(FOOTING_TOLERANCE) > 0 || residual.compare(FOOTING_TOLERANCE.negate()) < 0) {
+      throw new UnprocessableEntityException(
+        errorBody(
+          'FOOTING_MISMATCH',
+          `This student's fee items could not be reconciled to the invoice total ` +
+            `(${residual.toDb()} unattributed after concessions). This usually means a ` +
+            `concession or override exceeds what this bill can absorb — check the student's ` +
+            `concessions and overrides for this period.`,
+          { studentId, residual: residual.toDb() },
+        ),
+      );
+    }
+
     return {
       outcome: 'DRAFT',
       skipReason: null,
@@ -232,7 +278,7 @@ export class BillLineResolverService {
       taxRate: taxRateValue,
       taxAmount: taxAmount.toNumber(),
       net: net.toNumber(),
-      items,
+      items: footedItems,
     };
   }
 }

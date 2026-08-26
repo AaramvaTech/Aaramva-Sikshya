@@ -4,6 +4,28 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## MUST-RESOLVE-BEFORE-BILL-8 — resolved (2026-08-26, `D13-CLUSTER-FOOTING` Phase 1, branch `feat/d13-cluster-footing`)
+
+Closes the thread opened by TRANSPORT-ITEM (2026-07-27, above) and widened by BILL-4-ZERONET-CRASH (2026-08-10, above): a whole-bill (`fee_head_id IS NULL`) concession was never attributed to any stored `bill_invoice_items` row, so `SUM(item.net_amount)` never equalled the invoice header's own net whenever one was active. TRANSPORT-ITEM logged this "must-resolve-before-BILL-8, not a permanently accepted simplification"; BILL-8 shipped its own render-time-only workaround instead (`bill-pdf.util.ts::apportionWholeBillConcession`, reused by `bill-document.service.ts`) and left the underlying gap open — that workaround stays, unmodified, for every already-posted invoice, which is immutable.
+
+**Fixed at the write path.** `BillLineResolverService.resolve()` now reconciles `items` to the header's own pre-tax net (`bill-footing.util.ts::reconcileItemsToFootTarget`) before returning — apportioning any gap (whole-bill concession, or plain per-item rounding placement, D13a, closed for free by the same mechanism) across items by gross share, reusing `apportionWholeBillConcession` verbatim rather than re-deriving its exact-remainder-to-largest-gross-line guarantee a second time. Since `resolve()` is the one function both `BillRunService` (draft) and `BillRunPostRunnerService` (post) call, a NEW invoice's stored items foot exactly at both stages — no code path posts a non-footing invoice going forward.
+
+**11 already-posted invoices across `demo` (6) and `motherland_school` (5) do not foot and are NOT touched** — immutable records, per this ticket's own constraint. Of the 11, only 8 are this defect (3 of demo's 7 "breaching" rows are a different, correct-by-design gap: header `net_amount` includes tax, `SUM(item.net_amount)` never has, and 1 more — `CAL1-TEST-INV-0001` — is a soft-deleted CAL-1 test fixture with zero item rows, unreproducible through the current `resolve()` under any input; see the D13-CLUSTER-FOOTING Phase 1 report for the full breakdown). BILL-8's plug keeps these 8 printing correctly.
+
+Full detail (the tax-exclusion invariant, the D8-overshoot interaction, why the historical "transport had no item row" framing didn't match any currently-breaching invoice) is in the D13-CLUSTER-FOOTING Phase 1 report, not duplicated here.
+
+---
+
+## D7 (BILLING-CALC-AUDIT-1) — an override's effect is stored as `concession_amount`; confirmed non-blocking for footing, not fixed here
+
+`bill-line-resolver.service.ts`'s per-head loop computes `concession = gross.sub(net)` where `gross` is the structure's own amount and `net` already reflects any override — so an override that REPLACES a head's amount (not a discount) is stored and reported as a "concession," on both the header (`concessionFinal`) and every affected item. Confirmed live in dev data: `student-1`-shaped rows exist where this is the case (see D6/D7 in `BILLING-CALC-AUDIT-1-phase0.md`).
+
+**Confirmed NOT to block D13's footing fix.** Footing only requires `SUM(item.net_amount)` to equal the header's own pre-tax net — it does not care what the gap between an item's gross and net is *called*. `reconcileItemsToFootTarget` (this ticket) adds a whole-bill-concession share on top of whatever `concessionAmount` an item already carried, whether that carried amount was a real concession or an override effect already mislabeled by D7; the two are orthogonal at the arithmetic level.
+
+**Not fixed here — scope discipline.** A real fix (distinguishing "override effect" from "concession" as reported figures) changes what `concession-register-report.service.ts` and the printed discount column show for every school that has ever configured an override, which is a genuine product/display decision, not a footing one. Logged per D13-CLUSTER-FOOTING's own "if you find something outside this cluster, log it, don't fix it here" instruction.
+
+---
+
 ## ERR-WEB-MESSAGE-DEAD — every server-supplied error message is discarded by the web client (found during BILL-SOFTDEL-1 Phase 1, 2026-08-26, NOT FIXED — flagging only)
 
 **`apps/web/lib/errors.ts:172` is `message: CODE_MESSAGES[code] ?? serverMessageOf(env) ?? GENERIC_MESSAGE`.** The catalog string wins; the server's own `message` is only ever reached for a code the web catalog does not list. So **any message a service passes as `errorBody(code, message, details)`'s second argument is dead on arrival at the web UI** — it is computed, serialised, sent over the wire, and thrown away in favour of a fixed string.

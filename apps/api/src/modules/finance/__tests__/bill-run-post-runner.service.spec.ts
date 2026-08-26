@@ -90,7 +90,8 @@ describe('BillRunPostRunnerService', () => {
   it('posts a single DRAFT line: invoice + item + ledger entry, one per-student transaction under one lock', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun]) // SELECT bill_runs WHERE status='POSTING'
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]); // SELECT DRAFT lines
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]) // SELECT DRAFT lines
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]); // D14: frozen-line read, outside the lock
 
     billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
 
@@ -178,6 +179,11 @@ describe('BillRunPostRunnerService', () => {
       .mockResolvedValueOnce(mockResolved as any)
       .mockRejectedValueOnce(new Error('boom'));
 
+    // Only line-1 reaches the D14 frozen-line read — line-2's resolve()
+    // rejects before getting there, so no second entry is queued for it.
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]);
+
     mockTx.$queryRawUnsafe
       .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
       .mockResolvedValueOnce([{ sum: '5500.00' }])
@@ -194,7 +200,8 @@ describe('BillRunPostRunnerService', () => {
   it('skips a line whose fresh re-check (under the lock) shows it is no longer DRAFT', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]); // D14: frozen-line read, agrees with resolved
 
     billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
     mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ outcome: 'POSTED', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }]);
@@ -232,7 +239,8 @@ describe('BillRunPostRunnerService', () => {
   it('BILL-4-ZERO-NET: posts a zero-net invoice (e.g. a full concession) WITHOUT a ledger entry — student_ledger_entries_check2 rejects any debit=0/credit=0 row, so postLine must never attempt one', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '100.00', tax: '0.00', net: '0.00' }]); // D14: frozen-line read, agrees with resolved
 
     billLineResolverService.resolve.mockResolvedValueOnce({
       ...mockResolved, gross: 100, concession: 100, net: 0,
@@ -265,7 +273,8 @@ describe('BillRunPostRunnerService', () => {
     financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: true });
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]); // D14: frozen-line read
 
     billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
     mockTx.$queryRawUnsafe
@@ -295,9 +304,16 @@ describe('BillRunPostRunnerService', () => {
   it('BILL-8 finding: amount_in_words reflects total_receivable, not just net — the figure a payer actually owes including any carried-forward balance', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      // D14: frozen-line read. This test's own point is unrelated to D14, so
+      // the fixture is made internally consistent with the 1350/1350 figures
+      // the rest of the test already uses (previously resolved carried the
+      // unrelated mockResolved 3000/3000, harmless before D14 existed to
+      // notice — now it must agree, or this test would be asserting a real
+      // draft/post drift and D14 would (correctly) fail the line).
+      .mockResolvedValueOnce([{ gross: '1350.00', tax: '0.00', net: '1350.00' }]);
 
-    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+    billLineResolverService.resolve.mockResolvedValueOnce({ ...mockResolved, gross: 1350, net: 1350 } as any);
     mockTx.$queryRawUnsafe
       .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '1350.00', concession: '0.00', tax: '0.00', net: '1350.00' }])
       .mockResolvedValueOnce([{ sum: '450.00' }]) // previous balance: student owed 450 before this invoice (Dr)
@@ -322,7 +338,8 @@ describe('BillRunPostRunnerService', () => {
   it('posts a DRAFT line for a student holding advance credit: exactly one INVOICE entry (BILL-4 invariant unchanged), advance consumed via a new allocation row (capped at the invoice net, not the full advance), zero new ledger entries for the consumption itself', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]); // D14: frozen-line read
 
     billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
 
@@ -356,7 +373,8 @@ describe('BillRunPostRunnerService', () => {
   it('ALLOCATION-CAP-1: an advance larger than the invoice own charge is consumed only up to that charge — the rest stays unconsumed credit', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]); // D14: frozen-line read
 
     billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
 
@@ -395,7 +413,8 @@ describe('BillRunPostRunnerService', () => {
     // ceiling is easier to see at the call site than inside the util.
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])
-      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }]);
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '100.00', tax: '0.00', net: '0.00' }]); // D14: frozen-line read
 
     billLineResolverService.resolve.mockResolvedValueOnce({
       ...mockResolved, gross: 100, concession: 100, net: 0,
