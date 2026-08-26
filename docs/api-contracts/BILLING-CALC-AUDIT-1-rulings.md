@@ -244,3 +244,49 @@ Two things are worth keeping in view anyway:
 No behaviour was changed. Anyone touching bill-run identity should decide deliberately
 whether the key or the message is the thing to fix.
 
+---
+
+## Open — the four "outstanding" consumers disagree about credit notes
+
+*Recorded during D15-REPOINT (2026-08-25). Not that ticket's scope, and deliberately not
+fixed there. It needs its own decision.*
+
+D15-REPOINT moved five consumers off `total_receivable` and onto the invoice's own charge.
+That fixed the axis the audit named. It also made a second, pre-existing disagreement
+impossible to miss: **the four consumers that compute an invoice's "outstanding" do not
+agree on whether an APPROVED credit note or write-off reduces it.**
+
+| Consumer | Formula after D15-REPOINT | Nets out corrections? |
+|---|---|---|
+| Invoice-list `balance` | `net_amount − cleared allocations` | **no** |
+| Fee aging | `net_amount − cleared allocations` | **no** |
+| Credit-note / write-off cap | `net_amount − cleared allocations − approved corrections` | **yes** |
+| Late-fee base | `net_amount − cleared allocations − approved corrections` | **yes** |
+
+The split is not arbitrary — the two that net corrections out are the two making a *money
+decision* about the invoice, and they were written to be conservative. But the consequence
+is visible to a school: **an invoice with an APPROVED credit note against it still shows its
+full balance in the admin list and still ages into a bucket**, while the fine engine
+correctly treats it as settled and stops accruing. Proven live on `demo` during D15-REPOINT
+Phase 2 — invoice `BINV-2083-000033` (own charge 1,200, paid 500, credit note 700) had an
+own outstanding of **0.00** to the fine engine, which correctly declined to fine it, while
+the same invoice's `balance` field reported **700.00**.
+
+Three ways out, none obviously right:
+
+1. **Net corrections out everywhere.** Most internally consistent, and matches what a parent
+   would expect a credit note to do. Changes what the admin list and the aging report show
+   for every tenant that has ever issued one.
+2. **Never net them out; let the ledger carry the credit.** Also consistent, and closer to
+   `total_receivable`'s original statement-of-account instinct — the invoice records what was
+   charged, and the credit lives on the account. Would mean removing the netting from the cap
+   and the fine base, which is a real behaviour change on a money path.
+3. **Leave the split and document it as intentional** — an invoice's *display* balance is what
+   was billed less what was paid, while its *creditable and fineable* balance additionally
+   respects corrections.
+
+The reason this is not a free choice: whichever way it goes, aging totals and the credit cap
+move together, and both are figures a school reconciles against. It also interacts with the
+still-open compensating entries from Ruling 3 — those will post corrections against exactly
+the invoices whose allocations already breach the cap.
+
