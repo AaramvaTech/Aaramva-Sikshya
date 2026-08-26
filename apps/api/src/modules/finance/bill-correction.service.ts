@@ -460,7 +460,17 @@ export class BillCorrectionService {
    * "outstanding" definition BillPaymentService already uses). "credited"
    * sums BOTH CREDIT_NOTE and WRITE_OFF — an approved invoice-scoped
    * write-off shrinks the room left for a later credit note on the same
-   * invoice, and vice versa (BILL-BUGS.md CORRECTIONS-CAP-SHARED). */
+   * invoice, and vice versa (BILL-BUGS.md CORRECTIONS-CAP-SHARED).
+   *
+   * D15-REPOINT: the invoice-level branch read total_receivable, which made
+   * two things false at once. It let a credit note exceed what this invoice
+   * actually charged, by exactly the arrears carried onto it from earlier
+   * invoices — money those invoices can be, and separately are, credited
+   * against. And the "same definition BillPaymentService already uses" claim
+   * above stopped being true the moment ALLOCATION-CAP-1 repointed that
+   * service to net_amount. Both branches now cap against own charge, which
+   * is also what the line-level branch has always done. Same rule
+   * apps/web/lib/invoice-totals.ts's docblock states for the web side. */
   private async creditableAmount(tx: TenantTx, invoiceId: string, itemId: string | null): Promise<Money> {
     if (itemId) {
       const [row] = await tx.$queryRawUnsafe<{ net_amount: string; credited: string }[]>(
@@ -473,8 +483,8 @@ export class BillCorrectionService {
       return toMoney(row.net_amount).sub(toMoney(row.credited));
     }
 
-    const [row] = await tx.$queryRawUnsafe<{ total_receivable: string; paid: string; credited: string }[]>(
-      `SELECT bi.total_receivable,
+    const [row] = await tx.$queryRawUnsafe<{ net_amount: string; paid: string; credited: string }[]>(
+      `SELECT bi.net_amount,
               COALESCE((SELECT SUM(bpa.amount) FROM bill_payment_allocations bpa
                         JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
                         WHERE bpa.bill_invoice_id = bi.id), 0) AS paid,
@@ -483,7 +493,7 @@ export class BillCorrectionService {
        FROM bill_invoices bi WHERE bi.id = $1::uuid`,
       invoiceId,
     );
-    return toMoney(row.total_receivable).sub(toMoney(row.paid)).sub(toMoney(row.credited));
+    return toMoney(row.net_amount).sub(toMoney(row.paid)).sub(toMoney(row.credited));
   }
 
   /** B6-6: available advance credit — the magnitude of a negative (ADVANCE) balance. */

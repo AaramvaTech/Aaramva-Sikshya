@@ -119,7 +119,7 @@ describe('BillCorrectionService', () => {
     it('below threshold: auto-posts APPROVED, requester = decider, one CREDIT_NOTE credit entry', async () => {
       mockRequestPrelude();
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ total_receivable: '5000.00', paid: '0.00', credited: '0.00' }]) // creditableAmount
+        .mockResolvedValueOnce([{ net_amount: '5000.00', paid: '0.00', credited: '0.00' }]) // creditableAmount
         .mockResolvedValueOnce([{ value: BigInt(1) }]) // sequence
         .mockResolvedValueOnce([{ ...mockCorrectionRow, status: 'APPROVED', requires_approval: false, decided_by: 'accountant-1' }]); // insert RETURNING *
       ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-1' } as any);
@@ -140,7 +140,7 @@ describe('BillCorrectionService', () => {
     it('at/above threshold: stays REQUESTED, nothing posts', async () => {
       mockRequestPrelude();
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ total_receivable: '10000.00', paid: '0.00', credited: '0.00' }])
+        .mockResolvedValueOnce([{ net_amount: '10000.00', paid: '0.00', credited: '0.00' }])
         .mockResolvedValueOnce([{ value: BigInt(2) }])
         .mockResolvedValueOnce([{ ...mockCorrectionRow, amount: '5000.00', status: 'REQUESTED', requires_approval: true }]);
 
@@ -156,7 +156,7 @@ describe('BillCorrectionService', () => {
   describe('requestCreditNote — over-credit guard (B6-2)', () => {
     it('rejects when amount exceeds the outstanding-after-existing-credits amount, posts nothing', async () => {
       mockRequestPrelude();
-      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ total_receivable: '1000.00', paid: '0.00', credited: '500.00' }]); // outstanding = 500
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ net_amount: '1000.00', paid: '0.00', credited: '500.00' }]); // outstanding = 500
 
       await expect(service.requestCreditNote(baseDto({ amount: '600.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
       expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
@@ -178,7 +178,7 @@ describe('BillCorrectionService', () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockCorrectionRow]);
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ status: 'REQUESTED' }]) // re-check under lock
-        .mockResolvedValueOnce([{ total_receivable: '5000.00', paid: '0.00', credited: '0.00' }]) // creditableAmount re-check
+        .mockResolvedValueOnce([{ net_amount: '5000.00', paid: '0.00', credited: '0.00' }]) // creditableAmount re-check
         .mockResolvedValueOnce([{ ...mockCorrectionRow, status: 'APPROVED', decided_by: 'owner-1', ledger_entry_id: 'ledger-entry-2' }]); // final UPDATE RETURNING *
       ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-2' } as any);
 
@@ -194,7 +194,7 @@ describe('BillCorrectionService', () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockCorrectionRow]);
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([{ status: 'REQUESTED' }])
-        .mockResolvedValueOnce([{ total_receivable: '1000.00', paid: '0.00', credited: '900.00' }]); // outstanding now only 100, amount is 1200
+        .mockResolvedValueOnce([{ net_amount: '1000.00', paid: '0.00', credited: '900.00' }]); // outstanding now only 100, amount is 1200
 
       await expect(service.approve('corr-1', 'owner-1', {})).rejects.toThrow(BadRequestException);
       expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
@@ -506,4 +506,67 @@ describe('BillCorrectionService', () => {
       expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * D15-REPOINT (BILLING-CALC-AUDIT-1 §2). The invoice-level credit cap was
+   * total_receivable − paid − credited, so an invoice could be credited for
+   * the arrears carried onto it from EARLIER invoices — invoices that can be,
+   * and separately are, credited against themselves. The cap is now the
+   * invoice's own charge, which is what the line-level branch has always
+   * used, and what the docblock's "same definition BillPaymentService uses"
+   * claim needs in order to be true again after ALLOCATION-CAP-1.
+   *
+   * The fixture carries previous_balance ≠ 0 on purpose: own charge 2,260
+   * behind a statement figure of 4,260. A 3,000 credit note is refused now
+   * and would have been accepted before. With previous_balance 0 the two
+   * formulas agree and the test would prove nothing.
+   */
+  describe('D15-REPOINT — the credit cap is the invoice own charge', () => {
+    const OWN_CHARGE = '2260.00';
+
+    it('refuses a credit note above the own charge that the statement figure would have allowed', async () => {
+      mockRequestPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { net_amount: OWN_CHARGE, paid: '0.00', credited: '0.00' },
+      ]);
+
+      // 3,000 sits under total_receivable (4,260) and over the own charge.
+      await expect(
+        service.requestCreditNote(baseDto({ amount: '3000.00' }), 'accountant-1'),
+      ).rejects.toThrow(/2260\.00/);
+    });
+
+    it('allows a credit note at exactly the own charge — the cap is a ceiling, not a block', async () => {
+      mockRequestPrelude();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ net_amount: OWN_CHARGE, paid: '0.00', credited: '0.00' }])
+        .mockResolvedValueOnce([{ value: BigInt(9) }])
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, amount: OWN_CHARGE, status: 'APPROVED', requires_approval: false }]);
+      // 2,260 is under the 5,000 approval threshold, so it auto-posts.
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-cap-1' } as any);
+
+      const result = await service.requestCreditNote(baseDto({ amount: OWN_CHARGE }), 'accountant-1');
+
+      expect(result).toBeDefined();
+    });
+
+    it('the cap query reads net_amount, never total_receivable', async () => {
+      mockRequestPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { net_amount: OWN_CHARGE, paid: '0.00', credited: '0.00' },
+      ]);
+
+      await service
+        .requestCreditNote(baseDto({ amount: '99999.00' }), 'accountant-1')
+        .catch(() => undefined);
+
+      const capSql = mockTx.$queryRawUnsafe.mock.calls
+        .map((c: unknown[]) => String(c[0]))
+        .find((sql: string) => sql.includes('AS credited'));
+      expect(capSql).toBeDefined();
+      expect(capSql).toContain('bi.net_amount');
+      expect(capSql).not.toContain('bi.total_receivable');
+    });
+  });
+
 });

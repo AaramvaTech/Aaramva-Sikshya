@@ -217,4 +217,80 @@ describe('BillFineService', () => {
       expect(result.meta.total).toBe(1);
     });
   });
+
+  /**
+   * D15-REPOINT (BILLING-CALC-AUDIT-1 §2). The fine base was
+   * total_receivable − paid − credited, which broke the late-fee rail two
+   * ways at once. The arrears carried onto an invoice were fined here as
+   * well as on the earlier invoices that actually owe them and are still
+   * accruing themselves — the same debt fined twice in a month, and a
+   * PERCENT rule compounding on a base that grows every billing cycle. And
+   * an invoice whose own charge was fully paid still showed a positive
+   * "outstanding" from the carried arrears, so it never hit the B7-2 settled
+   * check and went on accruing.
+   *
+   * Postgres computes `outstanding`, so a mocked value cannot distinguish
+   * the two formulas — the assertion that can is on the expression the
+   * service sends. The worked figures in the comments below use the
+   * confirmed live case (own charge 2,260 behind a statement figure of
+   * 4,260) to show what the two formulas would each produce.
+   */
+  describe('D15-REPOINT — the fine base is the invoice own outstanding', () => {
+    function mockRunPrelude(ruleOver: Record<string, unknown> = {}) {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([runRow()])
+        .mockResolvedValueOnce([{
+          id: 'rule-1', scope: 'GLOBAL', fee_head_id: null, type: 'PERCENT',
+          value: '2.00', grace_days: 0, cap_amount: null, ...ruleOver,
+        }])
+        .mockResolvedValueOnce([{ invoice_id: 'inv-1', student_id: 'student-1', academic_year_id: 'year-1', fee_head_ids: [] }])
+        .mockResolvedValueOnce([runRow({ status: 'COMPLETED' })]);
+    }
+
+    it('computes outstanding from net_amount, never total_receivable', async () => {
+      mockRunPrelude();
+      // own charge 2,260 with nothing paid — the statement figure would have
+      // said 4,260 and fined 85.20 instead of 45.20 at 2%.
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ due_date: '2026-07-24', outstanding: '2260.00', already_posted: '0.00' }])
+        .mockResolvedValueOnce([{
+          id: 'accrual-1', bill_invoice_id: 'inv-1', student_id: 'student-1', late_fee_rule_id: 'rule-1',
+          accrued_through: new Date('2026-08-03'), days_overdue: 10, total_fine: '45.20', delta_posted: '45.20',
+          rule_type_snapshot: 'PERCENT', rule_value_snapshot: '2.00', rule_cap_snapshot: null,
+          ledger_entry_id: 'ledger-1', fine_run_id: 'run-1', created_at: new Date('2026-08-03'),
+        }]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-1' } as any);
+
+      await service.runLateFees('MANUAL', 'accountant-1');
+
+      const stateSql = String(mockTx.$queryRawUnsafe.mock.calls[0][0]);
+      expect(stateSql).toContain('bi.net_amount');
+      // Targets the expression, not the bare word — the explanatory comment
+      // above it names total_receivable on purpose.
+      expect(stateSql).not.toMatch(/bi\.total_receivable\s*\n\s*- COALESCE/);
+      // A PERCENT fine is levied on that figure: 2% of 2,260 = 45.20, not
+      // 2% of 4,260 = 85.20.
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'FINE', debit: '45.20',
+      }));
+    });
+
+    it('an invoice whose OWN charge is settled accrues nothing, even while arrears are carried onto it', async () => {
+      // The B7-2 settled check reads the same figure. Under
+      // total_receivable this invoice reported 2,000 outstanding — the
+      // carried arrears — and kept accruing after its own charge was paid.
+      mockRunPrelude();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { due_date: '2026-07-24', outstanding: '0.00', already_posted: '0.00' },
+      ]);
+      calendarService.countWorkingDays.mockResolvedValueOnce(10);
+
+      const result = await service.runLateFees('MANUAL', 'accountant-1');
+
+      expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
+      expect(result.invoicesFined).toBe(0);
+    });
+  });
+
 });

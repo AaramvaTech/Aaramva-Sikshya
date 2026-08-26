@@ -150,6 +150,94 @@ describe('BillInvoiceService', () => {
       );
     });
   });
+
+  /**
+   * D15-REPOINT (BILLING-CALC-AUDIT-1 §2 consumer 1). `balance` meant
+   * "total_receivable − cleared allocations" — a statement-of-account figure
+   * restating every earlier unpaid month on every row, so a student three
+   * months behind saw the same arrears on three cards. It now means this
+   * invoice's OWN outstanding: net_amount − cleared allocations.
+   *
+   * Every fixture below carries previous_balance ≠ 0 on purpose. With
+   * previous_balance 0 the two formulas agree and a passing test proves
+   * nothing.
+   */
+  describe('D15-REPOINT — balance is this invoice own outstanding', () => {
+    // The confirmed live case: own charge 2,260 carrying 2,000 of arrears.
+    const OWN_CHARGE = '2260.00';
+    const CARRIED = '2000.00';
+    const STATEMENT_FIGURE = '4260.00';
+
+    const carriedRow = {
+      ...mockInvoiceRow,
+      net_amount: OWN_CHARGE,
+      previous_balance: CARRIED,
+      total_receivable: STATEMENT_FIGURE,
+    };
+
+    it('findAll selects net_amount − cleared allocations, never total_receivable', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...carriedRow, balance: OWN_CHARGE, total_count: '1' }]);
+
+      await service.findAll({});
+
+      const sql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(sql).toContain('bi.net_amount - COALESCE(SUM(bpa.amount), 0) AS balance');
+      // Targets the expression, not the bare word — the explanatory comment
+      // in the query names total_receivable on purpose.
+      expect(sql).not.toContain('bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance');
+    });
+
+    it('findOne selects the same expression', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...carriedRow, balance: OWN_CHARGE }])
+        .mockResolvedValueOnce([]);
+
+      await service.findOne('invoice-1');
+
+      const sql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(sql).toContain('bi.net_amount - COALESCE(SUM(bpa.amount), 0) AS balance');
+      expect(sql).not.toContain('bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance');
+    });
+
+    it('the entity fallback answers with the own charge, not the statement figure', async () => {
+      // toBillInvoiceResponse falls back when no allocation columns were
+      // selected. That fallback WAS total_receivable, so a caller who did not
+      // ask for allocations silently got the carried-forward figure labelled
+      // "balance" — the same defect one layer down. This is real arithmetic,
+      // not a mocked column: the two formulas give 2,260 and 4,260 here.
+      const { balance, ...withoutBalance } = carriedRow;
+      const dto = toBillInvoiceResponse(withoutBalance as BillInvoiceRow);
+
+      expect(dto.balance).toBe(2260);
+      expect(dto.balance).not.toBe(4260);
+      expect(dto.totalReceivable).toBe(4260); // the statement figure itself is untouched
+    });
+
+    it('clamps a negative own balance to 0.00 rather than reporting money owed to the student', async () => {
+      // An invoice whose cleared allocations exceed its own charge breaches
+      // the allocation cap (ALLOCATION-CAP-1). 8 such invoices existed at the
+      // census and are corrected forward, so they are still out there.
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...carriedRow, paid_amount: STATEMENT_FIGURE, balance: '-2000.00', total_count: '1' },
+      ]);
+
+      const result = await service.findAll({});
+
+      expect(result.data[0].balance).toBe(0);
+      expect(result.data[0].paidAmount).toBe(4260); // what was actually taken is still reported
+    });
+
+    it('leaves a positive balance untouched', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...carriedRow, paid_amount: '260.00', balance: '2000.00', total_count: '1' },
+      ]);
+
+      const result = await service.findAll({});
+
+      expect(result.data[0].balance).toBe(2000);
+    });
+  });
+
 });
 
 // ─── BILL-CHECKOUT-1 Phase 3 — item names on list rows ───────────────────────

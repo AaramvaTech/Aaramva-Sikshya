@@ -14,9 +14,20 @@ import { toMoney } from '../finance/entities/finance.entity';
  *
  * An invoice's outstanding balance is the same formula BillPaymentService
  * already treats as ground truth for "how much is left on this invoice"
- * (fetchUnpaidInvoicesOldestFirst / recomputeInvoiceStatus): total_receivable
+ * (fetchUnpaidInvoicesOldestFirst / recomputeInvoiceStatus): **net_amount**
  * minus the SUM of allocations whose parent bill_payment is CLEARED — a
  * PENDING/BOUNCED/VOIDED payment's allocations never reduce the balance.
+ *
+ * D15-REPOINT: that used to say total_receivable, and the claim about
+ * BillPaymentService went stale the moment ALLOCATION-CAP-1 repointed those
+ * two functions to net_amount. Beyond the staleness it was wrong here on its
+ * own terms: the arrears folded into an invoice's previous_balance belong to
+ * EARLIER invoices, which appear in this very report under their own, older
+ * due dates. Counting them again on the later invoice both double-counted
+ * the money and filed it in a younger, less severe bucket than the debt
+ * actually is. Same rule apps/web/lib/invoice-totals.ts's docblock states
+ * for the web side: "summing totalReceivable across a student's invoices
+ * double-counts every carried balance."
  *
  * Buckets (days past due as of the given date): 0–30 / 31–60 / 61–90 / 90+.
  * "0–30" starts at 1 day past due — an invoice due today or in the future is
@@ -43,7 +54,9 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const AGED_INVOICES_CTE = `
   WITH aged AS (
     SELECT bi.id AS invoice_id, bi.invoice_number, bi.due_date,
-           (bi.total_receivable - COALESCE(paid.paid_amount, 0)) AS balance,
+           -- D15-REPOINT: net_amount (this invoice's own charge), never
+           -- total_receivable — see the docblock above.
+           (bi.net_amount - COALESCE(paid.paid_amount, 0)) AS balance,
            ($1::date - bi.due_date) AS days_past_due,
            s.id AS student_id, s.first_name, s.last_name, s.class_name, s.section_name
     FROM bill_invoices bi

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { Role } from '../common/enums/role.enum';
 import { BillInvoiceQueryDto } from './dto/bill-invoice.dto';
@@ -6,7 +6,11 @@ import {
   BillInvoiceRow, BillInvoiceItemRow, BillInvoiceResponseDto,
   toBillInvoiceResponse,
 } from './entities/bill-invoice.entity';
+import { toMoney } from './entities/finance.entity';
 import { GuardianScopeService } from '../student/guardian-scope.service';
+import {
+  OWN_BALANCE_EXPR, CLEARED_ALLOCATIONS_JOIN, clampOwnBalance,
+} from './bill-own-balance.util';
 
 /**
  * BILL-4-SPEC.md §5 read endpoints: list, single (parent object-scoped),
@@ -16,6 +20,8 @@ import { GuardianScopeService } from '../student/guardian-scope.service';
  */
 @Injectable()
 export class BillInvoiceService {
+  private readonly logger = new Logger(BillInvoiceService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly guardianScope: GuardianScopeService,
@@ -44,7 +50,16 @@ export class BillInvoiceService {
       `SELECT bi.*, s.first_name || ' ' || s.last_name AS student_name,
               s.student_id AS admission_number, c.name AS class_name,
               COALESCE(SUM(bpa.amount), 0) AS paid_amount,
-              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance,
+              -- D15-REPOINT: this invoice's OWN outstanding — net_amount less
+              -- its cleared allocations, never total_receivable. A balance
+              -- built from total_receivable restates every earlier unpaid
+              -- month on this row, so listing a student's invoices shows the
+              -- same arrears once per month they have been outstanding. Same
+              -- rule apps/web/lib/invoice-totals.ts's docblock already states
+              -- for the web side: "netAmount ... never totalReceivable ...
+              -- summing totalReceivable across a student's invoices
+              -- double-counts every carried balance."
+              ${OWN_BALANCE_EXPR} AS balance,
               -- BILL-CHECKOUT-1: names only, so a list card can say what its
               -- amount covers. A correlated subquery rather than a second
               -- round trip per row (N+1) or a third join whose fan-out the
@@ -55,9 +70,7 @@ export class BillInvoiceService {
        FROM bill_invoices bi
        JOIN students s ON s.id = bi.student_id
        LEFT JOIN classes c ON c.id = s.class_id
-       LEFT JOIN bill_payment_allocations bpa
-         ON bpa.bill_invoice_id = bi.id
-         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       ${CLEARED_ALLOCATIONS_JOIN}
        WHERE ${conditions.join(' AND ')}
        GROUP BY bi.id, s.first_name, s.last_name, s.student_id, c.name
        ORDER BY bi.created_at DESC
@@ -66,7 +79,7 @@ export class BillInvoiceService {
     );
 
     const total = rows[0]?.total_count ? parseInt(rows[0].total_count, 10) : 0;
-    return { data: rows.map((r) => toBillInvoiceResponse(r)), meta: { page, limit, total } };
+    return { data: rows.map((r) => toBillInvoiceResponse(this.clampBalance(r))), meta: { page, limit, total } };
   }
 
   async findOne(id: string, callerId?: string, callerRole?: Role): Promise<BillInvoiceResponseDto> {
@@ -83,14 +96,14 @@ export class BillInvoiceService {
                  FROM guardians g WHERE g.student_id = s.id
                 ORDER BY g.is_primary DESC, g.created_at LIMIT 1) AS guardian_name,
               COALESCE(SUM(bpa.amount), 0) AS paid_amount,
-              bi.total_receivable - COALESCE(SUM(bpa.amount), 0) AS balance
+              -- D15-REPOINT: own outstanding, not total_receivable — see the
+              -- same expression in findAll above for why.
+              ${OWN_BALANCE_EXPR} AS balance
        FROM bill_invoices bi
        JOIN students s ON s.id = bi.student_id
        LEFT JOIN classes c ON c.id = s.class_id
        LEFT JOIN sections sec ON sec.id = s.section_id
-       LEFT JOIN bill_payment_allocations bpa
-         ON bpa.bill_invoice_id = bi.id
-         AND EXISTS (SELECT 1 FROM bill_payments bp WHERE bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED')
+       ${CLEARED_ALLOCATIONS_JOIN}
        WHERE bi.id = $1::uuid AND bi.deleted_at IS NULL
        GROUP BY bi.id, s.id, c.name, sec.name`,
       id,
@@ -105,7 +118,24 @@ export class BillInvoiceService {
       `SELECT * FROM bill_invoice_items WHERE bill_invoice_id = $1::uuid ORDER BY created_at`,
       id,
     );
-    return toBillInvoiceResponse(rows[0], items);
+    return toBillInvoiceResponse(this.clampBalance(rows[0]), items);
+  }
+
+  /**
+   * A negative own balance means this invoice's cleared allocations exceed
+   * its own charge — it breaches the allocation cap (ALLOCATION-CAP-1 /
+   * BILLING-CALC-AUDIT-1 Ruling 3; 8 such invoices existed at the census and
+   * are corrected forward, not rewritten, so they are still out there). Show
+   * 0.00 rather than a negative "balance", and log it, because clamping
+   * silently would discard the one signal that says so.
+   */
+  private clampBalance(row: BillInvoiceRow): BillInvoiceRow {
+    if (row.balance === undefined || row.balance === null) return row;
+    // invoice_number is nullable on the row type (a draft has none yet); the
+    // id is the fallback so the WARN can always name something a human can
+    // look up.
+    const ref = row.invoice_number ?? row.id;
+    return { ...row, balance: clampOwnBalance(toMoney(row.balance), ref, this.logger).toDb() };
   }
 
   async findByStudent(

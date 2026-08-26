@@ -11,13 +11,26 @@ import { toMoney } from '../finance/entities/finance.entity';
  * bill_invoice_items directly — new-system rail only (B9-7).
  *
  * Fee-head breakdown prorates each CLEARED allocation across the invoice's
- * line items by their share of `net_amount` (SQL-side, B9-6). An invoice's
- * `total_receivable` can exceed the sum of its items by `previous_balance`
- * (a carried-over debt, not itself a fee head) — money that paid down that
- * carry-over is deliberately left unattributed to any head here, so the
- * fee-head breakdown may sum to less than `totalCollected` when
- * previous_balance is nonzero. The method breakdown always sums to the
- * total exactly (spec §6 test 4) since it has no such carve-out.
+ * line items by their share of `net_amount` (SQL-side, B9-6).
+ *
+ * D15-REPOINT: the denominator was `total_receivable`, justified above (in
+ * text now removed) as deliberately leaving carry-over money unattributed.
+ * That justification died with ALLOCATION-CAP-1: an allocation is now capped
+ * at the invoice's own `net_amount`, so no allocation money reaches
+ * `previous_balance` any more — there is no carry-over portion left to carve
+ * out. Dividing by `total_receivable` therefore stopped being a carve-out
+ * and became a straight under-count, shrinking every head's share by the
+ * ratio net_amount/total_receivable on any invoice with arrears.
+ *
+ * The denominator is `bi.net_amount`, NOT `SUM(ii.net_amount)`. Those differ
+ * by `tax_amount` (`net = (gross - concession) + tax`, and tax is a header
+ * figure with no line of its own), so weights sum to
+ * `(net_amount - tax_amount) / net_amount`, not to 1. That residual is
+ * correct and deliberate: tax is not a fee head, and money that paid tax
+ * must not be attributed to one. So the fee-head breakdown still sums to
+ * less than `totalCollected` when tax is nonzero — a real carve-out, unlike
+ * the one this replaces. The method breakdown always sums to the total
+ * exactly (spec §6 test 4) since it has no such carve-out.
  */
 const GROUP_BYS = ['method', 'feehead'] as const;
 type GroupBy = (typeof GROUP_BYS)[number];
@@ -80,7 +93,10 @@ export class CollectionReportService {
       // label either way (0023 renamed the column for exactly this reason).
       const rows = await this.tenantPrisma.query<FeeHeadRow>(
         `SELECT COALESCE(ii.fee_head_id, ii.transport_route_id) AS head_id, ii.item_name,
-                SUM(bpa.amount * ii.net_amount / NULLIF(bi.total_receivable, 0)) AS total
+                -- D15-REPOINT: divide by the invoice's OWN charge, never
+                -- total_receivable — see the docblock above for why, and for
+                -- why this is net_amount rather than SUM(ii.net_amount).
+                SUM(bpa.amount * ii.net_amount / NULLIF(bi.net_amount, 0)) AS total
          FROM bill_payment_allocations bpa
          JOIN bill_payments bp ON bp.id = bpa.bill_payment_id
            AND bp.status = 'CLEARED' AND bp.received_date BETWEEN $1::date AND $2::date

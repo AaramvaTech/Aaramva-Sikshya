@@ -50,7 +50,7 @@ describe('CollectionReportService', () => {
     expect(totalSql).toContain('received_date BETWEEN $1::date AND $2::date');
   });
 
-  it('groupBy=feehead prorates allocations across bill_invoice_items via net_amount/total_receivable', async () => {
+  it('groupBy=feehead prorates allocations across bill_invoice_items via ii.net_amount/bi.net_amount', async () => {
     queryMock.mockResolvedValueOnce([{ total: '500.00' }]).mockResolvedValueOnce([
       { head_id: 'fh1', item_name: 'Tuition', total: '400.00' },
       { head_id: 'fh2', item_name: 'Exam Fee', total: '100.00' },
@@ -66,7 +66,11 @@ describe('CollectionReportService', () => {
     const feeHeadSql = queryMock.mock.calls[1][0] as string;
     expect(feeHeadSql).toContain('bill_payment_allocations');
     expect(feeHeadSql).toContain('bill_invoice_items');
-    expect(feeHeadSql).toContain('ii.net_amount / NULLIF(bi.total_receivable, 0)');
+    // D15-REPOINT: the denominator is the invoice's OWN charge. Against
+    // total_receivable every head's share shrank by net_amount/
+    // total_receivable on any invoice carrying arrears.
+    expect(feeHeadSql).toContain('ii.net_amount / NULLIF(bi.net_amount, 0)');
+    expect(feeHeadSql).not.toContain('NULLIF(bi.total_receivable');
     // TRANSPORT-ITEM (0023): fee_head_id is nullable, transport lines use
     // transport_route_id instead — the grouping key must cover both kinds.
     expect(feeHeadSql).toContain('COALESCE(ii.fee_head_id, ii.transport_route_id)');

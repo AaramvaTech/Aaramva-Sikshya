@@ -191,7 +191,17 @@ export class BillFineService {
       const [state] = await tx.$queryRawUnsafe<{ due_date: Date | string; outstanding: string; already_posted: string }[]>(
         `SELECT
            bi.due_date,
-           bi.total_receivable
+           -- D15-REPOINT: net_amount (this invoice's own charge), never
+           -- total_receivable. A late fee is charged on what THIS invoice
+           -- still owes. Under total_receivable the arrears carried onto this
+           -- invoice were fined here as well as on the earlier invoices that
+           -- actually owe them and are themselves still accruing — the same
+           -- debt fined twice a month, and a PERCENT rule compounding on a
+           -- base that grows every billing cycle. It also kept an invoice
+           -- whose own charge was fully paid looking unsettled, so it went on
+           -- accruing. Same rule apps/web/lib/invoice-totals.ts's docblock
+           -- states for the web side.
+           bi.net_amount
              - COALESCE((SELECT SUM(bpa.amount) FROM bill_payment_allocations bpa
                          JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
                          WHERE bpa.bill_invoice_id = bi.id), 0)

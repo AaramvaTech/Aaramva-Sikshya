@@ -158,7 +158,14 @@ export function toBillInvoiceResponse(
     previousBalance: toMoney(row.previous_balance).toNumber(),
     totalReceivable: toMoney(row.total_receivable).toNumber(),
     paidAmount: toMoney(row.paid_amount ?? 0).toNumber(),
-    balance: toMoney(row.balance ?? row.total_receivable).toNumber(),
+    // D15-REPOINT: the no-allocations-selected fallback is net_amount (this
+    // invoice's own charge), not total_receivable. `balance` means "what THIS
+    // invoice still owes"; total_receivable is a statement-of-account figure
+    // carrying every earlier unpaid month, so the fallback used to answer a
+    // different question than the column it stands in for — see
+    // apps/web/lib/invoice-totals.ts's docblock for the same rule on the web
+    // side, and bill-own-balance.util.ts for the definition.
+    balance: toMoney(row.balance ?? row.net_amount).toNumber(),
     ...(row.item_names ? { itemNames: row.item_names } : {}),
     amountInWordsEn: row.amount_in_words_en,
     amountInWordsNe: row.amount_in_words_ne,

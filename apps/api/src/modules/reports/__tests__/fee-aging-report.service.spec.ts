@@ -132,4 +132,54 @@ describe('FeeAgingReportService', () => {
     expect(queryMock.mock.calls[0][1]).toBe('2026-07-12');
     expect(queryMock.mock.calls[1][0]).toContain('GROUPING SETS');
   });
+
+  /**
+   * D15-REPOINT (BILLING-CALC-AUDIT-1 §2 consumer 4). The aged CTE derived
+   * each invoice's balance from total_receivable, so the arrears folded onto
+   * a later invoice were counted a second time here — and filed under that
+   * later invoice's younger due date, i.e. in a less severe bucket than the
+   * debt actually is, while the earlier invoice that genuinely owes them sits
+   * in the report under its own older date.
+   *
+   * The arithmetic runs in Postgres, so these assert the expression the
+   * service sends. A numeric fixture cannot distinguish the two formulas —
+   * the mock returns whatever `balance` it is handed.
+   */
+  describe('D15-REPOINT — aging is built on the invoice own charge', () => {
+    it('the aged CTE nets allocations off net_amount, never total_receivable', async () => {
+      queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.getAging({ asOf: '2026-07-12' });
+
+      const sql = queryMock.mock.calls[0][0] as string;
+      expect(sql).toContain('(bi.net_amount - COALESCE(paid.paid_amount, 0)) AS balance');
+      // Targets the expression, not the bare word — the explanatory comment
+      // above it names total_receivable on purpose.
+      expect(sql).toContain('total_receivable');
+      expect(sql).not.toContain('(bi.total_receivable - COALESCE(paid.paid_amount, 0)) AS balance');
+    });
+
+    it('uses the same expression for the by-class query — the two copies cannot disagree', async () => {
+      queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.getAging({ asOf: '2026-07-12' });
+
+      const byClassSql = queryMock.mock.calls[1][0] as string;
+      expect(byClassSql).toContain('(bi.net_amount - COALESCE(paid.paid_amount, 0)) AS balance');
+      expect(byClassSql).not.toContain('(bi.total_receivable - COALESCE(paid.paid_amount, 0)) AS balance');
+    });
+
+    it('still only buckets invoices with something left to pay', async () => {
+      // The `WHERE balance > 0` filter is what keeps a breaching invoice
+      // (cleared allocations above its own charge, so a negative own balance
+      // — ALLOCATION-CAP-1) out of the report entirely, rather than letting a
+      // negative amount net off a bucket total.
+      queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.getAging({ asOf: '2026-07-12' });
+
+      expect(queryMock.mock.calls[0][0] as string).toContain('WHERE balance > 0');
+    });
+  });
+
 });
