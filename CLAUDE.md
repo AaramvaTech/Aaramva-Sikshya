@@ -1531,6 +1531,10 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   path, and fixes settlement status. CASH/MANUAL/gateway paths all capped. Two pre-existing
   breaches (2,500 across 2 invoices) await compensating entries.
 
+- [x] D15-REPOINT — five consumers of `total_receivable` repointed to own-charge or
+  own-outstanding figures. Invoice list, aging, credit-note cap, fine base and collection
+  apportionment no longer double-count carried-forward balances.
+
 > Update this checklist as modules are completed.
 
 ---
