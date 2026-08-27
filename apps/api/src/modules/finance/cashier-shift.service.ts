@@ -23,6 +23,7 @@ interface CloseAggregateRow {
   cash_collected: string;
   cheque_total: string;
   gateway_total: string;
+  cash_refund_total: string;
 }
 
 export interface CashierCloseResult {
@@ -34,6 +35,12 @@ export interface CashierCloseResult {
   cashCollected: number;
   chequeTotal: number;
   gatewayTotal: number;
+  // D26-CASH-REFUND-DRAWER: a separate line, not folded silently into
+  // cashCollected — the cashier sees what left the drawer, not just a
+  // smaller number they can't account for. Already subtracted into
+  // expectedCash/variance above; this is the same figure shown, not a
+  // second deduction.
+  cashRefundTotal: number;
   byMethod: { method: string; total: number; count: number }[];
 }
 
@@ -51,6 +58,22 @@ export interface CashierCloseResult {
  * auto-adjusted (B9-3) — this service has no code path that touches
  * `bill_payments` or the ledger on close, only the shift's own snapshot
  * columns.
+ *
+ * D26-CASH-REFUND-DRAWER: `expected_cash` now also subtracts APPROVED CASH
+ * refunds (BILLING-CALC-AUDIT-1 D26) — money that physically left the same
+ * drawer, previously invisible to this formula entirely. Attributed by
+ * TIME WINDOW (`decided_at` inside the shift), not by actor: refund
+ * approval is OWNER_ONLY (`bill-correction.controller.ts`), so there is no
+ * `received_by`-equivalent column recording which cashier's till the cash
+ * actually came from — `decided_by` names who authorised it, not who
+ * disbursed it. This is the same soft-scope tolerance this file's own
+ * `closeShift` doc comment above already accepts for `closed_by`, extended
+ * here because no per-cashier field exists to be stricter with.
+ * Known limitation, not fixed here (out of D26's scope, logged in
+ * BILL-BUGS.md): two cashiers with concurrent OPEN shifts (the schema
+ * allows this — `uq_cashier_shifts_one_open` is scoped per cashier, not
+ * global) could both have a cash refund's window overlap their shift,
+ * attributing the same refund to both drawers.
  */
 @Injectable()
 export class CashierShiftService {
@@ -111,16 +134,37 @@ export class CashierShiftService {
       // between the two calls.
       const closeTimestamp = new Date();
 
+      // D26-CASH-REFUND-DRAWER: `refunds` is a SEPARATE CTE, not a second
+      // FILTER on the same bill_payments scan — the refund lives in
+      // bill_corrections, a different table, keyed by decided_at (when the
+      // OWNER approved it, which is also when its ledger entry — and the
+      // cash — moved) rather than received_by/created_at. Both CTEs reduce
+      // to exactly one row each (no GROUP BY), so `FROM payments, refunds`
+      // is a safe 1×1 cross join, not a fan-out.
       const [agg] = await tx.$queryRawUnsafe<CloseAggregateRow[]>(
-        `SELECT
-           $4::numeric + COALESCE(SUM(amount) FILTER (WHERE method = 'CASH'), 0) AS expected_cash,
-           $5::numeric - ($4::numeric + COALESCE(SUM(amount) FILTER (WHERE method = 'CASH'), 0)) AS variance,
-           COALESCE(SUM(amount) FILTER (WHERE method = 'CASH'), 0) AS cash_collected,
-           COALESCE(SUM(amount) FILTER (WHERE method = 'CHEQUE'), 0) AS cheque_total,
-           COALESCE(SUM(amount) FILTER (WHERE method IN ('BANK_TRANSFER', 'ESEWA', 'KHALTI')), 0) AS gateway_total
-         FROM bill_payments
-         WHERE received_by = $1::uuid AND status = 'CLEARED'
-           AND created_at BETWEEN $2::timestamptz AND $3::timestamptz`,
+        `WITH payments AS (
+           SELECT
+             COALESCE(SUM(amount) FILTER (WHERE method = 'CASH'), 0) AS cash_collected,
+             COALESCE(SUM(amount) FILTER (WHERE method = 'CHEQUE'), 0) AS cheque_total,
+             COALESCE(SUM(amount) FILTER (WHERE method IN ('BANK_TRANSFER', 'ESEWA', 'KHALTI')), 0) AS gateway_total
+           FROM bill_payments
+           WHERE received_by = $1::uuid AND status = 'CLEARED'
+             AND created_at BETWEEN $2::timestamptz AND $3::timestamptz
+         ),
+         refunds AS (
+           SELECT COALESCE(SUM(amount), 0) AS total
+           FROM bill_corrections
+           WHERE type = 'REFUND' AND status = 'APPROVED' AND refund_method = 'CASH'
+             AND decided_at BETWEEN $2::timestamptz AND $3::timestamptz
+         )
+         SELECT
+           $4::numeric + payments.cash_collected - refunds.total AS expected_cash,
+           $5::numeric - ($4::numeric + payments.cash_collected - refunds.total) AS variance,
+           payments.cash_collected,
+           payments.cheque_total,
+           payments.gateway_total,
+           refunds.total AS cash_refund_total
+         FROM payments, refunds`,
         shift.cashier_user_id,
         shift.opened_at,
         closeTimestamp,
@@ -172,6 +216,7 @@ export class CashierShiftService {
         cashCollected: toMoney(agg.cash_collected).toNumber(),
         chequeTotal: toMoney(agg.cheque_total).toNumber(),
         gatewayTotal: toMoney(agg.gateway_total).toNumber(),
+        cashRefundTotal: toMoney(agg.cash_refund_total).toNumber(),
         byMethod: byMethodRows.map((r) => ({
           method: r.method,
           total: toMoney(r.total).toNumber(),

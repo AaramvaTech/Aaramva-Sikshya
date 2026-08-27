@@ -4,6 +4,16 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## D26 (BILLING-CALC-AUDIT-1) — two items found while fixing the drawer total, neither fixed here
+
+`D26-CASH-REFUND-DRAWER` made `cashier-shift.service.ts::closeShift` subtract APPROVED CASH refunds (`bill_corrections`) from `expected_cash`, and added `cashRefundTotal` as its own field on the close-shift response. Two things surfaced during that work that are genuinely outside its scope.
+
+**1. Refund-to-shift attribution is by time window only, not by cashier.** Refund approval is `OWNER_ONLY` (`bill-correction.controller.ts`) — there is no `received_by`-equivalent column on `bill_corrections` recording which cashier's till the cash actually left. The fix filters by `decided_at BETWEEN shift.opened_at AND closeTimestamp`, the same window discipline `bill_payments` already uses, with no actor filter at all (filtering by `decided_by = shift.cashier_user_id` would almost always match nothing, since the approver is the owner, not the cashier running the register). This is correct for the ordinary case — one cashier, one open shift — but `uq_cashier_shifts_one_open` is scoped **per cashier**, not globally, so a school with two tills open at once could have a single cash refund's time window overlap both shifts, attributing the same cash to both drawers. Fixing this properly needs either a new column recording who actually disbursed the cash, or a product decision that concurrent shifts aren't a supported scenario — out of a visibility-fix's scope.
+
+**2. The web close-shift screen doesn't render the new field — and didn't render the old ones either.** `apps/web/app/(school)/finance/bill/reports/page.tsx`'s close-shift confirmation shows only `Expected cash` and `Counted`; `cashCollected`/`chequeTotal`/`gatewayTotal` were already computed by the API and already unsurfaced before this ticket. `cashRefundTotal` simply joins them. Not a regression this ticket introduced, and not fixed here — `CashierCloseResult` is a plain TypeScript interface (`apps/web/types/api.types.ts`), so the new field is additive and the web build is unaffected either way. Whether the close-shift screen should show the full breakdown (refunds included) is a UI ticket, not this one.
+
+---
+
 ## D5 (BILLING-CALC-AUDIT-1) — proration is start-only; confirmed still open, not fixed here
 
 `BILLING-CALC-AUDIT-1-phase0.md` D5 names two independent defects in the same sentence: "proration is start-only, and the fraction is a JS float." D5-PRORATION-PRECISION fixed only the second half — `bill-line-resolver.service.ts`'s `prorate()` now does `amount.mul(daysBilled).div(daysInMonth)`, exact integer numerator/denominator, no binary-double intermediate.

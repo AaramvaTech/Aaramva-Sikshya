@@ -102,6 +102,7 @@ describe('CashierShiftService', () => {
         .mockResolvedValueOnce([{
           expected_cash: '7000.00', variance: '-500.00',
           cash_collected: '5000.00', cheque_total: '1500.00', gateway_total: '2000.00',
+          cash_refund_total: '0',
         }]) // aggregate
         .mockResolvedValueOnce([
           { method: 'CASH', total: '5000.00', count: '2' },
@@ -118,6 +119,7 @@ describe('CashierShiftService', () => {
       expect(result.cashCollected).toBe(5000);
       expect(result.chequeTotal).toBe(1500);
       expect(result.gatewayTotal).toBe(2000);
+      expect(result.cashRefundTotal).toBe(0);
       expect(result.byMethod).toEqual([
         { method: 'CASH', total: 5000, count: 2 },
         { method: 'CHEQUE', total: 1500, count: 1 },
@@ -129,7 +131,7 @@ describe('CashierShiftService', () => {
     it('a positive (over) variance is reported as-is, not corrected', async () => {
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([shiftRow()])
-        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '100.00', cash_collected: '0', cheque_total: '0', gateway_total: '0' }])
+        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '100.00', cash_collected: '0', cheque_total: '0', gateway_total: '0', cash_refund_total: '0' }])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([shiftRow({ status: 'CLOSED' })]);
 
@@ -140,7 +142,7 @@ describe('CashierShiftService', () => {
     it('the aggregate query filters CLEARED-only, scoped to the cashier and the shift window', async () => {
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([shiftRow()])
-        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0' }])
+        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0', cash_refund_total: '0' }])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([shiftRow({ status: 'CLOSED' })]);
 
@@ -152,6 +154,76 @@ describe('CashierShiftService', () => {
       expect(aggSql).toContain('created_at BETWEEN $2::timestamptz AND $3::timestamptz');
       expect(aggSql).toContain("FILTER (WHERE method = 'CASH')");
       expect(aggSql).toContain("FILTER (WHERE method IN ('BANK_TRANSFER', 'ESEWA', 'KHALTI')");
+      // D26-CASH-REFUND-DRAWER
+      expect(aggSql).toContain('FROM bill_corrections');
+      expect(aggSql).toContain("type = 'REFUND' AND status = 'APPROVED' AND refund_method = 'CASH'");
+      expect(aggSql).toContain('decided_at BETWEEN $2::timestamptz AND $3::timestamptz');
+    });
+
+    // D26-CASH-REFUND-DRAWER (BILLING-CALC-AUDIT-1 D26). The SQL layer does
+    // the subtraction (Postgres NUMERIC, exact — no Money/float concern), so
+    // these fixtures set the AGGREGATE row directly rather than re-deriving
+    // it; that arithmetic is what the "aggregate query filters..." test
+    // above and the live probe (Phase 1 report) both already confirm.
+    it('a CASH payment and a CASH refund in the same shift: drawer balance is payment minus refund, and the refund shows as its own line', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([shiftRow()]) // FOR UPDATE select, opening_float 2000.00
+        .mockResolvedValueOnce([{
+          // opening 2000 + cash_collected 5000 - cash_refund_total 100 = 6900
+          expected_cash: '6900.00', variance: '0.00',
+          cash_collected: '5000.00', cheque_total: '0', gateway_total: '0',
+          cash_refund_total: '100.00',
+        }])
+        .mockResolvedValueOnce([{ method: 'CASH', total: '5000.00', count: '1' }])
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED', expected_cash: '6900.00' })]);
+
+      const result = await service.closeShift('shift-1', { countedCash: '6900.00' }, 'staff-1');
+
+      expect(result.cashCollected).toBe(5000);
+      expect(result.cashRefundTotal).toBe(100);
+      expect(result.expectedCash).toBe(6900); // 2000 opening + 5000 in - 100 out
+      expect(result.variance).toBe(0); // counted matches once the refund is accounted for
+    });
+
+    it('a non-CASH (BANK_TRANSFER) refund never reduces the drawer — only CASH refunds are subtracted', async () => {
+      // The SQL's own WHERE clause (refund_method = 'CASH') is what
+      // enforces this — confirmed directly above ("the aggregate query
+      // filters..."). This pins the OBSERVABLE behaviour: a shift with a
+      // BANK_TRANSFER refund reports cash_refund_total as if it didn't
+      // exist, because the aggregate the SQL would actually return for
+      // that case excludes it.
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([shiftRow()])
+        .mockResolvedValueOnce([{
+          expected_cash: '7000.00', variance: '0.00',
+          cash_collected: '5000.00', cheque_total: '0', gateway_total: '0',
+          cash_refund_total: '0', // the BANK_TRANSFER refund never entered this sum
+        }])
+        .mockResolvedValueOnce([{ method: 'CASH', total: '5000.00', count: '1' }])
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED', expected_cash: '7000.00' })]);
+
+      const result = await service.closeShift('shift-1', { countedCash: '7000.00' }, 'staff-1');
+
+      expect(result.cashRefundTotal).toBe(0);
+      expect(result.expectedCash).toBe(7000); // opening 2000 + cash 5000, undiminished
+    });
+
+    it('a shift with zero refunds of any kind: cashRefundTotal is 0, expectedCash unaffected — the common case is unchanged', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([shiftRow()])
+        .mockResolvedValueOnce([{
+          expected_cash: '5000.00', variance: '0.00',
+          cash_collected: '3000.00', cheque_total: '0', gateway_total: '0',
+          cash_refund_total: '0',
+        }])
+        .mockResolvedValueOnce([{ method: 'CASH', total: '3000.00', count: '1' }])
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED', expected_cash: '5000.00' })]);
+
+      const result = await service.closeShift('shift-1', { countedCash: '5000.00' }, 'staff-1');
+
+      expect(result.cashRefundTotal).toBe(0);
+      expect(result.expectedCash).toBe(5000);
+      expect(result.variance).toBe(0);
     });
   });
 
@@ -194,7 +266,7 @@ describe('CashierShiftService', () => {
     it('closeShift returns both cashierName and closedByName from the joined rows', async () => {
       mockTx.$queryRawUnsafe
         .mockResolvedValueOnce([shiftRow()])
-        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0' }])
+        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0', cash_refund_total: '0' }])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([shiftRow({
           status: 'CLOSED',
