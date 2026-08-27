@@ -275,6 +275,15 @@ export class BillRunService {
    * scoped by bill_run_id and a VOIDED run's lines are simply inert history.
    * Soft-deleting (not hard) frees the idempotency_key's partial unique
    * index (WHERE deleted_at IS NULL) so the period can be re-drafted.
+   *
+   * D20-VOID-TOCTOU: the pre-transaction fetch above is a fast-fail only
+   * (404 / "not DRAFT" for the obvious case) — it is not what authorizes the
+   * write. The actual void re-reads the row with `FOR UPDATE` inside its own
+   * transaction and re-checks status from THAT read; a run that stopped
+   * being DRAFT in the window between the fast-fail check and the lock
+   * (e.g. a concurrent requestPost) is rejected with a clear conflict
+   * instead of the old bare `WHERE status = 'DRAFT'` UPDATE, which matched
+   * zero rows and returned `undefined` for the caller to crash on.
    */
   async voidRun(id: string): Promise<BillRunResponseDto> {
     const rows = await this.tenantPrisma.query<BillRunRow>(
@@ -286,13 +295,23 @@ export class BillRunService {
       throw new BadRequestException('Only a DRAFT run can be voided');
     }
 
-    const [updated] = await this.tenantPrisma.query<BillRunRow>(
-      `UPDATE bill_runs SET status = 'VOIDED', deleted_at = NOW(), updated_at = NOW()
-       WHERE id = $1::uuid AND status = 'DRAFT'
-       RETURNING *`,
-      id,
-    );
-    return toBillRunResponse(updated);
+    return this.tenantPrisma.run(async (tx) => {
+      const [current] = await tx.$queryRawUnsafe<BillRunRow[]>(
+        `SELECT * FROM bill_runs WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE`, id,
+      );
+      if (!current) throw new NotFoundException(`Bill run ${id} not found`);
+      if (current.status !== 'DRAFT') {
+        throw new ConflictException(`Bill run ${id} status changed concurrently (now ${current.status})`);
+      }
+
+      const [updated] = await tx.$queryRawUnsafe<BillRunRow[]>(
+        `UPDATE bill_runs SET status = 'VOIDED', deleted_at = NOW(), updated_at = NOW()
+         WHERE id = $1::uuid
+         RETURNING *`,
+        id,
+      );
+      return toBillRunResponse(updated);
+    });
   }
 
   private async resolveRoster(scope: BillRunScope, classId?: string): Promise<string[]> {

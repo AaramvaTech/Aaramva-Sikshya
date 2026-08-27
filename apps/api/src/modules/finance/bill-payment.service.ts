@@ -474,6 +474,21 @@ export class BillPaymentService {
    * Voiding is disallowed once a payment is already VOIDED (idempotency
    * guard) or BOUNCED (already dead — no ledger effect left to reverse and
    * no meaningful "undo" of a bounce).
+   *
+   * D20-VOID-TOCTOU: the pre-lock `payment` fetch above is routing-only (it
+   * exists only to learn `student_id` so the right advisory lock can be
+   * taken, plus a fast-fail for the obvious-garbage-request case) — it is
+   * NOT authoritative. Everything the void actually decides on (`status`,
+   * whether a ledger entry exists to reverse) is re-read via `FOR UPDATE`
+   * under the lock, into `current`, and only `current` is consulted from
+   * that point on. Before this fix, the CLEARED+ledger_entry_id branch below
+   * tested `current.status` (fresh) but read `payment.ledger_entry_id`
+   * (stale): a payment that went PENDING -> CLEARED (acquiring a
+   * ledger_entry_id) in the window between the pre-lock fetch and this
+   * transaction's lock acquisition would be correctly detected as CLEARED
+   * here, but `payment.ledger_entry_id` was still the pre-transition NULL —
+   * the reversal was silently skipped and the payment was still marked
+   * VOIDED, leaving that ledger credit standing forever.
    */
   async voidPayment(paymentId: string, dto: VoidPaymentDto, staffId: string): Promise<BillPaymentResponseDto> {
     const rows = await this.tenantPrisma.query<BillPaymentRow>(
@@ -486,16 +501,17 @@ export class BillPaymentService {
     if (payment.status === 'BOUNCED') throw new BadRequestException('Cannot void an already-bounced payment');
 
     return this.ledgerService.withStudentLock(payment.student_id, async (tx) => {
-      const [current] = await tx.$queryRawUnsafe<{ status: string }[]>(
-        `SELECT status FROM bill_payments WHERE id = $1::uuid`, paymentId,
+      const [current] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
+        `SELECT * FROM bill_payments WHERE id = $1::uuid AND deleted_at IS NULL FOR UPDATE`, paymentId,
       );
+      if (!current) throw new NotFoundException(`Payment ${paymentId} not found`);
       if (current.status === 'VOIDED' || current.status === 'BOUNCED') {
         throw new ConflictException(`Payment status changed concurrently (now ${current.status})`);
       }
 
-      if (current.status === 'CLEARED' && payment.ledger_entry_id) {
+      if (current.status === 'CLEARED' && current.ledger_entry_id) {
         const [originalEntry] = await tx.$queryRawUnsafe<LedgerEntryRow[]>(
-          `SELECT * FROM student_ledger_entries WHERE id = $1::uuid`, payment.ledger_entry_id,
+          `SELECT * FROM student_ledger_entries WHERE id = $1::uuid`, current.ledger_entry_id,
         );
         await this.ledgerService.reverseInTx(tx, originalEntry, staffId);
       }
