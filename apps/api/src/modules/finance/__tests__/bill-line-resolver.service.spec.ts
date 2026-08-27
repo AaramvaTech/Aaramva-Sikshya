@@ -1,10 +1,11 @@
 import { bsToAd, daysInBsMonth } from 'bs-calendar';
 import { Test } from '@nestjs/testing';
-import { BillLineResolverService } from '../bill-line-resolver.service';
+import { BillLineResolverService, prorate } from '../bill-line-resolver.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { StudentFeeStructureAssignmentService } from '../student-fee-structure-assignment.service';
 import { FeePreviewService } from '../fee-preview.service';
 import { formatLocalDate } from '../../common/utils/date.util';
+import { Money } from '../../../common/money/money';
 
 const BS_YEAR = 2083;
 const BS_MONTH = 4; // Shrawan
@@ -35,6 +36,62 @@ function makePreview(heads: any[], transport: any = null, wholeBillConcessions: 
     grossTotal, concessionTotal: 0, netTotal,
   };
 }
+
+/**
+ * D5-PRORATION-PRECISION. Pure-function tests — no mocking, no NestJS
+ * module, no BS calendar dependency. `prorate()` takes plain integer day
+ * counts, so every case here is a literal, hand-computed expected value,
+ * not `toBeCloseTo` — the whole point is that the 2dp result is EXACT, not
+ * approximately right within float tolerance.
+ */
+describe('prorate() — D5-PRORATION-PRECISION', () => {
+  it("the ticket's own worked example: 30-day month, 17 billed, Rs 1000.00 -> exactly 566.67, not 566.66 or 566.68", () => {
+    const result = prorate(Money.fromDb('1000.00'), 17, 30);
+    expect(result.toDb()).toBe('566.67');
+    expect(result.toDb()).not.toBe('566.66');
+    expect(result.toDb()).not.toBe('566.68');
+  });
+
+  it('full month (daysBilled === daysInMonth): the identity — untouched, not merely close', () => {
+    const amount = Money.fromDb('1234.56');
+    const result = prorate(amount, 31, 31);
+    expect(result.toDb()).toBe('1234.56');
+    // Genuinely the same value, not a coincidentally-equal recomputation —
+    // confirms the identity short-circuit actually returns `amount` itself.
+    expect(result).toBe(amount);
+  });
+
+  it('last day of the month only (daysBilled=1, an assignment joining on the final day): exact, not rounded twice', () => {
+    // 1000/31 = 32.258064516... -> 32.26 (third decimal 8, rounds up)
+    const result = prorate(Money.fromDb('1000.00'), 1, 31);
+    expect(result.toDb()).toBe('32.26');
+  });
+
+  it('all but one day billed (daysBilled = daysInMonth - 1): the other edge from single-day', () => {
+    // 1000 * 30/31 = 967.741935... -> 967.74
+    const result = prorate(Money.fromDb('1000.00'), 30, 31);
+    expect(result.toDb()).toBe('967.74');
+  });
+
+  it('a fraction exactly representable in binary (15/30 = 0.5): unchanged from what the old float path already gave', () => {
+    const amount = Money.fromDb('1999.99');
+    const result = prorate(amount, 15, 30);
+    // What the OLD code computed: amount.mul(daysBilled / daysInMonth) with
+    // the precomputed JS double. 0.5 is exact in binary, so this old-style
+    // computation is ALSO exact here -- the fix must not perturb this case.
+    const oldStyle = amount.mul(15 / 30);
+    expect(result.toDb()).toBe(oldStyle.toDb());
+    // 1999.99 * 0.5 = 999.995 exactly (a genuine tie) -> half-up -> 1000.00.
+    expect(result.toDb()).toBe('1000.00');
+  });
+
+  it('the two ratios actually present in dev data (1/31 and 16/29) pin exact values, not just "close"', () => {
+    // BINV-2083-000001..006 in tenant_motherland_school, base 100.00, 1/31 days.
+    expect(prorate(Money.fromDb('100.00'), 1, 31).toDb()).toBe('3.23');
+    // BINV-2083-000048 in tenant_motherland_school, base 100.00, 16/29 days.
+    expect(prorate(Money.fromDb('100.00'), 16, 29).toDb()).toBe('55.17');
+  });
+});
 
 describe('BillLineResolverService', () => {
   let service: BillLineResolverService;
@@ -161,6 +218,29 @@ describe('BillLineResolverService', () => {
     expect(monthlyItem.grossAmount).toBeCloseTo((DAYS_IN_MONTH * 100 * EXPECTED_DAYS_BILLED) / DAYS_IN_MONTH, 2);
     expect(noneItem.prorationNote).toBeNull();
     expect(noneItem.grossAmount).toBe(500); // NONE-policy head bills in full even mid-period
+  });
+
+  // D5-PRORATION-PRECISION. The test above uses DAYS_IN_MONTH*100 as the
+  // gross, which divides out cleanly regardless of arithmetic precision —
+  // it cannot tell an exact result from a merely-close one. This uses an
+  // amount that does NOT divide evenly, and asserts an EXACT value (not
+  // toBeCloseTo), proving daysBilled/daysInMonth actually reach prorate()
+  // through the real resolve() pipeline — the pure-function tests above
+  // already prove prorate() itself is exact; this proves the wiring is.
+  it('D5-PRORATION-PRECISION: mid-period proration through the real pipeline is exact, not merely close', async () => {
+    assignmentService.findAssignmentOverlappingPeriod.mockResolvedValueOnce(makeAssignment(MID_EFFECTIVE_FROM));
+    feePreviewService.preview.mockResolvedValueOnce(makePreview([
+      { feeHeadId: 'fh-monthly', feeHeadName: 'Tuition', grossAmount: 1000, overrideAmount: null, effectiveBase: 1000, concessions: [], netAmount: 1000 },
+    ]) as any);
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'fh-monthly', is_taxable: false, recurrence: 'MONTHLY', proration_policy: 'MONTHLY' }])
+      .mockResolvedValueOnce([]); // no active tax rate
+
+    const result = await service.resolve('student-1', 'year-1', BS_YEAR, BS_MONTH);
+
+    const expected = prorate(Money.fromDb('1000.00'), EXPECTED_DAYS_BILLED, DAYS_IN_MONTH).toNumber();
+    expect(result.items[0].grossAmount).toBe(expected);
+    expect(result.gross).toBe(expected);
   });
 
   it('no active tax rate: taxRate null, taxAmount 0', async () => {
