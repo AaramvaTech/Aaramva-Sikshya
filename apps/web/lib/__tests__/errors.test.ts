@@ -80,8 +80,12 @@ describe('getErrorDisplay — enveloped server errors', () => {
   });
 
   // ERR-MAP-1 ruling 6 — the six codes that had drifted out of CODE_MESSAGES,
-  // plus this ticket's new one. Each must resolve to its OWN message, not the
-  // generic fallback and not the server's string.
+  // plus this ticket's new one. Each must resolve to its OWN message when the
+  // server sends none — not the generic fallback.
+  //
+  // ERR-WEB-MESSAGE-DEAD flipped the priority (server message now wins over
+  // the catalog when the server sends one — see the dedicated tests below),
+  // so this fixture must omit `message` to still exercise the catalog path.
   it.each([
     ['PASSWORD_CHANGE_REQUIRED', /temporary password/i],
     ['CLASS_MISMATCH', /different class/i],
@@ -90,17 +94,29 @@ describe('getErrorDisplay — enveloped server errors', () => {
     ['BAD_REQUEST', /could not be processed/i],
     ['SERVICE_UNAVAILABLE', /temporarily unavailable/i],
     ['RELATED_RECORD_NOT_FOUND', /no longer exists/i],
-  ])('%s has its own client message', (code, pattern) => {
+  ])('%s falls back to its own client message when the server sends none', (code, pattern) => {
     const d = getErrorDisplay({
-      response: { status: 400, data: { error: { code, message: 'SERVER STRING' } } },
+      response: { status: 400, data: { error: { code } } },
     });
     expect(d.message).toMatch(pattern);
-    expect(d.message).not.toBe('SERVER STRING');
     expect(d.message).not.toBe('Something went wrong. Please try again.');
   });
 
-  it('cataloged business code → mapped message, not retryable', () => {
-    const d = getErrorDisplay({ response: { status: 403, data: { error: { code: 'FORBIDDEN_SCOPE', message: 'Access denied' } } } });
+  // ERR-WEB-MESSAGE-DEAD — the defect this covers: CODE_MESSAGES[code] ??
+  // serverMessage discarded a real, specific server message (e.g. "Invoice
+  // INV-0042 is already voided") in favour of a generic catalog string
+  // whenever the code happened to be cataloged. The server message must win.
+  it('ERR-WEB-MESSAGE-DEAD: a cataloged code with a real server message uses the SERVER message, not the catalog', () => {
+    const d = getErrorDisplay({
+      response: { status: 403, data: { error: { code: 'FORBIDDEN_SCOPE', message: 'Access denied for invoice INV-0042' } } },
+    });
+    expect(d.kind).toBe('business');
+    expect(d.message).toBe('Access denied for invoice INV-0042');
+    expect(d.message).not.toBe("You don't have access to this record.");
+  });
+
+  it('cataloged business code with no server message → mapped catalog message, not retryable', () => {
+    const d = getErrorDisplay({ response: { status: 403, data: { error: { code: 'FORBIDDEN_SCOPE' } } } });
     expect(d.kind).toBe('business');
     expect(d.message).toBe("You don't have access to this record.");
   });
@@ -122,5 +138,15 @@ describe('getErrorDisplay — never leaks a raw axios/JS string', () => {
     const d = getErrorDisplay(new Error('CONFLICT_DUPLICATE: A record with this value already exists.'));
     expect(d.kind).toBe('business');
     expect(d.message).toBe('A record with this value already exists.');
+  });
+
+  // ERR-WEB-MESSAGE-DEAD: the fixture above can't tell old from new priority
+  // — the parsed text happens to equal the catalog string for that code. Use
+  // a code whose catalog text differs from the parsed message to prove the
+  // parsed (server-authored) message wins, not the catalog.
+  it('ERR-WEB-MESSAGE-DEAD: manufactured "CODE: message" prefers the parsed message over the catalog', () => {
+    const d = getErrorDisplay(new Error('CLASS_MISMATCH: Grade 5 structure cannot bill a Grade 10 student.'));
+    expect(d.kind).toBe('business');
+    expect(d.message).toBe('Grade 5 structure cannot bill a Grade 10 student.');
   });
 });
