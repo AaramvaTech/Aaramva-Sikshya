@@ -19,11 +19,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAcademicYears, useCurrentAcademicYear, useStudents } from '@/lib/hooks/use-students';
-import { useStudentOutstandingInvoices, useStudentBalance, useRecordPayment } from '@/lib/hooks/use-bill-payment';
+import {
+  useStudentOutstandingInvoices, useStudentBalance, useRecordPayment, useStudentOutstandingFines,
+} from '@/lib/hooks/use-bill-payment';
 import { COUNTER_PAYMENT_METHODS, canSubmitBillPayment, sumManualTargets, buildPaymentConfirmationText } from '@/lib/bill-payment-form';
 import { extractApiErrors } from '@/lib/api-errors';
 import { useAuthStore } from '@/store/auth.store';
-import type { BillPayment, BillPaymentAllocationMode, BillPaymentMethod, StudentSummary } from '@/types/api.types';
+import type { BillPayment, BillPaymentAllocationMode, BillPaymentMethod, StudentSummary, ManualAllocationTarget } from '@/types/api.types';
 
 /** Mirrors BillPaymentController's own MANUAL_ALLOCATION_ROLES exactly (not
  * route-access.ts's OWNER_PRINCIPAL, which omits PLATFORM_ADMIN) — the point
@@ -58,6 +60,7 @@ export default function RecordPaymentPage() {
   const [method, setMethod] = useState<BillPaymentMethod>('CASH');
   const [allocationMode, setAllocationMode] = useState<BillPaymentAllocationMode>('AUTO_FIFO');
   const [manualTargets, setManualTargets] = useState<Record<string, string>>({}); // billInvoiceId -> amount
+  const [manualFineTargets, setManualFineTargets] = useState<Record<string, string>>({}); // billFineAccrualId -> amount
   const [chequeBank, setChequeBank] = useState('');
   const [chequeDate, setChequeDate] = useState('');
   const [receivedDate, setReceivedDate] = useState('');
@@ -73,6 +76,7 @@ export default function RecordPaymentPage() {
   const searchResults = studentsData?.data?.data ?? [];
 
   const { data: outstandingInvoices, isLoading: invoicesLoading } = useStudentOutstandingInvoices(selectedStudent?.id ?? null);
+  const { data: outstandingFines, isLoading: finesLoading } = useStudentOutstandingFines(selectedStudent?.id ?? null);
   const { data: studentBalance } = useStudentBalance(selectedStudent?.id ?? null);
   const recordPayment = useRecordPayment();
 
@@ -91,6 +95,7 @@ export default function RecordPaymentPage() {
     setStudentSearch(`${student.firstName} ${student.lastName} (${student.studentId})`);
     setShowDropdown(false);
     setManualTargets({});
+    setManualFineTargets({});
   }
 
   function toggleManualTarget(invoiceId: string, invoiceBalance: number, checked: boolean) {
@@ -98,6 +103,15 @@ export default function RecordPaymentPage() {
       const next = { ...prev };
       if (checked) next[invoiceId] = String(invoiceBalance);
       else delete next[invoiceId];
+      return next;
+    });
+  }
+
+  function toggleManualFineTarget(fineAccrualId: string, outstanding: number, checked: boolean) {
+    setManualFineTargets((prev) => {
+      const next = { ...prev };
+      if (checked) next[fineAccrualId] = String(outstanding);
+      else delete next[fineAccrualId];
       return next;
     });
   }
@@ -111,6 +125,7 @@ export default function RecordPaymentPage() {
     setMethod('CASH');
     setAllocationMode('AUTO_FIFO');
     setManualTargets({});
+    setManualFineTargets({});
     setChequeBank('');
     setChequeDate('');
     setReceivedDate('');
@@ -119,7 +134,10 @@ export default function RecordPaymentPage() {
     setResult(null);
   }
 
-  const targets = Object.entries(manualTargets).map(([billInvoiceId, amt]) => ({ billInvoiceId, amount: amt }));
+  const targets: ManualAllocationTarget[] = [
+    ...Object.entries(manualTargets).map(([billInvoiceId, amt]) => ({ billInvoiceId, amount: amt })),
+    ...Object.entries(manualFineTargets).map(([billFineAccrualId, amt]) => ({ billFineAccrualId, amount: amt })),
+  ];
   const manualSum = sumManualTargets(targets);
 
   const canSubmit = !!selectedStudent && canSubmitBillPayment({
@@ -145,7 +163,9 @@ export default function RecordPaymentPage() {
         method,
         allocationMode,
         manualAllocations: targets.map((t) => ({
-          invoiceNumber: outstandingInvoices?.find((inv) => inv.id === t.billInvoiceId)?.invoiceNumber ?? t.billInvoiceId,
+          invoiceNumber: t.billInvoiceId
+            ? (outstandingInvoices?.find((inv) => inv.id === t.billInvoiceId)?.invoiceNumber ?? t.billInvoiceId)
+            : `Late fee (${outstandingFines?.find((f) => f.id === t.billFineAccrualId)?.invoiceNumber ?? t.billFineAccrualId})`,
           amount: t.amount,
         })),
       })
@@ -196,7 +216,9 @@ export default function RecordPaymentPage() {
               <div className="space-y-1.5">
                 {result.allocations.map((a) => (
                   <div key={a.id} className="flex justify-between text-sm">
-                    <span className="font-mono text-xs text-gray-500">Invoice …{a.billInvoiceId.slice(-8)}</span>
+                    <span className="font-mono text-xs text-gray-500">
+                      {a.billInvoiceId ? `Invoice …${a.billInvoiceId.slice(-8)}` : `Late fee …${a.billFineAccrualId?.slice(-8)}`}
+                    </span>
                     <AmountDisplay amount={a.amount} />
                   </div>
                 ))}
@@ -303,6 +325,42 @@ export default function RecordPaymentPage() {
                 )}
               </div>
 
+              {/* BILL-7 checkout fix: late fees had no payable target anywhere
+                  in the checkout flow before this — visible on the balance
+                  tile, uncollectable here. Hidden entirely (not just empty)
+                  when the student has none, so the common case is unchanged. */}
+              {!finesLoading && outstandingFines && outstandingFines.length > 0 && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Late Fees</p>
+                  <div className="space-y-2">
+                    {outstandingFines.map((fine) => (
+                      <div key={fine.id} className="flex items-center gap-3 text-sm">
+                        {allocationMode === 'MANUAL' && (
+                          <Checkbox
+                            checked={fine.id in manualFineTargets}
+                            onCheckedChange={(checked) => toggleManualFineTarget(fine.id, fine.outstanding, !!checked)}
+                          />
+                        )}
+                        <span className="font-mono text-xs text-gray-500 flex-1">
+                          {fine.invoiceNumber} · {fine.daysOverdue}d overdue
+                        </span>
+                        {allocationMode === 'MANUAL' && fine.id in manualFineTargets ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-7 w-28 text-right"
+                            value={manualFineTargets[fine.id]}
+                            onChange={(e) => setManualFineTargets((prev) => ({ ...prev, [fine.id]: e.target.value }))}
+                          />
+                        ) : (
+                          <AmountDisplay amount={fine.outstanding} className="text-error-600" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Amount *</Label>
@@ -349,7 +407,7 @@ export default function RecordPaymentPage() {
                   ))}
                 </div>
                 {allocationMode === 'AUTO_FIFO' && (
-                  <p className="text-xs text-gray-400 pt-2">Settles the oldest outstanding invoices first, no picking needed.</p>
+                  <p className="text-xs text-gray-400 pt-2">Settles the oldest outstanding invoices first, then any late fees, no picking needed.</p>
                 )}
                 {allocationMode === 'MANUAL' && (
                   <p className="text-xs text-gray-400 pt-2">

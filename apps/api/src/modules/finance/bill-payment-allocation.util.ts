@@ -38,3 +38,48 @@ export function planAutoFifoAllocation(
 
   return { allocations, remainder: remaining };
 }
+
+// ─── BILL-7 checkout fix — fine accruals as a second payable target ─────────
+
+export interface UnpaidFineCandidate {
+  billFineAccrualId: string;
+  outstanding: Money;
+}
+
+export interface FineAllocationPlanItem {
+  billFineAccrualId: string;
+  amount: Money;
+}
+
+export interface FineAllocationPlan {
+  allocations: FineAllocationPlanItem[];
+  remainder: Money;
+}
+
+/**
+ * Same walk-and-allocate algorithm as planAutoFifoAllocation, over fine
+ * accrual candidates instead of invoices. Deliberately a PARALLEL function,
+ * not a generic reuse of planAutoFifoAllocation — same reasoning
+ * bill-advance-consumption.util.ts already gives for its own near-identical
+ * walk: renaming that already-reviewed, already-proven type's
+ * `billInvoiceId` field to serve double duty here would read as an accrual
+ * id at every existing invoice call site. Called with the payment amount
+ * still remaining AFTER invoice candidates are exhausted (BillPaymentService
+ * — invoices first, then fines; see its own docblock for why).
+ */
+export function planAutoFifoFineAllocation(
+  amount: Money,
+  candidatesOldestFirst: UnpaidFineCandidate[],
+): FineAllocationPlan {
+  let remaining = amount;
+  const allocations: FineAllocationPlanItem[] = [];
+
+  for (const candidate of candidatesOldestFirst) {
+    if (remaining.isZero()) break;
+    const applied = remaining.compare(candidate.outstanding) <= 0 ? remaining : candidate.outstanding;
+    allocations.push({ billFineAccrualId: candidate.billFineAccrualId, amount: applied });
+    remaining = remaining.sub(applied);
+  }
+
+  return { allocations, remainder: remaining };
+}

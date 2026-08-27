@@ -9,7 +9,8 @@ import { pickApplicableRule, computeTotalFine, addDaysAd, FineRule } from './bil
 import { reversedExpr, notReversedExpr } from './bill-reversal.util';
 import {
   BillFineAccrualRow, BillFineRunRow, BillFineAccrualResponseDto, BillFineRunResponseDto,
-  toBillFineAccrualResponse, toBillFineRunResponse,
+  OutstandingFineAccrualRow, OutstandingFineAccrualResponseDto,
+  toBillFineAccrualResponse, toBillFineRunResponse, toOutstandingFineAccrualResponse,
 } from './entities/bill-fine.entity';
 import { BillFineRunQueryDto } from './dto/bill-fine.dto';
 
@@ -131,6 +132,50 @@ export class BillFineService {
 
     await this.ledgerService.reverse(accrual.ledger_entry_id, approverId);
     return toBillFineAccrualResponse(accrual);
+  }
+
+  /**
+   * BILL-7 checkout fix. "Outstanding" per accrual row = delta_posted minus
+   * any CLEARED payment allocation already booked against that exact row
+   * (bill_payment_allocations.bill_fine_accrual_id, migration 0039) — same
+   * CLEARED-only gate every other outstanding-money query in this module
+   * uses (B5-5), so a PENDING/BOUNCED/VOIDED payment never makes a fine
+   * look paid. Reversed accruals (the waiver mechanism, D24-D27-REVERSAL)
+   * are excluded entirely, same rule bill-fine.util's own already_posted/
+   * waived split uses — a waived fine was never owed in the first place, so
+   * it is never a payable candidate. Oldest-first by accrued_through, the
+   * same FIFO convention fetchUnpaidInvoicesOldestFirst uses for invoices.
+   *
+   * Takes a `tx` (not a bare studentId) so BillPaymentService can run this
+   * INSIDE its own per-student LedgerService.withStudentLock transaction —
+   * a concurrent payment must not be able to double-spend the same fine
+   * between this read and the allocation it books off of it.
+   */
+  async fetchOutstandingAccruals(tx: TenantTx, studentId: string): Promise<OutstandingFineAccrualRow[]> {
+    return tx.$queryRawUnsafe<OutstandingFineAccrualRow[]>(
+      `SELECT * FROM (
+         SELECT bfa.id, bfa.bill_invoice_id, bi.invoice_number, bfa.accrued_through, bfa.days_overdue,
+                bfa.delta_posted - COALESCE(
+                  (SELECT SUM(bpa.amount) FROM bill_payment_allocations bpa
+                   JOIN bill_payments bp ON bp.id = bpa.bill_payment_id AND bp.status = 'CLEARED'
+                   WHERE bpa.bill_fine_accrual_id = bfa.id), 0
+                ) AS outstanding
+         FROM bill_fine_accruals bfa
+         JOIN bill_invoices bi ON bi.id = bfa.bill_invoice_id
+         WHERE bfa.student_id = $1::uuid
+           AND ${notReversedExpr('bfa.ledger_entry_id')}
+       ) sub
+       WHERE outstanding > 0
+       ORDER BY accrued_through ASC, id ASC`,
+      studentId,
+    );
+  }
+
+  /** Read-endpoint wrapper — opens its own transaction (no caller-held lock
+   * to compose into, unlike BillPaymentService's use of the same query). */
+  async getOutstandingFines(studentId: string): Promise<OutstandingFineAccrualResponseDto[]> {
+    const rows = await this.tenantPrisma.run((tx) => this.fetchOutstandingAccruals(tx, studentId));
+    return rows.map(toOutstandingFineAccrualResponse);
   }
 
   private async fetchEnabledRules(today: string): Promise<FineRule[]> {

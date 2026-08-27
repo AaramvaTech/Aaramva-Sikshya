@@ -42,4 +42,14 @@ export class BillFineController {
   reverseAccrual(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('userId') userId: string) {
     return this.billFineService.reverseAccrual(id, userId);
   }
+
+  /** BILL-7 checkout fix — the read side the counter payment page needs to
+   * show a student's still-owed fines and let a cashier select them, same
+   * tier as the counter's other payment-context reads (outstanding
+   * invoices, student balance). */
+  @Get('students/:studentId/outstanding')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  getOutstandingFines(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.billFineService.getOutstandingFines(studentId);
+  }
 }
