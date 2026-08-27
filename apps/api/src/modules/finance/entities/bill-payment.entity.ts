@@ -39,7 +39,11 @@ export interface BillPaymentRow {
 export interface BillPaymentAllocationRow {
   id: string;
   bill_payment_id: string;
-  bill_invoice_id: string;
+  /** BILL-7 checkout fix: exactly one of bill_invoice_id/bill_fine_accrual_id
+   *  is ever set (migration 0039's CHECK constraint) — never both, never
+   *  neither. */
+  bill_invoice_id: string | null;
+  bill_fine_accrual_id: string | null;
   amount: string | number;
   created_at: Date | string;
 }
@@ -48,7 +52,8 @@ export interface BillPaymentAllocationRow {
 
 export interface BillPaymentAllocationResponseDto {
   id: string;
-  billInvoiceId: string;
+  billInvoiceId: string | null;
+  billFineAccrualId: string | null;
   amount: number;
   createdAt: string;
 }
@@ -106,6 +111,7 @@ export function toBillPaymentAllocationResponse(row: BillPaymentAllocationRow): 
   return {
     id: row.id,
     billInvoiceId: row.bill_invoice_id,
+    billFineAccrualId: row.bill_fine_accrual_id,
     amount: toMoney(row.amount).toNumber(),
     createdAt: toIso(row.created_at),
   };

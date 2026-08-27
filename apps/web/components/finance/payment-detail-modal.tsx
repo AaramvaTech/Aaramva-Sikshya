@@ -109,7 +109,9 @@ export function PaymentDetailModal({ paymentId, onClose }: PaymentDetailModalPro
                   <div className="space-y-2">
                     {payment.allocations.map((a) => (
                       <div key={a.id} className="flex justify-between text-sm">
-                        <span className="font-mono text-xs text-gray-500">Invoice …{a.billInvoiceId.slice(-8)}</span>
+                        <span className="font-mono text-xs text-gray-500">
+                          {a.billInvoiceId ? `Invoice …${a.billInvoiceId.slice(-8)}` : `Late fee …${a.billFineAccrualId?.slice(-8)}`}
+                        </span>
                         <AmountDisplay amount={a.amount} />
                       </div>
                     ))}

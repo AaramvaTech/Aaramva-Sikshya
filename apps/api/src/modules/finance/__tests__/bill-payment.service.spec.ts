@@ -5,6 +5,7 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { LedgerService } from '../ledger.service';
 import { FinanceSettingsService } from '../finance-settings.service';
+import { BillFineService } from '../bill-fine.service';
 import { Role } from '../../common/enums/role.enum';
 import { GuardianScopeService } from '../../student/guardian-scope.service';
 import { Money } from '../../../common/money/money';
@@ -51,6 +52,7 @@ describe('BillPaymentService', () => {
   let ledgerService: jest.Mocked<LedgerService>;
   let financeSettingsService: jest.Mocked<FinanceSettingsService>;
   let guardianScope: jest.Mocked<GuardianScopeService>;
+  let billFineService: jest.Mocked<BillFineService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -68,6 +70,11 @@ describe('BillPaymentService', () => {
         },
         { provide: FinanceSettingsService, useValue: { getInvoiceNumberingReset: jest.fn() } },
         { provide: GuardianScopeService, useValue: { assertOwnsStudent: jest.fn() } },
+        // BILL-7 checkout fix: fetchOutstandingAccruals defaults to "no
+        // outstanding fines" so every pre-existing test (none of which knows
+        // about fines) keeps its original AUTO_FIFO/MANUAL behavior — only
+        // the new BILL-7 tests below override this per-case.
+        { provide: BillFineService, useValue: { fetchOutstandingAccruals: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
@@ -76,7 +83,9 @@ describe('BillPaymentService', () => {
     ledgerService = module.get(LedgerService) as jest.Mocked<LedgerService>;
     financeSettingsService = module.get(FinanceSettingsService) as jest.Mocked<FinanceSettingsService>;
     guardianScope = module.get(GuardianScopeService) as jest.Mocked<GuardianScopeService>;
+    billFineService = module.get(BillFineService) as jest.Mocked<BillFineService>;
     jest.clearAllMocks();
+    billFineService.fetchOutstandingAccruals.mockResolvedValue([]);
     financeSettingsService.getInvoiceNumberingReset.mockResolvedValue({ invoiceNumberingReset: false });
   });
 
@@ -237,6 +246,219 @@ describe('BillPaymentService', () => {
           'user-1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // BILL-7 checkout fix — late fees had no payable target anywhere in the
+  // allocation model before this. Priority: invoices first (oldest-first,
+  // unchanged), then whatever remains goes to outstanding fines.
+  describe('recordPayment — BILL-7 fine allocation (AUTO_FIFO)', () => {
+    it('settles the invoice in full, remainder goes to the outstanding fine — Binod Gurung worked example (2260 invoice + 40 fine)', async () => {
+      mockExistenceChecks();
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000005', own_balance: '2260.00' }]) // unpaid invoices
+        .mockResolvedValueOnce([{ value: BigInt(6) }]) // sequence upsert
+        .mockResolvedValueOnce([{ id: 'payment-6' }]) // bill_payments insert
+        .mockResolvedValueOnce([
+          { id: 'alloc-1', bill_payment_id: 'payment-6', bill_invoice_id: 'invoice-1', bill_fine_accrual_id: null, amount: '2260.00', created_at: new Date() },
+          { id: 'alloc-2', bill_payment_id: 'payment-6', bill_invoice_id: null, bill_fine_accrual_id: 'fine-1', amount: '40.00', created_at: new Date() },
+        ]) // allocations re-select
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-6', amount: '2300.00' }]); // payment re-select
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-6' } as any);
+
+      const result = await service.recordPayment(baseDto({ amount: '2300.00' }), 'user-1');
+
+      expect(billFineService.fetchOutstandingAccruals).toHaveBeenCalledWith(mockTx, 'student-1');
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)'),
+        'payment-6', 'invoice-1', '2260.00',
+      );
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations (bill_payment_id, bill_fine_accrual_id, amount)'),
+        'payment-6', 'fine-1', '40.00',
+      );
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        entryType: 'PAYMENT', credit: '2300.00',
+      }));
+      expect(result.allocatedAmount).toBe(2300);
+      expect(result.advanceAmount).toBe(0);
+    });
+
+    it('never queries fines when invoices exactly consume the payment (zero remainder) — invoices strictly first', async () => {
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000005', own_balance: '2260.00' }])
+        .mockResolvedValueOnce([{ value: BigInt(7) }])
+        .mockResolvedValueOnce([{ id: 'payment-7' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-7', bill_invoice_id: 'invoice-1', bill_fine_accrual_id: null, amount: '2260.00', created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-7', amount: '2260.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-7' } as any);
+
+      await service.recordPayment(baseDto({ amount: '2260.00' }), 'user-1');
+
+      expect(billFineService.fetchOutstandingAccruals).not.toHaveBeenCalled();
+    });
+
+    it('no outstanding invoices at all — the whole payment goes to the outstanding fine', async () => {
+      mockExistenceChecks();
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([]) // no unpaid invoices
+        .mockResolvedValueOnce([{ value: BigInt(8) }])
+        .mockResolvedValueOnce([{ id: 'payment-8' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-8', bill_invoice_id: null, bill_fine_accrual_id: 'fine-1', amount: '40.00', created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-8', amount: '40.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-8' } as any);
+
+      const result = await service.recordPayment(baseDto({ amount: '40.00' }), 'user-1');
+
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations (bill_payment_id, bill_fine_accrual_id, amount)'),
+        'payment-8', 'fine-1', '40.00',
+      );
+      // Even a fine-only payment is a real PAYMENT, not unattributed advance
+      // credit (DEPOSIT) — money was applied to something specific.
+      expect(ledgerService.postEntryInTx).toHaveBeenCalledWith(mockTx, expect.objectContaining({ entryType: 'PAYMENT' }));
+      expect(result.allocatedAmount).toBe(40);
+    });
+  });
+
+  describe('recordPayment — BILL-7 fine allocation (MANUAL)', () => {
+    it('targets a fine accrual specifically', async () => {
+      mockExistenceChecks();
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ value: BigInt(9) }])
+        .mockResolvedValueOnce([{ id: 'payment-9' }])
+        .mockResolvedValueOnce([{ id: 'alloc-1', bill_payment_id: 'payment-9', bill_invoice_id: null, bill_fine_accrual_id: 'fine-1', amount: '40.00', created_at: new Date() }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-9', amount: '40.00' }]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-9' } as any);
+
+      const result = await service.recordPayment(
+        baseDto({
+          amount: '40.00',
+          allocationMode: BillPaymentAllocationMode.MANUAL,
+          targets: [{ billFineAccrualId: 'fine-1', amount: '40.00' }],
+        }),
+        'user-1',
+      );
+
+      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO bill_payment_allocations (bill_payment_id, bill_fine_accrual_id, amount)'),
+        'payment-9', 'fine-1', '40.00',
+      );
+      expect(result.allocatedAmount).toBe(40);
+    });
+
+    it('rejects a target amount exceeding that fine accrual\'s own outstanding amount', async () => {
+      mockExistenceChecks();
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+
+      await expect(
+        service.recordPayment(
+          baseDto({
+            amount: '100.00',
+            allocationMode: BillPaymentAllocationMode.MANUAL,
+            targets: [{ billFineAccrualId: 'fine-1', amount: '100.00' }],
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a fine id that is not outstanding for this student (foreign, already-paid, or reversed)', async () => {
+      mockExistenceChecks();
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([]); // nothing outstanding
+
+      await expect(
+        service.recordPayment(
+          baseDto({
+            amount: '40.00',
+            allocationMode: BillPaymentAllocationMode.MANUAL,
+            targets: [{ billFineAccrualId: 'fine-does-not-exist', amount: '40.00' }],
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects a target naming neither billInvoiceId nor billFineAccrualId', async () => {
+      mockExistenceChecks();
+      // Neither id is set, so invoiceIds/fineIds are both empty — both
+      // fetchInvoicesByIds and fetchFinesByIds short-circuit without
+      // touching mockTx or billFineService at all; the rejection comes
+      // purely from the per-target validation loop.
+
+      await expect(
+        service.recordPayment(
+          baseDto({
+            amount: '40.00',
+            allocationMode: BillPaymentAllocationMode.MANUAL,
+            targets: [{ amount: '40.00' } as any],
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a target naming BOTH billInvoiceId and billFineAccrualId', async () => {
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000005', own_balance: '2260.00' }]);
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+
+      await expect(
+        service.recordPayment(
+          baseDto({
+            amount: '40.00',
+            allocationMode: BillPaymentAllocationMode.MANUAL,
+            targets: [{ billInvoiceId: 'invoice-1', billFineAccrualId: 'fine-1', amount: '40.00' } as any],
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('mixes an invoice target and a fine target in one payment', async () => {
+      mockExistenceChecks();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ id: 'invoice-1', invoice_number: 'BINV-2083-000005', own_balance: '2260.00' }]) // fetchInvoicesByIds
+        .mockResolvedValueOnce([{ value: BigInt(10) }])
+        .mockResolvedValueOnce([{ id: 'payment-10' }])
+        .mockResolvedValueOnce([
+          { id: 'alloc-1', bill_payment_id: 'payment-10', bill_invoice_id: 'invoice-1', bill_fine_accrual_id: null, amount: '2260.00', created_at: new Date() },
+          { id: 'alloc-2', bill_payment_id: 'payment-10', bill_invoice_id: null, bill_fine_accrual_id: 'fine-1', amount: '40.00', created_at: new Date() },
+        ])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-10', amount: '2300.00' }]);
+      billFineService.fetchOutstandingAccruals.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'invoice-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+      ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-10' } as any);
+
+      const result = await service.recordPayment(
+        baseDto({
+          amount: '2300.00',
+          allocationMode: BillPaymentAllocationMode.MANUAL,
+          targets: [
+            { billInvoiceId: 'invoice-1', amount: '2260.00' },
+            { billFineAccrualId: 'fine-1', amount: '40.00' },
+          ],
+        }),
+        'user-1',
+      );
+
+      expect(result.allocatedAmount).toBe(2300);
+      expect(result.advanceAmount).toBe(0);
     });
   });
 

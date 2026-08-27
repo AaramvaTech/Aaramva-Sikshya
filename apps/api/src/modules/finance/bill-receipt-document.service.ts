@@ -254,7 +254,13 @@ export class BillReceiptDocumentService {
       txnRef: resolveTxnRef(payment),
       amount: payment.amount,
       allocations: (payment.allocations ?? []).map((a) => {
-        const inv = invoiceById.get(a.billInvoiceId);
+        // BILL-7 checkout fix: a fine-targeted allocation has no
+        // billInvoiceId — falls through to the existing "unknown
+        // allocation" '—' fallback below, same as today's behavior for any
+        // invoice id this map doesn't recognize. A dedicated "Late fee"
+        // receipt label is a print-surface enhancement, out of this
+        // ticket's scope (BILL-BUGS.md).
+        const inv = a.billInvoiceId ? invoiceById.get(a.billInvoiceId) : undefined;
         return {
           invoiceNumber: inv?.invoice_number ?? '—',
           amount: a.amount,

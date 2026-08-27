@@ -28,7 +28,13 @@ describe('BillFineService', () => {
     const module = await Test.createTestingModule({
       providers: [
         BillFineService,
-        { provide: TenantPrismaService, useValue: { query: jest.fn(), execute: jest.fn() } },
+        {
+          provide: TenantPrismaService,
+          useValue: {
+            query: jest.fn(), execute: jest.fn(),
+            run: jest.fn().mockImplementation((fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
+          },
+        },
         {
           provide: LedgerService,
           useValue: {
@@ -290,6 +296,53 @@ describe('BillFineService', () => {
 
       expect(ledgerService.postEntryInTx).not.toHaveBeenCalled();
       expect(result.invoicesFined).toBe(0);
+    });
+  });
+
+  // BILL-7 checkout fix — the read side the counter payment page (and
+  // BillPaymentService's own AUTO_FIFO/MANUAL allocation) needs to know
+  // which fines are still owed.
+  describe('fetchOutstandingAccruals', () => {
+    it('excludes reversed accruals — the notReversedExpr clause, matched by SQL substring', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([]);
+      await service.fetchOutstandingAccruals(mockTx, 'student-1');
+      const sql = String(mockTx.$queryRawUnsafe.mock.calls[0][0]);
+      expect(sql).toContain('NOT EXISTS');
+      expect(sql).toContain('rev.reverses_entry_id = bfa.ledger_entry_id');
+      expect(sql).toContain('WHERE outstanding > 0');
+      expect(mockTx.$queryRawUnsafe.mock.calls[0][1]).toBe('student-1');
+    });
+
+    it('maps DB rows to the response shape, oldest-first per the query ORDER BY (not re-sorted client-side)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'inv-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+      const rows = await service.fetchOutstandingAccruals(mockTx, 'student-1');
+      expect(rows).toEqual([
+        { id: 'fine-1', bill_invoice_id: 'inv-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+    });
+  });
+
+  describe('getOutstandingFines', () => {
+    it('opens its own transaction and returns the camelCase response DTO', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([
+        { id: 'fine-1', bill_invoice_id: 'inv-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
+      ]);
+
+      const result = await service.getOutstandingFines('student-1');
+
+      expect(tenantPrisma.run).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([{
+        id: 'fine-1', billInvoiceId: 'inv-1', invoiceNumber: 'BINV-2083-000005',
+        accruedThrough: '2026-08-16', daysOverdue: 4, outstanding: 40,
+      }]);
+    });
+
+    it('empty when the student has no outstanding fines', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([]);
+      const result = await service.getOutstandingFines('student-1');
+      expect(result).toEqual([]);
     });
   });
 

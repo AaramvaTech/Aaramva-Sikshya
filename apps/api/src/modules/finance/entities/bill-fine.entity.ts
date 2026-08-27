@@ -63,6 +63,30 @@ export interface BillFineRunResponseDto {
   createdAt: string;
 }
 
+/**
+ * BILL-7 checkout fix — one row per NOT-reversed accrual with outstanding
+ * fine still owed (delta_posted minus any CLEARED payment allocations
+ * already booked against that exact accrual). `outstanding` is a derived
+ * SQL column (BillFineService.fetchOutstandingAccruals), never persisted.
+ */
+export interface OutstandingFineAccrualRow {
+  id: string;
+  bill_invoice_id: string;
+  invoice_number: string;
+  accrued_through: Date | string;
+  days_overdue: number;
+  outstanding: string | number;
+}
+
+export interface OutstandingFineAccrualResponseDto {
+  id: string;
+  billInvoiceId: string;
+  invoiceNumber: string;
+  accruedThrough: string;
+  daysOverdue: number;
+  outstanding: number;
+}
+
 // Local toIso/toDateOnly — matches this codebase's established
 // "one private copy per file" convention (see bill-correction.entity.ts).
 
@@ -107,5 +131,16 @@ export function toBillFineRunResponse(row: BillFineRunRow): BillFineRunResponseD
     totalFinePosted: toMoney(row.total_fine_posted).toNumber(),
     status: row.status,
     createdAt: toIso(row.created_at),
+  };
+}
+
+export function toOutstandingFineAccrualResponse(row: OutstandingFineAccrualRow): OutstandingFineAccrualResponseDto {
+  return {
+    id: row.id,
+    billInvoiceId: row.bill_invoice_id,
+    invoiceNumber: row.invoice_number,
+    accruedThrough: toDateOnly(row.accrued_through),
+    daysOverdue: row.days_overdue,
+    outstanding: toMoney(row.outstanding).toNumber(),
   };
 }

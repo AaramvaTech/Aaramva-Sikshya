@@ -21,8 +21,15 @@ export enum BillPaymentAllocationMode {
 
 const PAYMENT_STATUSES = ['CLEARED', 'PENDING', 'BOUNCED', 'VOIDED'] as const;
 
+/**
+ * BILL-7 checkout fix: a target is either an invoice OR a fine accrual,
+ * never both — "exactly one of billInvoiceId/billFineAccrualId" is checked
+ * in BillPaymentService, same "not here" convention this class's own
+ * doc-comment below already establishes for the MANUAL-required rule.
+ */
 export class ManualAllocationTargetDto {
-  @IsUUID() billInvoiceId: string;
+  @IsOptional() @IsUUID() billInvoiceId?: string;
+  @IsOptional() @IsUUID() billFineAccrualId?: string;
   @IsMoneyString() amount: string;
 }
 

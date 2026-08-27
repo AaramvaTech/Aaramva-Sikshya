@@ -8,6 +8,7 @@ import type {
   VoidPaymentData,
   StudentBalance,
   StudentStatement,
+  OutstandingFine,
 } from '@/types/api.types';
 
 /** UI-4 — one client module for the BILL-5 payment surface, mirroring
@@ -37,4 +38,10 @@ export const billPaymentApi = {
   /** UI-6 §4.9 — student statement (LedgerController's `.../statement`). */
   getStatement: (studentId: string, params: { from?: string; to?: string } = {}) =>
     api.get<ApiResponse<StudentStatement>>(`/finance/students/${studentId}/statement`, { params }),
+
+  /** BILL-7 checkout fix — BillFineController's read side (`finance/late-fees`
+   *  prefix, not `finance/bill/payments`; kept here anyway since this module
+   *  already groups by "the payment counter's data needs", not by controller). */
+  getOutstandingFines: (studentId: string) =>
+    api.get<ApiResponse<OutstandingFine[]>>(`/finance/late-fees/students/${studentId}/outstanding`),
 };

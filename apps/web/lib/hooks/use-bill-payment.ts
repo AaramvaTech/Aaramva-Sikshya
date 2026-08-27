@@ -25,6 +25,16 @@ export function useStudentBalance(studentId: string | null) {
   });
 }
 
+/** BILL-7 checkout fix — the counter payment page's "Late Fees" panel. */
+export function useStudentOutstandingFines(studentId: string | null) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['student-outstanding-fines', studentId],
+    queryFn: () => billPaymentApi.getOutstandingFines(studentId as string).then((r) => r.data.data),
+    enabled: !!slug && !!studentId,
+  });
+}
+
 /** UI-5 §3.2 — line-item credit notes. `billInvoiceApi.get` has existed
  * since UI-4 with zero consumers; this is its first hook. */
 export function useBillInvoiceDetail(invoiceId: string | null) {
@@ -87,6 +97,7 @@ export function useRecordPayment() {
       queryClient.invalidateQueries({ queryKey: ['bill-payments'] });
       queryClient.invalidateQueries({ queryKey: ['bill-invoices', { studentId: data.studentId }] });
       queryClient.invalidateQueries({ queryKey: ['student-balance', data.studentId] });
+      queryClient.invalidateQueries({ queryKey: ['student-outstanding-fines', data.studentId] });
     },
   });
 }

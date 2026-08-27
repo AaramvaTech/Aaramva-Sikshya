@@ -1969,7 +1969,10 @@ export type BillPaymentStatus = 'CLEARED' | 'PENDING' | 'BOUNCED' | 'VOIDED';
 
 export interface BillPaymentAllocation {
   id: string;
-  billInvoiceId: string;
+  /** BILL-7 checkout fix: exactly one of billInvoiceId/billFineAccrualId is
+   *  ever set — never both, never neither. */
+  billInvoiceId: string | null;
+  billFineAccrualId: string | null;
   amount: number;
   createdAt: string;
 }
@@ -2006,8 +2009,20 @@ export interface BillPayment {
 }
 
 export interface ManualAllocationTarget {
-  billInvoiceId: string;
+  /** BILL-7 checkout fix: exactly one of billInvoiceId/billFineAccrualId. */
+  billInvoiceId?: string;
+  billFineAccrualId?: string;
   amount: string;
+}
+
+/** BILL-7 checkout fix — GET /finance/late-fees/students/:studentId/outstanding. */
+export interface OutstandingFine {
+  id: string;
+  billInvoiceId: string;
+  invoiceNumber: string;
+  accruedThrough: string;
+  daysOverdue: number;
+  outstanding: number;
 }
 export interface CreateBillPaymentData {
   studentId: string;

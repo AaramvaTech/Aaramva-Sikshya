@@ -4,13 +4,17 @@ import { TenantPrismaService, TenantTx } from '../tenant/tenant-prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { LedgerService } from './ledger.service';
 import { FinanceSettingsService } from './finance-settings.service';
+import { BillFineService } from './bill-fine.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { bsOf } from './ledger.util';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { fiscalYearBs } from './bill-post.util';
 import { buildReceiptNumber, buildReceiptSequenceKey } from './bill-payment.util';
-import { AllocationPlanItem, planAutoFifoAllocation, UnpaidInvoiceCandidate } from './bill-payment-allocation.util';
+import {
+  AllocationPlanItem, planAutoFifoAllocation, UnpaidInvoiceCandidate,
+  FineAllocationPlanItem, planAutoFifoFineAllocation, UnpaidFineCandidate,
+} from './bill-payment-allocation.util';
 import {
   OWN_BALANCE_EXPR, OWN_BALANCE_SELECT, CLEARED_ALLOCATIONS_JOIN,
   INVOICE_STATUS_RECOMPUTE_SQL, clampOwnBalance,
@@ -30,7 +34,7 @@ export interface RecordPaymentInTxParams {
   amount: Money;
   method: BillPaymentMethod;
   allocationMode: BillPaymentAllocationMode;
-  targets?: { billInvoiceId: string; amount: string }[];
+  targets?: { billInvoiceId?: string; billFineAccrualId?: string; amount: string }[];
   receivedDate?: string;
   reference?: string;
   chequeBank?: string;
@@ -68,6 +72,7 @@ export class BillPaymentService {
     private readonly ledgerService: LedgerService,
     private readonly financeSettingsService: FinanceSettingsService,
     private readonly guardianScope: GuardianScopeService,
+    private readonly billFineService: BillFineService,
   ) {}
 
   async recordPayment(dto: CreateBillPaymentDto, receivedById: string): Promise<BillPaymentResponseDto> {
@@ -137,40 +142,78 @@ export class BillPaymentService {
     const amount = params.amount;
 
     let allocations: AllocationPlanItem[];
+    let fineAllocations: FineAllocationPlanItem[];
 
     if (params.allocationMode === BillPaymentAllocationMode.ADVANCE_ONLY) {
       allocations = [];
+      fineAllocations = [];
     } else if (params.allocationMode === BillPaymentAllocationMode.AUTO_FIFO) {
-      const candidates = await this.fetchUnpaidInvoicesOldestFirst(tx, params.studentId);
-      const plan = planAutoFifoAllocation(amount, candidates);
-      allocations = plan.allocations;
+      // BILL-7 checkout fix. Priority: invoices first (oldest-first,
+      // unchanged), THEN whatever remains goes to the student's outstanding
+      // fines (oldest-first) — principal before penalty. No pre-existing
+      // convention named a priority (fines had no payable target at all
+      // before this fix), so this is the new, documented default.
+      const invoiceCandidates = await this.fetchUnpaidInvoicesOldestFirst(tx, params.studentId);
+      const invoicePlan = planAutoFifoAllocation(amount, invoiceCandidates);
+      allocations = invoicePlan.allocations;
+
+      fineAllocations = [];
+      if (invoicePlan.remainder.compare(Money.zero()) > 0) {
+        const fineCandidates = await this.fetchUnpaidFinesOldestFirst(tx, params.studentId);
+        const finePlan = planAutoFifoFineAllocation(invoicePlan.remainder, fineCandidates);
+        fineAllocations = finePlan.allocations;
+      }
     } else {
-      const ids = params.targets!.map((t) => t.billInvoiceId);
-      const invoiceMap = await this.fetchInvoicesByIds(tx, params.studentId, ids);
+      const invoiceIds = params.targets!.filter((t) => t.billInvoiceId).map((t) => t.billInvoiceId!);
+      const fineIds = params.targets!.filter((t) => t.billFineAccrualId).map((t) => t.billFineAccrualId!);
+      const invoiceMap = await this.fetchInvoicesByIds(tx, params.studentId, invoiceIds);
+      const fineMap = await this.fetchFinesByIds(tx, params.studentId, fineIds);
       let sum = Money.zero();
       allocations = [];
+      fineAllocations = [];
       for (const target of params.targets!) {
-        const invoice = invoiceMap.get(target.billInvoiceId);
-        if (!invoice) {
-          throw new NotFoundException(`Invoice ${target.billInvoiceId} not found for this student`);
+        if (!!target.billInvoiceId === !!target.billFineAccrualId) {
+          throw new BadRequestException('Each manual allocation target must specify exactly one of billInvoiceId or billFineAccrualId');
         }
         const targetAmount = toMoney(target.amount);
-        // ALLOCATION-CAP-1: `outstanding` is now the invoice's OWN balance,
-        // not total_receivable. MANUAL rejects rather than silently clamping
-        // — the operator named both the invoice and the figure, so quietly
-        // booking a different one would hide the very thing they need to
-        // decide. Allocating less than the payment is already supported
-        // (sum <= amount), and the shortfall lands as advance credit, which
-        // is Ruling 2's outcome reached deliberately instead of by accident.
-        if (targetAmount.compare(invoice.outstanding) > 0) {
-          throw new BadRequestException(
-            `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s own outstanding charge of ` +
-            `${invoice.outstanding.toDb()}. An invoice can only be credited up to its own net amount; ` +
-            `allocate up to that and the remainder of the payment is held as advance credit.`,
-          );
+
+        if (target.billInvoiceId) {
+          const invoice = invoiceMap.get(target.billInvoiceId);
+          if (!invoice) {
+            throw new NotFoundException(`Invoice ${target.billInvoiceId} not found for this student`);
+          }
+          // ALLOCATION-CAP-1: `outstanding` is now the invoice's OWN balance,
+          // not total_receivable. MANUAL rejects rather than silently clamping
+          // — the operator named both the invoice and the figure, so quietly
+          // booking a different one would hide the very thing they need to
+          // decide. Allocating less than the payment is already supported
+          // (sum <= amount), and the shortfall lands as advance credit, which
+          // is Ruling 2's outcome reached deliberately instead of by accident.
+          if (targetAmount.compare(invoice.outstanding) > 0) {
+            throw new BadRequestException(
+              `Allocation of ${targetAmount.toDb()} exceeds invoice ${target.billInvoiceId}'s own outstanding charge of ` +
+              `${invoice.outstanding.toDb()}. An invoice can only be credited up to its own net amount; ` +
+              `allocate up to that and the remainder of the payment is held as advance credit.`,
+            );
+          }
+          sum = sum.add(targetAmount);
+          allocations.push({ billInvoiceId: target.billInvoiceId, amount: targetAmount });
+        } else {
+          const fine = fineMap.get(target.billFineAccrualId!);
+          if (!fine) {
+            throw new NotFoundException(`Fine accrual ${target.billFineAccrualId} not found or already paid for this student`);
+          }
+          // Same ceiling rule as the invoice branch above — a fine cannot be
+          // credited past its own outstanding amount.
+          if (targetAmount.compare(fine.outstanding) > 0) {
+            throw new BadRequestException(
+              `Allocation of ${targetAmount.toDb()} exceeds fine accrual ${target.billFineAccrualId}'s own outstanding amount of ` +
+              `${fine.outstanding.toDb()}.`,
+            );
+          }
+          sum = sum.add(targetAmount);
+          fineAllocations.push({ billFineAccrualId: target.billFineAccrualId!, amount: targetAmount });
         }
-        sum = sum.add(targetAmount);
-        allocations.push({ billInvoiceId: target.billInvoiceId, amount: targetAmount });
       }
       if (sum.compare(amount) > 0) {
         throw new BadRequestException(`Total allocation ${sum.toDb()} exceeds payment amount ${amount.toDb()}`);
@@ -206,7 +249,9 @@ export class BillPaymentService {
     // PENDING cheque's intended settlement is decided at record time. They
     // simply don't count (see recomputeInvoiceStatus / fetchUnpaidInvoices
     // OldestFirst / fetchInvoicesByIds's CLEARED-only join) until this
-    // payment's own status becomes CLEARED.
+    // payment's own status becomes CLEARED. Same rule now applies to fine
+    // allocations via BillFineService.fetchOutstandingAccruals's own
+    // CLEARED-only join (BILL-7 checkout fix).
     for (const alloc of allocations) {
       await tx.$executeRawUnsafe(
         `INSERT INTO bill_payment_allocations (bill_payment_id, bill_invoice_id, amount)
@@ -214,13 +259,24 @@ export class BillPaymentService {
         payment.id, alloc.billInvoiceId, alloc.amount.toDb(),
       );
     }
+    for (const alloc of fineAllocations) {
+      await tx.$executeRawUnsafe(
+        `INSERT INTO bill_payment_allocations (bill_payment_id, bill_fine_accrual_id, amount)
+         VALUES ($1::uuid, $2::uuid, $3::numeric)`,
+        payment.id, alloc.billFineAccrualId, alloc.amount.toDb(),
+      );
+    }
 
     if (status === 'CLEARED') {
       for (const alloc of allocations) {
         await this.recomputeInvoiceStatus(tx, alloc.billInvoiceId);
       }
+      // Fine accruals have no status column of their own (D24-D27-REVERSAL:
+      // the reversal chain IS the record) — nothing to recompute; a fine's
+      // "paid" state is derived fresh, every read, from
+      // fetchOutstandingAccruals's own CLEARED-only join.
 
-      const entryType = allocations.length > 0 ? 'PAYMENT' : 'DEPOSIT';
+      const entryType = (allocations.length > 0 || fineAllocations.length > 0) ? 'PAYMENT' : 'DEPOSIT';
       const ledgerEntry = await this.ledgerService.postEntryInTx(tx, {
         studentId: params.studentId,
         academicYearId: params.academicYearId,
@@ -340,6 +396,12 @@ export class BillPaymentService {
   private async fetchInvoicesByIds(
     tx: TenantTx, studentId: string, ids: string[],
   ): Promise<Map<string, UnpaidInvoiceCandidate>> {
+    // BILL-7 checkout fix: a MANUAL payment now always calls this AND
+    // fetchFinesByIds (a target names exactly one), so a fine-only payment
+    // would otherwise still round-trip an empty-array query here — `WHERE
+    // id = ANY('{}')` can only ever return zero rows, so short-circuiting is
+    // exact, not an approximation. Mirrors fetchFinesByIds's own guard.
+    if (ids.length === 0) return new Map();
     const rows = await tx.$queryRawUnsafe<{ id: string; invoice_number: string; own_balance: string }[]>(
       `SELECT bi.id, bi.invoice_number, ${OWN_BALANCE_SELECT}
        FROM bill_invoices bi
@@ -353,6 +415,39 @@ export class BillPaymentService {
       billInvoiceId: r.id,
       outstanding: clampOwnBalance(toMoney(r.own_balance), r.invoice_number, this.logger),
     }]));
+  }
+
+  /**
+   * BILL-7 checkout fix — AUTO_FIFO's fine candidate list. Delegates the
+   * actual "outstanding" computation to BillFineService.fetchOutstandingAccruals
+   * (the one definition, shared with the GET .../outstanding read endpoint)
+   * rather than a second copy of that SQL here — the same reason
+   * bill-own-balance.util.ts and bill-reversal.util.ts exist as shared
+   * constants instead of copies.
+   */
+  private async fetchUnpaidFinesOldestFirst(tx: TenantTx, studentId: string): Promise<UnpaidFineCandidate[]> {
+    const rows = await this.billFineService.fetchOutstandingAccruals(tx, studentId);
+    return rows.map((r) => ({ billFineAccrualId: r.id, outstanding: toMoney(r.outstanding) }));
+  }
+
+  /**
+   * MANUAL's per-target ceiling for fines — same role as fetchInvoicesByIds,
+   * but there is no separate "by ids" query to write: fetchOutstandingAccruals
+   * already IS "every fine this student can currently pay", so a foreign or
+   * already-settled id simply isn't in the map, same as an invoice that
+   * doesn't belong to the student. A student's fine accrual count is small
+   * and bounded, so fetching the full list rather than a second targeted
+   * query is the simpler, not the slower, choice here.
+   */
+  private async fetchFinesByIds(
+    tx: TenantTx, studentId: string, ids: string[],
+  ): Promise<Map<string, UnpaidFineCandidate>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.billFineService.fetchOutstandingAccruals(tx, studentId);
+    const idSet = new Set(ids);
+    return new Map(
+      rows.filter((r) => idSet.has(r.id)).map((r) => [r.id, { billFineAccrualId: r.id, outstanding: toMoney(r.outstanding) }]),
+    );
   }
 
   /**
