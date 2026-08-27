@@ -359,7 +359,7 @@ describe('BillPaymentService', () => {
         ...mockPaymentRow, id: 'payment-1', status: 'CLEARED', ledger_entry_id: 'ledger-entry-1',
       }]);
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ status: 'CLEARED' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-1', status: 'CLEARED', ledger_entry_id: 'ledger-entry-1' }]) // locked re-read
         .mockResolvedValueOnce([{ id: 'ledger-entry-1', student_id: 'student-1', academic_year_id: 'year-1', entry_type: 'PAYMENT', debit: '0.00', credit: '5000.00', narration: 'Payment RCPT-1' }])
         .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
         .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-1', status: 'VOIDED' }])
@@ -368,6 +368,9 @@ describe('BillPaymentService', () => {
 
       const result = await service.voidPayment('payment-1', { reason: 'data entry error' }, 'owner-1');
 
+      expect(mockTx.$queryRawUnsafe).toHaveBeenNthCalledWith(
+        1, expect.stringContaining('FOR UPDATE'), 'payment-1',
+      );
       expect(ledgerService.reverseInTx).toHaveBeenCalledWith(
         mockTx, expect.objectContaining({ id: 'ledger-entry-1' }), 'owner-1',
       );
@@ -379,7 +382,7 @@ describe('BillPaymentService', () => {
         ...mockPaymentRow, id: 'payment-2', status: 'PENDING', ledger_entry_id: null,
       }]);
       mockTx.$queryRawUnsafe
-        .mockResolvedValueOnce([{ status: 'PENDING' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-2', status: 'PENDING', ledger_entry_id: null }]) // locked re-read
         .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
         .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-2', status: 'VOIDED' }])
         .mockResolvedValueOnce([]);
@@ -390,14 +393,53 @@ describe('BillPaymentService', () => {
       expect(result.status).toBe('VOIDED');
     });
 
-    it('rejects voiding an already-VOIDED payment', async () => {
+    it('rejects voiding an already-VOIDED payment (fast-fail, pre-lock)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, status: 'VOIDED' }]);
       await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(ConflictException);
     });
 
-    it('rejects voiding an already-BOUNCED payment', async () => {
+    it('rejects voiding an already-BOUNCED payment (fast-fail, pre-lock)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, status: 'BOUNCED' }]);
       await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('D20-VOID-TOCTOU: rejects when the LOCKED re-read shows VOIDED even though the pre-lock fetch saw CLEARED (a concurrent void won the race)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-1', status: 'CLEARED', ledger_entry_id: 'ledger-entry-1',
+      }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-1', status: 'VOIDED' }]);
+
+      await expect(service.voidPayment('payment-1', {}, 'owner-1')).rejects.toThrow(ConflictException);
+      expect(ledgerService.reverseInTx).not.toHaveBeenCalled();
+    });
+
+    it('D20-VOID-TOCTOU: the regression — a payment that goes PENDING -> CLEARED (gaining a ledger_entry_id) between the pre-lock fetch and the lock is still reversed, not silently skipped', async () => {
+      // Pre-lock fetch: still PENDING, no ledger entry yet — this is the stale
+      // snapshot that must NOT be trusted for the reversal decision.
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{
+        ...mockPaymentRow, id: 'payment-3', status: 'PENDING', ledger_entry_id: null,
+      }]);
+      // Locked re-read: a concurrent updateChequeStatus(PENDING -> CLEARED)
+      // committed in the window before this transaction's lock was acquired —
+      // the row is now CLEARED and carries a real ledger_entry_id.
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-3', status: 'CLEARED', ledger_entry_id: 'ledger-entry-late' }])
+        .mockResolvedValueOnce([{ id: 'ledger-entry-late', student_id: 'student-1', academic_year_id: 'year-1', entry_type: 'PAYMENT', debit: '0.00', credit: '5000.00', narration: 'Payment RCPT-1' }])
+        .mockResolvedValueOnce([{ bill_invoice_id: 'invoice-1' }])
+        .mockResolvedValueOnce([{ ...mockPaymentRow, id: 'payment-3', status: 'VOIDED' }])
+        .mockResolvedValueOnce([]);
+      ledgerService.reverseInTx.mockResolvedValueOnce({ id: 'ledger-entry-void-reversal' } as any);
+
+      const result = await service.voidPayment('payment-3', {}, 'owner-1');
+
+      // Before the fix, this branch tested current.status (fresh: CLEARED)
+      // but read payment.ledger_entry_id (stale: null) — the && short-circuited
+      // and reverseInTx was never called, leaving the ledger credit standing
+      // on a payment now marked VOIDED.
+      expect(ledgerService.reverseInTx).toHaveBeenCalledWith(
+        mockTx, expect.objectContaining({ id: 'ledger-entry-late' }), 'owner-1',
+      );
+      expect(result.status).toBe('VOIDED');
     });
   });
 

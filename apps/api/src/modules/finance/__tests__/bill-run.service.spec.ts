@@ -5,6 +5,12 @@ import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import { BillLineResolverService } from '../bill-line-resolver.service';
 import { BillRunScope } from '../dto/bill-run.dto';
+import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
+
+const mockTx = guardSurvivingMocks({
+  $queryRawUnsafe: jest.fn(),
+  $executeRawUnsafe: jest.fn(),
+});
 
 const mockRunRow = {
   id: 'run-1',
@@ -49,7 +55,14 @@ describe('BillRunService', () => {
     const module = await Test.createTestingModule({
       providers: [
         BillRunService,
-        { provide: TenantPrismaService, useValue: { query: jest.fn(), execute: jest.fn() } },
+        {
+          provide: TenantPrismaService,
+          useValue: {
+            query: jest.fn(),
+            execute: jest.fn(),
+            run: jest.fn().mockImplementation((fn: (tx: typeof mockTx) => unknown) => fn(mockTx)),
+          },
+        },
         { provide: TenantContextService, useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo', schemaName: 'tenant_demo' }) } },
         { provide: BillLineResolverService, useValue: { resolve: jest.fn() } },
       ],
@@ -332,28 +345,41 @@ describe('BillRunService', () => {
   });
 
   describe('voidRun', () => {
-    it('404s when the run does not exist', async () => {
+    it('404s when the run does not exist (pre-lock fast-fail)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
       await expect(service.voidRun('missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('rejects voiding a non-DRAFT run', async () => {
+    it('rejects voiding a non-DRAFT run (pre-lock fast-fail)', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTED' }]);
       await expect(service.voidRun('run-1')).rejects.toThrow(BadRequestException);
     });
 
-    it('voids a DRAFT run: status VOIDED, soft-deleted', async () => {
-      (tenantPrisma.query as jest.Mock)
-        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]) // fetch
+    it('voids a DRAFT run: status VOIDED, soft-deleted, via a locked re-read', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]); // pre-lock fetch
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]) // FOR UPDATE re-read
         .mockResolvedValueOnce([{ ...mockRunRow, status: 'VOIDED', deleted_at: new Date('2026-07-26') }]); // UPDATE RETURNING *
 
       const result = await service.voidRun('run-1');
 
-      expect(tenantPrisma.query).toHaveBeenLastCalledWith(
+      expect(mockTx.$queryRawUnsafe).toHaveBeenNthCalledWith(
+        1, expect.stringContaining('FOR UPDATE'), 'run-1',
+      );
+      expect(mockTx.$queryRawUnsafe).toHaveBeenLastCalledWith(
         expect.stringContaining("SET status = 'VOIDED'"),
         'run-1',
       );
       expect(result.status).toBe('VOIDED');
+    });
+
+    it('D20-VOID-TOCTOU: rejects with a clear conflict when the LOCKED re-read shows the run is no longer DRAFT (a concurrent requestPost won the race)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockRunRow, status: 'DRAFT' }]); // pre-lock fetch: still DRAFT
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ ...mockRunRow, status: 'POSTING' }]); // locked re-read: changed concurrently
+
+      await expect(service.voidRun('run-1')).rejects.toThrow(ConflictException);
+      // No UPDATE was ever issued against the now-POSTING run.
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1);
     });
   });
 });
