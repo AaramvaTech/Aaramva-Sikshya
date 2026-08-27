@@ -4,6 +4,16 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## D5 (BILLING-CALC-AUDIT-1) — proration is start-only; confirmed still open, not fixed here
+
+`BILLING-CALC-AUDIT-1-phase0.md` D5 names two independent defects in the same sentence: "proration is start-only, and the fraction is a JS float." D5-PRORATION-PRECISION fixed only the second half — `bill-line-resolver.service.ts`'s `prorate()` now does `amount.mul(daysBilled).div(daysInMonth)`, exact integer numerator/denominator, no binary-double intermediate.
+
+**The first half is untouched and still real.** `resolve()` only prorates when `effectiveFromAd > periodStart` (a mid-period *start*) — an assignment that *ends* mid-period still bills the full month, with no proration on the way out. This is a genuine behavioural gap (a student whose assignment is closed on the 5th of the month is billed for all `daysInMonth` days, not 5), not a precision one, and D5-PRORATION-PRECISION's own scope discipline ("this is a precision fix, not a behavioural change — the same proration logic, just with exact arithmetic") ruled it out by design, not by oversight.
+
+**Not fixed here.** Fixing it would change what gets billed (fewer days, on a real population of students whose assignments close mid-month), not just how precisely an existing figure is computed — a behavioural change belonging to its own ticket, with its own decision about how "assignment end" should even be detected for a fee structure that has no `effective_to` semantics of its own on the resolver's read path today.
+
+---
+
 ## MUST-RESOLVE-BEFORE-BILL-8 — resolved (2026-08-26, `D13-CLUSTER-FOOTING` Phase 1, branch `feat/d13-cluster-footing`)
 
 Closes the thread opened by TRANSPORT-ITEM (2026-07-27, above) and widened by BILL-4-ZERONET-CRASH (2026-08-10, above): a whole-bill (`fee_head_id IS NULL`) concession was never attributed to any stored `bill_invoice_items` row, so `SUM(item.net_amount)` never equalled the invoice header's own net whenever one was active. TRANSPORT-ITEM logged this "must-resolve-before-BILL-8, not a permanently accepted simplification"; BILL-8 shipped its own render-time-only workaround instead (`bill-pdf.util.ts::apportionWholeBillConcession`, reused by `bill-document.service.ts`) and left the underlying gap open — that workaround stays, unmodified, for every already-posted invoice, which is immutable.

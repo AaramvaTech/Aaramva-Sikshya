@@ -51,6 +51,29 @@ function clampNonNegative(amount: Money): Money {
 }
 
 /**
+ * D5-PRORATION-PRECISION. `daysBilled / daysInMonth` computed as a plain JS
+ * division is a binary double — the one inexact input this file's whole
+ * money chain used to have (BILLING-CALC-AUDIT-1 D5). `daysBilled` and
+ * `daysInMonth` are themselves always small exact integers (never more than
+ * 32), so `amount.mul(daysBilled).div(daysInMonth)` has no such
+ * intermediate: Money never rounds between chained operations — its one
+ * rounding step lives only in `toDb()`/`toNumber()` — so this is exact to
+ * decimal.js's own internal precision, which is far beyond the 2dp this
+ * ultimately rounds to. Same shape this file's own `percentOf` (on `Money`
+ * itself) already uses for exact fractional scaling — `mul(x).div(y)`, not
+ * a precomputed ratio.
+ *
+ * `daysBilled === daysInMonth` (the whole month, not actually prorated)
+ * short-circuits to the identity rather than computing `.mul(n).div(n)` —
+ * not required for exactness (division of a value by itself is exact in
+ * decimal.js too), just cheaper and makes the "untouched" case textually
+ * obvious.
+ */
+export function prorate(amount: Money, daysBilled: number, daysInMonth: number): Money {
+  return daysBilled === daysInMonth ? amount : amount.mul(daysBilled).div(daysInMonth);
+}
+
+/**
  * BILL-4 Checkpoint C: the ONE place proration (B4-5) and tax (R4/B4-9) are
  * computed — shared by BillRunService (draft) and BillRunPostRunnerService
  * (post) so what the accountant previews is exactly what gets posted.
@@ -62,10 +85,15 @@ function clampNonNegative(amount: Money): Money {
  * assignment is found by preview()'s OWN internal check too), and prorates
  * only the per-head amounts flagged fee_heads.proration_policy='MONTHLY'.
  *
- * The whole-bill concession IS prorated by the same `fraction` as per-head
+ * The whole-bill concession IS prorated by the same day count as per-head
  * MONTHLY amounts (BILL-4-ZERONET-CRASH root cause #1, BILL-BUGS.md) — this
  * docstring previously said otherwise; that was stale the moment that fix
  * landed, not a second, still-open gap.
+ *
+ * D5-PRORATION-PRECISION: proration is applied via `prorate()` above
+ * (`amount.mul(daysBilled).div(daysInMonth)`), never via a precomputed
+ * `daysBilled / daysInMonth` JS number — that ratio was the one binary-double
+ * intermediate in this file's entire money chain.
  *
  * D13-CLUSTER-FOOTING (was TRANSPORT-ITEM's "simple version" ruling, logged
  * must-resolve-before-BILL-8 and left open when BILL-8 shipped its own
@@ -112,12 +140,15 @@ export class BillLineResolverService {
     }
 
     let prorationNote: string | null = null;
-    let fraction = 1;
+    // D5-PRORATION-PRECISION: tracked as the integer day count, never as a
+    // precomputed daysBilled/daysInMonth ratio — see prorate() above.
+    // Defaults to the whole month (prorate()'s identity case) when the
+    // assignment covers the full period.
+    let daysBilled = daysInMonth;
     const effectiveFromAd = toAdString(assignment.effective_from);
     if (effectiveFromAd > periodStart) {
       const dayOfMonth = bsOf(effectiveFromAd).day;
-      const daysBilled = daysInMonth - dayOfMonth + 1;
-      fraction = daysBilled / daysInMonth;
+      daysBilled = daysInMonth - dayOfMonth + 1;
       prorationNote = `${daysBilled}/${daysInMonth} days`;
     }
 
@@ -167,10 +198,10 @@ export class BillLineResolverService {
     const feeHeadItems: ResolvedInvoiceItem[] = preview.heads.map((head) => {
       const meta = metaMap.get(head.feeHeadId);
       const isMonthly = meta?.proration_policy === 'MONTHLY';
-      const factor = isMonthly ? fraction : 1;
+      const billedDays = isMonthly ? daysBilled : daysInMonth;
 
-      const gross = toMoney(head.grossAmount).mul(factor);
-      const net = toMoney(head.netAmount).mul(factor);
+      const gross = prorate(toMoney(head.grossAmount), billedDays, daysInMonth);
+      const net = prorate(toMoney(head.netAmount), billedDays, daysInMonth);
       const concession = gross.sub(net);
 
       grossHeadTotal = grossHeadTotal.add(gross);
@@ -210,16 +241,16 @@ export class BillLineResolverService {
       : null;
     const items: ResolvedInvoiceItem[] = transportItem ? [...feeHeadItems, transportItem] : feeHeadItems;
 
-    // Prorated by the same `fraction` as per-head MONTHLY amounts (BILL-BUGS.md
+    // Prorated by the same day count as per-head MONTHLY amounts (BILL-BUGS.md
     // BILL-4-WHOLEBILL-CONCESSION-PRORATION). FeePreviewService computes this
     // amount against the UNPRORATED head totals — it has no concept of this
     // resolver's own day-fraction. Left unscaled, an assignment starting near
     // the end of the period (gross prorated down close to zero) could still
     // have a whole-bill concession applied at FULL strength, clamping net to
-    // (wrongly) zero — exactly the same `fraction` already used for MONTHLY
-    // heads above keeps the concession consistent with the gross it discounts.
+    // (wrongly) zero — the same `daysBilled` already used for MONTHLY heads
+    // above keeps the concession consistent with the gross it discounts.
     const wholeBillConcessionTotal = preview.wholeBillConcessions.reduce(
-      (acc, c) => acc.add(toMoney(c.amount).mul(fraction)), Money.zero(),
+      (acc, c) => acc.add(prorate(toMoney(c.amount), daysBilled, daysInMonth)), Money.zero(),
     );
 
     const grossFinal = grossHeadTotal.add(transportAmount);
