@@ -1553,6 +1553,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `daysBilled / daysInMonth` JS double. Precision fix only — no realistic case was found where
   the old float path actually changed a final rounded amount.
 
+- [x] D26-CASH-REFUND-DRAWER — cashier shift close (`cashier-shift.service.ts::closeShift`) now
+  subtracts APPROVED CASH refunds (`bill_corrections`, attributed by `decided_at` time window)
+  from `expected_cash`, exposed as its own `cashRefundTotal` field rather than folded silently
+  into `cashCollected`. Reporting fix only — no ledger/payment table changed.
+
 > Update this checklist as modules are completed.
 
 ---
