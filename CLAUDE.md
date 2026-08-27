@@ -1558,6 +1558,12 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   from `expected_cash`, exposed as its own `cashRefundTotal` field rather than folded silently
   into `cashCollected`. Reporting fix only — no ledger/payment table changed.
 
+- [x] D20-VOID-TOCTOU — `voidPayment` and `voidRun` now re-read the full target row via
+  `SELECT ... FOR UPDATE` inside their transaction and decide off that locked read alone, never
+  a pre-lock fetch. Closes a real race where a payment going PENDING -> CLEARED (gaining a
+  `ledger_entry_id`) between the pre-lock read and the lock could be voided without reversing
+  the ledger credit that arrived in between.
+
 > Update this checklist as modules are completed.
 
 ---
