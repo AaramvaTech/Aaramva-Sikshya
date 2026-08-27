@@ -1548,6 +1548,11 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   D34's collection-report weights sum to 1.0 on new invoices. Forward-only — 11 historical
   non-footing invoices are documented, not rewritten.
 
+- [x] D5-PRORATION-PRECISION — proration (`bill-line-resolver.service.ts::prorate()`) uses
+  `amount.mul(daysBilled).div(daysInMonth)`, exact integers, never a precomputed
+  `daysBilled / daysInMonth` JS double. Precision fix only — no realistic case was found where
+  the old float path actually changed a final rounded amount.
+
 > Update this checklist as modules are completed.
 
 ---
