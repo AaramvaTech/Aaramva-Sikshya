@@ -177,7 +177,7 @@ export function getErrorDisplay(error: unknown): ErrorDisplay {
     }
     return {
       kind: 'business',
-      message: CODE_MESSAGES[code] ?? serverMessageOf(env) ?? GENERIC_MESSAGE,
+      message: serverMessageOf(env) ?? CODE_MESSAGES[code] ?? GENERIC_MESSAGE,
       retryable: isRetryableCode(code),
     };
   }
@@ -197,7 +197,7 @@ export function getErrorDisplay(error: unknown): ErrorDisplay {
     const m = error.message.match(/^([A-Z][A-Z0-9_]+):\s*(.+)$/);
     if (m) {
       const [, parsedCode, parsedMsg] = m;
-      return { kind: 'business', message: CODE_MESSAGES[parsedCode] ?? parsedMsg, retryable: false };
+      return { kind: 'business', message: parsedMsg ?? CODE_MESSAGES[parsedCode], retryable: false };
     }
   }
 
