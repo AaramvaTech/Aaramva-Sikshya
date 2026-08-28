@@ -4,7 +4,7 @@ import { assertUsable } from './soft-delete-guard.util';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { todayAdInNepal } from '../common/utils/date.util';
-import { bsOf, directionToDebitCredit, balanceSign } from './ledger.util';
+import { bsOf, directionToDebitCredit, balanceSign, ledgerBalanceSql, openingBalanceCutoffExpr } from './ledger.util';
 import { LedgerEntryRow, toLedgerEntryResponse, LedgerEntryResponseDto } from './entities/ledger.entity';
 import { LedgerAdjustmentDto, LedgerQueryDto } from './dto/ledger.dto';
 import { Role } from '../common/enums/role.enum';
@@ -285,7 +285,8 @@ export class LedgerService {
     return { data: rows.map(toLedgerEntryResponse), meta: { page, limit, total } };
   }
 
-  /** Single-student reads always recompute the live SQL sum — the cache is for list views only (spec). */
+  /** Single-student reads always recompute the live SQL sum — the cache is for list views only (spec).
+   *  D19: floored at the student's own most recent OPENING_BALANCE entry — see ledger.util.ts. */
   async getBalance(
     studentId: string,
     callerId?: string,
@@ -296,7 +297,7 @@ export class LedgerService {
     }
 
     const rows = await this.tenantPrisma.query<{ sum: string }>(
-      `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum FROM student_ledger_entries WHERE student_id = $1::uuid`,
+      ledgerBalanceSql('$1::uuid'),
       studentId,
     );
     const balance = toMoney(rows[0]?.sum ?? 0);
@@ -350,9 +351,16 @@ export class LedgerService {
 
     const { from, to } = resolveRange(query.from, query.to);
 
+    // D19: also floored at the OPENING_BALANCE cutoff, on top of this
+    // report's own `entry_date < from` window — without it, a statement
+    // spanning a rollover would sum Year-1's raw entries into "opening" AND
+    // the Year-2 OPENING_BALANCE import into "movements" (it falls inside
+    // `from..to`), double-counting the exact figure that import restates.
     const [openingRow] = await this.tenantPrisma.query<{ sum: string }>(
       `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum
-       FROM student_ledger_entries WHERE student_id = $1::uuid AND entry_date < $2::date`,
+       FROM student_ledger_entries
+       WHERE student_id = $1::uuid AND entry_date < $2::date
+         AND entry_date >= ${openingBalanceCutoffExpr('$1::uuid')}`,
       studentId,
       from,
     );
@@ -400,7 +408,11 @@ export class LedgerService {
     };
   }
 
-  /** Nightly job's core: recompute every student's balance from the ledger, correct and report drift. */
+  /** Nightly job's core: recompute every student's balance from the ledger, correct and report drift.
+   *  D19: "truth" here MUST use the same floored (ledgerBalanceSql) definition
+   *  getBalance() uses — otherwise this job would permanently re-stamp
+   *  student_account_balances (the cache) back to the unfiltered, double-
+   *  counted figure every night, forever, the moment any student rolls over. */
   async reconcile(): Promise<{ checked: number; drifted: string[] }> {
     const students = await this.tenantPrisma.query<{ student_id: string }>(
       `SELECT DISTINCT student_id FROM student_ledger_entries`,
@@ -410,7 +422,7 @@ export class LedgerService {
     for (const { student_id: studentId } of students) {
       await this.withStudentLock(studentId, async (tx) => {
         const [{ sum }] = await tx.$queryRawUnsafe<{ sum: string }[]>(
-          `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum FROM student_ledger_entries WHERE student_id = $1::uuid`,
+          ledgerBalanceSql('$1::uuid'),
           studentId,
         );
         const cacheRows = await tx.$queryRawUnsafe<{ balance: string }[]>(

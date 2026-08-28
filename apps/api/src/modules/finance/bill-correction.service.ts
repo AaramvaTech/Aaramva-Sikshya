@@ -7,6 +7,7 @@ import { FinanceSettingsService } from './finance-settings.service';
 import { Money } from '../../common/money/money';
 import { toMoney } from './entities/finance.entity';
 import { notReversedExpr } from './bill-reversal.util';
+import { ledgerBalanceSql } from './ledger.util';
 import { todayAdInNepal } from '../common/utils/date.util';
 import { buildCorrectionSequenceKey, buildCorrectionNumber } from './bill-correction.util';
 import {
@@ -517,9 +518,14 @@ export class BillCorrectionService {
     return balance.compare(Money.zero()) > 0 ? balance : Money.zero();
   }
 
+  /** D19: floored at the student's own most recent OPENING_BALANCE entry
+   *  (ledger.util.ts) — availableCredit/owedBalance are real money caps
+   *  (refund and write-off approval), so an unfiltered post-rollover sum
+   *  here wouldn't just misreport a figure, it would let a refund draw
+   *  against advance credit that isn't really there. */
   private async liveBalance(tx: TenantTx, studentId: string): Promise<Money> {
     const [row] = await tx.$queryRawUnsafe<{ sum: string }[]>(
-      `SELECT COALESCE(SUM(debit)-SUM(credit),0) AS sum FROM student_ledger_entries WHERE student_id = $1::uuid`,
+      ledgerBalanceSql('$1::uuid'),
       studentId,
     );
     return toMoney(row.sum);

@@ -12,6 +12,7 @@ import { todayAdInNepal } from '../common/utils/date.util';
 import { buildInvoiceSequenceKey, buildInvoiceNumber, fiscalYearBs } from './bill-post.util';
 import { planAdvanceConsumption } from './bill-advance-consumption.util';
 import { INVOICE_STATUS_RECOMPUTE_SQL } from './bill-own-balance.util';
+import { ledgerBalanceSql } from './ledger.util';
 import { BillRunRow } from './entities/bill-run.entity';
 import { describeFrozenLineDrift } from './bill-footing.util';
 
@@ -181,8 +182,12 @@ export class BillRunPostRunnerService {
       );
       if (!line || line.outcome !== 'DRAFT') return; // already handled — idempotency safety net
 
+      // D19: floored at the student's own most recent OPENING_BALANCE entry
+      // (ledger.util.ts) — an unfiltered sum here would fold a Year-2
+      // rollover's opening-balance import on top of Year-1's already-settled
+      // entries into every invoice's previous_balance/total_receivable.
       const [{ sum }] = await tx.$queryRawUnsafe<{ sum: string }[]>(
-        `SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS sum FROM student_ledger_entries WHERE student_id = $1::uuid`,
+        ledgerBalanceSql('$1::uuid'),
         studentId,
       );
       const previousBalance = toMoney(sum);

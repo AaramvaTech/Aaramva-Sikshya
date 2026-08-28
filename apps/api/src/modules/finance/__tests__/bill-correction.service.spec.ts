@@ -374,6 +374,25 @@ describe('BillCorrectionService', () => {
 
       await expect(service.requestRefund(baseRefundDto({ amount: '100.00' }), 'accountant-1')).rejects.toThrow(BadRequestException);
     });
+
+    // D19: availableCredit (liveBalance) is a real money cap — an unfiltered
+    // post-rollover sum here would let a refund draw against advance credit
+    // that isn't really there (the Year-1 arrears it restates having been
+    // counted twice). Must floor at the OPENING_BALANCE cutoff same as
+    // getBalance().
+    it("D19: availableCredit's query floors at the OPENING_BALANCE cutoff, not an unconditional sum", async () => {
+      mockRefundPrelude();
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([{ sum: '-2000.00' }]) // availableCredit
+        .mockResolvedValueOnce([{ value: BigInt(4) }]) // sequence
+        .mockResolvedValueOnce([{ ...mockCorrectionRow, type: 'REFUND', amount: '2000.00', status: 'REQUESTED', requires_approval: true, refund_method: 'CASH' }]);
+
+      await service.requestRefund(baseRefundDto({ amount: '2000.00' }), 'accountant-1');
+
+      const sql = mockTx.$queryRawUnsafe.mock.calls[0][0] as string;
+      expect(sql).toContain("entry_type = 'OPENING_BALANCE'");
+      expect(sql).toContain("'-infinity'::date");
+    });
   });
 
   // ─── Checkpoint B: write-offs ───────────────────────────────────────────
