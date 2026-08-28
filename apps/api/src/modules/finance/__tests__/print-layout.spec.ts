@@ -5,7 +5,7 @@ import { loadPdfFonts } from '../../../common/pdf/pdf-fonts';
 import { mm, HALF_H, SHEET_W, SHEET_H, CONTENT_H, TOTALS_W, Locale } from '../print/mm';
 import { PAGE, halfBox, PrintOverflowError, PrintCapacityError, drawSheet, HalfRenderer, widthOf } from '../print/a5-sheet';
 import { renderInvoiceHalf, densities, InvoiceHalfData, InvoiceHalfLine, footerHeight } from '../print/invoice-half';
-import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation } from '../print/receipt-half';
+import { renderReceiptHalf, ReceiptHalfData, ReceiptAllocation, footerHeight as receiptFooterHeight } from '../print/receipt-half';
 import { printLabel, LabelKey, PrintLanguage, continuationLabel } from '../bill-print-labels';
 import { BillPdfService } from '../bill-pdf.service';
 import { BillReceiptA5Service } from '../bill-receipt-a5.service';
@@ -388,6 +388,18 @@ describe.each(LOCALES)('BILL-PRINT-1 receipt half [%s]', (locale) => {
   it('the SPEC fixture fits', () => {
     expect(() => renderReceiptHalf(newDoc(), halfBox(0), receiptFixture(locale), 'Student Copy'))
       .not.toThrow();
+  });
+
+  it('BILL-PRINT-2: the signature/stamp box (SIGN_GAP) grew from 4.4mm to 9mm at zero cost to the footer band', () => {
+    // remarksHeight (three blank ruled lines) governed the receipt footer's
+    // max() at 4.4mm and still does at 9mm — footerHeight is pinned to the
+    // exact value computed independently for both sizes (see the BILL-PRINT-2
+    // report), proving the resize genuinely didn't move anything else, not
+    // just asserting it fits. A regression here (footerHeight changing) would
+    // mean SIGN_GAP grew past remarksHeight and started costing allocation
+    // rows — exactly the cost this ticket's scope rules ruled out.
+    const expectedPt = locale === 'en' ? 71.388091 : 72.325591;
+    expect(receiptFooterHeight(locale)).toBeCloseTo(expectedPt, 5);
   });
 
   it('many allocations compress, then continue — and always reconcile', () => {

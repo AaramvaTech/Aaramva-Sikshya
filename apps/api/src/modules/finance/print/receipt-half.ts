@@ -178,8 +178,37 @@ export function planAllocations(
   };
 }
 
-/** Same reserved signing space as the invoice — see invoice-half.ts SIGN_GAP. */
-const SIGN_GAP = mm(4.4);
+/**
+ * BILL-PRINT-2: the uploaded signature/stamp images (drawn into this exact
+ * box via optionalImage's `fit: [w, h]`, which preserves aspect ratio) were
+ * rendering at 4.4mm — the value this constant started at, inherited from
+ * invoice-half.ts's own SIGN_GAP (see that file's comment: 4.4mm was chosen
+ * there because it is the largest size that costs the invoice half NOTHING,
+ * since its footer band is `max(QR, signatureHeight)` and QR is a fixed
+ * 15mm). That same "costs nothing" ceiling does NOT carry over to the
+ * receipt half — this file's footer band is `max(remarksHeight,
+ * receivedByHeight, signatureHeight)` (no QR at all), and remarksHeight
+ * (three blank ruled lines, REMARK_LINE_H * REMARK_LINES) is ~19.8-20.0mm,
+ * comfortably larger than the 4.4mm signature stack ever was. Solving
+ * signatureHeight(locale) = remarksHeight(locale) for SIGN_GAP gives a real,
+ * receipt-specific ceiling of ~9.46mm (Devanagari, the binding locale) below
+ * which growing this costs the receipt half nothing either — verified with
+ * a small script reproducing this file's own arithmetic, not estimated.
+ * 9mm stays under that with a safety margin, more than doubles the stamp
+ * and signature images (stampW below is defined AS this constant, so the
+ * stamp box grows in lockstep and stays square), and leaves 37mm of the
+ * 46mm SIG_W for the signature image (was 41.6mm) — comfortable either way.
+ * Going further, to the 15-20mm an uploaded stamp asset could ideally use,
+ * would require growing the whole footer band and would cost real allocation-
+ * row capacity; not done here — see BILL-BUGS.md.
+ *
+ * Deliberately NOT shared with invoice-half.ts's own SIGN_GAP: the two
+ * halves' footer bands are governed by different competing elements (QR vs.
+ * remarks), so their "costs nothing" ceilings are two different numbers —
+ * coupling them again would silently reintroduce the very ceiling that
+ * doesn't apply here.
+ */
+const SIGN_GAP = mm(9);
 
 function signatureHeight(locale: Locale): number {
   return eyebrowH(locale) + SIGN_GAP + RULE_INK + BODY * LINE_HEIGHT[locale] + eyebrowH(locale);

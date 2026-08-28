@@ -4,6 +4,18 @@ Deviations from `docs/api-contracts/BILL-SPEC.md` found during implementation, l
 
 ---
 
+## BILL-PRINT-2 — receipt stamp landed at 9mm, not the ticket's suggested 15-20mm; the difference is a real, computed layout cost
+
+The ticket asked for the receipt's uploaded signature/stamp box (`print/receipt-half.ts`'s `SIGN_GAP`, shared as the height for both the signature and stamp images) to grow from 4.4mm to "roughly 15-20mm." It landed at **9mm** instead — still more than double the original, but short of the suggested range — because 9mm is the largest size verified to cost the receipt's footer layout *nothing*, and going further genuinely does cost something, which scope rule 3 ("do not change any other print dimensions") ruled out.
+
+**Why 9mm is the real ceiling, not an arbitrary compromise.** The receipt footer's reserved band is `Math.max(remarksHeight, receivedByHeight, signatureHeight)` (`receipt-half.ts:226`, `footerHeight()`) — unlike the *invoice* half's footer, which is `max(QR, signatureHeight)` with a fixed 15mm QR code. `remarksHeight` (three blank ruled lines for hand annotation) is ~19.8mm (Latin) / ~20.0mm (Devanagari) and governs the band today, at both the old 4.4mm and the new 9mm — `signatureHeight` only becomes the new max, and starts pushing the whole footer (and therefore the allocation-table's available space) taller, once `SIGN_GAP` exceeds ~9.84mm (Latin) / ~9.46mm (Devanagari, the binding case since the same constant serves both locales). Verified with a small script reproducing the file's own arithmetic (not estimated), and independently confirmed by pinning `footerHeight(locale)` before and after in `__tests__/print-layout.spec.ts` — bit-for-bit identical at both 4.4mm and 9mm.
+
+**Reaching the ticket's suggested 15-20mm would require growing the whole footer band** by roughly 5-10mm beyond where it sits today, which the receipt's own `assertFits`/capacity machinery would then absorb by shrinking the allocation-row density or dropping to a continuation line sooner — a real, visible layout change for any receipt with more than a couple of payment allocations. Not attempted here — it would need an explicit decision to spend that space (the same kind of judgment call the original 4.4mm value's own comment in `invoice-half.ts` already made once, deliberately, for the invoice half).
+
+Note also: `invoice-half.ts`'s own `SIGN_GAP` (also 4.4mm, coincidentally the same value, previously described as "the same reserved signing space as the invoice") is **untouched** — invoices render via `renderInvoiceHalf` only, receipts via `renderReceiptHalf` only (confirmed: `bill-receipt-a5.service.ts` never imports `invoice-half.ts`), so the ticket's own scope (receipts) never reached that file, and it keeps its own, much tighter, QR-governed ceiling (~0.05mm of headroom at 4.4mm — no room to grow at all without cost).
+
+---
+
 ## D19 — two known limitations in the fiscal-year rollover fix, neither fixed here
 
 `D19` made every student-balance query (`LedgerService.getBalance`/`reconcile`/`getStatement`, `BillRunPostRunnerService`'s `previousBalance`, `BillCorrectionService.liveBalance`) floor at the student's own most recent `OPENING_BALANCE` ledger entry instead of summing every historical entry unconditionally — live-proved against real Postgres (crafted-then-rolled-back fixture): the naive sum double-counts a Year-2 rollover by exactly the carried-forward arrears (350.00 vs. the correct 150.00 in the worked-example proof), and the fix is byte-identical to today's behavior for a Year-1-only tenant (200.00 = 200.00, the case every real tenant is in today).
