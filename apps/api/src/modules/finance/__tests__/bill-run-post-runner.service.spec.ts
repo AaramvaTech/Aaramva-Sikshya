@@ -335,6 +335,28 @@ describe('BillRunPostRunnerService', () => {
     expect(amountNeArg).toBe(amountInWords(Money.fromDb('1800.00'), 'ne'));
   });
 
+  it('D19: the previousBalance query floors at the OPENING_BALANCE cutoff, not an unconditional sum — a Year-2 rollover import must not fold on top of Year-1\'s already-settled entries', async () => {
+    (tenantPrisma.query as jest.Mock)
+      .mockResolvedValueOnce([mockRun])
+      .mockResolvedValueOnce([{ id: 'line-1', student_id: 'student-1' }])
+      .mockResolvedValueOnce([{ gross: '3000.00', tax: '0.00', net: '3000.00' }]);
+
+    billLineResolverService.resolve.mockResolvedValueOnce(mockResolved as any);
+    mockTx.$queryRawUnsafe
+      .mockResolvedValueOnce([{ outcome: 'DRAFT', gross: '3000.00', concession: '0.00', tax: '0.00', net: '3000.00' }])
+      .mockResolvedValueOnce([{ sum: '0.00' }])
+      .mockResolvedValueOnce([{ value: BigInt(6) }])
+      .mockResolvedValueOnce([{ id: 'invoice-6' }])
+      .mockResolvedValueOnce([]);
+    ledgerService.postEntryInTx.mockResolvedValueOnce({ id: 'ledger-entry-6' } as any);
+
+    await service.drainCurrentTenant();
+
+    const previousBalanceSql = mockTx.$queryRawUnsafe.mock.calls[1][0] as string;
+    expect(previousBalanceSql).toContain("entry_type = 'OPENING_BALANCE'");
+    expect(previousBalanceSql).toContain("'-infinity'::date");
+  });
+
   it('posts a DRAFT line for a student holding advance credit: exactly one INVOICE entry (BILL-4 invariant unchanged), advance consumed via a new allocation row (capped at the invoice net, not the full advance), zero new ledger entries for the consumption itself', async () => {
     (tenantPrisma.query as jest.Mock)
       .mockResolvedValueOnce([mockRun])

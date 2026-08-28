@@ -242,6 +242,18 @@ describe('LedgerService', () => {
       const result = await service.getBalance('student-1');
       expect(result.sign).toBe(expectedSign);
     });
+
+    // D19: the query sent to the DB must floor at the student's own most
+    // recent OPENING_BALANCE entry — mocked-value regression tests above
+    // can't see a real Postgres date filter, so this pins the SQL shape
+    // directly (same split as ledger.util.spec.ts).
+    it('D19: the balance query floors at the OPENING_BALANCE cutoff, not an unconditional sum', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ sum: '0.00' }]);
+      await service.getBalance('student-1');
+      const sql = (tenantPrisma.query as jest.Mock).mock.calls[0][0] as string;
+      expect(sql).toContain("entry_type = 'OPENING_BALANCE'");
+      expect(sql).toContain("'-infinity'::date");
+    });
   });
 
   describe('getStatement', () => {
@@ -295,6 +307,21 @@ describe('LedgerService', () => {
       expect(result.closingBalance).toBe(-300);
       expect(result.advanceCredit).toBe(300);
     });
+
+    it('D19: the opening-balance bucket floors at the OPENING_BALANCE cutoff on top of its own entry_date < from window', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'student-1', admission_number: 'STU-1', first_name: 'Ram', last_name: 'Thapa', class_name: 'G9' }])
+        .mockResolvedValueOnce([{ sum: '0.00' }])
+        .mockResolvedValueOnce([{ total_debit: '0.00', total_credit: '0.00' }])
+        .mockResolvedValueOnce([]);
+
+      await service.getStatement('student-1', { from: '2026-07-01', to: '2026-07-31' }, 'accountant-1', Role.ACCOUNTANT);
+
+      const openingSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
+      expect(openingSql).toContain('entry_date < $2::date');
+      expect(openingSql).toContain("entry_type = 'OPENING_BALANCE'");
+      expect(openingSql).toContain("'-infinity'::date");
+    });
   });
 
   describe('reconcile', () => {
@@ -328,6 +355,21 @@ describe('LedgerService', () => {
       // correction UPDATE against student_account_balances follows it.
       expect(mockTx.$executeRawUnsafe).toHaveBeenCalledTimes(1);
       expect(mockTx.$executeRawUnsafe.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
+    });
+
+    // D19: reconcile()'s own "truth" MUST use the same floored definition
+    // getBalance() uses. If it didn't, the nightly job would permanently
+    // stamp student_account_balances back to the unfiltered figure —
+    // fighting getBalance()'s fix forever instead of agreeing with it.
+    it("D19: reconcile()'s truth query floors at the OPENING_BALANCE cutoff, matching getBalance()", async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ student_id: 'student-1' }]);
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ sum: '0.00' }]).mockResolvedValueOnce([{ balance: '0.00' }]);
+
+      await service.reconcile();
+
+      const truthSql = mockTx.$queryRawUnsafe.mock.calls[0][0] as string;
+      expect(truthSql).toContain("entry_type = 'OPENING_BALANCE'");
+      expect(truthSql).toContain("'-infinity'::date");
     });
   });
 
