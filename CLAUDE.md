@@ -1657,6 +1657,18 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   the 260/student computed under 'ALL'). List responses carry `locked` so the web catalog's tax-rate edit form shows an
   "Applies to" select, disabled with an explanation when locked (rate stays non-editable in the UI). 1527 api tests (+7), web 644.
 
+- [x] OUTSTANDING-500 — Record Payment showed "No outstanding invoices" + a 500 toast after a partial payment (motherland,
+  BINV-2083-000068). **Two independent causes, neither is the tax amount or the allocation math.** (1) **Web, fixed:**
+  `useStudentOutstandingInvoices` asked the invoice list for `status: 'POSTED'` only, so an invoice vanished from the counter the
+  moment it became `PARTIALLY_PAID` (balance 1,130 uncollectable there). Now `fetchOutstandingInvoices` (use-bill-payment.ts)
+  requests POSTED + PARTIALLY_PAID and merges oldest-first; the list endpoint takes one status per call. (2) **Ops, NOT fixed in
+  code:** `GET /finance/late-fees/students/:id/outstanding` (the actual 500, bill-payment.api.ts:46) selects
+  `bill_payment_allocations.bill_fine_accrual_id`, added by tenant migration **0039** (BILL-7 checkout fix), which was
+  canary-applied to `demo` only — the other 7 tenant schemas (incl. motherland-school) lack the column (Postgres 42703 → Prisma
+  P2010 → INTERNAL_ERROR). Fix = `npm run migrate:tenants` (canary convention already satisfied by demo). The payment itself
+  worked because AUTO_FIFO only touches the fine tables when money is left over after invoices; **a payment that fully clears the
+  student's invoices (remainder > 0) would 500 on those tenants until 0039 is rolled out.** 1527 api tests (unchanged), web 646 (+2).
+
 > Update this checklist as modules are completed.
 
 ---
