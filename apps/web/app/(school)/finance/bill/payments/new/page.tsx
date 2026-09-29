@@ -1,5 +1,6 @@
 'use client';
 
+import { allocationLabel } from '@/lib/allocation-label';
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -217,7 +218,7 @@ export default function RecordPaymentPage() {
                 {result.allocations.map((a) => (
                   <div key={a.id} className="flex justify-between text-sm">
                     <span className="font-mono text-xs text-gray-500">
-                      {a.billInvoiceId ? `Invoice …${a.billInvoiceId.slice(-8)}` : `Late fee …${a.billFineAccrualId?.slice(-8)}`}
+                      {allocationLabel(a)}
                     </span>
                     <AmountDisplay amount={a.amount} />
                   </div>
