@@ -1632,6 +1632,21 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   name stays reserved (the DB constraint is unchanged; making it a partial index on `deleted_at IS NULL` would be a
   tenant migration — deliberately not done here). 1516 api tests (+3), 644 web tests (+8), both api tsc + web tsc clean.
 
+- [x] FEE-STRUCTURE-ITEMS-DISPLAY — Fee Structures list showed "—" for every Items cell and Edit Items opened with no
+  rows (`fix/fee-structure-items-display`). **The items were always saved** (all 9 motherland structures have their
+  rows, incl. "Grade 9 2083": Admission 1000.00 from 2026-07-17); the bug was the READ path, pre-existing since UI-1
+  (#47), NOT a regression from the picker branch: `BillFeeStructureService.findAll` returned structures without items
+  (`items: undefined`), and the web reads `row.original.items?.length ?? '—'` and pre-fills Edit Items from that same
+  list row (`structure.items ?? []`); only `findOne` loaded items and its web hook `useFeeStructure` was never used.
+  Fix is API-only: `findAll` now loads items for the whole page in ONE batched query (`fee_structure_id = ANY($1)`,
+  same join as `findOne`; a structure with none gets `[]`). Billing's read path untouched. **Data-loss guard:**
+  `PATCH …/fee-structures/:id/items` replaces the whole set (DELETE + INSERT) and had no minimum — `{items: []}` silently
+  wiped every item (the web schema's `min(1)` was the only guard, bypassable by any direct call, and with the empty
+  dialog above a save would also have replaced a multi-item structure with a single row). Now 422 `VALIDATION_FAILED`
+  (`details.field: 'items'`) before anything is touched (404 for a missing structure still wins). Create with an empty
+  list is unchanged. Live: list shows 1,1,1,1,1,2,1,1; Edit Items — Grade 9 2083 pre-fills Admission / 1000 /
+  2083 Shrawan 1; empty PATCH → HTTP 422 and the row count stays 1. 1520 api tests (+4), web unchanged (644), tsc clean.
+
 > Update this checklist as modules are completed.
 
 ---
