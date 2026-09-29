@@ -305,7 +305,7 @@ export default function NewStudentPage() {
                         <FormItem>
                           <FormLabel>Date of Birth (BS) *</FormLabel>
                           <FormControl>
-                            <BsDateInput value={field.value} onChange={field.onChange} />
+                            <BsDateInput value={field.value} onChange={field.onChange} minYear={todayBs().year - 25} maxYear={todayBs().year - 2} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
