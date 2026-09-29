@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { BillFeeStructureService } from '../bill-fee-structure.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -177,6 +177,45 @@ describe('BillFeeStructureService', () => {
     });
   });
 
+  describe('findAll()', () => {
+    const itemRow = (id: string, structureId: string, head: string) => ({
+      id, fee_structure_id: structureId, fee_head_id: `fh-${id}`, fee_head_name: head, amount: '1000.00',
+      recurrence_override: null, effective_from: new Date('2026-07-17'), effective_to: null, created_at: new Date('2026-09-29'),
+    });
+
+    it('carries each structures items (the list column + Edit Items pre-fill read them off the list row)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([
+          { ...mockStructureRow, id: 'bfs-1', total_count: '2' },
+          { ...mockStructureRow, id: 'bfs-2', total_count: '2' },
+        ])
+        .mockResolvedValueOnce([itemRow('i1', 'bfs-1', 'Admission'), itemRow('i2', 'bfs-1', 'Tuition'), itemRow('i3', 'bfs-2', 'Admission')]);
+
+      const { data } = await service.findAll({} as never);
+
+      expect(data.find((d) => d.id === 'bfs-1')!.items!.map((i) => i.feeHeadName)).toEqual(['Admission', 'Tuition']);
+      expect(data.find((d) => d.id === 'bfs-2')!.items).toHaveLength(1);
+      // one batched items query, not one per structure
+      expect((tenantPrisma.query as jest.Mock)).toHaveBeenCalledTimes(2);
+      expect((tenantPrisma.query as jest.Mock).mock.calls[1][1]).toEqual(['bfs-1', 'bfs-2']);
+    });
+
+    it('a structure with no items gets [] (0), not undefined (which the UI renders as a dash)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockStructureRow, id: 'bfs-1', total_count: '1' }])
+        .mockResolvedValueOnce([]);
+      const { data } = await service.findAll({} as never);
+      expect(data[0].items).toEqual([]);
+    });
+
+    it('an empty page skips the items query entirely', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      const { data } = await service.findAll({} as never);
+      expect(data).toEqual([]);
+      expect((tenantPrisma.query as jest.Mock)).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('findOne()', () => {
     it('returns the structure with its items and fee head names', async () => {
       (tenantPrisma.query as jest.Mock)
@@ -221,6 +260,14 @@ describe('BillFeeStructureService', () => {
         ([sql]) => typeof sql === 'string' && sql.includes('DELETE FROM bill_fee_structure_items'),
       );
       expect(deleteCall).toBeDefined();
+    });
+
+    it('an EMPTY item list is refused with 422 and nothing is deleted (it would wipe every item)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([mockStructureRow]); // existence check
+      const err = await service.updateItems('bfs-1', { items: [] }).catch((e) => e);
+      expect(err).toBeInstanceOf(UnprocessableEntityException);
+      expect(err.getResponse()).toMatchObject({ code: 'VALIDATION_FAILED', details: { field: 'items' } });
+      expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
     it('404s when the structure does not exist', async () => {

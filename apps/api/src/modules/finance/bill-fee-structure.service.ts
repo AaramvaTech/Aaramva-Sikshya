@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { errorBody } from '../common/errors/error-codes';
 import {
@@ -115,8 +115,31 @@ export class BillFeeStructureService {
       ...params,
     );
 
+    // The list carries each structure's items too (one batched query, not N+1): the web list's
+    // "Items" column and the Edit Items dialog's pre-fill both read them off the list row.
+    // Same join as findOne() — billing's own read path is untouched.
+    const itemsByStructure = new Map<string, BillFeeStructureItemRow[]>();
+    if (rows.length > 0) {
+      const items = await this.tenantPrisma.query<BillFeeStructureItemRow & { fee_structure_id: string }>(
+        `SELECT bfsi.*, fh.name AS fee_head_name
+         FROM bill_fee_structure_items bfsi
+         JOIN fee_heads fh ON fh.id = bfsi.fee_head_id
+         WHERE bfsi.fee_structure_id = ANY($1::uuid[])
+         ORDER BY bfsi.created_at`,
+        rows.map((r) => r.id),
+      );
+      for (const it of items) {
+        const list = itemsByStructure.get(it.fee_structure_id) ?? [];
+        list.push(it);
+        itemsByStructure.set(it.fee_structure_id, list);
+      }
+    }
+
     const total = rows[0]?.total_count ? parseInt(rows[0].total_count, 10) : 0;
-    return { data: rows.map((r) => toBillFeeStructureResponse(r)), meta: { page, limit, total } };
+    return {
+      data: rows.map((r) => toBillFeeStructureResponse(r, itemsByStructure.get(r.id) ?? [])),
+      meta: { page, limit, total },
+    };
   }
 
   async findOne(id: string): Promise<BillFeeStructureResponseDto> {
@@ -144,6 +167,16 @@ export class BillFeeStructureService {
       id,
     );
     if (!rows[0]) throw new NotFoundException(`Fee structure ${id} not found`);
+
+    // updateItems REPLACES the whole item set (DELETE + INSERT). An empty list would silently
+    // wipe every item, leaving a structure that bills nothing — refuse it before touching anything.
+    if (dto.items.length === 0) {
+      throw new UnprocessableEntityException(
+        errorBody('VALIDATION_FAILED', 'A fee structure must keep at least one fee item. To retire a structure, delete it instead.', {
+          field: 'items',
+        }),
+      );
+    }
 
     await this.tenantPrisma.run(async (tx) => {
       await tx.$executeRawUnsafe(
