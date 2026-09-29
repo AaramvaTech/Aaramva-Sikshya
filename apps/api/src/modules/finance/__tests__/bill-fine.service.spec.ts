@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { BillFineService } from '../bill-fine.service';
-import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
+import { TenantPrismaService, TenantTx } from '../../tenant/tenant-prisma.service';
 import { LedgerService } from '../ledger.service';
 import { CalendarService } from '../../calendar/calendar.service';
 import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
@@ -305,7 +305,7 @@ describe('BillFineService', () => {
   describe('fetchOutstandingAccruals', () => {
     it('excludes reversed accruals — the notReversedExpr clause, matched by SQL substring', async () => {
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([]);
-      await service.fetchOutstandingAccruals(mockTx, 'student-1');
+      await service.fetchOutstandingAccruals(mockTx as unknown as TenantTx, 'student-1');
       const sql = String(mockTx.$queryRawUnsafe.mock.calls[0][0]);
       expect(sql).toContain('NOT EXISTS');
       expect(sql).toContain('rev.reverses_entry_id = bfa.ledger_entry_id');
@@ -317,7 +317,7 @@ describe('BillFineService', () => {
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([
         { id: 'fine-1', bill_invoice_id: 'inv-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
       ]);
-      const rows = await service.fetchOutstandingAccruals(mockTx, 'student-1');
+      const rows = await service.fetchOutstandingAccruals(mockTx as unknown as TenantTx, 'student-1');
       expect(rows).toEqual([
         { id: 'fine-1', bill_invoice_id: 'inv-1', invoice_number: 'BINV-2083-000005', accrued_through: '2026-08-16', days_overdue: 4, outstanding: '40.00' },
       ]);

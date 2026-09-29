@@ -1592,6 +1592,10 @@ When starting a new session, Claude Code should:
 3. Check existing code in the target directory before writing anything new
 4. Ask for clarification if the task conflicts with anything in this file
 
+## Session close rules
+
+- Before reporting a typecheck as clean, run CI's exact commands, never a bare `tsc --noEmit` (it hits TS6059 in `apps/api` and skips specs). `apps/api`: `npx tsc -p tsconfig.build.json --noEmit` AND `npx tsc -p tsconfig.spec.json --noEmit` (CI runs both; specs went unchecked until 2026-09-29). `apps/web` and `apps/mobile`: `npx tsc --noEmit` (mobile also `npm test`); web CI runs no tests.
+
 ## Frontend (apps/web/) — added Session 11
 
 Framework: Next.js 14 App Router + TypeScript
