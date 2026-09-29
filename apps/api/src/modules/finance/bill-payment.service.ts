@@ -68,9 +68,14 @@ export interface RecordPaymentInTxParams {
 // join to bill_fine_accruals: its allocation column comes from tenant
 // migration 0039, and a display join must not break payments on a tenant that
 // hasn't received it.
-const STUDENT_DISPLAY_COLS = `TRIM(CONCAT(s.first_name, ' ', s.last_name)) AS student_name, s.student_id AS admission_number`;
+// Class/section come from students.class_id / section_id (the only place a
+// student's class is stored as ids; there is no enrolment table).
+const STUDENT_CLASS_JOINS = `LEFT JOIN classes c ON c.id = s.class_id LEFT JOIN sections sec ON sec.id = s.section_id`;
+const STUDENT_DISPLAY_COLS = `TRIM(CONCAT(s.first_name, ' ', s.last_name)) AS student_name, s.student_id AS admission_number,
+   c.name AS class_name, sec.name AS section_name`;
 const PAYMENT_WITH_STUDENT_SQL = `SELECT bp.*, ${STUDENT_DISPLAY_COLS}
-   FROM bill_payments bp LEFT JOIN students s ON s.id = bp.student_id`;
+   FROM bill_payments bp LEFT JOIN students s ON s.id = bp.student_id
+   ${STUDENT_CLASS_JOINS}`;
 const ALLOCATIONS_WITH_INVOICE_SQL = `SELECT bpa.*, bi.invoice_number
    FROM bill_payment_allocations bpa
    LEFT JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id
@@ -333,6 +338,8 @@ export class BillPaymentService {
     const params: unknown[] = [];
     let idx = 1;
     if (query.studentId) { conditions.push(`bp.student_id = $${idx++}::uuid`); params.push(query.studentId); }
+    if (query.classId) { conditions.push(`s.class_id = $${idx++}::uuid`); params.push(query.classId); }
+    if (query.sectionId) { conditions.push(`s.section_id = $${idx++}::uuid`); params.push(query.sectionId); }
     if (query.method) { conditions.push(`bp.method = $${idx++}`); params.push(query.method); }
     if (query.status) { conditions.push(`bp.status = $${idx++}`); params.push(query.status); }
     if (query.dateFrom) { conditions.push(`bp.received_date >= $${idx++}::date`); params.push(query.dateFrom); }
@@ -344,6 +351,7 @@ export class BillPaymentService {
       `SELECT bp.*, ${STUDENT_DISPLAY_COLS}, COUNT(*) OVER() AS total_count
        FROM bill_payments bp
        LEFT JOIN students s ON s.id = bp.student_id
+       ${STUDENT_CLASS_JOINS}
        WHERE ${conditions.join(' AND ')}
        ORDER BY bp.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,

@@ -74,6 +74,9 @@ export class BillPaymentQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
   @IsOptional() @IsUUID() studentId?: string;
+  /** Student's current class / section (students.class_id / section_id). */
+  @IsOptional() @IsUUID() classId?: string;
+  @IsOptional() @IsUUID() sectionId?: string;
   @IsOptional() @IsEnum(BillPaymentMethod) method?: BillPaymentMethod;
   @IsOptional() @IsEnum(PAYMENT_STATUSES) status?: string;
   @IsOptional() @IsDateString() dateFrom?: string;

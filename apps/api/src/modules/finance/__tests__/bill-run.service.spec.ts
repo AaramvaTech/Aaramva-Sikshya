@@ -262,6 +262,25 @@ describe('BillRunService', () => {
       expect(lineCall[0]).toContain('s.class_id =');
       expect(lineCall).toContain('class-9');
     });
+
+    it.each([
+      ['no class/section', {}, false, false],
+      ['section only', { sectionId: 'sec-b' }, false, true],
+      ['class + section', { classId: 'class-9', sectionId: 'sec-b' }, true, true],
+    ])('line filters — %s', async (_n, q, hasClass, hasSection) => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([mockRunRow]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.findOne('run-1', q);
+
+      const lineCall = (tenantPrisma.query as jest.Mock).mock.calls[2];
+      expect(lineCall[0].includes('s.class_id =')).toBe(hasClass);
+      expect(lineCall[0].includes('s.section_id =')).toBe(hasSection);
+      // run id first, then only the filters actually given, then limit/offset
+      expect(lineCall.slice(1)).toEqual([
+        'run-1', ...(hasClass ? ['class-9'] : []), ...(hasSection ? ['sec-b'] : []), 20, 0,
+      ]);
+    });
   });
 
   describe('findAll', () => {

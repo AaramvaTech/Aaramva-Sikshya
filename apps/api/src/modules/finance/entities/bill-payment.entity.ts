@@ -36,6 +36,8 @@ export interface BillPaymentRow {
   /** Display joins (students) — present only on queries that ask for them. */
   student_name?: string | null;
   admission_number?: string | null;
+  class_name?: string | null;
+  section_name?: string | null;
   total_count?: string;
 }
 
@@ -71,6 +73,8 @@ export interface BillPaymentResponseDto {
   studentId: string;
   studentName: string | null;
   admissionNumber: string | null;
+  className: string | null;
+  sectionName: string | null;
   academicYearId: string;
   amount: number;
   method: string;
@@ -142,6 +146,8 @@ export function toBillPaymentResponse(
     studentId: row.student_id,
     studentName: row.student_name ?? null,
     admissionNumber: row.admission_number ?? null,
+    className: row.class_name ?? null,
+    sectionName: row.section_name ?? null,
     academicYearId: row.academic_year_id,
     amount: amount.toNumber(),
     method: row.method,

@@ -22,6 +22,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ClassSectionFilter } from '@/components/finance/class-section-filter';
+import { formatClassSection } from '@/lib/class-section';
+import { useClasses } from '@/lib/hooks/use-students';
 import { useBillPayments, useUpdateChequeStatus, useVoidPayment } from '@/lib/hooks/use-bill-payment';
 import { useAuthStore } from '@/store/auth.store';
 import type { BillPayment, BillPaymentMethod, BillPaymentStatus } from '@/types/api.types';
@@ -47,6 +50,8 @@ export default function BillPaymentsPage() {
   const status = searchParams.get('status') ?? '';
   const dateFrom = searchParams.get('dateFrom') ?? '';
   const dateTo = searchParams.get('dateTo') ?? '';
+  const classId = searchParams.get('classId') ?? '';
+  const sectionId = searchParams.get('sectionId') ?? '';
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
 
@@ -57,13 +62,16 @@ export default function BillPaymentsPage() {
     status: status || undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
+    classId: classId || undefined,
+    sectionId: sectionId || undefined,
   });
+  const { data: classes } = useClasses();
   const updateCheque = useUpdateChequeStatus();
   const voidPayment = useVoidPayment();
 
   const payments = paymentsData?.data ?? [];
   const meta = paymentsData?.meta;
-  const activeFilterCount = [method, status, dateFrom, dateTo].filter(Boolean).length;
+  const activeFilterCount = [method, status, dateFrom, dateTo, classId, sectionId].filter(Boolean).length;
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -124,6 +132,15 @@ export default function BillPaymentsPage() {
           <p className="font-medium text-gray-900 dark:text-white">{row.original.studentName}</p>
           <p className="text-xs text-gray-400 font-mono">{row.original.admissionNumber}</p>
         </div>
+      ),
+    },
+    {
+      id: 'classSection',
+      header: 'Class / Section',
+      cell: ({ row }) => (
+        <span className="text-gray-600 dark:text-gray-300">
+          {formatClassSection(row.original.className, row.original.sectionName)}
+        </span>
       ),
     },
     {
@@ -235,6 +252,13 @@ export default function BillPaymentsPage() {
           {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>)}
         </SelectContent>
       </Select>
+
+      <ClassSectionFilter
+        classes={classes}
+        classId={classId}
+        sectionId={sectionId}
+        onChange={(next) => updateParams({ classId: next.classId, sectionId: next.sectionId, page: '1' })}
+      />
 
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-gray-500 shrink-0">Received:</span>
