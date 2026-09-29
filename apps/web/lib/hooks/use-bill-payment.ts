@@ -6,12 +6,26 @@ import type { CreateBillPaymentData, UpdateChequeStatusData, VoidPaymentData } f
 
 // ─── Outstanding invoices (UI-4 §2 balance field) ────────────────────────────
 
+/** Still-collectable = POSTED (nothing paid) + PARTIALLY_PAID. Asking for POSTED
+ * alone made an invoice vanish from the counter after its first partial
+ * payment, leaving the balance uncollectable there. The list endpoint takes one
+ * status per call, hence two calls; oldest first, the same order AUTO_FIFO settles. */
+export async function fetchOutstandingInvoices(studentId: string) {
+  const [posted, partial] = await Promise.all(
+    (['POSTED', 'PARTIALLY_PAID'] as const).map((status) =>
+      billInvoiceApi.list({ studentId, status, limit: 100 }).then((r) => r.data.data.data),
+    ),
+  );
+  return [...posted, ...partial].sort(
+    (a, b) => a.issueDate.localeCompare(b.issueDate) || (a.invoiceNumber ?? '').localeCompare(b.invoiceNumber ?? ''),
+  );
+}
+
 export function useStudentOutstandingInvoices(studentId: string | null) {
   const slug = useTenantStore((s) => s.slug);
   return useQuery({
     queryKey: ['bill-invoices', { studentId }],
-    queryFn: () =>
-      billInvoiceApi.list({ studentId: studentId as string, status: 'POSTED', limit: 100 }).then((r) => r.data.data.data),
+    queryFn: () => fetchOutstandingInvoices(studentId as string),
     enabled: !!slug && !!studentId,
   });
 }
