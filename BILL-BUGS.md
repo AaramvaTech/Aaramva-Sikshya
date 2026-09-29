@@ -837,3 +837,30 @@ reference set). Live proof used invoices/payments that had never been printed.
 **FILE-1-BLOB-D — `staff_documents.file_url` / `student_documents.file_url` not gated.** Same column shape, but
 both are written only with a verified `fileKey` today (the web fallback that could send base64 was removed);
 no legacy rows exist. No `data:` guard added on those write paths — cheap to add if a client ever sends `fileUrl`.
+
+
+## BILL-DATA-1-LEFT — what Phase 2 deliberately did NOT fix (2026-09-29)
+
+Phase 2 was motherland-school only, academic-year rows + exact-mapping assignment re-dating only. Left as-is, all test data:
+
+1. **demo — academic year expired.** Its only AY `2082-83` (2025-07-16 → 2026-07-15) is still `is_current` but no longer
+   contains today, and no successor year exists. All 15 active students are assigned (0/15 missing), but their
+   `effective_from` (2025-04-12) is also before the AY's start. Needs a 2083/84 year created + current, then re-assignment.
+2. **test — 504/540 missing assignments** (Grades 1–8, 10–12, L.K.G./U.K.G./Nursery have none), plus **37 cross-class
+   rows** (all Grade 9 students on "Grade 1 Fees 2083"), 37 `effective_from` values before the AY start, and an AY
+   (2026-05-16 → 2027-05-15) not aligned to Shrawan 1. Probably disposable test data; not touched.
+3. **geetanjali-school-college — 1/1 missing** (a Grade 10 student), and no fee structure exists for Grade 10. AY
+   2026-05-01 → 2027-05-01 is also not Shrawan-aligned.
+4. **jorden-donovan, kaye-nashh, raja-mcintyres, stacey-mejia** — no academic year and no students; nothing to fix yet.
+5. **motherland — 7 cross-class assignments** (6 Grade-9-A students + 1 Grade-10-A chain row on `tes`, a Grade 6
+   structure), all pre-FEE-CLASS-GUARD and carrying no override stamp. Re-assign through the app or stamp deliberately.
+6. **motherland — the `tes` (Grade 6, 10,000), `test8` (Grade 8, 1,700) and `Grade 10 Standard Fee Structure (placeholder)`
+   (1,000) structures** look like test data; no Grade 7 or Grade 9 structure exists at all. Decision + Bulk Assign in the app.
+7. **motherland — 9 future-dated chained assignment rows** (`effective_from` 2027-09-16, 2027-11-16, 2028-01-16; students
+   2083-0001/03/04/05/06/51/52/57) sit after the current year's end (2027-07-16) because only rows dated exactly
+   2027-07-16 were re-dated. Harmless for today's lookups; revisit when the next AY is created.
+8. **`tenant_bill_scratch` schema** (60 tables, no `public.tenants` row) — leftover from BILL-1 scratch tests; same item as
+   FILE-1-BLOB-B, still not dropped.
+9. **motherland — 6 bill runs** on AY `2083/84` are for bs_year 2083 months 4/5/6/8 (2026 dates; month 8 = Mangsir is in
+   the future). Their skipped lines (168 `SKIPPED_NO_ASSIGNMENT` on POSTED runs + 10 on one DRAFT run) are unchanged; **no
+   run was re-run**. Whether/how to re-bill already-posted months is undecided.

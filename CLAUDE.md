@@ -1592,6 +1592,25 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   fails / resolved / load error / `data:` preview). **636 web tests, `tsc --noEmit` clean.** Live-proved on
   motherland-school (console clean with MinIO up; placeholders, no broken images with MinIO down).
 
+- [x] BILL-DATA-1 — fee-assignment gap + academic-year integrity (`docs/api-contracts/BILL-DATA-1-spec.md`).
+  **Phase 3 (guards)** shipped in the CAL-1 PRs of 2026-08-16; **Phase 1 audit** done 2026-09-29 (all 8 tenants);
+  **Phase 2 fix done for motherland-school ONLY**. The audit found overlaps/inverted rows already gone everywhere; the
+  motherland problem (52/57 students without a current-year assignment) was that its two academic-year rows were mis-named
+  and mis-dated ~2 years: the row named `2081/82` held BS 2083/84's dates and was current, while the row named `2083/84`
+  held BS 2084/85's dates — and all operational data (assignments, structures, bill runs) hung on the latter. Fixed with a
+  reviewed one-off (dry-run → backup → one transaction → idempotent; scripts in git-ignored `apps/api/.scratch/`, not
+  committed): `2081/82` → `2082/83` / year_bs 2082 / 2025-07-17 → 2026-07-16 / not current; `2083/84` → year_bs 2083 /
+  2026-07-17 → 2027-07-16 / current (Shrawan 1 dates verified against hamropatro: 2082 = 2025-07-17, 2083 = 2026-07-17,
+  2084 = 2027-07-17); 21 assignments dated exactly 2027-07-16 re-dated to 2026-07-17. **Raw SQL in one transaction, not
+  `AcademicYearService`:** the service cannot change `year_bs`, its `update()`/`setCurrentYear()` each open their own
+  transaction (no atomic multi-step edit), so the script replicated the same overlap / end-before-start / one-current checks
+  after every step and rolled back on failure. Result: 0 overlaps, 0 inverted, one current year containing today, missing
+  52 → 36 (Grades 6/7/8/9B, needing structures + Bulk Assign in the app), all 21 assigned students resolve via the real
+  `findActiveAssignment`. **Known side effects left on purpose:** 9 chained assignment rows dated 2027-09-16 … 2028-01-16 (not
+  matching the exact mapping) now sit after the current year's end; the 5 students who had a `placeholder` (1,000) current-year
+  row now resolve to `Grade 10 Fees 2083` (100) in the new current year. Nothing else touched (no structures, runs, invoices,
+  ledger, other tenants). Leftovers: BILL-BUGS.md "BILL-DATA-1-LEFT".
+
 > Update this checklist as modules are completed.
 
 ---
