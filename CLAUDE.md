@@ -1578,7 +1578,7 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `data:` values, or those tenants' settings saves 422.** Production step is manual (spec). Live-proved on
   motherland-school: resent `data:` → 422 + column unchanged; script dry-run/apply/second-apply (8 cleared, then 0);
   real presigned signature → key stored; uncached invoice PDF + A5 receipt printed with no asset WARN and the
-  signature image embedded. **1513 api tests (+45), 631 web tests, both `tsc` clean.**
+  signature image embedded. **1513 api tests, 631 web tests, both `tsc` clean.**
 
 > Update this checklist as modules are completed.
 
