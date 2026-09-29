@@ -1564,6 +1564,22 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `ledger_entry_id`) between the pre-lock read and the lock could be voided without reversing
   the ledger credit that arrived in between.
 
+- [x] FILE-1-BLOB — stop and clean up base64 images (`docs/api-contracts/FILE-1-BLOB-spec.md`,
+  `apps/api/src/modules/storage/asset-ref.util.ts` + `legacy-blob-cleanup.ts`, `scripts/clean-legacy-blobs.ts`).
+  `checkAssetRef` is the single gate for `tenants.logoUrl/principalSignatureUrl/schoolStampUrl/qrImageUrl` and
+  `staff_profiles`/`students.photo_url` (settings, super-admin `updateTenant`, staff + student update): **`data:` is
+  ALWAYS refused (422 `ASSET_LEGACY_BASE64_REJECTED`) even when it equals the stored value**; anything not this
+  tenant's own key of the right kind (logo: this deployment's public URL of one) → 422 `ASSET_REF_INVALID {field}`;
+  `''` → NULL; an unchanged non-`data:` value is accepted (covers demo's retired `bill-qr` key — BILL-BUGS.md
+  FILE-1-BLOB-A). Web `uploadFile` lost its base64 fallback (presign failure = the server's message);
+  settings/super-admin never send a `data:` preview. **Cleanup:** `npm run clean-legacy-blobs` (dry-run default,
+  `--apply` backs old values up to git-ignored `apps/api/.scratch/` first, never deletes storage objects, skips
+  schemas with no `public.tenants` row) — **run it BEFORE deploying this change to any environment that still holds
+  `data:` values, or those tenants' settings saves 422.** Production step is manual (spec). Live-proved on
+  motherland-school: resent `data:` → 422 + column unchanged; script dry-run/apply/second-apply (8 cleared, then 0);
+  real presigned signature → key stored; uncached invoice PDF + A5 receipt printed with no asset WARN and the
+  signature image embedded. **1513 api tests (+45), 631 web tests, both `tsc` clean.**
+
 > Update this checklist as modules are completed.
 
 ---
