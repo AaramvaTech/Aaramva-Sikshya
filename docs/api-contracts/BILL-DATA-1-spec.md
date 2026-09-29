@@ -1,7 +1,17 @@
 # BILL-DATA-1 — Fee Assignment Gap + Academic Year Date Integrity Fix
 
-**Status:** Spec, not yet built.
-**Trigger:** Student billing tab investigation found `motherland_school` has zero
+**Status (updated 2026-09-29):**
+- **Phase 1 (audit): done 2026-09-29**, all 8 tenants, read-only. Findings differed from the trigger below: the AY-overlap and
+  inverted-assignment problems no longer exist anywhere (0 overlaps, 0 inverted rows, live or soft-deleted); motherland-school
+  was 52/57 missing, not 0/57, and its real cause was two mis-named / mis-dated academic-year rows (see CLAUDE.md
+  "BILL-DATA-1 Phase 2"). Working report: `apps/api/.scratch/BILL-DATA-1-audit.md` (git-ignored).
+- **Phase 2 (fix): done for motherland-school ONLY (2026-09-29).** Other tenants deliberately left, see BILL-BUGS.md
+  "BILL-DATA-1-LEFT".
+- **Phase 3 (guards): shipped in the CAL-1 PRs of 2026-08-16** — AY overlap check + end-before-start check
+  (`academic-year.service.ts`), backdated-assignment guard, and migration 0035's
+  `chk_sfsa_effective_to_after_from`. The old "not yet built" line was stale.
+
+**Trigger (original, kept for history):** Student billing tab investigation found `motherland_school` has zero
 students with a fee-structure assignment for its current academic year (0/57), plus
 overlapping AY date ranges and 10 assignment rows with inverted `effective_to <
 effective_from`. This is a data problem, not a code bug — the app already degrades
