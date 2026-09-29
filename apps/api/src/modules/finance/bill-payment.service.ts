@@ -62,6 +62,20 @@ export interface RecordPaymentInTxParams {
  * every join to bill_payment_allocations) is what makes PENDING/BOUNCED/
  * VOIDED all correctly stop counting without a separate code path each.
  */
+// Display-only joins: the payments list/detail/receipt show a student name and
+// human invoice numbers instead of raw uuids. LEFT JOINs, so a missing student
+// or a fine allocation (no invoice id) still returns the row. Deliberately no
+// join to bill_fine_accruals: its allocation column comes from tenant
+// migration 0039, and a display join must not break payments on a tenant that
+// hasn't received it.
+const STUDENT_DISPLAY_COLS = `TRIM(CONCAT(s.first_name, ' ', s.last_name)) AS student_name, s.student_id AS admission_number`;
+const PAYMENT_WITH_STUDENT_SQL = `SELECT bp.*, ${STUDENT_DISPLAY_COLS}
+   FROM bill_payments bp LEFT JOIN students s ON s.id = bp.student_id`;
+const ALLOCATIONS_WITH_INVOICE_SQL = `SELECT bpa.*, bi.invoice_number
+   FROM bill_payment_allocations bpa
+   LEFT JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id
+   WHERE bpa.bill_payment_id = $1::uuid ORDER BY bpa.created_at`;
+
 @Injectable()
 export class BillPaymentService {
   private readonly logger = new Logger(BillPaymentService.name);
@@ -296,11 +310,11 @@ export class BillPaymentService {
     }
 
     const allocRows = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
-      `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`,
+      ALLOCATIONS_WITH_INVOICE_SQL,
       payment.id,
     );
     const [paymentRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
-      `SELECT * FROM bill_payments WHERE id = $1::uuid`,
+      PAYMENT_WITH_STUDENT_SQL + ` WHERE bp.id = $1::uuid`,
       payment.id,
     );
 
@@ -327,8 +341,9 @@ export class BillPaymentService {
 
     params.push(limit, offset);
     const rows = await this.tenantPrisma.query<BillPaymentRow>(
-      `SELECT bp.*, COUNT(*) OVER() AS total_count
+      `SELECT bp.*, ${STUDENT_DISPLAY_COLS}, COUNT(*) OVER() AS total_count
        FROM bill_payments bp
+       LEFT JOIN students s ON s.id = bp.student_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY bp.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,
@@ -341,7 +356,7 @@ export class BillPaymentService {
 
   async findOne(id: string, callerId?: string, callerRole?: Role): Promise<BillPaymentResponseDto> {
     const rows = await this.tenantPrisma.query<BillPaymentRow>(
-      `SELECT * FROM bill_payments WHERE id = $1::uuid AND deleted_at IS NULL`, id,
+      PAYMENT_WITH_STUDENT_SQL + ` WHERE bp.id = $1::uuid AND bp.deleted_at IS NULL`, id,
     );
     if (!rows[0]) throw new NotFoundException(`Payment ${id} not found`);
 
@@ -350,7 +365,7 @@ export class BillPaymentService {
     }
 
     const allocations = await this.tenantPrisma.query<BillPaymentAllocationRow>(
-      `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`, id,
+      ALLOCATIONS_WITH_INVOICE_SQL, id,
     );
     return toBillPaymentResponse(rows[0], allocations);
   }
@@ -553,10 +568,10 @@ export class BillPaymentService {
       }
 
       const [updatedRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
-        `SELECT * FROM bill_payments WHERE id = $1::uuid`, paymentId,
+        PAYMENT_WITH_STUDENT_SQL + ` WHERE bp.id = $1::uuid`, paymentId,
       );
       const updatedAllocations = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
-        `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`, paymentId,
+        ALLOCATIONS_WITH_INVOICE_SQL, paymentId,
       );
       return toBillPaymentResponse(updatedRow, updatedAllocations);
     });
@@ -626,10 +641,10 @@ export class BillPaymentService {
       }
 
       const [updatedRow] = await tx.$queryRawUnsafe<BillPaymentRow[]>(
-        `SELECT * FROM bill_payments WHERE id = $1::uuid`, paymentId,
+        PAYMENT_WITH_STUDENT_SQL + ` WHERE bp.id = $1::uuid`, paymentId,
       );
       const updatedAllocations = await tx.$queryRawUnsafe<BillPaymentAllocationRow[]>(
-        `SELECT * FROM bill_payment_allocations WHERE bill_payment_id = $1::uuid ORDER BY created_at`, paymentId,
+        ALLOCATIONS_WITH_INVOICE_SQL, paymentId,
       );
       return toBillPaymentResponse(updatedRow, updatedAllocations);
     });

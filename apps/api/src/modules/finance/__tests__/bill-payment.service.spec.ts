@@ -922,4 +922,46 @@ describe('BillPaymentService', () => {
       );
     });
   });
+
+  describe('display names — payments list/detail show a student name and invoice numbers, not uuids', () => {
+    it('findAll joins students and returns studentName + admissionNumber', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockPaymentRow, student_name: 'Sandip Lama', admission_number: '2083-0021', total_count: '1' },
+      ]);
+
+      const { data } = await service.findAll({});
+
+      expect(data[0].studentName).toBe('Sandip Lama');
+      expect(data[0].admissionNumber).toBe('2083-0021');
+      expect(tenantPrisma.query).toHaveBeenCalledWith(
+        expect.stringContaining('LEFT JOIN students s ON s.id = bp.student_id'),
+        20, 0,
+      );
+    });
+
+    it('findOne returns the student name and every allocation invoice number', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockPaymentRow, student_name: 'Sandip Lama', admission_number: '2083-0021' }])
+        .mockResolvedValueOnce([{
+          id: 'alloc-1', bill_payment_id: 'payment-1', bill_invoice_id: 'inv-uuid', bill_fine_accrual_id: null,
+          amount: '1000.00', created_at: new Date('2026-09-29'), invoice_number: 'BINV-2083-000068',
+        }]);
+
+      const result = await service.findOne('payment-1');
+
+      expect(result.studentName).toBe('Sandip Lama');
+      expect(result.allocations?.[0].invoiceNumber).toBe('BINV-2083-000068');
+      const allocSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
+      expect(allocSql).toContain('LEFT JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id');
+      // must not depend on migration 0039's column, or payments break on tenants without it
+      expect(allocSql).not.toContain('bill_fine_accrual');
+    });
+
+    it('a payment whose student row is missing still returns (names null, not an error)', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...mockPaymentRow, total_count: '1' }]);
+      const { data } = await service.findAll({});
+      expect(data[0].studentName).toBeNull();
+      expect(data[0].studentId).toBe(mockPaymentRow.student_id);
+    });
+  });
 });

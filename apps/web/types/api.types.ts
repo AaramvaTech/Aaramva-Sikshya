@@ -1974,6 +1974,8 @@ export interface BillPaymentAllocation {
   /** BILL-7 checkout fix: exactly one of billInvoiceId/billFineAccrualId is
    *  ever set — never both, never neither. */
   billInvoiceId: string | null;
+  /** Human invoice number (BINV-…) for invoice allocations. */
+  invoiceNumber?: string | null;
   billFineAccrualId: string | null;
   amount: number;
   createdAt: string;
@@ -1982,8 +1984,8 @@ export interface BillPayment {
   id: string;
   receiptNumber: string;
   studentId: string;
-  studentName?: string;
-  admissionNumber?: string;
+  studentName?: string | null;
+  admissionNumber?: string | null;
   academicYearId: string;
   amount: number;
   method: BillPaymentMethod;

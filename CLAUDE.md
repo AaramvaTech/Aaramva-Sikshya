@@ -1668,6 +1668,16 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   P2010 → INTERNAL_ERROR). Fix = `npm run migrate:tenants` (canary convention already satisfied by demo). The payment itself
   worked because AUTO_FIFO only touches the fine tables when money is left over after invoices; **a payment that fully clears the
   student's invoices (remainder > 0) would 500 on those tenants until 0039 is rolled out.** 1527 api tests (unchanged), web 646 (+2).
+- [x] PAYMENT-DISPLAY-NAMES — Billing > Payments showed a blank Student column and raw uuids in the receipt popup. **Display
+  bug only, money data verified correct:** RCPT-2083-000009 (Rs 1,000) and BINV-2083-000068 both belong to student
+  `24e70fff-…` = Sandip Lama 2083-0021, Grade 6 A; zero payment↔invoice student mismatches in any tenant. The web types already
+  declared `studentName`/`admissionNumber` but the API never returned them. `BillPaymentService` list/detail/record/void/bounce
+  responses now LEFT JOIN `students` (studentName, admissionNumber) and allocations LEFT JOIN `bill_invoices`
+  (`invoiceNumber`); web uses `allocationLabel` (lib/allocation-label.ts). **Deliberately no join to `bill_fine_accruals`** —
+  its allocation column is migration 0039's, and a display join must not break payments on tenants that lack it (fine
+  allocations keep the id-tail label). The other id in the report, `63b07dfb-…`, is a DIFFERENT student (Sandip Shrestha
+  2083-0033, Grade 7 A, zero payments/invoices/ledger rows) — two students named Sandip in the search dropdown, not an
+  enrolment-vs-student id split (no enrolment table exists; `students.id` is the only id used). 1530 api tests (+3), web 647 (+3).
 
 > Update this checklist as modules are completed.
 
