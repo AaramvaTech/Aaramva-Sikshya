@@ -9,7 +9,7 @@ one lockfile per package), all pinned to **Node 24** (matches local dev;
 
 | Job | Steps | Notes |
 |---|---|---|
-| `api` | build bs-calendar → `npm ci` → `npx prisma generate` → `npx tsc -p tsconfig.build.json --noEmit` → `npm test` | Baseline **298 tests**, all service-layer mocks — **no Postgres/Redis containers needed**. `prisma generate` is mandatory: a fresh install has an ungenerated client stub and typecheck fails with ~90 TS2347 errors. Plain `tsc --noEmit` is NOT used — it fails on TS6059 (`test/app.e2e-spec.ts` outside `rootDir`, SEC-1 finding, still unfixed). |
+| `api` | build bs-calendar → `npm ci` → `npx prisma generate` → `npx tsc -p tsconfig.build.json --noEmit` → `npx tsc -p tsconfig.spec.json --noEmit` (specs) → `npm test` | Baseline **298 tests**, all service-layer mocks — **no Postgres/Redis containers needed**. `prisma generate` is mandatory: a fresh install has an ungenerated client stub and typecheck fails with ~90 TS2347 errors. Plain `tsc --noEmit` is NOT used — it fails on TS6059 (`test/app.e2e-spec.ts` outside `rootDir`, SEC-1 finding, still unfixed). |
 | `web` | `npm ci` → `npx tsc --noEmit` | **No test runner configured (known gap)** — the job logs this explicitly. |
 | `mobile` | build bs-calendar → `npm ci` → `npx tsc --noEmit` → `npm test` | jest-expo; tests are timezone-sensitive by design — `TZ=Asia/Kathmandu` is pinned both in the npm script (cross-env) and the job env. |
 | `bs-calendar` | `npm ci` → `npm run build` → `npm test` | 26 tests. `dist/` is not committed; api (tsconfig path alias) and mobile (`file:` dep main) both resolve to it, hence the build-first steps above. |
