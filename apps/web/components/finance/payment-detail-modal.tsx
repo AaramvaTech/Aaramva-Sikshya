@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PrintDocumentButton } from '@/components/finance/print-document-button';
 import { canPrintReceipt, receiptPrintLabel } from '@/lib/print-document';
+import { allocationLabel } from '@/lib/allocation-label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { BsDate } from '@/components/shared/bs-date';
@@ -110,7 +111,7 @@ export function PaymentDetailModal({ paymentId, onClose }: PaymentDetailModalPro
                     {payment.allocations.map((a) => (
                       <div key={a.id} className="flex justify-between text-sm">
                         <span className="font-mono text-xs text-gray-500">
-                          {a.billInvoiceId ? `Invoice …${a.billInvoiceId.slice(-8)}` : `Late fee …${a.billFineAccrualId?.slice(-8)}`}
+                          {allocationLabel(a)}
                         </span>
                         <AmountDisplay amount={a.amount} />
                       </div>

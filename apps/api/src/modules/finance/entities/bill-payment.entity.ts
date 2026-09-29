@@ -33,6 +33,9 @@ export interface BillPaymentRow {
   voided_at: Date | string | null;
   voided_by: string | null;
   void_reason: string | null;
+  /** Display joins (students) — present only on queries that ask for them. */
+  student_name?: string | null;
+  admission_number?: string | null;
   total_count?: string;
 }
 
@@ -46,6 +49,8 @@ export interface BillPaymentAllocationRow {
   bill_fine_accrual_id: string | null;
   amount: string | number;
   created_at: Date | string;
+  /** Display join (bill_invoices) — present only on queries that ask for it. */
+  invoice_number?: string | null;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -53,6 +58,8 @@ export interface BillPaymentAllocationRow {
 export interface BillPaymentAllocationResponseDto {
   id: string;
   billInvoiceId: string | null;
+  /** Human invoice number for invoice allocations; null for fine allocations. */
+  invoiceNumber: string | null;
   billFineAccrualId: string | null;
   amount: number;
   createdAt: string;
@@ -62,6 +69,8 @@ export interface BillPaymentResponseDto {
   id: string;
   receiptNumber: string;
   studentId: string;
+  studentName: string | null;
+  admissionNumber: string | null;
   academicYearId: string;
   amount: number;
   method: string;
@@ -111,6 +120,7 @@ export function toBillPaymentAllocationResponse(row: BillPaymentAllocationRow): 
   return {
     id: row.id,
     billInvoiceId: row.bill_invoice_id,
+    invoiceNumber: row.invoice_number ?? null,
     billFineAccrualId: row.bill_fine_accrual_id,
     amount: toMoney(row.amount).toNumber(),
     createdAt: toIso(row.created_at),
@@ -130,6 +140,8 @@ export function toBillPaymentResponse(
     id: row.id,
     receiptNumber: row.receipt_number,
     studentId: row.student_id,
+    studentName: row.student_name ?? null,
+    admissionNumber: row.admission_number ?? null,
     academicYearId: row.academic_year_id,
     amount: amount.toNumber(),
     method: row.method,
