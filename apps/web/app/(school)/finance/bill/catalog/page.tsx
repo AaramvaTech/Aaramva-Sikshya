@@ -578,6 +578,8 @@ function TransportRoutesTab() {
 
 // ── Tax Rates ────────────────────────────────────────────────────────────────
 
+const TAX_RATE_LOCKED_HINT = 'Locked: posted bills already used this rate. Create a new rate instead.';
+
 function TaxRatesTab() {
   const { data: rates, isLoading } = useTaxRates();
   const create = useCreateTaxRate();
@@ -586,7 +588,7 @@ function TaxRatesTab() {
 
   const [form, setForm] = useState({ name: '', rate: '', appliesTo: 'ALL' as TaxAppliesTo, effectiveFrom: '', effectiveTo: '' });
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', effectiveFrom: '', effectiveTo: '' });
+  const [editForm, setEditForm] = useState({ name: '', appliesTo: 'ALL' as TaxAppliesTo, effectiveFrom: '', effectiveTo: '' });
 
   async function handleCreate() {
     const rate = Number(form.rate);
@@ -605,8 +607,10 @@ function TaxRatesTab() {
 
   async function handleUpdate(id: string) {
     if (!editForm.name.trim()) return;
+    const current = rates?.find((r) => r.id === id);
     try {
-      await update.mutateAsync({ id, data: { name: editForm.name.trim(), effectiveFrom: editForm.effectiveFrom || undefined, effectiveTo: editForm.effectiveTo || undefined } });
+      // Only send appliesTo when it changed: an unchanged value must not trip the server's in-use guard.
+      await update.mutateAsync({ id, data: { name: editForm.name.trim(), appliesTo: current && editForm.appliesTo !== current.appliesTo ? editForm.appliesTo : undefined, effectiveFrom: editForm.effectiveFrom || undefined, effectiveTo: editForm.effectiveTo || undefined } });
       setEditId(null);
       toast.success('Tax rate updated');
     } catch (err) {
@@ -628,7 +632,7 @@ function TaxRatesTab() {
   return (
     <ConfigSection
       title="Tax Rates"
-      description="VAT/tax percentages applied to taxable fee heads. A rate's percentage can't be edited once created — a rate already used on real invoices must never silently change; create a new rate instead."
+      description="VAT/tax percentages applied to taxable fee heads. A rate's percentage can't be edited here. 'Applies to' can be corrected only until the first bill using a rate is posted — after that create a new rate instead."
       isLoading={isLoading}
       addSlot={
         <div className="flex gap-2 flex-wrap items-center">
@@ -654,6 +658,11 @@ function TaxRatesTab() {
             {editId === r.id ? (
               <div className="flex gap-2 flex-wrap items-center">
                 <Input value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className="max-w-48 h-8 text-sm" autoFocus />
+                <select className={nativeSelect} value={editForm.appliesTo} disabled={r.locked} title={r.locked ? TAX_RATE_LOCKED_HINT : undefined} onChange={(e) => setEditForm((p) => ({ ...p, appliesTo: e.target.value as TaxAppliesTo }))}>
+                  <option value="ALL">Applies to: All</option>
+                  <option value="TAXABLE_HEADS">Applies to: Taxable heads only</option>
+                </select>
+                {r.locked && <span className="text-xs text-amber-600">{TAX_RATE_LOCKED_HINT}</span>}
                 <BsDateInput value={editForm.effectiveFrom} onChange={(ad) => setEditForm((p) => ({ ...p, effectiveFrom: ad }))} />
                 <BsDateInput value={editForm.effectiveTo} onChange={(ad) => setEditForm((p) => ({ ...p, effectiveTo: ad }))} />
                 <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdate(r.id)} disabled={update.isPending}>
@@ -673,7 +682,7 @@ function TaxRatesTab() {
                   <StatusBadge status={isActive ? 'ACTIVE' : 'INACTIVE'} />
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-gray-600" onClick={() => { setEditId(r.id); setEditForm({ name: r.name, effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo ?? '' }); }}>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-gray-600" onClick={() => { setEditId(r.id); setEditForm({ name: r.name, appliesTo: r.appliesTo, effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo ?? '' }); }}>
                     <Edit2 className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(r.id)}>

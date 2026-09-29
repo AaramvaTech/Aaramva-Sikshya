@@ -1564,6 +1564,8 @@ export interface TaxRate {
   effectiveTo: string | null;
   createdBy: string;
   createdAt: string;
+  /** Set on list responses: true once posted bills exist, so appliesTo/rate can no longer change. */
+  locked?: boolean;
 }
 export interface CreateTaxRateData {
   name: string;
@@ -1572,7 +1574,7 @@ export interface CreateTaxRateData {
   effectiveFrom: string;
   effectiveTo?: string;
 }
-export interface UpdateTaxRateData { name?: string; effectiveFrom?: string; effectiveTo?: string }
+export interface UpdateTaxRateData { name?: string; appliesTo?: TaxAppliesTo; effectiveFrom?: string; effectiveTo?: string }
 
 export type LateFeeRuleScope = 'GLOBAL' | 'FEE_HEAD';
 export type LateFeeRuleType = 'FLAT' | 'PER_DAY' | 'PERCENT';

@@ -156,6 +156,8 @@ export interface TaxRateResponseDto {
   effectiveTo: string | null;
   createdBy: string;
   createdAt: string;
+  /** List responses only: true once posted bills exist, so rate/appliesTo are frozen (409 TAX_RATE_IN_USE). */
+  locked?: boolean;
 }
 
 export interface LateFeeRuleResponseDto {

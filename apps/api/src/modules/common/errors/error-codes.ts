@@ -41,6 +41,13 @@ export const ERROR_CATALOG = {
   // target student's. `details` carries { feeStructure, target } so the client
   // can name both sides; retry with allowCrossClassAssignment to override.
   CLASS_MISMATCH: { status: 422, message: "This fee structure is for a different class than the student's." },
+  // TAX-RATE-EDIT: applies_to / rate are frozen once a posted bill was computed
+  // under the rate (invoices snapshot only the rate VALUE, so the old scope
+  // could not be reconstructed). Correct forward by creating a new rate.
+  TAX_RATE_IN_USE: {
+    status: 409,
+    message: 'This tax rate is already used by posted bills. Create a new rate instead.',
+  },
   // FILE-1-BLOB: image columns hold a storage key (logo: the public URL of one),
   // never inline base64. Two codes because the user action differs — re-upload
   // an old inline image vs. a reference that isn't this school's own.
