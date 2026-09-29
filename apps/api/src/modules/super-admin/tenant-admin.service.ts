@@ -22,6 +22,7 @@ import {
   UpdateTenantDto,
   ListTenantsQueryDto,
 } from './dto/tenant-admin.dto';
+import { checkAssetRef } from '../storage/asset-ref.util';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 import { StorageService } from '../storage/storage.service';
 
@@ -309,19 +310,23 @@ export class TenantAdminService {
     // key is verified against the TARGET tenant's slug (super-admin operates
     // outside tenant context) and persisted as the public URL.
     let logoBufferFromStorage: Buffer | null = null;
-    if (dto.logoFileKey !== undefined) {
-      const slugRows = await this.publicPrisma.query<{ slug: string }>(
-        `SELECT slug FROM tenants WHERE id = $1 AND "deletedAt" IS NULL`,
+    if (dto.logoFileKey !== undefined || dto.logoUrl !== undefined) {
+      const slugRows = await this.publicPrisma.query<{ slug: string; logo: string | null }>(
+        `SELECT slug, "logoUrl" AS logo FROM tenants WHERE id = $1 AND "deletedAt" IS NULL`,
         id,
       );
       if (!slugRows[0]) throw new NotFoundException(`Tenant ${id} not found`);
-      await this.storage.verifyConfirmedKey(dto.logoFileKey, 'school-logo', slugRows[0].slug);
-      dto.logoUrl = this.storage.publicUrlFor(dto.logoFileKey);
-      logoBufferFromStorage = await this.storage.getObjectBuffer(dto.logoFileKey);
-    } else if (dto.logoUrl?.startsWith('data:')) {
-      this.logger.warn(
-        '[FILE-1] deprecated base64 school logo received (super-admin) — switch to the presign flow (logoFileKey)',
-      );
+      if (dto.logoFileKey !== undefined) {
+        await this.storage.verifyConfirmedKey(dto.logoFileKey, 'school-logo', slugRows[0].slug);
+        dto.logoUrl = this.storage.publicUrlFor(dto.logoFileKey);
+        logoBufferFromStorage = await this.storage.getObjectBuffer(dto.logoFileKey);
+      } else {
+        // FILE-1-BLOB: data: always refused, '' → NULL.
+        dto.logoUrl = checkAssetRef('logoUrl', dto.logoUrl, {
+          slug: slugRows[0].slug, kind: 'school-logo', current: slugRows[0].logo,
+          publicPrefix: this.storage.publicUrlFor(''),
+        }) as string | undefined;
+      }
     }
 
     // slug is intentionally NOT updatable — it is the permanent subdomain + schema key.
@@ -375,7 +380,7 @@ export class TenantAdminService {
       ),
     });
 
-    if (dto.logoUrl !== undefined) {
+    if (dto.logoUrl) {
       const colorSource = rows[0].color_source ?? 'auto';
       if (colorSource !== 'manual') {
         const buffer = logoBufferFromStorage ?? (await fetchImageBuffer(dto.logoUrl));

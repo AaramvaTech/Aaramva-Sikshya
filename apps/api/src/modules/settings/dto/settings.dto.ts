@@ -10,7 +10,7 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  logoUrl?: string;
+  logoUrl?: string | null;
 
   /** FILE-1: storage keys from POST /files/presign-upload. Each wins over its
    *  legacy *Url twin; HEAD-verified against the kind policy before persist. */
@@ -123,11 +123,11 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  principalSignatureUrl?: string;
+  principalSignatureUrl?: string | null;
 
   @IsOptional()
   @IsString()
-  schoolStampUrl?: string;
+  schoolStampUrl?: string | null;
 
   /** UI-7 — real tenants columns since BILL-1, rendered on every printed bill,
    *  previously exposed nowhere in this DTO (read or write). */
@@ -138,7 +138,7 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  qrImageUrl?: string;
+  qrImageUrl?: string | null;
 
   @IsOptional()
   @IsString()

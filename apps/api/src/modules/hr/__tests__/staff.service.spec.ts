@@ -259,6 +259,47 @@ describe('StaffService', () => {
   });
 
 
+  describe('updateStaff() — FILE-1-BLOB photoUrl guard', () => {
+    const DATA = 'data:image/jpeg;base64,BBBB';
+    const KEY = 'tenant_test-school/staff-photo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jpg';
+
+    it('rejects a data: photoUrl with 422 ASSET_LEGACY_BASE64_REJECTED and never writes', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([baseProfileRow]);
+      await expect(service.updateStaff('profile-1', { photoUrl: DATA } as any)).rejects.toMatchObject({
+        status: 422,
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED', details: { field: 'photoUrl' } },
+      });
+      expect(tenantPrisma.query).toHaveBeenCalledTimes(1); // the lookup only
+    });
+
+    it('rejects data: even when it equals the stored photo', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ ...baseProfileRow, photo_url: DATA }]);
+      await expect(service.updateStaff('profile-1', { photoUrl: DATA } as any)).rejects.toMatchObject({
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED' },
+      });
+    });
+
+    it("stores '' as NULL", async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...baseProfileRow, photo_url: KEY }])
+        .mockResolvedValueOnce([baseProfileRow])
+        .mockResolvedValueOnce([baseProfileRow]);
+      await service.updateStaff('profile-1', { photoUrl: '' } as any);
+      const upd = (tenantPrisma.query as jest.Mock).mock.calls[1];
+      expect(upd[0]).toContain('photo_url = $13');
+      expect(upd[13]).toBeNull();
+    });
+
+    it('still accepts a valid staff-photo key for this tenant', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([baseProfileRow])
+        .mockResolvedValueOnce([{ ...baseProfileRow, photo_url: KEY }])
+        .mockResolvedValueOnce([{ ...baseProfileRow, photo_url: KEY }]);
+      await service.updateStaff('profile-1', { photoUrl: KEY } as any);
+      expect((tenantPrisma.query as jest.Mock).mock.calls[1]).toContain(KEY);
+    });
+  });
+
   describe('addDocument() — FILE-1 cutover', () => {
     const KEY = 'tenant_demo/staff-document/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf';
 

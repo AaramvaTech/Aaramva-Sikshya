@@ -152,7 +152,7 @@ export class UpdateStaffDto {
   /** Legacy base64 data-URI photo (deprecated — logged; use photoFileKey). */
   @IsOptional()
   @IsString()
-  photoUrl?: string;
+  photoUrl?: string | null;
 
   /** FILE-1: storage key (kind staff-photo). Wins over photoUrl. */
   @IsOptional()

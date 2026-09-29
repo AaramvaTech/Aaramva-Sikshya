@@ -130,9 +130,8 @@ export default function SettingsPage() {
     };
     try {
       // FILE-1: presign→PUT each picked file; the verified key replaces the
-      // legacy base64 field. uploadFile falls back to base64 only when the
-      // server has storage disabled (503) — then the preview data-URI in the
-      // form value is exactly what gets sent, as before.
+      // *Url field. If presign fails (e.g. 503 storage down) the error is
+      // thrown and the server's message is shown below.
       const kinds = [
         ['logo', 'school-logo', 'logoFileKey', 'logoUrl'],
         ['signature', 'principal-signature', 'principalSignatureFileKey', 'principalSignatureUrl'],
@@ -143,10 +142,13 @@ export default function SettingsPage() {
         const file = pendingFiles[slot];
         if (!file) continue;
         const uploaded = await uploadFile(file, kind);
-        if (uploaded.mode === 'key') {
-          payload[keyField] = uploaded.key;
-          delete payload[urlField];
-        }
+        payload[keyField] = uploaded.key;
+        delete payload[urlField];
+      }
+      // FILE-1-BLOB: a picked-file preview is a local data: URI and must never
+      // reach the server in a *Url field (it is refused with a 422).
+      for (const [, , , urlField] of kinds) {
+        if (payload[urlField]?.startsWith('data:')) delete payload[urlField];
       }
       const res = await update.mutateAsync(payload);
       // `useUpdateSchoolProfile`'s mutationFn returns settingsApi.updateProfile(data)

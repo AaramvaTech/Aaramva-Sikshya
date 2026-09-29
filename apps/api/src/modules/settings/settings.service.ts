@@ -4,6 +4,8 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { UpdateProfileDto } from './dto/settings.dto';
 import { BrandingColorService, contrastRatio, fetchImageBuffer } from '../branding/branding-color.service';
 import { StorageService } from '../storage/storage.service';
+import { checkAssetRef } from '../storage/asset-ref.util';
+import type { FileKind } from '../storage/storage.policy';
 import { NEPALI_PRINT_PERMITTED } from '../../common/nepali-print-review-gate';
 
 interface TenantProfileRow {
@@ -153,16 +155,30 @@ export class SettingsService {
       await this.storage.verifyConfirmedKey(dto.qrImageFileKey, 'qr-image', slug);
       dto.qrImageUrl = dto.qrImageFileKey;
     }
-    for (const [field, value] of [
-      ['logoUrl', dto.logoFileKey === undefined ? dto.logoUrl : undefined],
-      ['principalSignatureUrl', dto.principalSignatureFileKey === undefined ? dto.principalSignatureUrl : undefined],
-      ['schoolStampUrl', dto.schoolStampFileKey === undefined ? dto.schoolStampUrl : undefined],
-      ['qrImageUrl', dto.qrImageFileKey === undefined ? dto.qrImageUrl : undefined],
-    ] as const) {
-      if (value?.startsWith('data:')) {
-        this.logger.warn(
-          `[FILE-1] deprecated base64 ${field} received — switch to the presign flow (*FileKey)`,
-        );
+    // FILE-1-BLOB: every *Url value not superseded by a verified *FileKey goes
+    // through checkAssetRef — data: is always refused, '' becomes NULL.
+    const pending: [keyof UpdateProfileDto, FileKind, boolean][] = [
+      ['logoUrl', 'school-logo', dto.logoFileKey === undefined],
+      ['principalSignatureUrl', 'principal-signature', dto.principalSignatureFileKey === undefined],
+      ['schoolStampUrl', 'school-stamp', dto.schoolStampFileKey === undefined],
+      ['qrImageUrl', 'qr-image', dto.qrImageFileKey === undefined],
+    ];
+    const toCheck = pending.filter(([f, , unchecked]) => unchecked && dto[f] !== undefined);
+    if (toCheck.length > 0) {
+      const cur = await this.publicPrisma.query<{ logo: string | null; sig: string | null; stamp: string | null; qr: string | null }>(
+        `SELECT "logoUrl" AS logo, "principalSignatureUrl" AS sig, "schoolStampUrl" AS stamp, "qrImageUrl" AS qr
+           FROM tenants WHERE id = $1`,
+        tenantId,
+      );
+      const current: Record<string, string | null | undefined> = {
+        logoUrl: cur[0]?.logo, principalSignatureUrl: cur[0]?.sig,
+        schoolStampUrl: cur[0]?.stamp, qrImageUrl: cur[0]?.qr,
+      };
+      for (const [field, kind] of toCheck) {
+        (dto as Record<string, unknown>)[field] = checkAssetRef(field, dto[field] as string | null, {
+          slug, kind, current: current[field],
+          publicPrefix: kind === 'school-logo' ? this.storage.publicUrlFor('') : undefined,
+        });
       }
     }
 
@@ -213,7 +229,7 @@ export class SettingsService {
       ...values,
     );
 
-    if (dto.logoUrl !== undefined) {
+    if (dto.logoUrl) {
       // FILE-1: presign-flow logos read their bytes straight from storage;
       // legacy values (data-URI / URL) still go through fetchImageBuffer.
       const buffer = logoBufferFromStorage ?? (await fetchImageBuffer(dto.logoUrl));

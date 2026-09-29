@@ -41,6 +41,17 @@ export const ERROR_CATALOG = {
   // target student's. `details` carries { feeStructure, target } so the client
   // can name both sides; retry with allowCrossClassAssignment to override.
   CLASS_MISMATCH: { status: 422, message: "This fee structure is for a different class than the student's." },
+  // FILE-1-BLOB: image columns hold a storage key (logo: the public URL of one),
+  // never inline base64. Two codes because the user action differs — re-upload
+  // an old inline image vs. a reference that isn't this school's own.
+  ASSET_LEGACY_BASE64_REJECTED: {
+    status: 422,
+    message: 'Inline (base64) images are no longer accepted. Please upload the image again.',
+  },
+  ASSET_REF_INVALID: {
+    status: 422,
+    message: "This image reference isn't valid for your school. Please upload the image again.",
+  },
   // ERR-MAP-1: the request is well-formed but references a related record that
   // does not exist — a foreign-key violation on a column the CALLER supplied
   // (see fk-constraints.ts for how fault is decided). 422 rather than 404

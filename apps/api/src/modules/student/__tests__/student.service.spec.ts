@@ -428,6 +428,52 @@ describe('StudentService', () => {
     });
   });
 
+  describe('updateStudent() — FILE-1-BLOB photoUrl guard', () => {
+    const DATA = 'data:image/png;base64,AAAA';
+    const KEY = 'tenant_testschool/student-photo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jpg';
+
+    it('rejects a data: photoUrl with 422 ASSET_LEGACY_BASE64_REJECTED and never writes', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ photo_url: null }]);
+      await expect(service.updateStudent('sid-1', { photoUrl: DATA } as any)).rejects.toMatchObject({
+        status: 422,
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED', details: { field: 'photoUrl' } },
+      });
+      expect((tenantPrisma.query as jest.Mock).mock.calls.every((c) => !/UPDATE/.test(c[0]))).toBe(true);
+    });
+
+    it('rejects a data: photoUrl even when it equals the stored value', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ photo_url: DATA }]);
+      await expect(service.updateStudent('sid-1', { photoUrl: DATA } as any)).rejects.toMatchObject({
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED' },
+      });
+    });
+
+    it('rejects a key from another tenant with ASSET_REF_INVALID', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([{ photo_url: null }]);
+      await expect(
+        service.updateStudent('sid-1', { photoUrl: 'tenant_other/student-photo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jpg' } as any),
+      ).rejects.toMatchObject({ response: { code: 'ASSET_REF_INVALID' } });
+    });
+
+    it("stores '' as NULL", async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ photo_url: KEY }])
+        .mockResolvedValueOnce([{ ...mockStudentRow, photo_url: null }]);
+      await service.updateStudent('sid-1', { photoUrl: '' } as any);
+      const upd = (tenantPrisma.query as jest.Mock).mock.calls.find((c) => /UPDATE/.test(c[0]))!;
+      expect(upd).toContain(null);
+      expect(upd).not.toContain('');
+    });
+
+    it('still accepts a valid storage key for this tenant', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ photo_url: null }])
+        .mockResolvedValueOnce([{ ...mockStudentRow, photo_url: KEY }]);
+      const result = await service.updateStudent('sid-1', { photoUrl: KEY } as any);
+      expect(result.photoUrl).toBe(KEY);
+    });
+  });
+
   describe('updateStatus()', () => {
     it('updates status and returns updated student', async () => {
       (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(1);

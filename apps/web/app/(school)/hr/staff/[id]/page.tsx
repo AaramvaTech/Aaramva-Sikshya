@@ -113,13 +113,9 @@ export default function StaffProfilePage() {
     if (!pendingPhoto || !pendingPhotoFile) return;
     setPhotoLoading(true);
     try {
-      // FILE-1: presign→PUT→photoFileKey; base64 only if storage is disabled.
+      // FILE-1: presign→PUT→photoFileKey.
       const uploaded = await uploadFile(pendingPhotoFile, 'staff-photo');
-      await updateStaff.mutateAsync(
-        uploaded.mode === 'key'
-          ? { photoFileKey: uploaded.key }
-          : { photoUrl: uploaded.dataUrl },
-      );
+      await updateStaff.mutateAsync({ photoFileKey: uploaded.key });
       await queryClient.invalidateQueries({ queryKey: ['hr', 'staff', id] });
       await queryClient.invalidateQueries({ queryKey: ['hr', 'staff'] });
       toast.success('Profile photo updated');
@@ -157,13 +153,11 @@ export default function StaffProfilePage() {
     }
     setDocUploading(true);
     try {
-      // FILE-1: presign→PUT→fileKey; base64 only if storage is disabled.
+      // FILE-1: presign→PUT→fileKey.
       const uploaded = await uploadFile(docFile, 'staff-document');
       await hrApi.addStaffDocument(id, {
         documentType: docType,
-        ...(uploaded.mode === 'key'
-          ? { fileKey: uploaded.key }
-          : { fileUrl: uploaded.dataUrl }),
+        fileKey: uploaded.key,
         fileName: docFile.name,
       });
       await queryClient.invalidateQueries({ queryKey: ['hr', 'staff-documents', id] });

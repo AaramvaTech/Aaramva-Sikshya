@@ -86,3 +86,88 @@ describe('SettingsService — UI-7 paymentInstructions/qrImageUrl', () => {
     expect(storage.publicUrlFor).not.toHaveBeenCalled();
   });
 });
+
+describe('SettingsService.updateProfile — FILE-1-BLOB *Url guard', () => {
+  let service: SettingsService;
+  let publicPrisma: jest.Mocked<PublicPrismaService>;
+  const DATA = 'data:image/png;base64,AAAA';
+  const UUID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const SIG = `tenant_demo/principal-signature/${UUID}.png`;
+  const current = (over: Record<string, unknown> = {}) => [{ logo: null, sig: null, stamp: null, qr: null, ...over }];
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        SettingsService,
+        { provide: PublicPrismaService, useValue: { query: jest.fn() } },
+        { provide: TenantContextService, useValue: { getOrThrow: () => ({ tenantId: 't-1', slug: 'demo' }) } },
+        { provide: BrandingColorService, useValue: { deriveThemeFromLogo: jest.fn() } },
+        {
+          provide: StorageService,
+          useValue: {
+            verifyConfirmedKey: jest.fn(),
+            getObjectBuffer: jest.fn(),
+            publicUrlFor: jest.fn((k: string) => `http://s3.test/bucket/${k}`),
+          },
+        },
+      ],
+    }).compile();
+    service = module.get(SettingsService);
+    publicPrisma = module.get(PublicPrismaService) as jest.Mocked<PublicPrismaService>;
+  });
+
+  const updateSqlRan = () => (publicPrisma.query as jest.Mock).mock.calls.some((c) => /UPDATE tenants/.test(c[0]));
+
+  it.each([['logoUrl'], ['principalSignatureUrl'], ['schoolStampUrl'], ['qrImageUrl']])(
+    'rejects a data: %s with 422 ASSET_LEGACY_BASE64_REJECTED and never updates',
+    async (field) => {
+      (publicPrisma.query as jest.Mock).mockResolvedValueOnce(current());
+      await expect(service.updateProfile({ [field]: DATA } as any)).rejects.toMatchObject({
+        status: 422,
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED', details: { field } },
+      });
+      expect(updateSqlRan()).toBe(false);
+    },
+  );
+
+  it('rejects an unchanged stored data: value resent (forces the cleanup to run first)', async () => {
+    (publicPrisma.query as jest.Mock).mockResolvedValueOnce(current({ sig: DATA }));
+    await expect(service.updateProfile({ principalSignatureUrl: DATA } as any)).rejects.toMatchObject({
+      response: { code: 'ASSET_LEGACY_BASE64_REJECTED' },
+    });
+  });
+
+  it('rejects a foreign-tenant key with ASSET_REF_INVALID {field}', async () => {
+    (publicPrisma.query as jest.Mock).mockResolvedValueOnce(current());
+    await expect(
+      service.updateProfile({ schoolStampUrl: `tenant_other/school-stamp/${UUID}.png` } as any),
+    ).rejects.toMatchObject({ response: { code: 'ASSET_REF_INVALID', details: { field: 'schoolStampUrl' } } });
+  });
+
+  it("stores '' as NULL", async () => {
+    (publicPrisma.query as jest.Mock)
+      .mockResolvedValueOnce(current({ sig: SIG }))
+      .mockResolvedValueOnce([profileRow()]);
+    await service.updateProfile({ principalSignatureUrl: '' } as any);
+    expect(publicPrisma.query).toHaveBeenCalledWith(
+      expect.stringContaining('"principalSignatureUrl" = $1'), null, 't-1',
+    );
+  });
+
+  it('still accepts a valid storage key resent in the *Url field (web resends the stored value)', async () => {
+    (publicPrisma.query as jest.Mock)
+      .mockResolvedValueOnce(current({ sig: SIG }))
+      .mockResolvedValueOnce([profileRow({ principal_signature_url: SIG })]);
+    const r = await service.updateProfile({ principalSignatureUrl: SIG } as any);
+    expect(r.principalSignatureUrl).toBe(SIG);
+  });
+
+  it("accepts this deployment's public logo URL", async () => {
+    const url = `http://s3.test/bucket/tenant_demo/school-logo/${UUID}.png`;
+    (publicPrisma.query as jest.Mock)
+      .mockResolvedValueOnce(current())
+      .mockResolvedValueOnce([profileRow({ logo_url: url, color_source: 'manual' })]);
+    const r = await service.updateProfile({ logoUrl: url } as any);
+    expect(r.logoUrl).toBe(url);
+  });
+});

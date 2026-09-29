@@ -27,7 +27,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prune-orphans": "ts-node scripts/prune-orphans.ts"
+    "prune-orphans": "ts-node scripts/prune-orphans.ts",
+    "clean-legacy-blobs": "ts-node scripts/clean-legacy-blobs.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1085.0",

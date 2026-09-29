@@ -120,15 +120,14 @@ export default function SchoolDetailPage() {
     try {
       // FILE-1: presign→PUT→logoFileKey. The /files presign route is
       // tenant-scoped, so the platform admin names the target school's slug.
+      // FILE-1-BLOB: never send a data: preview; the server refuses it.
       let logoFields: { logoFileKey?: string; logoUrl?: string } = {
-        logoUrl: editForm.logoUrl || undefined,
+        logoUrl:
+          editForm.logoUrl && !editForm.logoUrl.startsWith('data:') ? editForm.logoUrl : undefined,
       };
       if (pendingLogoFile) {
         const uploaded = await uploadFile(pendingLogoFile, 'school-logo', { tenantSlug: school.slug });
-        logoFields =
-          uploaded.mode === 'key'
-            ? { logoFileKey: uploaded.key }
-            : { logoUrl: uploaded.dataUrl };
+        logoFields = { logoFileKey: uploaded.key };
       }
       await updateTenant.mutateAsync({
         id: school.id,
@@ -148,8 +147,8 @@ export default function SchoolDetailPage() {
       setEditOpen(false);
       setPendingLogoFile(null);
       router.refresh();
-    } catch {
-      toast.error('Failed to update school');
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Failed to update school').join(' • '));
     }
   }
 

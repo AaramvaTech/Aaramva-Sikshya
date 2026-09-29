@@ -229,10 +229,6 @@ function CreateAssignmentDialog({
       // FILE-1 presign flow (kind assignment-attachment). No base64 fallback
       // here — attachments are a new feature, storage must be configured.
       const uploaded = await uploadFile(file, 'assignment-attachment');
-      if (uploaded.mode !== 'key') {
-        toast.error('File storage is not configured on the server');
-        return;
-      }
       setAttachments((prev) => [...prev, { key: uploaded.key, name: file.name }]);
     } catch {
       toast.error('Attachment upload failed');
