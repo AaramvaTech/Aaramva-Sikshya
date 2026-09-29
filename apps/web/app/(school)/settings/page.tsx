@@ -424,7 +424,8 @@ function FieldColor({ value, display, onChange, editing }: { value: string; disp
   );
 }
 
-function ImageField({
+// Exported for its own focused test (see settings-page.test.tsx).
+export function ImageField({
   label, hint, value, onChange, onFile, editing, boxClass, fallback,
 }: {
   label: string; hint?: string; value: string; onChange: (v: string) => void;
@@ -434,7 +435,10 @@ function ImageField({
   const inputRef = useRef<HTMLInputElement>(null);
   // FILE-1: saved signature/stamp values are storage keys — resolve them to a
   // presigned GET for display. data-URI previews and public URLs pass through.
-  const displaySrc = useFileUrl(value) ?? '';
+  // undefined while resolving / if the presign failed → placeholder, never <img src="">.
+  const displaySrc = useFileUrl(value);
+  // A resolved link can still fail to load (storage down/expired) → placeholder, not a broken image.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -454,9 +458,9 @@ function ImageField({
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="flex items-center gap-3">
-        {value ? (
+        {value && displaySrc && failedSrc !== displaySrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={displaySrc} alt={label} className={cn('border border-stroke bg-white object-contain dark:border-strokedark', boxClass)} />
+          <img src={displaySrc} alt={label} onError={() => setFailedSrc(displaySrc)} className={cn('border border-stroke bg-white object-contain dark:border-strokedark', boxClass)} />
         ) : (
           <div className={cn('flex items-center justify-center border border-dashed border-gray-300 text-gray-300 dark:border-strokedark', boxClass)}>{fallback}</div>
         )}

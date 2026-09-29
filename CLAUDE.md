@@ -1580,6 +1580,18 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   real presigned signature → key stored; uncached invoice PDF + A5 receipt printed with no asset WARN and the
   signature image embedded. **1513 api tests, 631 web tests, both `tsc` clean.**
 
+- [x] SETTINGS-IMG-EMPTY-SRC — `ImageField` (`apps/web/app/(school)/settings/page.tsx`) no longer renders
+  `<img src="">` while a stored key's presigned GET is resolving/failed (`useFileUrl` returns `undefined`
+  until then; the old `?? ''` fed that straight into `src`). Renders the dashed placeholder unless there is a
+  real src, and also falls back to it via `onError` when a *resolved* link fails to load — found live: with
+  MinIO stopped the presign still succeeds (the API signs locally, never contacts storage), so the browser
+  got a valid link that then died = a broken image, a different failure from a failed presign. Grep of all
+  `useFileUrl` callers + `?? ''` into `src`: the other 5 callers (`StorageAvatarImage`, teacher profile,
+  staff detail ×2, student detail ×2) pass `undefined` to `AvatarImage`, which is safe — `ImageField` was
+  the only instance. Web-only; `useFileUrl` contract untouched. 5 `ImageField` tests (unresolved / presign
+  fails / resolved / load error / `data:` preview). **636 web tests, `tsc --noEmit` clean.** Live-proved on
+  motherland-school (console clean with MinIO up; placeholders, no broken images with MinIO down).
+
 > Update this checklist as modules are completed.
 
 ---
