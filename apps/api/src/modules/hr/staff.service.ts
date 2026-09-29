@@ -24,6 +24,7 @@ import {
 } from './entities/hr.entity';
 import { CreateStaffDto, UpdateStaffDto, StaffQueryDto, AddStaffDocumentDto } from './dto/staff.dto';
 import { StorageService } from '../storage/storage.service';
+import { checkAssetRef } from '../storage/asset-ref.util';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -270,10 +271,11 @@ export class StaffService {
       const { slug } = this.tenantContext.getOrThrow();
       await this.storage.verifyConfirmedKey(dto.photoFileKey, 'staff-photo', slug);
       dto.photoUrl = dto.photoFileKey;
-    } else if (dto.photoUrl?.startsWith('data:')) {
-      this.logger.warn(
-        '[FILE-1] deprecated base64 staff photo received — switch to the presign flow (photoFileKey)',
-      );
+    } else {
+      // FILE-1-BLOB: data: always refused, '' → NULL, unchanged non-data: value ok.
+      dto.photoUrl = checkAssetRef('photoUrl', dto.photoUrl, {
+        slug: this.tenantContext.getOrThrow().slug, kind: 'staff-photo', current: existing[0].photo_url,
+      });
     }
 
     const p = existing[0];

@@ -275,14 +275,9 @@ export default function StudentProfilePage() {
     if (!pendingPhoto || !pendingPhotoFile) return;
     setPhotoLoading(true);
     try {
-      // FILE-1: presign→PUT→photoFileKey; base64 only if storage is disabled.
+      // FILE-1: presign→PUT→photoFileKey.
       const uploaded = await uploadFile(pendingPhotoFile, 'student-photo');
-      await studentsApi.update(
-        id,
-        uploaded.mode === 'key'
-          ? { photoFileKey: uploaded.key }
-          : { photoUrl: uploaded.dataUrl },
-      );
+      await studentsApi.update(id, { photoFileKey: uploaded.key });
       await queryClient.invalidateQueries({ queryKey: ['student', id] });
       await queryClient.invalidateQueries({ queryKey: ['students'] });
       toast.success('Photo updated');
@@ -325,10 +320,6 @@ export default function StudentProfilePage() {
       // base64 data to migrate — storage being disabled is a real error here,
       // not a fallback path.
       const uploaded = await uploadFile(docFile, 'student-document');
-      if (uploaded.mode !== 'key') {
-        toast.error('File storage is unavailable — cannot upload documents right now');
-        return;
-      }
       await studentsApi.addDocument(id, {
         documentType: docType,
         fileKey: uploaded.key,

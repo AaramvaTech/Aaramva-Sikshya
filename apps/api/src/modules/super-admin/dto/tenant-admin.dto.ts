@@ -67,7 +67,7 @@ export class UpdateTenantDto {
 
   @IsOptional()
   @IsString()
-  logoUrl?: string;
+  logoUrl?: string | null;
 
   /** FILE-1: storage key (kind school-logo, target tenant's slug prefix).
    *  Wins over logoUrl; resolved to the public URL before persist. */

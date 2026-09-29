@@ -24,6 +24,7 @@ import { UpdateStudentStatusDto } from './dto/update-student-status.dto';
 import { ListStudentsQueryDto } from './dto/list-students-query.dto';
 import { Role } from '../common/enums/role.enum';
 import { StorageService } from '../storage/storage.service';
+import { checkAssetRef } from '../storage/asset-ref.util';
 import {
   CredentialDeliveryService,
   DeliveryTarget,
@@ -85,21 +86,19 @@ export class StudentService {
    * FILE-1: a verified storage key (photoFileKey) wins over the legacy base64
    * photoUrl, which keeps working through cutover but is logged as deprecated.
    */
-  private async resolvePhotoValue(dto: {
-    photoUrl?: string;
-    photoFileKey?: string;
-  }): Promise<string | undefined> {
+  private async resolvePhotoValue(
+    dto: { photoUrl?: string | null; photoFileKey?: string },
+    current: string | null,
+  ): Promise<string | null | undefined> {
     if (dto.photoFileKey !== undefined) {
       const { slug } = this.tenantContext.getOrThrow();
       await this.storage.verifyConfirmedKey(dto.photoFileKey, 'student-photo', slug);
       return dto.photoFileKey;
     }
-    if (dto.photoUrl?.startsWith('data:')) {
-      this.logger.warn(
-        '[FILE-1] deprecated base64 student photo received — switch to the presign flow (photoFileKey)',
-      );
-    }
-    return dto.photoUrl;
+    // FILE-1-BLOB: data: always refused, '' → NULL, unchanged non-data: value ok.
+    return checkAssetRef('photoUrl', dto.photoUrl, {
+      slug: this.tenantContext.getOrThrow().slug, kind: 'student-photo', current,
+    });
   }
 
   async admitStudent(dto: CreateStudentDto, createdById: string): Promise<StudentResponseDto> {
@@ -108,7 +107,7 @@ export class StudentService {
     // FILE-1: resolve/verify the photo BEFORE the insert tx. Note the INSERT
     // previously had no photo_url at all — admission photos were silently
     // dropped; fixed here for both the key and the legacy base64 path.
-    const photoValue = await this.resolvePhotoValue(dto);
+    const photoValue = await this.resolvePhotoValue(dto, null);
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -272,7 +271,15 @@ export class StudentService {
     const { tenantId } = this.tenantContext.getOrThrow();
 
     // FILE-1: a verified photoFileKey rides the existing photoUrl column path.
-    dto.photoUrl = await this.resolvePhotoValue(dto);
+    let currentPhoto: string | null = null;
+    if (dto.photoUrl !== undefined && dto.photoFileKey === undefined) {
+      const cur = await this.tenantPrisma.query<{ photo_url: string | null }>(
+        `SELECT photo_url FROM students WHERE id = $1::uuid AND deleted_at IS NULL`,
+        id,
+      );
+      currentPhoto = cur[0]?.photo_url ?? null;
+    }
+    dto.photoUrl = await this.resolvePhotoValue(dto, currentPhoto);
 
     // MIG-2: guardians supplied on an update are written to the normalized
     // `guardians` table (find-or-create, additive — never wholesale-replaces or

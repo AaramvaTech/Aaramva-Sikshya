@@ -808,3 +808,32 @@ Srijan's rulings on the two items raised below, now baked into `BILL-SPEC.md` di
 Phase 1's deliverable ("Widen `fine_amount` from `NUMERIC(8,2)` to `NUMERIC(12,2)`") is written against a column that is not narrow. The column that *is* narrow (`fine_per_day`, in two tables) is not named in the deliverable at all. Raised at Checkpoint 0 for a ruling on which column(s) Phase 1 should actually widen.
 
 **2. R15's "dev tenant" framing doesn't match the data.** R15 says "Dev tenant finance tables are truncated at Phase 1. No data migration" — singular, implying one tenant holds finance data. Live row counts show **three** tenant schemas with real finance rows: `tenant_demo` (2 invoices), `tenant_motherland_school` (42 invoices, 108 invoice_items, 22 payments), and `tenant_test` (60 invoices, 120 invoice_items, 40 payments). `motherland-school` in particular has substantial history referenced across many prior sessions (MIG-3, FILE-1, EAS-1, etc.) — it reads as a populated reference tenant, not throwaway dev data. Raised at Checkpoint 0: does R15's truncation apply to all three, or only `demo`?
+
+
+## FILE-1-BLOB — findings (2026-09-29)
+
+**Fixed:** every write path for the four `public.tenants` image columns and the staff/student `photo_url`
+columns now refuses `data:` (422 `ASSET_LEGACY_BASE64_REJECTED`) and any reference that is not this tenant's own
+key of the right kind (422 `ASSET_REF_INVALID`); `''` is stored as NULL. `npm run clean-legacy-blobs` cleared the
+8 legacy values on local dev. See `docs/api-contracts/FILE-1-BLOB-spec.md`.
+
+**FILE-1-BLOB-A — `tenant_demo` QR key uses a kind that no longer exists.** `tenants.qrImageUrl` for `demo` is
+`tenant_demo/bill-qr/<uuid>.png`. `bill-qr` is not in `FILE_KIND_POLICIES` (the current kind is `qr-image`), so
+`parseStorageKey` returns null for it. Likely origin: BILL-8 named the kind `bill-qr` while writing the demo row
+and the policy table was later spelled `qr-image` (the object itself exists — BILL-8-UI-evidence.md:254 lists it
+LIVE-REFERENCED). Deliberately NOT widened: the kind list stays as is. Behaviour today: an *unchanged* resend of
+that value is accepted (non-`data:` exemption), any *different* non-`qr-image` value is refused, and a re-upload
+through Settings replaces it with a proper `qr-image` key. `prune-orphans`/STOR-1 should treat `bill-qr/` as
+referenced when it gets fixed.
+
+**FILE-1-BLOB-B — stray `tenant_bill_scratch` schema.** Exists in the dev Postgres with no `public.tenants` row
+(leftover from the BILL-1 scratch-schema tests). The cleanup script reports it as skipped and never touches it.
+
+**FILE-1-BLOB-C — cached print PDFs keep whatever asset state they were generated with.** `bill-pdf`/`bill-receipt`
+objects are cached by invoice/payment id; a bill printed while the signature was blank stays blank after the
+school re-uploads it. Not fixed here (STOR-1 territory, must be ruled on deliberately with the prune-orphans
+reference set). Live proof used invoices/payments that had never been printed.
+
+**FILE-1-BLOB-D — `staff_documents.file_url` / `student_documents.file_url` not gated.** Same column shape, but
+both are written only with a verified `fileKey` today (the web fallback that could send base64 was removed);
+no legacy rows exist. No `data:` guard added on those write paths — cheap to add if a client ever sends `fileUrl`.

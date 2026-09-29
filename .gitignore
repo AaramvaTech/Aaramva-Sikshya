@@ -44,3 +44,6 @@ backups/
 
 # FILE-1: local MinIO dev server (exes + object data — never commit)
 tools/minio/
+
+# FILE-1-BLOB cleanup backups (contain old base64 values — never commit)
+.scratch/

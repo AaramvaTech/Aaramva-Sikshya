@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Loader2, Image as ImageIcon, Palette, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { extractApiErrors } from '@/lib/api-errors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,19 +56,18 @@ export function BrandingStep({ onChanged }: { onChanged?: () => void }) {
       return;
     }
     try {
-      // FILE-1: presign→PUT→logoFileKey (base64 only if storage is disabled).
+      // FILE-1: presign→PUT→logoFileKey.
       // Either way the server runs node-vibrant on the logo bytes and stores
       // the auto-derived theme colour.
       const uploaded = await uploadFile(file, 'school-logo');
       syncTenantBranding(
-        await update.mutateAsync(
-          uploaded.mode === 'key' ? { logoFileKey: uploaded.key } : { logoUrl: uploaded.dataUrl },
-        ),
+        await update.mutateAsync({ logoFileKey: uploaded.key }),
       );
       toast.success('Logo uploaded — theme colour derived from it');
       onChanged?.();
-    } catch {
-      toast.error('Could not upload the logo');
+    } catch (err) {
+      // Server's message wins (e.g. 503 storage unavailable, 422 bad reference).
+      toast.error(extractApiErrors(err, 'Could not upload the logo').join(' • '));
     }
   }
 

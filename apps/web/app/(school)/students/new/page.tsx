@@ -134,15 +134,11 @@ export default function NewStudentPage() {
 
   async function onSubmit(values: CreateStudentFormValues) {
     try {
-      // FILE-1: presign→PUT→photoFileKey; legacy base64 only when storage is
-      // disabled server-side (uploadFile falls back on 503).
-      let photoFields: { photoFileKey?: string; photoUrl?: string } = {};
+      // FILE-1: presign→PUT→photoFileKey.
+      let photoFields: { photoFileKey?: string } = {};
       if (photoFile) {
         const uploaded = await uploadFile(photoFile, 'student-photo');
-        photoFields =
-          uploaded.mode === 'key'
-            ? { photoFileKey: uploaded.key }
-            : { photoUrl: uploaded.dataUrl };
+        photoFields = { photoFileKey: uploaded.key };
       }
       const payload = {
         ...values,

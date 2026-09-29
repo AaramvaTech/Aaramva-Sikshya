@@ -243,6 +243,37 @@ describe('TenantAdminService', () => {
     });
   });
 
+  describe('updateTenant() — FILE-1-BLOB logoUrl guard', () => {
+    it('rejects a data: logoUrl with 422 and never runs the UPDATE', async () => {
+      (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{ slug: 'test-school', logo: null }]);
+      await expect(
+        service.updateTenant('tenant-uuid-1', { logoUrl: 'data:image/png;base64,AAAA' }, 'admin-uuid-1'),
+      ).rejects.toMatchObject({ status: 422, response: { code: 'ASSET_LEGACY_BASE64_REJECTED', details: { field: 'logoUrl' } } });
+      expect((publicPrisma.query as jest.Mock).mock.calls.every((c) => !/UPDATE/.test(c[0]))).toBe(true);
+    });
+
+    it('rejects data: even when it equals the stored logo', async () => {
+      const v = 'data:image/png;base64,AAAA';
+      (publicPrisma.query as jest.Mock).mockResolvedValueOnce([{ slug: 'test-school', logo: v }]);
+      await expect(service.updateTenant('tenant-uuid-1', { logoUrl: v }, 'admin-uuid-1')).rejects.toMatchObject({
+        response: { code: 'ASSET_LEGACY_BASE64_REJECTED' },
+      });
+    });
+
+    it("stores '' as NULL", async () => {
+      (publicPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ slug: 'test-school', logo: 'http://storage.test/bucket/tenant_test-school/school-logo/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.png' }])
+        .mockResolvedValueOnce([{ id: 'tenant-uuid-1', color_source: 'auto' }])
+        .mockResolvedValueOnce([mockTenant]);
+      const tenantPrisma = (service as any).tenantPrisma as jest.Mocked<TenantPrismaService>;
+      (tenantPrisma.query as jest.Mock).mockResolvedValue([{ students: '0', staff: '0' }]);
+      await service.updateTenant('tenant-uuid-1', { logoUrl: '' }, 'admin-uuid-1');
+      const upd = (publicPrisma.query as jest.Mock).mock.calls[1];
+      expect(upd[0]).toContain('"logoUrl" = $1');
+      expect(upd[1]).toBeNull();
+    });
+  });
+
   describe('suspendTenant()', () => {
     it('sets is_active=false on the tenant', async () => {
       (publicPrisma.query as jest.Mock).mockResolvedValue([

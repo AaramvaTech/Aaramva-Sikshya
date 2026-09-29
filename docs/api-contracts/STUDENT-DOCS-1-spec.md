@@ -1,6 +1,6 @@
 # STUDENT-DOCS-1 — Student Document Management
 
-**Status:** Spec, not yet built.
+**Status:** Built (`student_documents`, migration 0036, `student-document.service.ts`; corrected in FILE-1-BLOB — this line was stale).
 **Trigger:** Student profile Documents tab has been calling backend routes that were
 never implemented since the project's earliest commits (`Cannot GET
 /api/v1/students/:id/documents`). Not a regression — a genuinely unbuilt feature.
