@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
+import { errorBody } from '../common/errors/error-codes';
 import {
   BillFeeStructureRow,
   BillFeeStructureItemRow,
@@ -31,19 +32,30 @@ export class BillFeeStructureService {
     createdById: string,
   ): Promise<BillFeeStructureResponseDto> {
     return this.tenantPrisma.run(async (tx) => {
-      const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM bill_fee_structures
+      // Deliberately NOT filtered on deleted_at: the DB's UNIQUE NULLS NOT DISTINCT
+      // constraint counts soft-deleted rows too, so ignoring them here let a
+      // re-used name through to the INSERT, which died as a 500 (23505).
+      const existing = await tx.$queryRawUnsafe<{ id: string; deleted_at: Date | null }[]>(
+        `SELECT id, deleted_at FROM bill_fee_structures
          WHERE academic_year_id = $1::uuid AND class_id = $2::uuid
            AND section_id IS NOT DISTINCT FROM $3::uuid
-           AND name = $4 AND deleted_at IS NULL`,
+           AND name = $4
+         ORDER BY deleted_at NULLS FIRST LIMIT 1`,
         dto.academicYearId,
         dto.classId,
         dto.sectionId ?? null,
         dto.name,
       );
       if (existing.length > 0) {
+        const retired = existing[0].deleted_at != null;
         throw new ConflictException(
-          `A fee structure named "${dto.name}" already exists for this class/section/year`,
+          errorBody(
+            'CONFLICT_DUPLICATE',
+            retired
+              ? `A fee structure named "${dto.name}" was deleted earlier for this class/section/year and its name is still reserved. Choose a different name.`
+              : `A fee structure named "${dto.name}" already exists for this class/section/year`,
+            { name: dto.name, retired },
+          ),
         );
       }
 

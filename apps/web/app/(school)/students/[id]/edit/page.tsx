@@ -1,5 +1,6 @@
 'use client';
 
+import { todayBs } from 'bs-calendar';
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -231,7 +232,7 @@ export default function EditStudentPage() {
                     <FormItem>
                       <FormLabel>Date of Birth (BS) *</FormLabel>
                       <FormControl>
-                        <BsDateInput value={field.value} onChange={field.onChange} />
+                        <BsDateInput value={field.value} onChange={field.onChange} minYear={todayBs().year - 25} maxYear={todayBs().year - 2} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -123,6 +123,45 @@ describe('BillFeeStructureService', () => {
       expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
+    it('a SOFT-DELETED structure with the same name still collides: 409 CONFLICT_DUPLICATE, never a 500 (23505 from the unique constraint)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'bfs-old', deleted_at: new Date('2026-09-29') }]);
+
+      const err = await service
+        .createFeeStructure(
+          { academicYearId: 'year-1', classId: 'class-9', name: 'Grade 9 Fees 2083', items: [] },
+          'user-1',
+        )
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse()).toMatchObject({
+        code: 'CONFLICT_DUPLICATE',
+        message: expect.stringContaining('was deleted earlier'),
+        details: { name: 'Grade 9 Fees 2083', retired: true },
+      });
+      expect(mockTx.$executeRawUnsafe).not.toHaveBeenCalled();
+      // the INSERT must never be reached
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
+    it('the collision lookup does not filter out deleted rows (the DB constraint does not)', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([]).mockResolvedValueOnce([mockStructureRow]);
+      mockTx.$executeRawUnsafe.mockResolvedValue(1);
+      await service.createFeeStructure(
+        { academicYearId: 'year-1', classId: 'class-1', name: 'Grade 5 — Day scholar', items: [] },
+        'user-1',
+      );
+      expect(String(mockTx.$queryRawUnsafe.mock.calls[0][0])).not.toMatch(/deleted_at IS NULL/);
+    });
+
+    it('a LIVE collision reports code CONFLICT_DUPLICATE with retired=false', async () => {
+      mockTx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 'bfs-1', deleted_at: null }]);
+      const err = await service
+        .createFeeStructure({ academicYearId: 'year-1', classId: 'class-1', name: 'X', items: [] }, 'user-1')
+        .catch((e) => e);
+      expect(err.getResponse()).toMatchObject({ code: 'CONFLICT_DUPLICATE', details: { name: 'X', retired: false } });
+    });
+
     it('collision check is NULL-safe on section_id (IS NOT DISTINCT FROM)', async () => {
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([]).mockResolvedValueOnce([mockStructureRow]);
       mockTx.$executeRawUnsafe.mockResolvedValue(1);

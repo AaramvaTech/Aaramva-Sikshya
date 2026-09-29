@@ -9,19 +9,23 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { bsYearRange, toLocalAdString } from '@/lib/bs-year-range';
 
 interface BsDateInputProps {
   value?: string; // AD date string "YYYY-MM-DD"
   onChange: (adDate: string) => void;
   label?: string;
-  minYear?: number; // BS year, defaults to today-25
-  maxYear?: number; // BS year, defaults to today-2
+  minYear?: number; // BS year, defaults to today-10
+  maxYear?: number; // BS year, defaults to today+5 (both clamped to the bs-calendar table)
 }
 
 function parseBsFromAd(adDate: string) {
   if (!adDate) return null;
   try {
-    return adToBs(new Date(adDate));
+    // Local-frame Date (not new Date('YYYY-MM-DD'), which is UTC midnight and lands on the
+    // previous day west of UTC) — the mirror image of toLocalAdString on the write side.
+    const [y, m, d] = adDate.slice(0, 10).split('-').map(Number);
+    return adToBs(new Date(y, m - 1, d));
   } catch {
     return null;
   }
@@ -29,9 +33,6 @@ function parseBsFromAd(adDate: string) {
 
 export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxYear: maxYearProp }: BsDateInputProps) {
   const today = todayBs();
-  const minYear = minYearProp ?? today.year - 25;
-  const maxYear = maxYearProp ?? today.year - 2;
-
   const [year, setYear] = useState<string>(() => {
     const bs = parseBsFromAd(value ?? '');
     return bs ? String(bs.year) : '';
@@ -45,18 +46,27 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
     return bs ? String(bs.day) : '';
   });
 
-  // Sync dropdowns when value is cleared externally (e.g. form reset)
+  // Sync dropdowns when value is changed externally: cleared (form reset) OR set
+  // (e.g. a default like "start of the selected academic year"). Our own picks round-trip
+  // through onChange → value, land here with identical numbers, and are a no-op.
   useEffect(() => {
     if (!value) {
       setYear('');
       setMonth('');
       setDay('');
+      return;
+    }
+    const bs = parseBsFromAd(value);
+    if (bs) {
+      setYear(String(bs.year));
+      setMonth(String(bs.month));
+      setDay(String(bs.day));
     }
   }, [value]);
 
   const years = useMemo(
-    () => Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i),
-    [minYear, maxYear],
+    () => bsYearRange(today.year, minYearProp, maxYearProp),
+    [today.year, minYearProp, maxYearProp],
   );
 
   const dayCount = useMemo(() => {
@@ -72,7 +82,7 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
     if (!y || !m || !d) return;
     try {
       const ad = bsToAd({ year: Number(y), month: Number(m), day: Number(d) });
-      onChange(ad.toISOString().split('T')[0]);
+      onChange(toLocalAdString(ad));
     } catch {
       // invalid combination — ignore
     }

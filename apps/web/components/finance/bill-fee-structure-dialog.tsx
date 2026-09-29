@@ -70,6 +70,7 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
     handleSubmit,
     control,
     setValue,
+    getValues,
     watch,
     reset,
     formState: { errors },
@@ -108,6 +109,18 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
   }, [open, mode, structure?.id]);
 
   const selectedClass = classes?.find((c) => c.id === watch('classId'));
+
+  // Default "Effective From" to the SELECTED academic year's start (spec: never blank / a stale year).
+  // Only fills empty rows — a date the user already picked is never overwritten.
+  const yearStartAd = (yearId: string) => academicYears?.find((y) => y.id === yearId)?.startDate.ad ?? '';
+  function handleYearChange(yearId: string) {
+    setValue('academicYearId', yearId, { shouldValidate: true });
+    const start = yearStartAd(yearId);
+    if (!start) return;
+    getValues('items').forEach((it, i) => {
+      if (!it.effectiveFrom) setValue(`items.${i}.effectiveFrom`, start, { shouldValidate: true });
+    });
+  }
 
   async function onSubmit(values: BillFeeStructureFormValues) {
     // Boundary conversion: RHF/Zod keep amount as a number for input UX;
@@ -168,7 +181,7 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
 
               <div className="space-y-1.5">
                 <Label>Academic Year *</Label>
-                <Select value={watch('academicYearId')} onValueChange={(v) => setValue('academicYearId', v ?? '', { shouldValidate: true })}>
+                <Select value={watch('academicYearId')} onValueChange={(v) => handleYearChange(v ?? '')}>
                   <SelectTrigger>
                     <span className={watch('academicYearId') ? '' : 'text-muted-foreground'}>
                       {watch('academicYearId') ? (academicYears?.find((y) => y.id === watch('academicYearId'))?.name ?? 'Loading…') : 'Select year'}
@@ -214,7 +227,7 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label>Fee Items *</Label>
-              <Button type="button" variant="outline" size="sm" onClick={() => append(emptyItem)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => append({ ...emptyItem, effectiveFrom: yearStartAd(watch('academicYearId')) })}>
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
               </Button>
             </div>

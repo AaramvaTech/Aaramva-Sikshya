@@ -1611,6 +1611,27 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   row now resolve to `Grade 10 Fees 2083` (100) in the new current year. Nothing else touched (no structures, runs, invoices,
   ledger, other tenants). Leftovers: BILL-BUGS.md "BILL-DATA-1-LEFT".
 
+- [x] BS-YEAR-PICKER — `BsDateInput` year range + off-by-one + fee-structure 500 (`fix/bs-year-picker-range`). **Range:**
+  the year dropdown defaulted to `today-25 … today-2` (built for birth dates — 2081 in 2083, so Effective From pickers on
+  the fee catalog, fee overrides, concessions, transport, single-student assignment could not select the current year).
+  Now `bsYearRange()` (`lib/bs-year-range.ts`): default `today-10 … today+5`, always computed from `todayBs()`, clamped
+  to the bs-calendar table (BS 2000–2099 — never offer a year `bsToAd` can't convert), newest first. Explicit `minYear`/
+  `maxYear` callers unchanged; the two Date-of-Birth pickers (students new/edit) now pass their old `today-25 … today-2`
+  window explicitly. **Found while fixing (root cause of "falls back to 2081"):** `fireChange` used
+  `bsToAd(...).toISOString().split('T')[0]` — under Nepal's UTC+5:45 that stores the day BEFORE (1 Shrawan 2083 →
+  2026-07-16; the Grade 6/7/8 structures' 2081 Baisakh 1 landed as 2024-04-12 not 04-13) — the FIX-2 bug class on the
+  web. Fixed for ALL `BsDateInput` callers with `toLocalAdString` (local components); parse side now local too. Also:
+  the component ignored a `value` SET after mount (only cleared), so form defaults never showed — it now syncs both
+  ways. **Default:** `BillFeeStructureDialog` Effective From defaults to the SELECTED academic year's start date
+  (only fills empty rows, never overwrites a pick; new rows too); previously blank. **API 500:** NOT effective_from
+  outside the AY (that is accepted, 201 — the three Grade 6/7/8 "Fees 2083" structures prove it; no AY-range guard
+  exists and none was added) — the real cause was reproduced at the service layer: `UNIQUE NULLS NOT DISTINCT
+  (academic_year_id, class_id, section_id, name)` counts soft-deleted rows but `createFeeStructure`'s pre-check filtered
+  `deleted_at IS NULL`, so re-using a deleted structure's name hit `P2010`/`23505` → INTERNAL_ERROR. The pre-check now
+  sees deleted rows too → 409 `CONFLICT_DUPLICATE` with `details.retired`. **Known consequence:** a deleted structure's
+  name stays reserved (the DB constraint is unchanged; making it a partial index on `deleted_at IS NULL` would be a
+  tenant migration — deliberately not done here). 1516 api tests (+3), 644 web tests (+8), both api tsc + web tsc clean.
+
 > Update this checklist as modules are completed.
 
 ---
