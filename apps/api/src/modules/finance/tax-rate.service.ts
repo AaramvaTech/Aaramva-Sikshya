@@ -5,7 +5,11 @@ import {
   toTaxRateResponse,
   TaxRateResponseDto,
 } from './entities/bill-catalog.entity';
+import { errorBody } from '../common/errors/error-codes';
 import { CreateTaxRateDto, UpdateTaxRateDto, TaxRateQueryDto } from './dto/tax-rate.dto';
+
+const USED_BY_POSTED_BILLS_SQL = `SELECT (EXISTS (SELECT 1 FROM bill_invoices WHERE tax_rate IS NOT NULL)
+            OR EXISTS (SELECT 1 FROM bill_runs WHERE status = 'POSTING')) AS used`;
 
 @Injectable()
 export class TaxRateService {
@@ -38,6 +42,23 @@ export class TaxRateService {
     );
     if (overlapping.length > 0) {
       throw new ConflictException('Effective range overlaps an existing tax rate');
+    }
+  }
+
+  /**
+   * A posted invoice snapshots only the rate VALUE (`tax_rate`), never this
+   * row's id, and R6 says one rate is effective per date — so "computed under
+   * this rate" can't be matched exactly. Conservative on purpose: any invoice
+   * (any status, incl. voided) that carries a rate, or a run mid-POSTING,
+   * freezes ALL rates' scope/rate; the fix path is a new rate. Draft run lines
+   * don't count: they freeze the tax AMOUNT only (no rate, no rate id).
+   */
+  private async assertNotUsedByPostedBills(tx: TenantTx): Promise<void> {
+    const [used] = await tx.$queryRawUnsafe<{ used: boolean }[]>(USED_BY_POSTED_BILLS_SQL);
+    if (used?.used) {
+      throw new ConflictException(
+        errorBody('TAX_RATE_IN_USE'),
+      );
     }
   }
 
@@ -95,7 +116,10 @@ export class TaxRateService {
     );
 
     const total = rows[0]?.total_count ? parseInt(rows[0].total_count, 10) : 0;
-    return { data: rows.map(toTaxRateResponse), meta: { page, limit, total } };
+    // Lets the web disable the rate/applies-to fields up front; update() stays authoritative.
+    const [usage] = await this.tenantPrisma.query<{ used: boolean }>(USED_BY_POSTED_BILLS_SQL);
+    const locked = !!usage?.used;
+    return { data: rows.map((r) => ({ ...toTaxRateResponse(r), locked })), meta: { page, limit, total } };
   }
 
   async update(id: string, dto: UpdateTaxRateDto): Promise<TaxRateResponseDto> {
@@ -114,11 +138,17 @@ export class TaxRateService {
         await this.assertNoOverlap(tx, nextFrom, nextTo, id);
       }
 
+      const rateChanged = dto.rate !== undefined && toTaxRateResponse(existing).rate !== dto.rate;
+      const scopeChanged = dto.appliesTo !== undefined && dto.appliesTo !== existing.applies_to;
+      if (rateChanged || scopeChanged) await this.assertNotUsedByPostedBills(tx);
+
       const sets: string[] = ['updated_at = NOW()'];
       const params: unknown[] = [];
       let idx = 1;
 
       if (dto.name !== undefined) { sets.push(`name = $${idx++}`); params.push(dto.name); }
+      if (rateChanged) { sets.push(`rate = $${idx++}`); params.push(dto.rate); }
+      if (scopeChanged) { sets.push(`applies_to = $${idx++}`); params.push(dto.appliesTo); }
       if (dto.effectiveFrom !== undefined) { sets.push(`effective_from = $${idx++}::date`); params.push(dto.effectiveFrom); }
       if (dto.effectiveTo !== undefined) { sets.push(`effective_to = $${idx++}::date`); params.push(dto.effectiveTo); }
 

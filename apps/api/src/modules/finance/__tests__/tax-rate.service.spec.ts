@@ -1,4 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { UpdateTaxRateDto } from '../dto/tax-rate.dto';
 import { Test } from '@nestjs/testing';
 import { TaxRateService } from '../tax-rate.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
@@ -121,6 +124,58 @@ describe('TaxRateService', () => {
       expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(2); // lookup + update, no overlap check
     });
 
+    it('changes applies_to when no posted bill used a rate', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([mockRow]) // existing
+        .mockResolvedValueOnce([{ used: false }]) // usage check
+        .mockResolvedValueOnce([{ ...mockRow, applies_to: 'TAXABLE_HEADS' }]); // UPDATE
+
+      const result = await service.update('tax-1', { appliesTo: 'TAXABLE_HEADS' } as never);
+
+      expect(result.appliesTo).toBe('TAXABLE_HEADS');
+      const [sql, ...params] = mockTx.$queryRawUnsafe.mock.calls[2];
+      expect(sql).toContain('applies_to = $1');
+      expect(params).toEqual(['TAXABLE_HEADS', 'tax-1']);
+    });
+
+    it('changes the rate when no posted bill used a rate', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([mockRow])
+        .mockResolvedValueOnce([{ used: false }])
+        .mockResolvedValueOnce([{ ...mockRow, rate: '13.500' }]);
+
+      await service.update('tax-1', { rate: 13.5 } as never);
+
+      const [sql, ...params] = mockTx.$queryRawUnsafe.mock.calls[2];
+      expect(sql).toContain('rate = $1');
+      expect(params).toEqual([13.5, 'tax-1']);
+    });
+
+    it.each([
+      ['applies_to', { appliesTo: 'TAXABLE_HEADS' }],
+      ['rate', { rate: 15 }],
+    ])('409 TAX_RATE_IN_USE when a posted bill used a rate and %s changes; nothing is written', async (_n, dto) => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([mockRow])
+        .mockResolvedValueOnce([{ used: true }]);
+
+      const err = await service.update('tax-1', dto as never).catch((e) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse().code).toBe('TAX_RATE_IN_USE');
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(2); // no UPDATE
+    });
+
+    it('an unchanged applies_to/rate never consults usage, so renaming a used rate still works', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([mockRow])
+        .mockResolvedValueOnce([{ ...mockRow, name: 'VAT2' }]);
+
+      await service.update('tax-1', { name: 'VAT2', appliesTo: 'ALL', rate: 13 } as never);
+
+      expect(mockTx.$queryRawUnsafe).toHaveBeenCalledTimes(2); // lookup + update only
+    });
+
     it('404s when the row does not exist', async () => {
       mockTx.$queryRawUnsafe.mockResolvedValueOnce([]);
       await expect(service.update('missing', { name: 'X' })).rejects.toThrow(NotFoundException);
@@ -131,6 +186,21 @@ describe('TaxRateService', () => {
     it('404s on a missing row', async () => {
       (tenantPrisma.execute as jest.Mock).mockResolvedValueOnce(0);
       await expect(service.softDelete('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('UpdateTaxRateDto validation', () => {
+    const errs = (o: object) => validate(plainToInstance(UpdateTaxRateDto, o));
+
+    it('accepts ALL and TAXABLE_HEADS', async () => {
+      expect(await errs({ appliesTo: 'ALL' })).toHaveLength(0);
+      expect(await errs({ appliesTo: 'TAXABLE_HEADS' })).toHaveLength(0);
+    });
+
+    it('rejects an unknown applies_to and an out-of-range/over-precise rate', async () => {
+      expect((await errs({ appliesTo: 'SOME' }))[0].property).toBe('appliesTo');
+      expect((await errs({ rate: 101 }))[0].property).toBe('rate');
+      expect((await errs({ rate: 13.0001 }))[0].property).toBe('rate');
     });
   });
 });

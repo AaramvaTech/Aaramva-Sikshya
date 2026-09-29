@@ -22,6 +22,9 @@ export class CreateTaxRateDto {
 
 export class UpdateTaxRateDto {
   @IsOptional() @IsString() @MaxLength(100) name?: string;
+  // Changing either is refused (409 TAX_RATE_IN_USE) once a posted bill used the rate.
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(100) rate?: number;
+  @IsOptional() @IsEnum(TaxAppliesTo) appliesTo?: TaxAppliesTo;
   @IsOptional() @IsDateString() effectiveFrom?: string;
   @IsOptional() @IsDateString() effectiveTo?: string;
 }

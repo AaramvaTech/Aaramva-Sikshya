@@ -1647,6 +1647,16 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   list is unchanged. Live: list shows 1,1,1,1,1,2,1,1; Edit Items — Grade 9 2083 pre-fills Admission / 1000 /
   2083 Shrawan 1; empty PATCH → HTTP 422 and the row count stays 1. 1520 api tests (+4), web unchanged (644), tsc clean.
 
+- [x] TAX-RATE-EDIT — `TaxRateService.update` can now change `applies_to` (and `rate`) via `PATCH /finance/tax-rates/:id`,
+  but only while no posted bill used a rate; otherwise 409 `TAX_RATE_IN_USE` (new ERR-1 code), nothing written. Unchanged values
+  never trip the guard, so renaming a used rate still works. **Usage check is deliberately conservative:** invoices snapshot only
+  the rate VALUE (`bill_invoices.tax_rate`), never the `tax_rates` id, so attribution to one rate is impossible — ANY invoice
+  carrying a `tax_rate` (any status) or any run in `POSTING` freezes every rate's scope/rate; fix path = create a new rate.
+  **Drafts:** `bill_run_lines` freeze only the tax AMOUNT (no rate, no rate id) and the post runner re-uses that frozen amount,
+  so editing a rate does NOT change an existing draft — it must be re-drafted (motherland's Grade 6 Ashwin draft still holds
+  the 260/student computed under 'ALL'). List responses carry `locked` so the web catalog's tax-rate edit form shows an
+  "Applies to" select, disabled with an explanation when locked (rate stays non-editable in the UI). 1527 api tests (+7), web 644.
+
 > Update this checklist as modules are completed.
 
 ---
