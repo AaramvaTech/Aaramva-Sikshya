@@ -173,6 +173,7 @@ export class BillRunService {
     let idx = 2;
     if (lineQuery.outcome) { conditions.push(`brl.outcome = $${idx++}`); params.push(lineQuery.outcome); }
     if (lineQuery.classId) { conditions.push(`s.class_id = $${idx++}::uuid`); params.push(lineQuery.classId); }
+    if (lineQuery.sectionId) { conditions.push(`s.section_id = $${idx++}::uuid`); params.push(lineQuery.sectionId); }
     params.push(limit, offset);
 
     // LEFT JOIN (not JOIN) — a student with no class_id set shouldn't drop

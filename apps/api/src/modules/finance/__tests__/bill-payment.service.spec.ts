@@ -964,4 +964,31 @@ describe('BillPaymentService', () => {
       expect(data[0].studentId).toBe(mockPaymentRow.student_id);
     });
   });
+
+  describe('findAll — class / section filters (server-side, paginated)', () => {
+    it.each([
+      ['none', {}, [], false, false],
+      ['class only', { classId: 'class-6' }, ['class-6'], true, false],
+      ['class + section', { classId: 'class-6', sectionId: 'sec-a' }, ['class-6', 'sec-a'], true, true],
+    ])('%s', async (_n, q, bound, hasClass, hasSection) => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+
+      await service.findAll({ ...q, page: 2, limit: 10 });
+
+      const [sql, ...params] = (tenantPrisma.query as jest.Mock).mock.calls[0];
+      expect(sql.includes('s.class_id = $1::uuid')).toBe(hasClass);
+      expect(sql.includes('s.section_id =')).toBe(hasSection);
+      // filters are bound params in order, followed by LIMIT/OFFSET — so paging applies to the filtered set
+      expect(params).toEqual([...bound, 10, 10]);
+    });
+
+    it('returns className and sectionName so the list can show "Grade 6 · A"', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { ...mockPaymentRow, student_name: 'Sandip Lama', class_name: 'Grade 6', section_name: 'A', total_count: '1' },
+      ]);
+      const { data } = await service.findAll({});
+      expect(data[0].className).toBe('Grade 6');
+      expect(data[0].sectionName).toBe('A');
+    });
+  });
 });

@@ -84,7 +84,7 @@ export function useStudentBillInvoices(studentId: string | null, academicYearId:
 export function useBillPayments(
   params: {
     page?: number; limit?: number; studentId?: string; method?: string; status?: string;
-    dateFrom?: string; dateTo?: string; receivedBy?: string;
+    dateFrom?: string; dateTo?: string; receivedBy?: string; classId?: string; sectionId?: string;
   } = {},
 ) {
   const slug = useTenantStore((s) => s.slug);

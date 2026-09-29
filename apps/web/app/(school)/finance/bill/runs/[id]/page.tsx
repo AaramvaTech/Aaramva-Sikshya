@@ -13,6 +13,8 @@ import { StatCard } from '@/components/shared/stat-card';
 import { DataTable } from '@/components/shared/data-table';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
+import { ClassSectionFilter } from '@/components/finance/class-section-filter';
+import { formatClassSection } from '@/lib/class-section';
 import { BillRunOutcomeBadge, labels as outcomeLabels } from '@/components/finance/bill-run-outcome-badge';
 import { Button } from '@/components/ui/button';
 import { PrintDocumentButton } from '@/components/finance/print-document-button';
@@ -42,11 +44,13 @@ export default function BillRunReviewPage() {
   const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [outcomeFilter, setOutcomeFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
 
   const { data: run, isLoading, isError } = useBillRun(runId, {
     limit: 200,
     outcome: outcomeFilter || undefined,
     classId: classFilter || undefined,
+    sectionId: sectionFilter || undefined,
   });
   const { data: classes } = useClasses();
 
@@ -117,17 +121,15 @@ export default function BillRunReviewPage() {
         </div>
       ),
     },
-    ...(run.scope === 'WHOLE_SCHOOL'
-      ? [{
-          id: 'class',
-          header: 'Class',
-          cell: ({ row }: { row: { original: BillRunLine } }) => (
-            <span className="text-gray-600 dark:text-gray-300">
-              {row.original.className ?? '—'}{row.original.sectionName ? ` ${row.original.sectionName}` : ''}
-            </span>
-          ),
-        } as ColumnDef<BillRunLine>]
-      : []),
+    {
+      id: 'class',
+      header: 'Class / Section',
+      cell: ({ row }) => (
+        <span className="text-gray-600 dark:text-gray-300">
+          {formatClassSection(row.original.className, row.original.sectionName)}
+        </span>
+      ),
+    },
     {
       id: 'outcome',
       header: 'Outcome',
@@ -184,19 +186,13 @@ export default function BillRunReviewPage() {
         </SelectContent>
       </Select>
 
-      {run.scope === 'WHOLE_SCHOOL' && (
-        <Select value={classFilter} onValueChange={(v) => setClassFilter(v ?? '')}>
-          <SelectTrigger className="h-9 w-36 text-sm">
-            <span className={classFilter ? '' : 'text-muted-foreground'}>
-              {classFilter ? (classes?.find((c) => c.id === classFilter)?.name ?? 'Loading…') : 'All Classes'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Classes</SelectItem>
-            {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      )}
+      <ClassSectionFilter
+        classes={classes}
+        classId={classFilter}
+        sectionId={sectionFilter}
+        fixedClassId={run.scope === 'CLASS' ? run.classId : null}
+        onChange={(next) => { setClassFilter(next.classId); setSectionFilter(next.sectionId); }}
+      />
     </>
   );
 

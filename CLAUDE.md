@@ -1679,6 +1679,21 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   2083-0033, Grade 7 A, zero payments/invoices/ledger rows) — two students named Sandip in the search dropdown, not an
   enrolment-vs-student id split (no enrolment table exists; `students.id` is the only id used). 1530 api tests (+3), web 647 (+3).
 
+- [x] CLASS-SECTION-DISPLAY — class/section visible and filterable where money is reviewed (`feat/class-section-display`).
+  **Source used: `students.class_id` / `section_id` joined to `classes`/`sections`** — the only place a student's class is stored
+  as ids (there is NO enrolment table; `currentEnrollment` in API responses is derived from these columns). The denormalised text
+  columns `students.class_name`/`section_name` also exist and had 0 drift across motherland's 57 students, but the id join is
+  what invoices, run lines and the student list already use. **Consequence: it is the student's CURRENT class, not a per-year
+  history** — a promoted student shows the new class on last year's payments/runs. Bill run review: `Class / Section` column
+  ("Grade 9 · B") on every run, section filter (`?sectionId=` on `GET /finance/bill/runs/:id`; class filter only for
+  WHOLE_SCHOOL runs, a CLASS run shows just its own sections). Payments list: `className`/`sectionName` in the response, `classId`/
+  `sectionId` filters applied server-side in the SQL WHERE (so LIMIT/OFFSET and `meta.total` follow the filtered set). Record
+  Payment: results and the selected student show "Grade 6 · A", plus optional class/section narrowing of the search (the students
+  endpoint already supported both). Shared `ClassSectionFilter` component + `formatClassSection`. **Receipt: no change** — the
+  A5 receipt already prints section via BILL-PRINT-1; the thermal receipt's renderer is a documented frozen renderer whose `class`
+  row shows the class name only, so section was left off it. No money, allocation or bill-run logic touched. 1537 api tests (+7),
+  web 657 (+10).
+
 > Update this checklist as modules are completed.
 
 ---

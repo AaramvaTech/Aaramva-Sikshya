@@ -19,7 +19,7 @@ export const billRunApi = {
 
   create: (data: CreateBillRunData) => api.post<ApiResponse<BillRunSummary>>('/finance/bill/runs', data),
 
-  get: (id: string, params: { page?: number; limit?: number; outcome?: string; classId?: string } = {}) =>
+  get: (id: string, params: { page?: number; limit?: number; outcome?: string; classId?: string; sectionId?: string } = {}) =>
     api.get<ApiResponse<BillRunDetail>>(`/finance/bill/runs/${id}`, { params }),
 
   exclude: (id: string, data: ExcludeBillRunLinesData) =>

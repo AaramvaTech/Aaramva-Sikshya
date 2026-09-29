@@ -39,7 +39,7 @@ export function useCreateBillRun() {
  * and outcomeSummary are always computed over every line, unfiltered. */
 export function useBillRun(
   id: string | null,
-  params: { page?: number; limit?: number; outcome?: string; classId?: string } = {},
+  params: { page?: number; limit?: number; outcome?: string; classId?: string; sectionId?: string } = {},
 ) {
   return useQuery({
     queryKey: ['bill-run', id, params],

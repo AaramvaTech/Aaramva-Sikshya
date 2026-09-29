@@ -1986,6 +1986,8 @@ export interface BillPayment {
   studentId: string;
   studentName?: string | null;
   admissionNumber?: string | null;
+  className?: string | null;
+  sectionName?: string | null;
   academicYearId: string;
   amount: number;
   method: BillPaymentMethod;

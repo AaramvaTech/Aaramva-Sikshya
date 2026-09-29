@@ -1,6 +1,8 @@
 'use client';
 
 import { allocationLabel } from '@/lib/allocation-label';
+import { ClassSectionFilter } from '@/components/finance/class-section-filter';
+import { formatClassSection } from '@/lib/class-section';
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { useAcademicYears, useCurrentAcademicYear, useStudents } from '@/lib/hooks/use-students';
+import { useAcademicYears, useCurrentAcademicYear, useStudents, useClasses } from '@/lib/hooks/use-students';
 import {
   useStudentOutstandingInvoices, useStudentBalance, useRecordPayment, useStudentOutstandingFines,
 } from '@/lib/hooks/use-bill-payment';
@@ -53,6 +55,8 @@ export default function RecordPaymentPage() {
   const [studentSearch, setStudentSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [classFilter, setClassFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<StudentSummary | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,7 +77,8 @@ export default function RecordPaymentPage() {
   const { data: allYears } = useAcademicYears();
   const effectiveYearId = academicYearId || currentYear?.id || '';
 
-  const { data: studentsData } = useStudents({ search: searchQuery, limit: 10, page: 1 });
+  const { data: studentsData } = useStudents({ search: searchQuery, classId: classFilter || undefined, sectionId: sectionFilter || undefined, limit: 10, page: 1 });
+  const { data: classes } = useClasses();
   const searchResults = studentsData?.data?.data ?? [];
 
   const { data: outstandingInvoices, isLoading: invoicesLoading } = useStudentOutstandingInvoices(selectedStudent?.id ?? null);
@@ -93,7 +98,7 @@ export default function RecordPaymentPage() {
 
   function handleSelectStudent(student: StudentSummary) {
     setSelectedStudent(student);
-    setStudentSearch(`${student.firstName} ${student.lastName} (${student.studentId})`);
+    setStudentSearch(`${student.firstName} ${student.lastName} (${student.studentId}) · ${formatClassSection(student.className, student.sectionName)}`);
     setShowDropdown(false);
     setManualTargets({});
     setManualFineTargets({});
@@ -274,12 +279,35 @@ export default function RecordPaymentPage() {
                       onClick={() => handleSelectStudent(s)}
                     >
                       <span className="font-medium">{s.firstName} {s.lastName}</span>
-                      <span className="text-xs text-gray-400 font-mono">{s.studentId}</span>
+                      <span className="text-xs text-gray-400">
+                        <span className="font-mono">{s.studentId}</span> · {formatClassSection(s.className, s.sectionName)}
+                      </span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-xs text-gray-500">Narrow search:</span>
+              <ClassSectionFilter
+                classes={classes}
+                classId={classFilter}
+                sectionId={sectionFilter}
+                onChange={(next) => {
+                  setClassFilter(next.classId);
+                  setSectionFilter(next.sectionId);
+                  setSelectedStudent(null);
+                  setShowDropdown(true);
+                }}
+              />
+            </div>
+            {selectedStudent && (
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-medium">{selectedStudent.firstName} {selectedStudent.lastName}</span>
+                {' · '}{formatClassSection(selectedStudent.className, selectedStudent.sectionName)}
+                <span className="ml-2 font-mono text-xs text-gray-400">{selectedStudent.studentId}</span>
+              </p>
+            )}
           </div>
 
           {selectedStudent && (

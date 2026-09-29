@@ -19,7 +19,7 @@ export const billPaymentApi = {
   list: (
     params: {
       page?: number; limit?: number; studentId?: string; method?: string; status?: string;
-      dateFrom?: string; dateTo?: string; receivedBy?: string;
+      dateFrom?: string; dateTo?: string; receivedBy?: string; classId?: string; sectionId?: string;
     } = {},
   ) => api.get<ApiResponse<PaginatedResponse<BillPayment>>>('/finance/bill/payments', { params }),
 
