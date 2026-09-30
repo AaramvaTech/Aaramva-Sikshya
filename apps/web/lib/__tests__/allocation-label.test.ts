@@ -10,7 +10,11 @@ describe('allocationLabel', () => {
     expect(allocationLabel({ billInvoiceId: '97e01f91-7e1e-4d9b-9dda-e7f5d72f32bc', billFineAccrualId: null, invoiceNumber: null }))
       .toBe('Invoice …d72f32bc');
   });
-  it('labels a fine allocation', () => {
+  it('labels a fine allocation with the invoice the fine accrued on', () => {
+    expect(allocationLabel({ billInvoiceId: null, billFineAccrualId: 'aaaaaaaa-0000-0000-0000-00000000beef', invoiceNumber: null, fineInvoiceNumber: 'BINV-2083-000068' }))
+      .toBe('Late fee on BINV-2083-000068');
+  });
+  it('falls back to the accrual id tail for a fine when no invoice number came back', () => {
     expect(allocationLabel({ billInvoiceId: null, billFineAccrualId: 'aaaaaaaa-0000-0000-0000-00000000beef', invoiceNumber: null }))
       .toBe('Late fee …0000beef');
   });

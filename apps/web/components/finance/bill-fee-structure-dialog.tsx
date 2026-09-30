@@ -44,6 +44,8 @@ interface BillFeeStructureDialogProps {
   onSuccess?: () => void;
 }
 
+// recurrenceOverride has no input (billing ignores it) but stays in the form values: edit-mode
+// submit replaces the whole item set, so dropping it here would null stored values.
 const emptyItem = { feeHeadId: '', amount: 0, recurrenceOverride: '', effectiveFrom: '', effectiveTo: '' };
 
 /**
@@ -263,12 +265,6 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
                     <div className="w-28 shrink-0 space-y-1.5">
                       <Label className="text-xs text-gray-500">Amount (Rs.)</Label>
                       <Input type="number" step="0.01" className="h-9" placeholder="0" {...register(`items.${index}.amount`, { valueAsNumber: true })} />
-                    </div>
-
-                    <div className="w-36 shrink-0 space-y-1.5">
-                      <Label className="text-xs text-gray-500">Recurrence Override</Label>
-                      <Input className="h-9" placeholder="—" {...register(`items.${index}.recurrenceOverride`)} />
-                      <p className="text-xs text-gray-500">Saved, but billing does not use it yet. Invoices take recurrence from the fee head.</p>
                     </div>
 
                     <div className="shrink-0 space-y-1.5">

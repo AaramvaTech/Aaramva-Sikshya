@@ -1,4 +1,5 @@
-import { BillPdfService, BillPdfData } from '../bill-pdf.service';
+import { BillPdfService, BillPdfData, toInvoiceHalf } from '../bill-pdf.service';
+import { taxRowLabel } from '../print/invoice-half';
 
 function makeData(overrides: Partial<BillPdfData['invoice']> = {}): BillPdfData {
   return {
@@ -63,5 +64,39 @@ describe('BillPdfService', () => {
 
   it('renderMerged() rejects an empty invoice list rather than producing a zero-page PDF', () => {
     expect(() => service.renderMerged([])).toThrow('at least one invoice');
+  });
+});
+
+describe('invoice tax row (INVOICE-PRINT-POLISH T1)', () => {
+  it('carries the stored rate and amount when tax > 0; subtotal + tax + previous = total receivable', () => {
+    const half = toInvoiceHalf(makeData({ taxRate: 13, taxAmount: 130, netAmount: 2130, totalReceivable: 2130 }), 'en');
+    expect(half.tax).toEqual({ rate: 13, amount: 130 });
+    expect(half.subtotal).toBe(2000);
+    expect(half.subtotal + half.tax!.amount + half.previousBalance).toBe(half.totalReceivable);
+  });
+
+  it('after a whole-bill concession the row shows the stored (post-concession) tax, not a recomputation', () => {
+    // 2,400 gross less 400 concession = 2,000 taxable; 13% = 260 is what was STORED.
+    const half = toInvoiceHalf(makeData({ taxRate: 13, taxAmount: 260, netAmount: 2260, totalReceivable: 2260 }), 'en');
+    expect(half.tax).toEqual({ rate: 13, amount: 260 });
+    expect(half.subtotal).toBe(2000);
+  });
+
+  it('has no tax row when tax is zero (including a rate stored with a zero amount)', () => {
+    expect(toInvoiceHalf(makeData(), 'en').tax).toBeNull();
+    expect(toInvoiceHalf(makeData({ taxRate: 13, taxAmount: 0 }), 'en').tax).toBeNull();
+  });
+
+  it('labels the row with the rate, dropping stored trailing zeros; no rate → bare label', () => {
+    expect(taxRowLabel('Tax', 13)).toBe('Tax (13%)');
+    expect(taxRowLabel('Tax', 13.5)).toBe('Tax (13.5%)');
+    expect(taxRowLabel('Tax', null)).toBe('Tax');
+  });
+
+  it('renders a one-page PDF with the tax row', async () => {
+    const { buffer } = await new BillPdfService().render(
+      makeData({ taxRate: 13, taxAmount: 130, netAmount: 2130, totalReceivable: 2130 }),
+    );
+    expect(buffer.subarray(0, 5).toString()).toBe('%PDF-');
   });
 });

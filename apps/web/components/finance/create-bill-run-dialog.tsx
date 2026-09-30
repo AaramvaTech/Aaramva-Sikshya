@@ -16,6 +16,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { BsDateInput } from '@/components/shared/bs-date-input';
+
+// A BS picker needs ~17rem; auto-fit gives one column where two would overlap (dialog at 360px wide, or 480px).
+export const DATE_PAIR_GRID = 'grid grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] gap-3';
 import { useAcademicYears, useCurrentAcademicYear, useClasses } from '@/lib/hooks/use-students';
 import { useCreateBillRun } from '@/lib/hooks/use-bill-run';
 import { canSubmitBillRunDraft } from '@/lib/bill-run-form';
@@ -185,7 +188,7 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
             Advanced (issue / due date)
           </button>
           {showAdvanced && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className={DATE_PAIR_GRID}>
               <BsDateInput label="Issue Date (BS)" value={issueDate} onChange={setIssueDate} minYear={bsYearNow - 1} maxYear={bsYearNow + 1} />
               <BsDateInput label="Due Date (BS)" value={dueDate} onChange={setDueDate} minYear={bsYearNow - 1} maxYear={bsYearNow + 1} />
             </div>

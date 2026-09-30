@@ -26,4 +26,15 @@ describe('BsDateInput', () => {
     rerender(<BsDateInput value="" onChange={() => {}} />);
     expect(shown()).toEqual(['Year', 'Month', 'Day']);
   });
+
+  // jsdom has no layout, so overlap itself can't be measured here — this pins the
+  // structure that prevents it: only the month box may shrink, the year/day boxes keep
+  // a fixed width, so a narrow container squeezes one box instead of overlapping three.
+  it('only the month box shrinks (min-w-0); year and day keep a fixed width', () => {
+    render(<BsDateInput onChange={() => {}} />);
+    const [year, month, day] = screen.getAllByRole('combobox');
+    expect(month.className).toContain('min-w-0');
+    expect(year.className).toMatch(/w-\[84px\].*shrink-0|shrink-0.*w-\[84px\]/);
+    expect(day.className).toMatch(/w-\[64px\].*shrink-0|shrink-0.*w-\[64px\]/);
+  });
 });

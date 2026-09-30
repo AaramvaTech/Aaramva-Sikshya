@@ -202,6 +202,8 @@ describe.each(LOCALES)('BILL-PRINT-1 invoice half [%s]', (locale) => {
     ['SPEC fixture', () => fixture(locale)],
     ['maximum content', () => maxContent(locale)],
     ['minimum content', () => minContent(locale)],
+    ['SPEC fixture with tax row', () => ({ ...fixture(locale), tax: { rate: 13, amount: 175.5 } })],
+    ['maximum content with tax row', () => ({ ...maxContent(locale), tax: { rate: 13, amount: 99_999.99 } })],
   ];
 
   it.each(cases)('%s fits both halves without overflowing', (_name, build) => {

@@ -72,6 +72,9 @@ export interface InvoiceHalfData {
   guardian: string | null;
   lines: InvoiceHalfLine[];
   subtotal: number;
+  /** Stored header tax, shown between Subtotal and the previous balance only
+   *  when amount > 0. Display only — never recomputed from the lines. */
+  tax?: { rate: number | null; amount: number } | null;
   /** Magnitude of the previous balance. */
   previousBalance: number;
   /** The ledger's own three-way sign — never re-derived from the number. */
@@ -416,7 +419,8 @@ export function renderInvoiceHalf(
   const footerTop = box.bottom - footerHeight(locale);
   // The totals band now includes the amount-in-words block (they share one
   // band), so there is no separate wordsH term to reserve.
-  const tableBudget = footerTop - y - RULE_INK - STEP.lg - totalsHeight(locale) - STEP.sm;
+  const hasTax = (data.tax?.amount ?? 0) > 0;
+  const tableBudget = footerTop - y - RULE_INK - STEP.lg - totalsHeight(locale, hasTax) - STEP.sm;
 
   const plan = planFeeRows(data.lines, tableBudget, data.subtotal, locale);
   const rowH = rowHeight(plan.density, locale);
@@ -484,6 +488,9 @@ export function renderInvoiceHalf(
     y += 8 * LINE_HEIGHT[locale];
   };
   totalRow(label('subtotal'), money(data.subtotal));
+  if (data.tax && hasTax) {
+    totalRow(taxRowLabel(label('tax'), data.tax.rate), money(data.tax.amount));
+  }
   // The previous-balance row ALWAYS renders, at 0.00 with the correct marker
   // when there is none — never a blank cell, never a dash.
   totalRow(
@@ -547,14 +554,19 @@ export function renderInvoiceHalf(
   return { ...plan, assetMisses };
 }
 
+/** "Tax (13%)" — the rate as a JS number (the DTO already parsed 13.000 → 13). */
+export function taxRowLabel(base: string, rate: number | null): string {
+  return rate == null ? base : `${base} (${rate}%)`;
+}
+
 /**
  * Subtotal + previous-balance rows, then the shared total band: the accent
  * rule and figure on the right, the amount-in-words block on the left. The
  * band is as tall as whichever side is taller, which is why they are max'd
  * rather than summed — that max IS the saving this refit buys.
  */
-function totalsHeight(locale: Locale): number {
-  const rows = 8 * LINE_HEIGHT[locale] * 2;
+function totalsHeight(locale: Locale, hasTax = false): number {
+  const rows = 8 * LINE_HEIGHT[locale] * (hasTax ? 3 : 2);
   const eyeH = EYEBROW_SIZE[locale] * LINE_HEIGHT[locale];
   const figureSide = RULE_ACCENT + STEP.xs + 15 * LINE_HEIGHT[locale];
   const wordsSide = eyeH + 7.5 * LINE_HEIGHT[locale] + STEP.xs + RULE_HAIR;

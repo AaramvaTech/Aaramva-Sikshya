@@ -121,7 +121,7 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
       {label && <Label>{label}</Label>}
       <div className="flex gap-2">
         <Select value={year} onValueChange={handleYear}>
-          <SelectTrigger className="w-[96px]">
+          <SelectTrigger className="w-[84px] shrink-0 px-3">
             <span className={year ? '' : 'text-muted-foreground'}>
               {year || 'Year'}
             </span>
@@ -136,7 +136,7 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
         </Select>
 
         <Select value={month} onValueChange={handleMonth}>
-          <SelectTrigger className="flex-1 min-w-[120px]">
+          <SelectTrigger className="min-w-0 flex-1 px-3">
             <span className={month ? '' : 'text-muted-foreground'}>
               {month ? BS_MONTH_NAMES_EN[Number(month) - 1] : 'Month'}
             </span>
@@ -151,7 +151,7 @@ export function BsDateInput({ value, onChange, label, minYear: minYearProp, maxY
         </Select>
 
         <Select value={day} onValueChange={handleDay}>
-          <SelectTrigger className="w-[72px]">
+          <SelectTrigger className="w-[64px] shrink-0 px-3">
             <span className={day ? '' : 'text-muted-foreground'}>
               {day || 'Day'}
             </span>

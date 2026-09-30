@@ -65,9 +65,11 @@ export interface RecordPaymentInTxParams {
 // Display-only joins: the payments list/detail/receipt show a student name and
 // human invoice numbers instead of raw uuids. LEFT JOINs, so a missing student
 // or a fine allocation (no invoice id) still returns the row. Deliberately no
-// join to bill_fine_accruals: its allocation column comes from tenant
-// migration 0039, and a display join must not break payments on a tenant that
-// hasn't received it.
+// join to bill_fine_accruals was the rule until INVOICE-PRINT-POLISH T3: a fine
+// allocation has no invoice id of its own, so its label had nothing but the
+// accrual uuid. The join now resolves the fine's parent invoice number; it
+// needs tenant migration 0039 (bill_payment_allocations.bill_fine_accrual_id),
+// which is on every tenant — a tenant missing 0039 must run migrate:tenants.
 // Class/section come from students.class_id / section_id (the only place a
 // student's class is stored as ids; there is no enrolment table).
 const STUDENT_CLASS_JOINS = `LEFT JOIN classes c ON c.id = s.class_id LEFT JOIN sections sec ON sec.id = s.section_id`;
@@ -76,9 +78,11 @@ const STUDENT_DISPLAY_COLS = `TRIM(CONCAT(s.first_name, ' ', s.last_name)) AS st
 const PAYMENT_WITH_STUDENT_SQL = `SELECT bp.*, ${STUDENT_DISPLAY_COLS}
    FROM bill_payments bp LEFT JOIN students s ON s.id = bp.student_id
    ${STUDENT_CLASS_JOINS}`;
-const ALLOCATIONS_WITH_INVOICE_SQL = `SELECT bpa.*, bi.invoice_number
+const ALLOCATIONS_WITH_INVOICE_SQL = `SELECT bpa.*, bi.invoice_number, fbi.invoice_number AS fine_invoice_number
    FROM bill_payment_allocations bpa
    LEFT JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id
+   LEFT JOIN bill_fine_accruals bfa ON bfa.id = bpa.bill_fine_accrual_id
+   LEFT JOIN bill_invoices fbi ON fbi.id = bfa.bill_invoice_id
    WHERE bpa.bill_payment_id = $1::uuid ORDER BY bpa.created_at`;
 
 @Injectable()

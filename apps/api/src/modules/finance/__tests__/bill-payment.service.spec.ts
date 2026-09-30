@@ -953,8 +953,23 @@ describe('BillPaymentService', () => {
       expect(result.allocations?.[0].invoiceNumber).toBe('BINV-2083-000068');
       const allocSql = (tenantPrisma.query as jest.Mock).mock.calls[1][0] as string;
       expect(allocSql).toContain('LEFT JOIN bill_invoices bi ON bi.id = bpa.bill_invoice_id');
-      // must not depend on migration 0039's column, or payments break on tenants without it
-      expect(allocSql).not.toContain('bill_fine_accrual');
+      // INVOICE-PRINT-POLISH T3 reversed the old "no join to bill_fine_accruals" rule: a fine
+      // allocation's label needs its parent invoice number, and that join needs migration 0039.
+      expect(allocSql).toContain('LEFT JOIN bill_fine_accruals bfa ON bfa.id = bpa.bill_fine_accrual_id');
+    });
+
+    it('a fine allocation returns the number of the invoice the fine accrued on', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ ...mockPaymentRow, student_name: 'Sandip Lama', admission_number: '2083-0021' }])
+        .mockResolvedValueOnce([{
+          id: 'alloc-2', bill_payment_id: 'payment-1', bill_invoice_id: null, bill_fine_accrual_id: 'fine-uuid',
+          amount: '50.00', created_at: new Date('2026-09-29'), invoice_number: null, fine_invoice_number: 'BINV-2083-000068',
+        }]);
+
+      const result = await service.findOne('payment-1');
+
+      expect(result.allocations?.[0].invoiceNumber).toBeNull();
+      expect(result.allocations?.[0].fineInvoiceNumber).toBe('BINV-2083-000068');
     });
 
     it('a payment whose student row is missing still returns (names null, not an error)', async () => {
