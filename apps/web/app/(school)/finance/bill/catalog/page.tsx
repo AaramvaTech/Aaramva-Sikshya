@@ -77,7 +77,7 @@ export default function FeeCatalogPage() {
         ))}
       </div>
 
-      {activeTab === 'fee-heads' && <FeeHeadsTab />}
+      {activeTab === 'fee-heads' && <FeeHeadsTab onGoToTaxRates={() => setActiveTab('tax-rates')} />}
       {activeTab === 'fee-structures' && <FeeStructuresTab />}
       {activeTab === 'discount-reasons' && <DiscountReasonsTab />}
       {activeTab === 'correction-reasons' && <CorrectionReasonsTab />}
@@ -99,7 +99,16 @@ function emptyFeeHeadForm() {
   return { name: '', code: '', recurrence: 'MONTHLY' as FeeHeadRecurrence, isTaxable: false, isRefundable: false, prorationPolicy: 'NONE' as ProrationPolicy, glAccountCode: '' };
 }
 
-function FeeHeadsTab() {
+function VatCaption({ onGoToTaxRates }: { onGoToTaxRates: () => void }) {
+  return (
+    <p className="mt-1 text-xs text-gray-500">
+      VAT is set under{' '}
+      <button type="button" onClick={onGoToTaxRates} className="text-brand-500 underline">Tax Rates</button>
+    </p>
+  );
+}
+
+function FeeHeadsTab({ onGoToTaxRates }: { onGoToTaxRates: () => void }) {
   const { data: feeHeads, isLoading } = useFeeHeads();
   const create = useCreateFeeHead();
   const update = useUpdateFeeHead();
@@ -185,6 +194,7 @@ function FeeHeadsTab() {
       {feeHeads?.map((h: FeeHead) => (
         <div key={h.id} className="py-3 border-b border-gray-100 dark:border-gray-800 last:border-0">
           {editId === h.id ? (
+            <div>
             <div className="flex gap-2 flex-wrap items-center">
               <Input value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className="max-w-48 h-8 text-sm" autoFocus />
               <Input value={editForm.code} onChange={(e) => setEditForm((p) => ({ ...p, code: e.target.value }))} className="w-28 h-8 text-sm" />
@@ -206,7 +216,10 @@ function FeeHeadsTab() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
+            {editForm.isTaxable && <VatCaption onGoToTaxRates={onGoToTaxRates} />}
+            </div>
           ) : (
+            <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm text-gray-800 dark:text-white">{h.name}</span>
@@ -229,6 +242,8 @@ function FeeHeadsTab() {
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
+            </div>
+            {h.isTaxable && <VatCaption onGoToTaxRates={onGoToTaxRates} />}
             </div>
           )}
         </div>
