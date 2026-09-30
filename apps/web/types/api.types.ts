@@ -1977,6 +1977,8 @@ export interface BillPaymentAllocation {
   /** Human invoice number (BINV-…) for invoice allocations. */
   invoiceNumber?: string | null;
   billFineAccrualId: string | null;
+  /** Invoice number the fine accrued on (fine allocations only). */
+  fineInvoiceNumber?: string | null;
   amount: number;
   createdAt: string;
 }

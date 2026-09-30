@@ -1733,6 +1733,24 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   each side defaulting independently; the web caption mirrors that rule client-side (the API does not return the applied
   range), so a change there must be mirrored in `CollectionTab`. "Defaulters bold" (item 7) not reproduced from code. web 674 (+11).
 
+- [x] INVOICE-PRINT-POLISH — four polish items (`fix/invoice-print-polish`). **T1 tax row on the A4 invoice:** the
+  header stores one `tax_rate` + `tax_amount` per invoice (`0022_bill_run.sql:86-87`; items carry NO tax — tax is header-only,
+  `bill-line-resolver.service.ts` picks ONE active rate, `LIMIT 1`, so multiple rates on one invoice cannot exist). `toInvoiceHalf`
+  (`bill-pdf.service.ts`) passes `tax` only when `taxAmount > 0`; `print/invoice-half.ts` draws "Tax (13%)" between Subtotal and
+  Previous balance and reserves its height. Display only, nothing stored changes; after a concession the row shows the STORED
+  post-concession tax. Label is the existing reviewed `tax` label, not "VAT" (invoice stores no tax name; a new Nepali string would
+  need the NEPALI_PRINT_REVIEWED review). Dev DB: every invoice with tax > 0 has a rate (42 motherland, 3 demo) — none affected.
+  **CAVEAT — the PDF cache:** `getOrGenerateBillPdf` returns an already-generated `…-v2-{lang}.pdf` untouched (A6 byte-identical
+  reprint), so any invoice printed BEFORE this change keeps its old no-tax-row PDF; only first-time prints get the row. Forcing
+  regeneration = bump `keyFor` to v3 (breaks the issued-document guarantee) or delete cached objects — a deliberate call, not done.
+  **T2** `BsDateInput` triggers were ~304px minimum (96+120+72+gaps) — two in a 2-col grid overlapped in the 480px New Bill Run
+  dialog at ANY width; year/day now fixed narrow, month `min-w-0 flex-1`, and the Issue/Due pair (and Record Payment's Received
+  Date + Reference grid) use `grid-cols-[repeat(auto-fit,minmax(17rem,1fr))]`. **T3** a fine allocation has `bill_invoice_id NULL`
+  (0039 CHECK), so its label was "Late fee …{accrual uuid tail}"; `ALLOCATIONS_WITH_INVOICE_SQL` now joins
+  `bill_fine_accruals`→`bill_invoices` (REVERSES the old "no join, don't depend on 0039" rule — 0039 is on all dev tenants, prod
+  must run migrate:tenants) and returns `fineInvoiceNumber`; label = "Late fee on BINV-…". **T4** Recurrence Override input removed;
+  the value stays in the form state so an edit-save (whole-set replace) still sends the stored override. api 1571, web 679.
+
 > Update this checklist as modules are completed.
 
 ---

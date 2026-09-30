@@ -53,6 +53,8 @@ export interface BillPaymentAllocationRow {
   created_at: Date | string;
   /** Display join (bill_invoices) — present only on queries that ask for it. */
   invoice_number?: string | null;
+  /** Display join: the invoice a FINE allocation's accrual belongs to. */
+  fine_invoice_number?: string | null;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -63,6 +65,8 @@ export interface BillPaymentAllocationResponseDto {
   /** Human invoice number for invoice allocations; null for fine allocations. */
   invoiceNumber: string | null;
   billFineAccrualId: string | null;
+  /** Invoice number the fine accrued on; null for invoice allocations. */
+  fineInvoiceNumber: string | null;
   amount: number;
   createdAt: string;
 }
@@ -126,6 +130,7 @@ export function toBillPaymentAllocationResponse(row: BillPaymentAllocationRow): 
     billInvoiceId: row.bill_invoice_id,
     invoiceNumber: row.invoice_number ?? null,
     billFineAccrualId: row.bill_fine_accrual_id,
+    fineInvoiceNumber: row.fine_invoice_number ?? null,
     amount: toMoney(row.amount).toNumber(),
     createdAt: toIso(row.created_at),
   };

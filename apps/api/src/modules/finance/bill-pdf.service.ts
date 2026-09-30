@@ -270,6 +270,7 @@ export function toInvoiceHalf(data: BillPdfData, locale: Locale): InvoiceHalfDat
     // Pre-tax net, matching the sum of the lines' Total column so the fee
     // table foots against this figure exactly.
     subtotal: inv.netAmount - inv.taxAmount,
+    tax: inv.taxAmount > 0 ? { rate: inv.taxRate, amount: inv.taxAmount } : null,
     previousBalance: inv.previousBalance,
     previousBalanceSign: balanceSign(Money.fromNumber(inv.previousBalance)),
     totalReceivable: inv.totalReceivable,

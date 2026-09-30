@@ -459,7 +459,7 @@ export default function RecordPaymentPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] gap-4">
                 <BsDateInput label="Received Date (BS)" value={receivedDate} onChange={setReceivedDate} minYear={bsYearNow - 1} maxYear={bsYearNow + 1} />
                 <div className="space-y-1.5">
                   <Label>Reference {method !== 'CASH' && '*'}</Label>
