@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CashierShiftService } from '../cashier-shift.service';
+import { CashierShiftService, SHIFT_PAYMENTS_WHERE } from '../cashier-shift.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
@@ -279,6 +279,80 @@ describe('CashierShiftService', () => {
       expect(result.shift.closedByName).toBe('Gita KC');
       const updateSql = mockTx.$queryRawUnsafe.mock.calls[3][0] as string;
       expect(updateSql).toContain('LEFT JOIN users cb ON cb.id = updated.closed_by');
+    });
+  });
+
+  describe('listShiftPayments — same window as closeShift (SHIFT-PAYMENTS-WINDOW)', () => {
+    const CLOSED_AT = new Date('2026-07-29T03:04:00Z');
+    const payRow = (over: Record<string, unknown> = {}) => ({
+      id: 'p1', receipt_number: 'RCPT-1', method: 'CASH', amount: '130.00', received_date: '2026-07-29',
+      created_at: new Date('2026-07-29T03:01:00Z'), student_name: 'Sandip Lama', admission_number: '2083-0021',
+      class_name: 'Grade 6', section_name: 'A', ...over,
+    });
+
+    it('404s an unknown shift, never queries payments', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      await expect(service.listShiftPayments('nope')).rejects.toThrow(NotFoundException);
+      expect(tenantPrisma.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('a closed shift is bounded by [opened_at, closed_at] for THAT shift cashier, CLEARED only', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED', closed_at: CLOSED_AT })])
+        .mockResolvedValueOnce([payRow()]);
+
+      const result = await service.listShiftPayments('shift-1');
+
+      const [sql, cashier, from, to] = (tenantPrisma.query as jest.Mock).mock.calls[1];
+      expect(sql).toContain(SHIFT_PAYMENTS_WHERE);
+      expect(sql).toContain("bp.status = 'CLEARED'");
+      expect(sql).toContain('bp.received_by = $1::uuid');
+      expect(cashier).toBe('cashier-1');            // another cashier's payments are excluded by this bind
+      expect(from).toEqual(new Date('2026-07-29T03:00:00Z'));
+      expect(to).toEqual(CLOSED_AT);                // not a date, not the end of the day
+      expect(result.payments).toHaveLength(1);
+      expect(result.payments[0]).toMatchObject({
+        receiptNumber: 'RCPT-1', method: 'CASH', amount: 130, receivedDate: '2026-07-29',
+        studentName: 'Sandip Lama', className: 'Grade 6', sectionName: 'A',
+      });
+    });
+
+    it('an OPEN shift runs to now()', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([shiftRow()])          // closed_at null
+        .mockResolvedValueOnce([]);
+      const before = Date.now();
+      const result = await service.listShiftPayments('shift-1');
+      const to = (tenantPrisma.query as jest.Mock).mock.calls[1][3] as Date;
+      expect(to.getTime()).toBeGreaterThanOrEqual(before);
+      expect(to.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(new Date(result.windowEnd).getTime()).toBe(to.getTime());
+    });
+
+    it('cashCollected sums CASH rows only (cheque/gateway are listed but not drawer cash)', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED', closed_at: CLOSED_AT })])
+        .mockResolvedValueOnce([
+          payRow({ id: 'a', amount: '130.00' }),
+          payRow({ id: 'b', amount: '20.10' }),
+          payRow({ id: 'c', method: 'ESEWA', amount: '500.00' }),
+        ]);
+      const result = await service.listShiftPayments('shift-1');
+      expect(result.payments).toHaveLength(3);
+      expect(result.cashCollected).toBe(150.1);
+    });
+
+    it('closeShift and the list splice the SAME predicate, so they cannot drift', async () => {
+      mockTx.$queryRawUnsafe
+        .mockResolvedValueOnce([shiftRow()])
+        .mockResolvedValueOnce([{ expected_cash: '2000.00', variance: '0', cash_collected: '0', cheque_total: '0', gateway_total: '0', cash_refund_total: '0' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([shiftRow({ status: 'CLOSED' })]);
+      await service.closeShift('shift-1', { countedCash: '2000.00' }, 'staff-1');
+      const aggSql = mockTx.$queryRawUnsafe.mock.calls[1][0] as string;
+      const bySql = mockTx.$queryRawUnsafe.mock.calls[2][0] as string;
+      expect(aggSql).toContain(SHIFT_PAYMENTS_WHERE);
+      expect(bySql).toContain(SHIFT_PAYMENTS_WHERE);
     });
   });
 });

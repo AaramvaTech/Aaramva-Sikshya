@@ -2266,6 +2266,27 @@ export interface StudentStatement {
 }
 
 export type CashierShiftStatus = 'OPEN' | 'CLOSED';
+/** GET /finance/cashier/shifts/:id/payments — the receipts inside one shift's time window. */
+export interface ShiftPayment {
+  id: string;
+  receiptNumber: string;
+  method: string;
+  amount: number;
+  receivedDate: string;
+  createdAt: string;
+  studentName: string | null;
+  admissionNumber: string | null;
+  className: string | null;
+  sectionName: string | null;
+}
+export interface ShiftPaymentsResult {
+  shiftId: string;
+  windowStart: string;
+  windowEnd: string;
+  cashCollected: number;
+  payments: ShiftPayment[];
+}
+
 export interface CashierShift {
   id: string;
   cashierUserId: string;

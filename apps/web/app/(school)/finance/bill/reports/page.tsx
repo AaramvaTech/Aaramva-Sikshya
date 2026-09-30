@@ -26,7 +26,8 @@ import {
   useFeeAging,
 } from '@/lib/hooks/use-reports';
 import { useConcessionRegister } from '@/lib/hooks/use-bill-assignment';
-import { useStudentStatement, useBillPayments } from '@/lib/hooks/use-bill-payment';
+import { useStudentStatement } from '@/lib/hooks/use-bill-payment';
+import { ShiftPaymentsDrilldown } from '@/components/finance/shift-payments-drilldown';
 import { useCashierShifts, useOpenShift, useCloseShift } from '@/lib/hooks/use-cashier';
 import { exportToCsv } from '@/lib/export';
 import { todayBs } from 'bs-calendar';
@@ -631,26 +632,6 @@ function StatementTab() {
 }
 
 // ── Cashier tab (§4.10 — the one write action) ──────────────────────────────
-
-function ShiftPaymentsDrilldown({ shift }: { shift: CashierShift }) {
-  const payments = useBillPayments({
-    receivedBy: shift.cashierUserId,
-    dateFrom: shift.openedAt.slice(0, 10),
-    dateTo: (shift.closedAt ?? shift.openedAt).slice(0, 10),
-    limit: 100,
-  });
-  if (payments.isLoading) return <Skeleton className="h-24 w-full" />;
-  const rows = (payments.data?.data ?? []).filter((p) => p.status === 'CLEARED');
-  if (rows.length === 0) return <p className="px-3 py-4 text-sm text-gray-400">No cleared payments found for this shift window.</p>;
-  return (
-    <div className="border-t border-stroke bg-gray-2 px-3 py-3 dark:border-strokedark dark:bg-meta-4">
-      <SimpleTable
-        headers={['Receipt', 'Method', 'Amount', 'Received']}
-        rows={rows.map((p) => [p.receiptNumber, p.method, `Rs ${p.amount}`, p.receivedDate])}
-      />
-    </div>
-  );
-}
 
 export function CashierTab() {
   const { data: currentYear } = useCurrentAcademicYear();

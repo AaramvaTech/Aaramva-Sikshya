@@ -11,6 +11,18 @@ import { OpenShiftDto, CloseShiftDto } from './dto/cashier-shift.dto';
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * SHIFT-PAYMENTS-WINDOW: the ONE definition of "this payment belongs to this
+ * shift". closeShift's expected-cash and by-method queries and the shift's
+ * receipt list (listShiftPayments) all splice this same fragment, so the list
+ * a cashier reads and the total they are held to cannot drift apart. Params:
+ * $1 cashier user id, $2 opened_at, $3 window end (closeTimestamp, or
+ * COALESCE(closed_at, now()) for the list). Callers alias bill_payments as `bp`.
+ * There is no shift_id on payments; membership is cashier + status + time window.
+ */
+export const SHIFT_PAYMENTS_WHERE = `bp.received_by = $1::uuid AND bp.status = 'CLEARED'
+             AND bp.created_at BETWEEN $2::timestamptz AND $3::timestamptz`;
+
 interface MethodTotalRow {
   method: string;
   total: string;
@@ -25,6 +37,32 @@ interface CloseAggregateRow {
   gateway_total: string;
   cash_refund_total: string;
 }
+
+interface ShiftPaymentRow {
+  id: string;
+  receipt_number: string;
+  method: string;
+  amount: string | number;
+  received_date: Date | string;
+  created_at: Date | string;
+  student_name: string | null;
+  admission_number: string | null;
+  class_name: string | null;
+  section_name: string | null;
+}
+
+export interface ShiftPaymentsResult {
+  shiftId: string;
+  windowStart: string;
+  windowEnd: string;
+  cashCollected: number;
+  payments: {
+    id: string; receiptNumber: string; method: string; amount: number; receivedDate: string; createdAt: string;
+    studentName: string | null; admissionNumber: string | null; className: string | null; sectionName: string | null;
+  }[];
+}
+
+const toIso = (d: Date | string): string => (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
 
 export interface CashierCloseResult {
   shift: CashierShiftResponseDto;
@@ -147,9 +185,8 @@ export class CashierShiftService {
              COALESCE(SUM(amount) FILTER (WHERE method = 'CASH'), 0) AS cash_collected,
              COALESCE(SUM(amount) FILTER (WHERE method = 'CHEQUE'), 0) AS cheque_total,
              COALESCE(SUM(amount) FILTER (WHERE method IN ('BANK_TRANSFER', 'ESEWA', 'KHALTI')), 0) AS gateway_total
-           FROM bill_payments
-           WHERE received_by = $1::uuid AND status = 'CLEARED'
-             AND created_at BETWEEN $2::timestamptz AND $3::timestamptz
+           FROM bill_payments bp
+           WHERE ${SHIFT_PAYMENTS_WHERE}
          ),
          refunds AS (
            SELECT COALESCE(SUM(amount), 0) AS total
@@ -173,12 +210,11 @@ export class CashierShiftService {
       );
 
       const byMethodRows = await tx.$queryRawUnsafe<MethodTotalRow[]>(
-        `SELECT method, SUM(amount) AS total, COUNT(*) AS count
-         FROM bill_payments
-         WHERE received_by = $1::uuid AND status = 'CLEARED'
-           AND created_at BETWEEN $2::timestamptz AND $3::timestamptz
-         GROUP BY method
-         ORDER BY method`,
+        `SELECT bp.method, SUM(bp.amount) AS total, COUNT(*) AS count
+         FROM bill_payments bp
+         WHERE ${SHIFT_PAYMENTS_WHERE}
+         GROUP BY bp.method
+         ORDER BY bp.method`,
         shift.cashier_user_id,
         shift.opened_at,
         closeTimestamp,
@@ -224,6 +260,55 @@ export class CashierShiftService {
         })),
       };
     });
+  }
+
+  /**
+   * The receipts under one shift — same predicate as closeShift (see
+   * SHIFT_PAYMENTS_WHERE), window end = closed_at, or now() while still open.
+   * 404 for an unknown shift id.
+   */
+  async listShiftPayments(shiftId: string): Promise<ShiftPaymentsResult> {
+    const [shift] = await this.tenantPrisma.query<CashierShiftRow>(
+      `SELECT * FROM cashier_shifts WHERE id = $1::uuid`,
+      shiftId,
+    );
+    if (!shift) throw new NotFoundException(`Cashier shift ${shiftId} not found`);
+
+    const windowEnd = shift.closed_at ?? new Date();
+    const rows = await this.tenantPrisma.query<ShiftPaymentRow>(
+      `SELECT bp.id, bp.receipt_number, bp.method, bp.amount, bp.received_date, bp.created_at,
+              TRIM(CONCAT(s.first_name, ' ', s.last_name)) AS student_name,
+              s.student_id AS admission_number, c.name AS class_name, sec.name AS section_name
+       FROM bill_payments bp
+       LEFT JOIN students s ON s.id = bp.student_id
+       LEFT JOIN classes c ON c.id = s.class_id
+       LEFT JOIN sections sec ON sec.id = s.section_id
+       WHERE ${SHIFT_PAYMENTS_WHERE}
+       ORDER BY bp.created_at`,
+      shift.cashier_user_id,
+      shift.opened_at,
+      windowEnd,
+    );
+
+    const cash = rows.filter((r) => r.method === 'CASH').reduce((acc, r) => acc.add(toMoney(r.amount)), toMoney(0));
+    return {
+      shiftId,
+      windowStart: toIso(shift.opened_at),
+      windowEnd: toIso(windowEnd),
+      cashCollected: cash.toNumber(),
+      payments: rows.map((r) => ({
+        id: r.id,
+        receiptNumber: r.receipt_number,
+        method: r.method,
+        amount: toMoney(r.amount).toNumber(),
+        receivedDate: r.received_date instanceof Date ? r.received_date.toISOString().split('T')[0] : String(r.received_date).slice(0, 10),
+        createdAt: toIso(r.created_at),
+        studentName: r.student_name || null,
+        admissionNumber: r.admission_number ?? null,
+        className: r.class_name ?? null,
+        sectionName: r.section_name ?? null,
+      })),
+    };
   }
 
   async listShifts(params: { cashierId?: string; date?: string }): Promise<CashierShiftResponseDto[]> {

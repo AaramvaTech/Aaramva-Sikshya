@@ -32,6 +32,12 @@ export class CashierController {
     return this.cashierShiftService.closeShift(id, dto, user.userId);
   }
 
+  @Get('shifts/:id/payments')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  listShiftPayments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cashierShiftService.listShiftPayments(id);
+  }
+
   @Get('shifts')
   @Roles(...ACCOUNTANT_AND_ABOVE)
   listShifts(@Query('cashierId') cashierId?: string, @Query('date') date?: string) {
