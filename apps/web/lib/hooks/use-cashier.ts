@@ -14,6 +14,15 @@ export function useCashierShifts(params: { cashierId?: string; date?: string } =
   });
 }
 
+export function useShiftPayments(shiftId: string | null) {
+  const slug = useTenantStore((s) => s.slug);
+  return useQuery({
+    queryKey: ['cashier-shift-payments', shiftId],
+    queryFn: () => cashierApi.listShiftPayments(shiftId as string).then((r) => r.data.data),
+    enabled: !!slug && !!shiftId,
+  });
+}
+
 export function useOpenShift() {
   const queryClient = useQueryClient();
   return useMutation({

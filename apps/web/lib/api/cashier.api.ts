@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   CashierShift,
   CashierCloseResult,
+  ShiftPaymentsResult,
   OpenShiftData,
   CloseShiftData,
 } from '@/types/api.types';
@@ -18,4 +19,8 @@ export const cashierApi = {
 
   listShifts: (params: { cashierId?: string; date?: string } = {}) =>
     api.get<ApiResponse<CashierShift[]>>('/finance/cashier/shifts', { params }),
+
+  /** Receipts inside one shift's [opened_at, closed_at|now] window — same predicate as close-shift. */
+  listShiftPayments: (shiftId: string) =>
+    api.get<ApiResponse<ShiftPaymentsResult>>(`/finance/cashier/shifts/${shiftId}/payments`),
 };

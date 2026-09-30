@@ -1708,6 +1708,22 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   epoch but past the end of its table (~2100) it silently returns a bogus date (year 2000, huge day) instead of throwing;
   `assertAdDate` round-trips through `bsToAd` to catch both. Not changed in the package. 1552 api tests (+15), web 659 (+2).
 
+- [x] SHIFT-PAYMENTS-WINDOW — the Cashier tab's shift receipt list now matches the shift's expected cash (`fix/shift-payments-window`).
+  The drilldown filtered the generic payments list by calendar DATE (`openedAt.slice(0,10)`..`closedAt.slice(0,10)`, also the UTC
+  date — wrong for shifts opened 00:00–05:45 Nepal), so earlier same-day receipts showed under a later shift, while close-shift's
+  expected cash correctly used the time window (motherland shift e53e2509: expected 1,130 = 1,000 float + Rs 130 from RCPT-14, but
+  RCPT-11/12/13 were listed). **New `GET /finance/cashier/shifts/:id/payments`** (ACCOUNTANT_AND_ABOVE, like the other shift
+  routes; unknown id → 404 `RESOURCE_NOT_FOUND`): cashier + `CLEARED` + `created_at BETWEEN opened_at AND COALESCE(closed_at, now())`,
+  returning receipt, method, amount, received date, student name/admission no., class/section and a `cashCollected` sum.
+  **The predicate is ONE exported SQL fragment (`SHIFT_PAYMENTS_WHERE` in cashier-shift.service.ts) spliced into closeShift's
+  expected-cash query, its by-method query and this list**, and a test asserts all three contain it — they cannot drift.
+  Payments have no `shift_id`; membership is cashier + time window (cheque/gateway rows are listed but only CASH is drawer cash).
+  Web: `ShiftPaymentsDrilldown` moved to `components/finance/` and calls `useShiftPayments` — no client-side date slicing or
+  CLEARED filtering. **Tickets logged, NOT built:** (a) a "cash received outside any shift" line on the Cashier tab (day's cash
+  payments minus those inside a shift window); (b) warn on Record Payment when a CASH payment is made with no open shift;
+  (c) `shift_id` on `bill_payments` if shifts should ever be enforced (migration + historical backfill from the same window +
+  a rule for cashier-less gateway payments). 1557 api tests (+5), web 663 (+4).
+
 > Update this checklist as modules are completed.
 
 ---
