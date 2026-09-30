@@ -1724,6 +1724,15 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   (c) `shift_id` on `bill_payments` if shifts should ever be enforced (migration + historical backfill from the same window +
   a rule for cashier-less gateway payments). 1557 api tests (+5), web 663 (+4).
 
+- [x] UI-HINTS — help text and captions, web-only, no behaviour change (`fix/ui-hints`). Cashier Opening float / Counted cash
+  help; Fee Heads "VAT is set under Tax Rates" caption (taxable heads only, view + edit; the link switches the catalog's
+  in-page tab — tabs are state, not routes); one-line description under each of the 8 Reports tabs; Collection tab shows the
+  applied range. **Recurrence Override is a no-op today:** `fee_structure_items.recurrence_override` is written and returned
+  but never read by billing — `bill-line-resolver.service.ts:167` takes recurrence from `fee_heads.recurrence`; the hint says so.
+  **Collection default range** (`reports/report.util.ts:76-83`): from = 1 Baisakh of the current BS year, to = today (Nepal),
+  each side defaulting independently; the web caption mirrors that rule client-side (the API does not return the applied
+  range), so a change there must be mirrored in `CollectionTab`. "Defaulters bold" (item 7) not reproduced from code. web 674 (+11).
+
 > Update this checklist as modules are completed.
 
 ---

@@ -268,6 +268,7 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
                     <div className="w-36 shrink-0 space-y-1.5">
                       <Label className="text-xs text-gray-500">Recurrence Override</Label>
                       <Input className="h-9" placeholder="—" {...register(`items.${index}.recurrenceOverride`)} />
+                      <p className="text-xs text-gray-500">Saved, but billing does not use it yet. Invoices take recurrence from the fee head.</p>
                     </div>
 
                     <div className="shrink-0 space-y-1.5">

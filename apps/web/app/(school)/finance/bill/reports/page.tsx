@@ -30,7 +30,8 @@ import { useStudentStatement } from '@/lib/hooks/use-bill-payment';
 import { ShiftPaymentsDrilldown } from '@/components/finance/shift-payments-drilldown';
 import { useCashierShifts, useOpenShift, useCloseShift } from '@/lib/hooks/use-cashier';
 import { exportToCsv } from '@/lib/export';
-import { todayBs } from 'bs-calendar';
+import { todayBs, bsToAd } from 'bs-calendar';
+import { toLocalAdString } from '@/lib/bs-year-range';
 import type { ConcessionRegisterEntry, CashierShift } from '@/types/api.types';
 
 /**
@@ -101,6 +102,10 @@ function StatRow({ items }: { items: { label: string; value: string | number }[]
   );
 }
 
+function TabHint({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-gray-500">{children}</p>;
+}
+
 function timeOfDay(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
@@ -114,6 +119,7 @@ function DaybookTab() {
 
   return (
     <div className="space-y-6">
+      <TabHint>One day's ledger movements: invoiced, collected, refunded. Dated by ledger entry.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <BsDateInput label="Date (BS)" value={date} onChange={setDate} minYear={todayBs().year - 2} maxYear={todayBs().year} />
       </div>
@@ -176,6 +182,7 @@ function DefaultersTab() {
 
   return (
     <div className="space-y-6">
+      <TabHint>Students with a ledger balance above zero right now. Not tied to a date range.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <Select value={classId || 'all'} onValueChange={(v) => setClassId(!v || v === 'all' ? '' : v)}>
           <SelectTrigger className="w-40"><span>{selectedClass?.name ?? 'All classes'}</span></SelectTrigger>
@@ -306,6 +313,7 @@ function AgingTab() {
 
   return (
     <div className="space-y-6">
+      <TabHint>Unpaid invoices grouped by days past their due date, as of the chosen date.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <BsDateInput label="As of (BS)" value={asOf} onChange={setAsOf} minYear={todayBs().year - 2} maxYear={todayBs().year} />
         <Select value={classId || 'all'} onValueChange={(v) => setClassId(!v || v === 'all' ? '' : v)}>
@@ -337,9 +345,14 @@ function CollectionTab() {
   const bsYear = useMemo(() => todayBs().year, []);
 
   const collection = useCollectionSummary({ from: from || undefined, to: to || undefined, groupBy });
+  // Mirrors the API default (apps/api/src/modules/reports/report.util.ts resolveRange): from = 1 Baisakh of the
+  // current BS year, to = today; each side defaults independently.
+  const appliedFrom = from || toLocalAdString(bsToAd({ year: bsYear, month: 1, day: 1 }));
+  const appliedTo = to || toLocalAdString(bsToAd(todayBs()));
 
   return (
     <div className="space-y-6">
+      <TabHint>Cleared payments over a date range, by method or fee head. Dated by received date.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <BsDateInput label="From (BS)" value={from} onChange={setFrom} minYear={bsYear - 2} maxYear={bsYear} />
         <BsDateInput label="To (BS)" value={to} onChange={setTo} minYear={bsYear - 2} maxYear={bsYear} />
@@ -351,6 +364,9 @@ function CollectionTab() {
           </SelectContent>
         </Select>
       </div>
+      <p className="text-xs text-gray-500">
+        Showing <BsDate date={appliedFrom} /> to <BsDate date={appliedTo} />
+      </p>
 
       {collection.isError ? (
         <QueryErrorState onRetry={() => collection.refetch()} />
@@ -392,6 +408,7 @@ function FinesTab() {
 
   return (
     <div className="space-y-6">
+      <TabHint>Late fines accrued over a date range. Dated by fine accrual date.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <BsDateInput label="From (BS)" value={from} onChange={setFrom} minYear={bsYear - 2} maxYear={bsYear} />
         <BsDateInput label="To (BS)" value={to} onChange={setTo} minYear={bsYear - 2} maxYear={bsYear} />
@@ -495,6 +512,7 @@ function ConcessionRegisterTab() {
 
   return (
     <div className="space-y-4">
+      <TabHint>Every concession on record, including expired ones. Not filtered by date.</TabHint>
       <div className="flex flex-wrap items-end gap-3">
         <Select value={classId || 'all'} onValueChange={(v) => { setClassId(!v || v === 'all' ? '' : v); setPage(1); }}>
           <SelectTrigger className="w-40"><span>{selectedClass?.name ?? 'All classes'}</span></SelectTrigger>
@@ -551,6 +569,7 @@ function StatementTab() {
 
   return (
     <div className="space-y-5">
+      <TabHint>One student's ledger with opening and closing balance. Dated by ledger entry.</TabHint>
       <div className="flex flex-wrap items-start gap-3">
         <div className="relative w-72">
           <Input
@@ -667,6 +686,7 @@ export function CashierTab() {
 
   return (
     <div className="space-y-6">
+      <TabHint>Open and close your cash shift. History compares counted cash with expected.</TabHint>
       <Card title={myOpenShift ? 'Close shift' : 'Open shift'}>
         {shifts.isLoading ? (
           <Skeleton className="h-32 w-full" />
@@ -679,6 +699,7 @@ export function CashierTab() {
               <div>
                 <label className="mb-1 block text-xs text-gray-500">Counted cash</label>
                 <Input type="number" min="0" step="0.01" className="w-40" value={countedCash} onChange={(e) => setCountedCash(e.target.value)} />
+                <p className="mt-1 max-w-xs text-xs text-gray-500">Count all cash in the drawer, including the opening float. The expected amount is not shown; the variance appears in Shift history after you close.</p>
               </div>
               <div className="w-64">
                 <label className="mb-1 block text-xs text-gray-500">Notes (optional)</label>
@@ -707,6 +728,7 @@ export function CashierTab() {
             <div>
               <label className="mb-1 block text-xs text-gray-500">Opening float</label>
               <Input type="number" min="0" step="0.01" className="w-40" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} />
+              <p className="mt-1 max-w-xs text-xs text-gray-500">Cash already in the drawer at the start of your shift, for giving change. It is not income.</p>
             </div>
             <div className="w-64">
               <label className="mb-1 block text-xs text-gray-500">Notes (optional)</label>
