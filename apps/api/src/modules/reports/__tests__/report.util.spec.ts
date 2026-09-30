@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { bsMonthBucket, pct, resolveRange } from '../report.util';
+import { assertAdDate, bsMonthBucket, pct, resolveRange } from '../report.util';
 import { bucketForDays } from '../fee-aging-report.service';
 
 describe('bsMonthBucket (the Step-0-verified AD→BS fold)', () => {
@@ -80,5 +80,23 @@ describe('pct', () => {
     expect(pct(2, 3)).toBe(66.7);
     expect(pct(0, 0)).toBe(0);
     expect(pct(5, 5)).toBe(100);
+  });
+});
+
+describe('assertAdDate / resolveRange — impossible dates are 400 INVALID_DATE, not a Postgres/bs-calendar 500', () => {
+  it.each(['2026-02-30', '2026-13-45', '2026-00-10', '1900-01-01', '2200-01-01'])('rejects %s', (bad) => {
+    const err = (() => { try { assertAdDate(bad, 'from'); } catch (e) { return e as BadRequestException; } })();
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toMatchObject({ code: 'INVALID_DATE', details: { field: 'from' } });
+  });
+
+  it('accepts a real date, including a leap day', () => {
+    expect(assertAdDate('2026-09-30', 'date')).toBe('2026-09-30');
+    expect(assertAdDate('2028-02-29', 'date')).toBe('2028-02-29');
+  });
+
+  it('resolveRange rejects a shape-valid but nonexistent from/to', () => {
+    expect(() => resolveRange('2026-02-30', '2026-09-30')).toThrow(BadRequestException);
+    expect(() => resolveRange('2026-09-01', '2026-13-45')).toThrow(BadRequestException);
   });
 });

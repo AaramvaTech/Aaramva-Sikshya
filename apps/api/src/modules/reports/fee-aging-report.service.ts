@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
-import { isoDate, todayAdInNepal } from './report.util';
+import { assertAdDate, isoDate, todayAdInNepal } from './report.util';
 import { toMoney } from '../finance/entities/finance.entity';
 
 /**
@@ -44,7 +44,6 @@ export function bucketForDays(days: number): AgingBucket | null {
   return '90+';
 }
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Shared CTE: every overdue, still-outstanding bill_invoice as of $1, with
  *  its SQL-computed balance, days past due, and aging bucket. Repeated
@@ -110,9 +109,7 @@ export class FeeAgingReportService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   async getAging(params: { asOf?: string; classId?: string }) {
-    if (params.asOf && !ISO_DATE_RE.test(params.asOf)) {
-      throw new BadRequestException('asOf must be an AD date in YYYY-MM-DD form.');
-    }
+    if (params.asOf) assertAdDate(params.asOf, 'asOf');
     const asOf = params.asOf ?? todayAdInNepal();
     const classId = params.classId ?? null;
 

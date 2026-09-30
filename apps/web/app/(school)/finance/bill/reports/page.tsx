@@ -107,13 +107,14 @@ function timeOfDay(iso: string): string {
 // ── Daybook tab (§4.3) ──────────────────────────────────────────────────────
 
 function DaybookTab() {
-  const [bsDate, setBsDate] = useState('');
-  const daybook = useDaybook({ bsDate: bsDate || undefined });
+  // BsDateInput emits an AD 'YYYY-MM-DD'; the API takes it as `date` and converts to BS itself.
+  const [date, setDate] = useState('');
+  const daybook = useDaybook({ date: date || undefined });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3">
-        <BsDateInput label="Date (BS)" value={bsDate} onChange={setBsDate} minYear={todayBs().year - 2} maxYear={todayBs().year} />
+        <BsDateInput label="Date (BS)" value={date} onChange={setDate} minYear={todayBs().year - 2} maxYear={todayBs().year} />
       </div>
 
       {daybook.isError ? (

@@ -27,7 +27,8 @@ export const reportsApi = {
     api.get('/reports/finance/aging', { params }),
 
   // UI-6 — Billing Reports page (§4.3-4.7 of UI-6-SPEC.md)
-  daybook: (params: { bsDate?: string }) => api.get('/reports/finance/daybook', { params }),
+  /** `date` is an AD 'YYYY-MM-DD' (what BsDateInput emits) — the server converts it to BS. */
+  daybook: (params: { date?: string }) => api.get('/reports/finance/daybook', { params }),
   financeDefaulters: (params: { classId?: string; minBalance?: string; sort?: string }) =>
     api.get('/reports/finance/defaulters', { params }),
   collectionSummary: (params: { from?: string; to?: string; groupBy?: string }) =>

@@ -37,6 +37,10 @@ export const ERROR_CATALOG = {
   RESOURCE_NOT_FOUND: { status: 404, message: 'The requested record was not found.' },
   CONFLICT_DUPLICATE: { status: 409, message: 'A record with this value already exists.' },
   VALIDATION_FAILED: { status: 422, message: 'Please correct the highlighted fields.' },
+  // DAYBOOK-DATE: a date query param that is malformed, not a real calendar day,
+  // or outside the BS calendar table (1943-04-13 .. end of BS 2099). 400, never a
+  // 500 from bs-calendar/Postgres throwing on it. `details.field` names the param.
+  INVALID_DATE: { status: 400, message: 'That is not a valid date. Use an existing date in YYYY-MM-DD form.' },
   // FEE-CLASS-GUARD: the fee structure's class/section doesn't match the
   // target student's. `details` carries { feeStructure, target } so the client
   // can name both sides; retry with allowCrossClassAssignment to override.
