@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { bsToAd, todayBs } from 'bs-calendar';
+import { Injectable } from '@nestjs/common';
+import { adToBs, bsToAd, todayBs } from 'bs-calendar';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { toMoney } from '../finance/entities/finance.entity';
 import { formatLocalDate } from '../common/utils/date.util';
+import { assertAdDate } from './report.util';
 
 /**
  * BILL-9 §3 — daybook: "what happened today" ledger view. Sources
@@ -22,8 +23,6 @@ import { formatLocalDate } from '../common/utils/date.util';
  * collection only when CLEARED" rule as the rest of BILL-9, enforced here by
  * the ledger's own write path rather than a WHERE clause.
  */
-const BS_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 interface DaybookEntryRow {
   id: string;
   entry_type: string;
@@ -56,16 +55,25 @@ interface TotalsRow {
 export class DaybookReportService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  async getDaybook(params: { bsDate?: string }) {
+  /**
+   * DAYBOOK-DATE: `date` is an AD 'YYYY-MM-DD' — the same contract as
+   * defaulters / collection / fines / statement, and what BsDateInput emits.
+   * It is converted with adToBs and matched against the stored
+   * entry_bs_year/month/day. There is deliberately NO BS-format parameter: AD and
+   * BS strings look alike (2026-09-29 is a legal-looking BS day that matches
+   * nothing), so the server never guesses which one it was sent.
+   */
+  async getDaybook(params: { date?: string }) {
     let bs: { year: number; month: number; day: number };
-    if (params.bsDate) {
-      if (!BS_DATE_RE.test(params.bsDate)) {
-        throw new BadRequestException('bsDate must be a BS date in YYYY-MM-DD form.');
-      }
-      const [year, month, day] = params.bsDate.split('-').map(Number);
-      bs = { year, month, day };
+    let adDate: string;
+    if (params.date) {
+      assertAdDate(params.date, 'date');
+      const [y, m, d] = params.date.split('-').map(Number);
+      bs = adToBs(new Date(y, m - 1, d));
+      adDate = params.date;
     } else {
       bs = todayBs();
+      adDate = formatLocalDate(bsToAd(bs));
     }
 
     const entries = await this.tenantPrisma.query<DaybookEntryRow>(
@@ -110,7 +118,7 @@ export class DaybookReportService {
 
     return {
       bsDate: bs,
-      adDate: formatLocalDate(bsToAd(bs)),
+      adDate,
       entries: entries.map((r) => ({
         id: r.id,
         time: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),

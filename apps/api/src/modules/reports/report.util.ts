@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { adToBs, bsToAd, todayBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { Money } from '../../common/money/money';
+import { errorBody } from '../common/errors/error-codes';
 
 /**
  * REP-1 shared helpers.
@@ -39,13 +40,39 @@ export function todayAdInNepal(): string {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * Validates a user-supplied AD date ('YYYY-MM-DD') and returns it unchanged.
+ * Three failures that used to reach Postgres / bs-calendar and surface as a 500:
+ * wrong shape, a shape-valid day that does not exist (2026-02-30, 2026-13-45),
+ * and a real day outside bs-calendar's table. All → 400 INVALID_DATE.
+ */
+export function assertAdDate(value: string, field: string): string {
+  const fail = (why: string) =>
+    new BadRequestException(errorBody('INVALID_DATE', `${field}: ${why}`, { field, value }));
+  if (!ISO_DATE_RE.test(value)) throw fail('must be an AD date in YYYY-MM-DD form.');
+  const [y, m, d] = value.split('-').map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+    throw fail('is not a real calendar date.');
+  }
+  // adToBs THROWS before its epoch but, past the end of its table, silently
+  // returns a bogus BS date (year 2000, huge day) instead of throwing. A
+  // round trip through bsToAd catches both.
+  const local = new Date(y, m - 1, d);
+  try {
+    if (bsToAd(adToBs(local)).getTime() !== local.getTime()) throw new Error('round-trip mismatch');
+  } catch {
+    throw fail('is outside the supported calendar range.');
+  }
+  return value;
+}
+
+/**
  * The bounded-range guard every report endpoint runs: validates AD inputs,
  * defaults to the current BS year (1 Baishakh..today), caps at ~2 years.
  */
 export function resolveRange(from?: string, to?: string): { from: string; to: string } {
-  if ((from && !ISO_DATE_RE.test(from)) || (to && !ISO_DATE_RE.test(to))) {
-    throw new BadRequestException('from/to must be AD dates in YYYY-MM-DD form.');
-  }
+  if (from) assertAdDate(from, 'from');
+  if (to) assertAdDate(to, 'to');
   let resolvedTo = to ?? todayAdInNepal();
   let resolvedFrom = from;
   if (!resolvedFrom) {

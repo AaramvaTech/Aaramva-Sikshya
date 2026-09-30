@@ -1,4 +1,5 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { errorBody } from '../common/errors/error-codes';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -134,8 +135,15 @@ export class ReportsController {
 
   @Get('finance/daybook')
   @Roles(...FINANCE_REPORT_ROLES)
-  getDaybook(@Query('bsDate') bsDate?: string) {
-    return this.daybookReports.getDaybook({ bsDate });
+  getDaybook(@Query('date') date?: string, @Query('bsDate') legacyBsDate?: string) {
+    // A stale client sending the old param must fail loudly: silently ignoring it
+    // would show TODAY's book under the date the user picked.
+    if (legacyBsDate !== undefined) {
+      throw new BadRequestException(
+        errorBody('INVALID_DATE', 'bsDate is no longer accepted. Send date=YYYY-MM-DD (an AD date).', { field: 'bsDate' }),
+      );
+    }
+    return this.daybookReports.getDaybook({ date });
   }
 
   @Get('finance/defaulters')

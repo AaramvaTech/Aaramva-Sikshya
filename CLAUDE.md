@@ -1694,6 +1694,20 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   row shows the class name only, so section was left off it. No money, allocation or bill-run logic touched. 1537 api tests (+7),
   web 657 (+10).
 
+- [x] DAYBOOK-DATE — Daybook date contract fixed (`fix/daybook-date-contract`). `BsDateInput` emits an AD string but the tab
+  sent it as `?bsDate=`, which the API read as BS: 2026-09-30 → bs-calendar "Invalid BS date: 2026-9-30" (500), 2026-09-29 →
+  BS year 2026 matches nothing (empty); only the no-date default worked. **New contract: `GET /reports/finance/daybook?date=YYYY-MM-DD`
+  (AD)**, same as defaulters/collection/fines/statement; the service `adToBs`-converts and still filters on the stored
+  `entry_bs_year/month/day`. `bsDate` is REMOVED and a request that still sends it gets 400 (not silently ignored — that would
+  show today's book under the picked date). The only caller was the web Daybook tab (page.tsx, reports.api.ts, use-reports.ts);
+  mobile's `BsDate` hits are an unrelated component. **New ERR-1 code `INVALID_DATE` (400)** via `assertAdDate` in
+  report.util.ts: wrong shape, shape-valid non-existent day (2026-02-30, 2026-13-45), or outside the BS table. **Same 500 class
+  found and fixed in other report endpoints:** `resolveRange` (report.util.ts, used by attendance, collection and fines reports)
+  and fee-aging `asOf` (fee-aging-report.service.ts) only regex-checked shape, so `from=2026-02-30` reached Postgres
+  (22008 → P2010 → 500) — all four reproduced live as 500 before, 400 after. **bs-calendar gotcha:** `adToBs` throws before its
+  epoch but past the end of its table (~2100) it silently returns a bogus date (year 2000, huge day) instead of throwing;
+  `assertAdDate` round-trips through `bsToAd` to catch both. Not changed in the package. 1552 api tests (+15), web 659 (+2).
+
 > Update this checklist as modules are completed.
 
 ---

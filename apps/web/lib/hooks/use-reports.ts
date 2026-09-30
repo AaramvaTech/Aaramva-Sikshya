@@ -100,7 +100,7 @@ export function useFeeAging(params: { asOf?: string; classId?: string }) {
 // `useCollectionReport` — those names are already taken by the old-rail
 // hooks in `use-finance.ts`, which must keep working unmodified.
 
-export function useDaybook(params: { bsDate?: string } = {}) {
+export function useDaybook(params: { date?: string } = {}) {
   return useQuery({
     queryKey: ['reports', 'daybook', params],
     queryFn: async () => (await reportsApi.daybook(params)).data.data as DaybookReport,

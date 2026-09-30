@@ -54,6 +54,7 @@ describe('FeeAgingReportService', () => {
 
   it('rejects a malformed asOf', async () => {
     await expect(service.getAging({ asOf: 'today' })).rejects.toThrow(BadRequestException);
+    await expect(service.getAging({ asOf: '2026-02-30' })).rejects.toThrow(BadRequestException); // real shape, no such day → was a Postgres 500
   });
 
   it('threads SQL-computed bucket totals and grand total into the response', async () => {
