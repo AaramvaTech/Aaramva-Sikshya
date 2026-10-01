@@ -8,7 +8,7 @@ import { bsOf, directionToDebitCredit, balanceSign, ledgerBalanceSql, openingBal
 import { LedgerEntryRow, toLedgerEntryResponse, LedgerEntryResponseDto } from './entities/ledger.entity';
 import { LedgerAdjustmentDto, LedgerQueryDto } from './dto/ledger.dto';
 import { Role } from '../common/enums/role.enum';
-import { resolveRange } from '../reports/report.util';
+import { resolveRangeForTenant } from '../reports/report.util';
 import { GuardianScopeService } from '../student/guardian-scope.service';
 
 /** Distinct from tenant-migration's advisory-lock namespace (4271) — advisory
@@ -349,7 +349,7 @@ export class LedgerService {
     );
     if (!studentRows[0]) throw new NotFoundException(`Student ${studentId} not found`);
 
-    const { from, to } = resolveRange(query.from, query.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, query.from, query.to);
 
     // D19: also floored at the OPENING_BALANCE cutoff, on top of this
     // report's own `entry_date < from` window — without it, a statement

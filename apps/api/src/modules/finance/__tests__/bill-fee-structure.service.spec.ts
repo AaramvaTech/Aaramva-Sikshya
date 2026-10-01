@@ -74,10 +74,11 @@ describe('BillFeeStructureService', () => {
         'bfs-1',
         'fh-1',
         '2000.00',
-        null,
         '2026-01-01',
         null,
       );
+      const insertSql = mockTx.$executeRawUnsafe.mock.calls.find(([q]) => String(q).includes('INSERT INTO bill_fee_structure_items'))![0] as string;
+      expect(insertSql).not.toContain('recurrence_override');
     });
 
     it('SPEC: two structures for the same class+year with DIFFERENT names both persist', async () => {
@@ -180,7 +181,7 @@ describe('BillFeeStructureService', () => {
   describe('findAll()', () => {
     const itemRow = (id: string, structureId: string, head: string) => ({
       id, fee_structure_id: structureId, fee_head_id: `fh-${id}`, fee_head_name: head, amount: '1000.00',
-      recurrence_override: null, effective_from: new Date('2026-07-17'), effective_to: null, created_at: new Date('2026-09-29'),
+      effective_from: new Date('2026-07-17'), effective_to: null, created_at: new Date('2026-09-29'),
     });
 
     it('carries each structures items (the list column + Edit Items pre-fill read them off the list row)', async () => {
@@ -226,7 +227,6 @@ describe('BillFeeStructureService', () => {
           fee_head_id: 'fh-1',
           fee_head_name: 'Tuition Fee',
           amount: '2000.00',
-          recurrence_override: null,
           effective_from: new Date('2026-01-01'),
           effective_to: null,
           created_at: new Date('2026-01-01'),
@@ -260,6 +260,10 @@ describe('BillFeeStructureService', () => {
         ([sql]) => typeof sql === 'string' && sql.includes('DELETE FROM bill_fee_structure_items'),
       );
       expect(deleteCall).toBeDefined();
+      // an edit re-inserts the item set without the removed recurrence_override column
+      const insertCall = mockTx.$executeRawUnsafe.mock.calls.find(([q]) => String(q).includes('INSERT INTO bill_fee_structure_items'))!;
+      expect(insertCall[0]).not.toContain('recurrence_override');
+      expect(insertCall.slice(1)).toEqual(['bfs-1', 'fh-2', '2500.00', '2026-02-01', null]);
     });
 
     it('an EMPTY item list is refused with 422 and nothing is deleted (it would wipe every item)', async () => {

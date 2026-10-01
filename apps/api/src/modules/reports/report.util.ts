@@ -2,6 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { adToBs, bsToAd, todayBs, BS_MONTH_NAMES_EN } from 'bs-calendar';
 import { Money } from '../../common/money/money';
 import { errorBody } from '../common/errors/error-codes';
+import { formatLocalDate } from '../common/utils/date.util';
+import type { TenantPrismaService } from '../tenant/tenant-prisma.service';
 
 /**
  * REP-1 shared helpers.
@@ -67,20 +69,29 @@ export function assertAdDate(value: string, field: string): string {
 }
 
 /**
- * The bounded-range guard every report endpoint runs: validates AD inputs,
- * defaults to the current BS year (1 Baishakh..today), caps at ~2 years.
+ * Most recent 1 Shrawan (fiscal/academic year start) on or before today —
+ * the fallback default when a tenant has no current academic year. NOT simply
+ * "1 Shrawan of the current BS year": from Baisakh to Ashadh that date is still
+ * in the future and would make from > to.
  */
-export function resolveRange(from?: string, to?: string): { from: string; to: string } {
+export function lastShrawanStart(): string {
+  const bsNow = todayBs();
+  const today = todayAdInNepal();
+  const thisYear = formatLocalDate(bsToAd({ year: bsNow.year, month: 4, day: 1 }));
+  return thisYear <= today ? thisYear : formatLocalDate(bsToAd({ year: bsNow.year - 1, month: 4, day: 1 }));
+}
+
+/**
+ * The bounded-range guard every report endpoint runs: validates AD inputs,
+ * defaults `from` to `defaultFrom` (callers pass the tenant's current academic
+ * year start; see resolveRangeForTenant) and `to` to today in Nepal, caps at
+ * ~2 years. Each side defaults independently.
+ */
+export function resolveRange(from?: string, to?: string, defaultFrom: string = lastShrawanStart()): { from: string; to: string } {
   if (from) assertAdDate(from, 'from');
   if (to) assertAdDate(to, 'to');
-  let resolvedTo = to ?? todayAdInNepal();
-  let resolvedFrom = from;
-  if (!resolvedFrom) {
-    // Default: start of the current BS year.
-    const bsNow = todayBs();
-    const baisakh1 = bsToAd({ year: bsNow.year, month: 1, day: 1 });
-    resolvedFrom = `${baisakh1.getFullYear()}-${String(baisakh1.getMonth() + 1).padStart(2, '0')}-${String(baisakh1.getDate()).padStart(2, '0')}`;
-  }
+  const resolvedTo = to ?? todayAdInNepal();
+  const resolvedFrom = from ?? defaultFrom;
   if (resolvedFrom > resolvedTo) {
     throw new BadRequestException('from must not be after to.');
   }
@@ -89,6 +100,24 @@ export function resolveRange(from?: string, to?: string): { from: string; to: st
     throw new BadRequestException('Date range too large — maximum two years per report.');
   }
   return { from: resolvedFrom, to: resolvedTo };
+}
+
+/**
+ * resolveRange for a tenant: when `from` is omitted it defaults to the START
+ * DATE of the tenant's current academic year, falling back to the last 1 Shrawan
+ * when none is marked current. The DB is only touched when `from` is absent.
+ */
+export async function resolveRangeForTenant(
+  tenantPrisma: Pick<TenantPrismaService, 'query'>,
+  from?: string,
+  to?: string,
+): Promise<{ from: string; to: string }> {
+  if (from) return resolveRange(from, to);
+  const [year] = await tenantPrisma.query<{ start: string }>(
+    `SELECT to_char(start_date, 'YYYY-MM-DD') AS start
+     FROM academic_years WHERE is_current = true AND deleted_at IS NULL LIMIT 1`,
+  );
+  return resolveRange(from, to, year?.start);
 }
 
 /**

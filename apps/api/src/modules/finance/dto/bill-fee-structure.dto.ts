@@ -7,7 +7,6 @@ import { IsMoneyString } from '../../../common/money/is-money-string.validator';
 export class BillFeeStructureItemDto {
   @IsUUID() feeHeadId: string;
   @IsMoneyString() amount: string;
-  @IsOptional() @IsString() recurrenceOverride?: string;
   @IsDateString() effectiveFrom: string;
   @IsOptional() @IsDateString() effectiveTo?: string;
 }

@@ -30,8 +30,7 @@ import { useStudentStatement } from '@/lib/hooks/use-bill-payment';
 import { ShiftPaymentsDrilldown } from '@/components/finance/shift-payments-drilldown';
 import { useCashierShifts, useOpenShift, useCloseShift } from '@/lib/hooks/use-cashier';
 import { exportToCsv } from '@/lib/export';
-import { todayBs, bsToAd } from 'bs-calendar';
-import { toLocalAdString } from '@/lib/bs-year-range';
+import { todayBs } from 'bs-calendar';
 import type { ConcessionRegisterEntry, CashierShift } from '@/types/api.types';
 
 /**
@@ -345,10 +344,9 @@ function CollectionTab() {
   const bsYear = useMemo(() => todayBs().year, []);
 
   const collection = useCollectionSummary({ from: from || undefined, to: to || undefined, groupBy });
-  // Mirrors the API default (apps/api/src/modules/reports/report.util.ts resolveRange): from = 1 Baisakh of the
-  // current BS year, to = today; each side defaults independently.
-  const appliedFrom = from || toLocalAdString(bsToAd({ year: bsYear, month: 1, day: 1 }));
-  const appliedTo = to || toLocalAdString(bsToAd(todayBs()));
+  // The range the API actually applied (its default for an empty side is the current academic year start / today) —
+  // never recomputed here, so the caption cannot drift from the data under it.
+  const applied = collection.data?.range;
 
   return (
     <div className="space-y-6">
@@ -364,9 +362,11 @@ function CollectionTab() {
           </SelectContent>
         </Select>
       </div>
-      <p className="text-xs text-gray-500">
-        Showing <BsDate date={appliedFrom} /> to <BsDate date={appliedTo} />
-      </p>
+      {applied && (
+        <p className="text-xs text-gray-500">
+          Showing <BsDate date={applied.from} /> to <BsDate date={applied.to} />
+        </p>
+      )}
 
       {collection.isError ? (
         <QueryErrorState onRetry={() => collection.refetch()} />

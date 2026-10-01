@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { assertAdDate, bsMonthBucket, pct, resolveRange } from '../report.util';
+import { assertAdDate, bsMonthBucket, pct, resolveRange, resolveRangeForTenant, lastShrawanStart } from '../report.util';
 import { bucketForDays } from '../fee-aging-report.service';
 
 describe('bsMonthBucket (the Step-0-verified AD→BS fold)', () => {
@@ -98,5 +98,47 @@ describe('assertAdDate / resolveRange — impossible dates are 400 INVALID_DATE,
   it('resolveRange rejects a shape-valid but nonexistent from/to', () => {
     expect(() => resolveRange('2026-02-30', '2026-09-30')).toThrow(BadRequestException);
     expect(() => resolveRange('2026-09-01', '2026-13-45')).toThrow(BadRequestException);
+  });
+});
+
+describe('default report range = current academic year start (resolveRangeForTenant)', () => {
+  afterEach(() => jest.useRealTimers());
+  const tenantWith = (rows: { start: string }[]) => ({ query: jest.fn().mockResolvedValue(rows) });
+
+  it('from defaults to the current academic year start, to to today (Nepal)', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-01T06:00:00Z'));
+    const t = tenantWith([{ start: '2026-07-17' }]);
+    expect(await resolveRangeForTenant(t as never)).toEqual({ from: '2026-07-17', to: '2026-10-01' });
+    expect(t.query).toHaveBeenCalledTimes(1);
+    expect(t.query.mock.calls[0][0]).toContain('is_current = true');
+  });
+
+  it('falls back to the last 1 Shrawan when no academic year is current', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-01T06:00:00Z'));
+    expect(await resolveRangeForTenant(tenantWith([]) as never)).toEqual({ from: '2026-07-17', to: '2026-10-01' });
+  });
+
+  it('the fallback is the PREVIOUS Shrawan from Baisakh to Ashadh (this year would be in the future)', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2027-05-01T06:00:00Z')); // Baisakh 2084
+    expect(lastShrawanStart()).toBe('2026-07-17');
+    jest.setSystemTime(new Date('2027-08-01T06:00:00Z')); // Shrawan 2084
+    expect(lastShrawanStart()).toBe('2027-07-17');
+  });
+
+  it('an explicit from/to wins and never queries the DB', async () => {
+    const t = tenantWith([{ start: '2026-07-17' }]);
+    expect(await resolveRangeForTenant(t as never, '2026-08-01', '2026-08-31')).toEqual({ from: '2026-08-01', to: '2026-08-31' });
+    expect(t.query).not.toHaveBeenCalled();
+  });
+
+  it('each side defaults independently: explicit to + defaulted from', async () => {
+    const t = tenantWith([{ start: '2026-07-17' }]);
+    expect(await resolveRangeForTenant(t as never, undefined, '2026-09-01')).toEqual({ from: '2026-07-17', to: '2026-09-01' });
+  });
+
+  it('invalid dates are still 400 INVALID_DATE', async () => {
+    const t = tenantWith([{ start: '2026-07-17' }]);
+    await expect(resolveRangeForTenant(t as never, '2026-02-30')).rejects.toMatchObject({ response: { code: 'INVALID_DATE' } });
+    await expect(resolveRangeForTenant(t as never, undefined, '2026-13-45')).rejects.toMatchObject({ response: { code: 'INVALID_DATE' } });
   });
 });

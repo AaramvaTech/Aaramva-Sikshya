@@ -44,9 +44,7 @@ interface BillFeeStructureDialogProps {
   onSuccess?: () => void;
 }
 
-// recurrenceOverride has no input (billing ignores it) but stays in the form values: edit-mode
-// submit replaces the whole item set, so dropping it here would null stored values.
-const emptyItem = { feeHeadId: '', amount: 0, recurrenceOverride: '', effectiveFrom: '', effectiveTo: '' };
+const emptyItem = { feeHeadId: '', amount: 0, effectiveFrom: '', effectiveTo: '' };
 
 /**
  * UI-1 §5.2. Mirrors components/finance/fee-structure-form.tsx (the old
@@ -99,7 +97,6 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
         items: (structure.items ?? []).map((i) => ({
           feeHeadId: i.feeHeadId,
           amount: i.amount,
-          recurrenceOverride: i.recurrenceOverride ?? '',
           effectiveFrom: i.effectiveFrom,
           effectiveTo: i.effectiveTo ?? '',
         })),
@@ -130,7 +127,6 @@ export function BillFeeStructureDialog({ open, onOpenChange, mode, structure, on
     const items = values.items.map((item) => ({
       feeHeadId: item.feeHeadId,
       amount: item.amount.toFixed(2),
-      recurrenceOverride: item.recurrenceOverride || undefined,
       effectiveFrom: item.effectiveFrom,
       effectiveTo: item.effectiveTo || undefined,
     }));

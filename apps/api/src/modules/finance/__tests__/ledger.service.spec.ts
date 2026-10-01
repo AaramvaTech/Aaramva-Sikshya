@@ -302,7 +302,7 @@ describe('LedgerService', () => {
         .mockResolvedValueOnce([{ total_debit: '0.00', total_credit: '300.00' }])
         .mockResolvedValueOnce([]);
 
-      const result = await service.getStatement('student-1', {}, 'accountant-1', Role.ACCOUNTANT);
+      const result = await service.getStatement('student-1', { from: '2026-07-17', to: '2026-10-01' }, 'accountant-1', Role.ACCOUNTANT);
 
       expect(result.closingBalance).toBe(-300);
       expect(result.advanceCredit).toBe(300);

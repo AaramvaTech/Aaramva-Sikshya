@@ -79,6 +79,10 @@ affected schema(s) from the last backup, then fixing forward with a new
 migration. **Always run `scripts/backup-db.sh` before `npm run migrate:tenants`
 against all tenants.**
 
+**Deploy order for column drops:** ship the API build that no longer references the column
+first, then run `migrate:tenants`. Pending: `0040_drop_fee_item_recurrence_override` (drops
+`bill_fee_structure_items.recurrence_override`) — an API from before this change still INSERTs it.
+
 ### Where backups live in production
 
 Off-host, always: the dump must survive the database host dying. Push to
