@@ -38,9 +38,15 @@ export class CashierController {
     return this.cashierShiftService.listShiftPayments(id);
   }
 
+  @Get('outside-shift-cash')
+  @Roles(...ACCOUNTANT_AND_ABOVE)
+  outsideShiftCash(@CurrentUser() user: AuthUser, @Query('date') date?: string) {
+    return this.cashierShiftService.outsideShiftCash(user.userId, date);
+  }
+
   @Get('shifts')
   @Roles(...ACCOUNTANT_AND_ABOVE)
-  listShifts(@Query('cashierId') cashierId?: string, @Query('date') date?: string) {
-    return this.cashierShiftService.listShifts({ cashierId, date });
+  listShifts(@Query('cashierId') cashierId?: string, @Query('date') date?: string, @Query('status') status?: string) {
+    return this.cashierShiftService.listShifts({ cashierId, date, status });
   }
 }

@@ -28,7 +28,11 @@ import {
 import { useConcessionRegister } from '@/lib/hooks/use-bill-assignment';
 import { useStudentStatement } from '@/lib/hooks/use-bill-payment';
 import { ShiftPaymentsDrilldown } from '@/components/finance/shift-payments-drilldown';
-import { useCashierShifts, useOpenShift, useCloseShift } from '@/lib/hooks/use-cashier';
+import { useCashierShifts, useOpenShift, useCloseShift, useOutsideShiftCash } from '@/lib/hooks/use-cashier';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { describeVariance, rs } from '@/lib/cashier-close';
+import { extractApiErrors } from '@/lib/api-errors';
+import { toast } from 'sonner';
 import { exportToCsv } from '@/lib/export';
 import { todayBs, bsToAd } from 'bs-calendar';
 import { toLocalAdString } from '@/lib/bs-year-range';
@@ -663,6 +667,7 @@ export function CashierTab() {
   const shifts = useCashierShifts();
   const openShiftMutation = useOpenShift();
   const closeShiftMutation = useCloseShift();
+  const outsideCash = useOutsideShiftCash();
   const [closeResult, setCloseResult] = useState<Awaited<ReturnType<typeof closeShiftMutation.mutateAsync>>['data']['data'] | null>(null);
 
   const myOpenShift = shifts.data?.find((s) => s.status === 'OPEN');
@@ -674,19 +679,33 @@ export function CashierTab() {
     });
   }
 
-  function handleClose() {
+  async function handleClose() {
     if (!myOpenShift || !countedCash) return;
-    closeShiftMutation.mutate(
-      { id: myOpenShift.id, data: { countedCash, notes: closeNotes || undefined } },
-      {
-        onSuccess: (res) => { setCloseResult(res.data.data); setCountedCash(''); setCloseNotes(''); },
-      },
-    );
+    try {
+      const res = await closeShiftMutation.mutateAsync({ id: myOpenShift.id, data: { countedCash, notes: closeNotes || undefined } });
+      setCloseResult(res.data.data); setCountedCash(''); setCloseNotes('');
+    } catch (err) {
+      toast.error(extractApiErrors(err, 'Could not close the shift.')[0]);
+    }
   }
 
   return (
     <div className="space-y-6">
       <TabHint>Open and close your cash shift. History compares counted cash with expected.</TabHint>
+      {closeResult && (() => {
+        const v = describeVariance(closeResult.variance);
+        return (
+          <div role="status" className={`rounded-sm border p-4 text-sm ${v.tone === 'neutral' ? 'border-gray-200 bg-gray-50 dark:border-strokedark dark:bg-meta-4' : 'border-warning-300 bg-warning-50'}`}>
+            <p className="font-semibold">Shift closed. {v.text}</p>
+            <p>Counted: {rs(closeResult.countedCash)} · Expected: {rs(closeResult.expectedCash)}</p>
+          </div>
+        );
+      })()}
+      {outsideCash.data && outsideCash.data.total > 0 && (
+        <p className="text-sm text-gray-500">
+          Cash received outside any shift today: {rs(outsideCash.data.total)} ({outsideCash.data.count} payment{outsideCash.data.count === 1 ? '' : 's'})
+        </p>
+      )}
       <Card title={myOpenShift ? 'Close shift' : 'Open shift'}>
         {shifts.isLoading ? (
           <Skeleton className="h-32 w-full" />
@@ -705,19 +724,18 @@ export function CashierTab() {
                 <label className="mb-1 block text-xs text-gray-500">Notes (optional)</label>
                 <Textarea rows={1} value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)} />
               </div>
-              <Button onClick={handleClose} disabled={!countedCash || closeShiftMutation.isPending}>
-                {closeShiftMutation.isPending ? 'Closing…' : 'Close shift'}
-              </Button>
+              {countedCash && !closeShiftMutation.isPending ? (
+                // Branch-render, not <Button disabled>: ConfirmDialog's trigger span opens on click regardless.
+                <ConfirmDialog
+                  title="Close shift"
+                  description={`Close this shift with counted cash ${rs(Number(countedCash))}? This cannot be undone.`}
+                  onConfirm={handleClose}
+                  trigger={<Button>Close shift</Button>}
+                />
+              ) : (
+                <Button disabled>{closeShiftMutation.isPending ? 'Closing…' : 'Close shift'}</Button>
+              )}
             </div>
-            {closeResult && (
-              <div className={`rounded-sm border p-4 text-sm ${closeResult.variance === 0 ? 'border-success-300 bg-success-50' : 'border-warning-300 bg-warning-50'}`}>
-                <p>Expected cash: Rs {closeResult.expectedCash} · Counted: Rs {closeResult.countedCash}</p>
-                <p className="font-semibold">
-                  Variance: Rs {closeResult.variance} {closeResult.variance === 0 ? '(exact match)' : closeResult.variance > 0 ? '(over)' : '(short)'}
-                </p>
-                <SimpleTable headers={['Method', 'Total', 'Count']} rows={closeResult.byMethod.map((m) => [m.method, `Rs ${m.total}`, m.count])} />
-              </div>
-            )}
           </div>
         ) : (
           <div className="flex flex-wrap items-end gap-3">

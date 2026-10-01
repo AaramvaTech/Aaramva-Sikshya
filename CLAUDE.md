@@ -1751,6 +1751,23 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   must run migrate:tenants) and returns `fineInvoiceNumber`; label = "Late fee on BINV-…". **T4** Recurrence Override input removed;
   the value stays in the form state so an edit-save (whole-set replace) still sends the stored override. api 1571, web 679.
 
+- [x] CASHIER-CLOSE-CONFIRM — cashier close confirmation + outside-shift cash (`feat/cashier-close-confirm`). **(1)** Close shift
+  now opens a `ConfirmDialog` ("Close this shift with counted cash Rs X? This cannot be undone.", Cancel/Confirm); the dialog never
+  shows expected cash (blind count kept). Branch-rendered, not `<Button disabled>` (ConfirmDialog's trigger span opens on click
+  regardless). **(2)** Result banner: "Shift closed. Variance Rs 0" (neutral) / "-Rs 100 (short)" / "+Rs 50 (over)" (warning) plus
+  counted/expected. `closeShift` already returned expected + variance, no API change. **Found:** the old result block lived
+  inside the open-shift branch, so it vanished the instant the shifts query refetched after close — it now renders outside it (the
+  per-method table that sat in it was dropped; the history drilldown still lists receipts). **(3)** `GET /finance/cashier/outside-shift-cash?date=`
+  (ACCOUNTANT_AND_ABOVE, current cashier only, `date` optional AD, default Nepal today, bad dates 400 `INVALID_DATE`): CLEARED CASH
+  payments in the Nepal day with no shift of that cashier covering them. **Drift-proof:** `SHIFT_PAYMENTS_WHERE` is now built by
+  `shiftPaymentsWhere(cashier, from, to)` (same string as before), and the NOT EXISTS reuses that function against each shift.
+  Open shifts end at `now()`. Shown on the Cashier tab, hidden at 0. `GET /shifts` gained optional `status`. **(4)** Record Payment shows
+  "No cash shift is open…" (non-blocking) for CASH only, once the caller's own OPEN-shift lookup has settled (`NoShiftWarning`,
+  `useMyOpenShift`; loading/error = no warning). **Gotcha:** "outside any shift" is per cashier + time window, same as close-shift;
+  payments still have no `shift_id`. api 1573 (+3), web 690 (+11), both api CI typechecks + web tsc clean. Live (read-only SQL, the
+  service's exact query, motherland-school, 2026-09-30): RCPT-2083-000011/12/13 = Rs 2,130 + 2,130 + 1,130 = **Rs 5,390**, RCPT-14
+  (16:58:51, inside the 16:58–17:02 shift) excluded. UI not clicked in a browser — unit/jsdom tests only.
+
 > Update this checklist as modules are completed.
 
 ---
