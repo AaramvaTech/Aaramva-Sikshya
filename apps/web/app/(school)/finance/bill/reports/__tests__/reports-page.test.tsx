@@ -4,6 +4,8 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import BillingReportsPage, { CashierTab, LISTING_TABS } from '../page';
 import { useCashierShifts, useOpenShift, useCloseShift } from '@/lib/hooks/use-cashier';
 import { useCurrentAcademicYear } from '@/lib/hooks/use-students';
+import { useCollectionSummary } from '@/lib/hooks/use-reports';
+import { BsDate } from '@/components/shared/bs-date';
 
 vi.mock('@/lib/hooks/use-cashier', () => ({
   useCashierShifts: vi.fn(),
@@ -13,7 +15,7 @@ vi.mock('@/lib/hooks/use-cashier', () => ({
 }));
 const loading = { data: undefined, isLoading: true, isError: false, refetch: vi.fn() };
 vi.mock('@/lib/hooks/use-reports', () => ({
-  useDaybook: () => loading, useFinanceDefaulters: () => loading, useCollectionSummary: () => loading,
+  useDaybook: () => loading, useFinanceDefaulters: () => loading, useCollectionSummary: vi.fn(() => loading),
   useFines: () => loading, useFeeAging: () => loading,
 }));
 vi.mock('@/lib/hooks/use-bill-assignment', () => ({ useConcessionRegister: () => loading }));
@@ -136,9 +138,25 @@ describe('report tab descriptions and Collection range caption (UI-HINTS)', () =
     expect(el.textContent!.length).toBeLessThan(90);
   });
 
-  it('Collection tab states the range it applies', () => {
+  it('Collection tab caption shows the range the API returned, not a browser-computed default', () => {
+    const useCollection = useCollectionSummary as unknown as ReturnType<typeof vi.fn>;
+    useCollection.mockReturnValue({
+      data: { range: { from: '2026-07-17', to: '2026-10-01' }, groupBy: 'method', totalCollected: 0, breakdown: [] },
+      isLoading: false, isError: false, refetch: vi.fn(),
+    });
+    const { container } = render(<BillingReportsPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Collection' }));
+    const caption = screen.getByText(/^Showing/).textContent;
+    cleanup();
+    const ref = render(<><BsDate date="2026-07-17" /> to <BsDate date="2026-10-01" /></>);
+    expect(caption).toBe(`Showing ${ref.container.textContent}`);
+    expect(container).toBeTruthy();
+  });
+
+  it('Collection tab shows no caption until the API has answered', () => {
+    (useCollectionSummary as unknown as ReturnType<typeof vi.fn>).mockReturnValue(loading);
     render(<BillingReportsPage />);
     fireEvent.click(screen.getByRole('tab', { name: 'Collection' }));
-    expect(screen.getByText(/^Showing/).textContent).toMatch(/^Showing .+ to .+/);
+    expect(screen.queryByText(/^Showing/)).toBeNull();
   });
 });

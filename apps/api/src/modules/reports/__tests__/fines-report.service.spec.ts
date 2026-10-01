@@ -31,7 +31,7 @@ describe('FinesReportService', () => {
 
   it('a fine within range appears with the exact posted amount', async () => {
     queryMock.mockResolvedValueOnce([row({})]);
-    const result = await service.getFines({});
+    const result = await service.getFines({ from: '2026-07-17', to: '2026-10-01' });
     expect(result.count).toBe(1);
     expect(result.totalFined).toBe(100);
     expect(result.accruals[0]).toMatchObject({
@@ -45,7 +45,7 @@ describe('FinesReportService', () => {
       row({ id: 'a1', delta_posted: '100.00', reversed: false }),
       row({ id: 'a2', delta_posted: '50.00', reversed: true }),
     ]);
-    const result = await service.getFines({});
+    const result = await service.getFines({ from: '2026-07-17', to: '2026-10-01' });
     expect(result.count).toBe(2);
     expect(result.totalFined).toBe(100);
     expect(result.accruals.find((a) => a.id === 'a2')?.reversed).toBe(true);
@@ -53,7 +53,7 @@ describe('FinesReportService', () => {
 
   it('empty range returns zeroed totals, not undefined', async () => {
     queryMock.mockResolvedValueOnce([]);
-    const result = await service.getFines({});
+    const result = await service.getFines({ from: '2026-07-17', to: '2026-10-01' });
     expect(result.count).toBe(0);
     expect(result.totalFined).toBe(0);
     expect(result.accruals).toEqual([]);
@@ -61,13 +61,13 @@ describe('FinesReportService', () => {
 
   it('passes classId through as a bound param, never interpolated', async () => {
     queryMock.mockResolvedValueOnce([]);
-    await service.getFines({ classId: 'c1' });
+    await service.getFines({ classId: 'c1', from: '2026-07-17', to: '2026-10-01' });
     expect(queryMock.mock.calls[0].slice(3)).toEqual(['c1']);
   });
 
   it('joins bill_fine_accruals against bill_invoices and students', async () => {
     queryMock.mockResolvedValueOnce([]);
-    await service.getFines({});
+    await service.getFines({ from: '2026-07-17', to: '2026-10-01' });
     const sql = queryMock.mock.calls[0][0] as string;
     expect(sql).toContain('FROM bill_fine_accruals bfa');
     expect(sql).toContain('JOIN bill_invoices bi');

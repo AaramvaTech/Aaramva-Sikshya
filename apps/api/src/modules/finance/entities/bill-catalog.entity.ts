@@ -107,7 +107,6 @@ export interface BillFeeStructureItemRow {
   fee_head_id: string;
   fee_head_name?: string;
   amount: string | number;
-  recurrence_override: string | null;
   effective_from: Date | string;
   effective_to: Date | string | null;
   created_at: Date | string;
@@ -179,7 +178,6 @@ export interface BillFeeStructureItemResponseDto {
   feeHeadId: string;
   feeHeadName?: string;
   amount: number;
-  recurrenceOverride: string | null;
   effectiveFrom: string;
   effectiveTo: string | null;
 }
@@ -282,7 +280,6 @@ export function toBillFeeStructureItemResponse(row: BillFeeStructureItemRow): Bi
     feeHeadId: row.fee_head_id,
     feeHeadName: row.fee_head_name,
     amount: toMoney(row.amount).toNumber(),
-    recurrenceOverride: row.recurrence_override,
     effectiveFrom: toDateOnly(row.effective_from),
     effectiveTo: row.effective_to ? toDateOnly(row.effective_to) : null,
   };

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
-import { bsMonthBucket, isoDate, pct, resolveRange } from './report.util';
+import { bsMonthBucket, isoDate, pct, resolveRangeForTenant } from './report.util';
 
 interface DayRow {
   date: Date;
@@ -73,7 +73,7 @@ export class AttendanceReportService {
     sectionId?: string;
     groupBy?: string;
   }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
     const groupBy = params.groupBy === 'day' ? 'day' : 'bs-month';
 
     const rows = await this.tenantPrisma.query<DayRow>(
@@ -88,7 +88,7 @@ export class AttendanceReportService {
 
   /** All sections of one class side by side (same range, one row per section). */
   async getClassComparison(params: { classId: string; from?: string; to?: string }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
     const rows = await this.tenantPrisma.query<{
       section_id: string;
       section_name: string;
@@ -143,7 +143,7 @@ export class AttendanceReportService {
     sectionId?: string;
     threshold?: number;
   }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
     const threshold = params.threshold ?? 75;
 
     const rows = await this.tenantPrisma.query<{
@@ -198,7 +198,7 @@ export class AttendanceReportService {
 
   /** Per-staff attendance summary over the range. */
   async getStaffSummary(params: { from?: string; to?: string }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
     const rows = await this.tenantPrisma.query<{
       user_id: string;
       first_name: string;

@@ -1729,9 +1729,8 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   in-page tab — tabs are state, not routes); one-line description under each of the 8 Reports tabs; Collection tab shows the
   applied range. **Recurrence Override is a no-op today:** `fee_structure_items.recurrence_override` is written and returned
   but never read by billing — `bill-line-resolver.service.ts:167` takes recurrence from `fee_heads.recurrence`; the hint says so.
-  **Collection default range** (`reports/report.util.ts:76-83`): from = 1 Baisakh of the current BS year, to = today (Nepal),
-  each side defaulting independently; the web caption mirrors that rule client-side (the API does not return the applied
-  range), so a change there must be mirrored in `CollectionTab`. "Defaulters bold" (item 7) not reproduced from code. web 674 (+11).
+  **Collection default range**: superseded by REPORT-RANGE-RECURRENCE below (from = current academic year start; the caption now
+  shows the range the API returned). "Defaulters bold" (item 7) not reproduced from code. web 674 (+11).
 
 - [x] INVOICE-PRINT-POLISH — four polish items (`fix/invoice-print-polish`). **T1 tax row on the A4 invoice:** the
   header stores one `tax_rate` + `tax_amount` per invoice (`0022_bill_run.sql:86-87`; items carry NO tax — tax is header-only,
@@ -1751,6 +1750,21 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   must run migrate:tenants) and returns `fineInvoiceNumber`; label = "Late fee on BINV-…". **T4** Recurrence Override input removed;
   the value stays in the form state so an edit-save (whole-set replace) still sends the stored override. api 1571, web 679.
 
+- [x] REPORT-RANGE-RECURRENCE — two cleanups (`fix/report-default-range-and-recurrence`). **A. Report default range:** when `from` is
+  omitted, every range report now defaults to the START of the tenant's current academic year (`resolveRangeForTenant`,
+  `reports/report.util.ts`; one `academic_years WHERE is_current` lookup, only when `from` is absent); `to` stays today (Nepal), each side
+  independent, explicit values win, bad dates still 400 `INVALID_DATE`. **Fallback when no year is current = the most recent 1 Shrawan on or
+  before today** (`lastShrawanStart`) — NOT literally "1 Shrawan of the current BS year", which from Baisakh to Ashadh is in the future and
+  would make from > to. Callers (all switched): attendance trends/class-comparison/low/staff (`attendance-report.service.ts:76,91,146,201`),
+  collection (`collection-report.service.ts:57`), fines (`fines-report.service.ts:46`), student statement (`finance/ledger.service.ts:352`).
+  Collection and fines already returned `range`; the Collection caption now renders `data.range` and shows nothing until the API answers
+  (browser-side default deleted). Known edge: `to` earlier than the year start with no `from` is a 400 (from > to), as before.
+  **B. `recurrence_override` removed** from `bill_fee_structure_items`: tenant migration **0040_drop_fee_item_recurrence_override** (canary
+  demo → all 8 tenants, `--status` shows all on 0040), DTO/entity/INSERTs/web form+Zod+types cleaned. Pre-check: 0 non-null values in any tenant
+  (25 items), backup of all (id, value) pairs at `apps/api/.scratch/recurrence-override-backup-20261001-223212.json` (git-ignored). **Deploy
+  order: ship the API build FIRST, then `npm run migrate:tenants`** — an older API still INSERTs the column and would 500 on fee-structure saves
+  (see RUNBOOK). The orphan scratch schema `tenant_bill_scratch` (no `tenants` row) still has the column; the runner ignores it. api 1579 (+8),
+  web 680 (+0 net), both api CI typechecks + web tsc clean.
 - [x] CASHIER-CLOSE-CONFIRM — cashier close confirmation + outside-shift cash (`feat/cashier-close-confirm`). **(1)** Close shift
   now opens a `ConfirmDialog` ("Close this shift with counted cash Rs X? This cannot be undone.", Cancel/Confirm); the dialog never
   shows expected cash (blind count kept). Branch-rendered, not `<Button disabled>` (ConfirmDialog's trigger span opens on click

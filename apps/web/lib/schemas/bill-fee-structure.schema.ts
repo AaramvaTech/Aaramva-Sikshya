@@ -3,7 +3,6 @@ import { z } from 'zod';
 export const billFeeStructureItemSchema = z.object({
   feeHeadId: z.string().min(1, 'Select a fee head'),
   amount: z.number().min(0.01, 'Must be > 0'),
-  recurrenceOverride: z.string().optional(),
   effectiveFrom: z.string().min(1, 'Required'),
   effectiveTo: z.string().optional(),
 });

@@ -39,10 +39,10 @@ describe('billFeeStructureSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts an optional sectionId, recurrenceOverride, and effectiveTo', () => {
+  it('accepts an optional sectionId and effectiveTo', () => {
     const result = billFeeStructureSchema.safeParse({
       classId: 'class-1', academicYearId: 'year-1', sectionId: 'section-1', name: 'Grade 9 Fees',
-      items: [{ ...validItem, recurrenceOverride: 'QUARTERLY', effectiveTo: '2027-03-31' }],
+      items: [{ ...validItem, effectiveTo: '2027-03-31' }],
     });
     expect(result.success).toBe(true);
   });

@@ -73,12 +73,11 @@ export class BillFeeStructureService {
       for (const item of dto.items) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_fee_structure_items
-             (fee_structure_id, fee_head_id, amount, recurrence_override, effective_from, effective_to)
-           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::date)`,
+             (fee_structure_id, fee_head_id, amount, effective_from, effective_to)
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4::date, $5::date)`,
           structure.id,
           item.feeHeadId,
           item.amount,
-          item.recurrenceOverride ?? null,
           item.effectiveFrom,
           item.effectiveTo ?? null,
         );
@@ -186,12 +185,11 @@ export class BillFeeStructureService {
       for (const item of dto.items) {
         await tx.$executeRawUnsafe(
           `INSERT INTO bill_fee_structure_items
-             (fee_structure_id, fee_head_id, amount, recurrence_override, effective_from, effective_to)
-           VALUES ($1::uuid, $2::uuid, $3::numeric, $4, $5::date, $6::date)`,
+             (fee_structure_id, fee_head_id, amount, effective_from, effective_to)
+           VALUES ($1::uuid, $2::uuid, $3::numeric, $4::date, $5::date)`,
           id,
           item.feeHeadId,
           item.amount,
-          item.recurrenceOverride ?? null,
           item.effectiveFrom,
           item.effectiveTo ?? null,
         );

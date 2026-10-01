@@ -1616,7 +1616,6 @@ export interface BillFeeStructureItem {
   feeHeadId: string;
   feeHeadName?: string;
   amount: number;
-  recurrenceOverride: string | null;
   effectiveFrom: string;
   effectiveTo: string | null;
 }
@@ -1634,7 +1633,6 @@ export interface BillFeeStructure {
 export interface BillFeeStructureItemInput {
   feeHeadId: string;
   amount: string;
-  recurrenceOverride?: string;
   effectiveFrom: string;
   effectiveTo?: string;
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
-import { resolveRange, isoDate } from './report.util';
+import { resolveRangeForTenant, isoDate } from './report.util';
 import { Money } from '../../common/money/money';
 import { toMoney } from '../finance/entities/finance.entity';
 
@@ -43,7 +43,7 @@ export class FinesReportService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   async getFines(params: { from?: string; to?: string; classId?: string }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
 
     const rows = await this.tenantPrisma.query<FineRow>(
       `SELECT bfa.id, bfa.accrued_through, bfa.days_overdue, bfa.delta_posted,

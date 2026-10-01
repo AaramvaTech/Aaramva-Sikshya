@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
-import { resolveRange } from './report.util';
+import { resolveRangeForTenant } from './report.util';
 import { toMoney } from '../finance/entities/finance.entity';
 
 /**
@@ -54,7 +54,7 @@ export class CollectionReportService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   async getCollection(params: { from?: string; to?: string; groupBy?: string }) {
-    const { from, to } = resolveRange(params.from, params.to);
+    const { from, to } = await resolveRangeForTenant(this.tenantPrisma, params.from, params.to);
     const groupBy: GroupBy = (GROUP_BYS as readonly string[]).includes(params.groupBy ?? '')
       ? (params.groupBy as GroupBy)
       : 'method';

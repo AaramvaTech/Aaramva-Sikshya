@@ -82,4 +82,21 @@ describe('CollectionReportService', () => {
     const result = await service.getCollection({ from: '2026-07-01', to: '2026-07-31', groupBy: 'bogus' });
     expect(result.groupBy).toBe('method');
   });
+
+  it('the response carries the range it applied (academic year start by default)', async () => {
+    queryMock
+      .mockResolvedValueOnce([{ start: '2026-07-17' }]) // current academic year
+      .mockResolvedValueOnce([{ total: '0' }])
+      .mockResolvedValueOnce([]);
+    const res = await service.getCollection({});
+    expect(res.range.from).toBe('2026-07-17');
+    expect(res.range.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(queryMock.mock.calls[1].slice(1, 2)).toEqual(['2026-07-17']); // the SUM query is bound to the same from
+  });
+
+  it('an explicit range is echoed back unchanged', async () => {
+    queryMock.mockResolvedValueOnce([{ total: '0' }]).mockResolvedValueOnce([]);
+    const res = await service.getCollection({ from: '2026-04-01', to: '2026-04-30' });
+    expect(res.range).toEqual({ from: '2026-04-01', to: '2026-04-30' });
+  });
 });
