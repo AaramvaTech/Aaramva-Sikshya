@@ -2313,6 +2313,13 @@ export interface CloseShiftData {
   countedCash: string;
   notes?: string;
 }
+/** GET /finance/cashier/outside-shift-cash — the caller's CLEARED cash for one Nepal day that sits in none of their shift windows. */
+export interface OutsideShiftCash {
+  date: string;
+  count: number;
+  total: number;
+  payments: { id: string; receiptNumber: string; amount: number; createdAt: string }[];
+}
 export interface CashierCloseResult {
   shift: CashierShift;
   openingFloat: number;

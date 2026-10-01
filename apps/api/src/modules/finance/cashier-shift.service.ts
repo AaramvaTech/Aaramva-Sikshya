@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { todayBs } from 'bs-calendar';
+import { NEPAL_OFFSET_MS, todayAdInNepal } from '../common/utils/date.util';
+import { assertAdDate } from '../reports/report.util';
 import { TenantPrismaService } from '../tenant/tenant-prisma.service';
 import { toMoney } from './entities/finance.entity';
 import {
@@ -20,8 +22,10 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * COALESCE(closed_at, now()) for the list). Callers alias bill_payments as `bp`.
  * There is no shift_id on payments; membership is cashier + status + time window.
  */
-export const SHIFT_PAYMENTS_WHERE = `bp.received_by = $1::uuid AND bp.status = 'CLEARED'
-             AND bp.created_at BETWEEN $2::timestamptz AND $3::timestamptz`;
+export const shiftPaymentsWhere = (cashier: string, from: string, to: string) =>
+  `bp.received_by = ${cashier} AND bp.status = 'CLEARED'
+             AND bp.created_at BETWEEN ${from} AND ${to}`;
+export const SHIFT_PAYMENTS_WHERE = shiftPaymentsWhere('$1::uuid', '$2::timestamptz', '$3::timestamptz');
 
 interface MethodTotalRow {
   method: string;
@@ -63,6 +67,13 @@ export interface ShiftPaymentsResult {
 }
 
 const toIso = (d: Date | string): string => (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
+
+export interface OutsideShiftCashResult {
+  date: string;
+  count: number;
+  total: number;
+  payments: { id: string; receiptNumber: string; amount: number; createdAt: string }[];
+}
 
 export interface CashierCloseResult {
   shift: CashierShiftResponseDto;
@@ -311,7 +322,40 @@ export class CashierShiftService {
     };
   }
 
-  async listShifts(params: { cashierId?: string; date?: string }): Promise<CashierShiftResponseDto[]> {
+  /**
+   * Cash the cashier took on a Nepal calendar day that falls in NONE of their
+   * shift windows. The NOT EXISTS reuses the shift-membership rule (shiftPaymentsWhere)
+   * against each of the cashier's shifts, so "inside a shift" means exactly what it
+   * means in close-shift and the receipt list. Open shifts end at now().
+   */
+  async outsideShiftCash(cashierId: string, date?: string): Promise<OutsideShiftCashResult> {
+    const day = date ? assertAdDate(date, 'date') : todayAdInNepal();
+    const start = new Date(Date.parse(`${day}T00:00:00Z`) - NEPAL_OFFSET_MS);
+    const end = new Date(start.getTime() + 24 * 3600 * 1000);
+    const rows = await this.tenantPrisma.query<{ id: string; receipt_number: string; amount: string; created_at: Date | string }>(
+      `SELECT bp.id, bp.receipt_number, bp.amount, bp.created_at
+       FROM bill_payments bp
+       WHERE bp.received_by = $1::uuid AND bp.status = 'CLEARED' AND bp.method = 'CASH'
+         AND bp.created_at >= $2::timestamptz AND bp.created_at < $3::timestamptz
+         AND NOT EXISTS (
+           SELECT 1 FROM cashier_shifts cs
+           WHERE cs.cashier_user_id = bp.received_by
+             AND ${shiftPaymentsWhere('cs.cashier_user_id', 'cs.opened_at', 'COALESCE(cs.closed_at, now())')}
+         )
+       ORDER BY bp.created_at`,
+      cashierId,
+      start,
+      end,
+    );
+    return {
+      date: day,
+      count: rows.length,
+      total: rows.reduce((a, r) => a.add(toMoney(r.amount)), toMoney(0)).toNumber(),
+      payments: rows.map((r) => ({ id: r.id, receiptNumber: r.receipt_number, amount: toMoney(r.amount).toNumber(), createdAt: toIso(r.created_at) })),
+    };
+  }
+
+  async listShifts(params: { cashierId?: string; date?: string; status?: string }): Promise<CashierShiftResponseDto[]> {
     if (params.date && !ISO_DATE_RE.test(params.date)) {
       throw new BadRequestException('date must be an AD date in YYYY-MM-DD form.');
     }
@@ -323,9 +367,11 @@ export class CashierShiftService {
        LEFT JOIN users cb ON cb.id = cs.closed_by
        WHERE ($1::uuid IS NULL OR cs.cashier_user_id = $1::uuid)
          AND ($2::date IS NULL OR cs.opened_at::date = $2::date)
+         AND ($3::text IS NULL OR cs.status = $3::text)
        ORDER BY cs.opened_at DESC`,
       params.cashierId ?? null,
       params.date ?? null,
+      params.status ?? null,
     );
     return rows.map(toCashierShiftResponse);
   }

@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CashierShiftService, SHIFT_PAYMENTS_WHERE } from '../cashier-shift.service';
+import { CashierShiftService, SHIFT_PAYMENTS_WHERE, shiftPaymentsWhere } from '../cashier-shift.service';
 import { TenantPrismaService } from '../../tenant/tenant-prisma.service';
 import { guardSurvivingMocks } from '../../../testing/mock-leak-guard';
 
@@ -235,7 +235,7 @@ describe('CashierShiftService', () => {
     it('passes cashierId/date through as bound params', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
       await service.listShifts({ cashierId: 'cashier-1', date: '2026-07-29' });
-      expect((tenantPrisma.query as jest.Mock).mock.calls[0].slice(1)).toEqual(['cashier-1', '2026-07-29']);
+      expect((tenantPrisma.query as jest.Mock).mock.calls[0].slice(1)).toEqual(['cashier-1', '2026-07-29', null]);
     });
 
     it('JOINs users for the cashier and closed-by display names (UI-6 §2.1)', async () => {
@@ -353,6 +353,33 @@ describe('CashierShiftService', () => {
       const bySql = mockTx.$queryRawUnsafe.mock.calls[2][0] as string;
       expect(aggSql).toContain(SHIFT_PAYMENTS_WHERE);
       expect(bySql).toContain(SHIFT_PAYMENTS_WHERE);
+    });
+  });
+
+  describe('outsideShiftCash — cash outside every shift window (CASHIER-CLOSE-CONFIRM)', () => {
+    // Nepal day 2026-09-30 = [2026-09-29T18:15Z, 2026-09-30T18:15Z)
+    it('binds the Nepal calendar day, the cashier, and reuses the shift membership rule per shift', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([
+        { id: 'p1', receipt_number: 'RCPT-11', amount: '1000.00', created_at: new Date('2026-09-30T05:37:00Z') },
+        { id: 'p2', receipt_number: 'RCPT-12', amount: '390.50', created_at: new Date('2026-09-30T05:40:00Z') },
+      ]);
+      const r = await service.outsideShiftCash('cashier-1', '2026-09-30');
+      const [sql, cashier, from, to] = (tenantPrisma.query as jest.Mock).mock.calls[0];
+      expect(cashier).toBe('cashier-1');
+      expect(from).toEqual(new Date('2026-09-29T18:15:00Z'));
+      expect(to).toEqual(new Date('2026-09-30T18:15:00Z'));
+      expect(sql).toContain('NOT EXISTS');
+      expect(sql).toContain("bp.method = 'CASH'");
+      // the NOT EXISTS body is the SAME rule close-shift uses, just bound to each shift
+      expect(sql).toContain(shiftPaymentsWhere('cs.cashier_user_id', 'cs.opened_at', 'COALESCE(cs.closed_at, now())'));
+      expect(SHIFT_PAYMENTS_WHERE).toBe(shiftPaymentsWhere('$1::uuid', '$2::timestamptz', '$3::timestamptz'));
+      expect(r).toMatchObject({ date: '2026-09-30', count: 2, total: 1390.5 });
+    });
+
+    it('returns zero for no rows and rejects an impossible date', async () => {
+      (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]);
+      expect(await service.outsideShiftCash('cashier-1', '2026-09-30')).toMatchObject({ count: 0, total: 0 });
+      await expect(service.outsideShiftCash('cashier-1', '2026-02-30')).rejects.toThrow(BadRequestException);
     });
   });
 });

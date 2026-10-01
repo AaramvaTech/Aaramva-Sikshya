@@ -11,6 +11,7 @@ vi.mock('@/lib/hooks/use-cashier', () => ({
   useCashierShifts: vi.fn(),
   useOpenShift: vi.fn(),
   useCloseShift: vi.fn(),
+  useOutsideShiftCash: () => ({ data: undefined }),
 }));
 const loading = { data: undefined, isLoading: true, isError: false, refetch: vi.fn() };
 vi.mock('@/lib/hooks/use-reports', () => ({
