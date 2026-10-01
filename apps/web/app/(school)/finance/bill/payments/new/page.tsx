@@ -12,6 +12,7 @@ import { todayBs } from 'bs-calendar';
 import { PageHeader } from '@/components/shared/page-header';
 import { BsDateInput } from '@/components/shared/bs-date-input';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { NoShiftWarning } from '@/components/finance/no-shift-warning';
 import { AmountDisplay, formatNPR } from '@/components/finance/amount-display';
 import { PrintDocumentButton } from '@/components/finance/print-document-button';
 import { receiptPrintLabel } from '@/lib/print-document';
@@ -472,7 +473,9 @@ export default function RecordPaymentPage() {
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" rows={2} />
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-col items-end gap-2 pt-2">
+                <NoShiftWarning method={method} />
+                <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => router.push('/finance/bill/payments')}>Cancel</Button>
                 {canSubmit && !recordPayment.isPending ? (
                   // Not <Button disabled> + onClick — ConfirmDialog's own trigger span
@@ -495,6 +498,7 @@ export default function RecordPaymentPage() {
                     Record Payment
                   </Button>
                 )}
+                </div>
               </div>
             </>
           )}
