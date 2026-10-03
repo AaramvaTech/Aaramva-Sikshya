@@ -39,6 +39,9 @@ export class BillRunService {
     if (dto.scope === BillRunScope.CLASS && !dto.classId) {
       throw new BadRequestException('classId is required when scope is CLASS');
     }
+    if (dto.sectionId && dto.scope !== BillRunScope.CLASS) {
+      throw new BadRequestException('sectionId is only allowed when scope is CLASS');
+    }
 
     const { slug } = this.tenantContext.getOrThrow();
 
@@ -54,11 +57,21 @@ export class BillRunService {
         dto.classId,
       );
       if (!classRows[0]) throw new NotFoundException(`Class ${dto.classId} not found`);
+
+      if (dto.sectionId) {
+        const sectionRows = await this.tenantPrisma.query<{ id: string }>(
+          `SELECT id FROM sections WHERE id = $1::uuid AND class_id = $2::uuid AND deleted_at IS NULL`,
+          dto.sectionId, dto.classId,
+        );
+        if (!sectionRows[0]) {
+          throw new NotFoundException(`Section ${dto.sectionId} not found in class ${dto.classId}`);
+        }
+      }
     }
 
     const issueDate = dto.issueDate ?? todayAdInNepal();
     const dueDate = dto.dueDate ?? addDaysToAdString(issueDate, DEFAULT_DUE_DAYS);
-    const idempotencyKey = buildBillRunIdempotencyKey(slug, dto.academicYearId, dto.bsMonth, dto.scope, dto.classId);
+    const idempotencyKey = buildBillRunIdempotencyKey(slug, dto.academicYearId, dto.bsMonth, dto.scope, dto.classId, dto.sectionId);
 
     const existing = await this.tenantPrisma.query<{ id: string; status: string }>(
       `SELECT id, status FROM bill_runs WHERE idempotency_key = $1 AND deleted_at IS NULL`,
@@ -70,19 +83,19 @@ export class BillRunService {
       );
     }
 
-    const studentIds = await this.resolveRoster(dto.scope, dto.classId);
+    const studentIds = await this.resolveRoster(dto.scope, dto.classId, dto.sectionId);
 
     let runRow: BillRunRow;
     try {
       const rows = await this.tenantPrisma.query<BillRunRow>(
         `INSERT INTO bill_runs
-           (academic_year_id, bs_year, bs_month, scope, class_id, status,
+           (academic_year_id, bs_year, bs_month, scope, class_id, section_id, status,
             issue_date, due_date, total_students, idempotency_key, created_by)
-         VALUES ($1::uuid, $2, $3, $4, $5::uuid, 'DRAFT',
+         VALUES ($1::uuid, $2, $3, $4, $5::uuid, $11::uuid, 'DRAFT',
                  $6::date, $7::date, $8, $9, $10::uuid)
          RETURNING *`,
         dto.academicYearId, dto.bsYear, dto.bsMonth, dto.scope, dto.classId ?? null,
-        issueDate, dueDate, studentIds.length, idempotencyKey, createdById,
+        issueDate, dueDate, studentIds.length, idempotencyKey, createdById, dto.sectionId ?? null,
       );
       runRow = rows[0];
     } catch (err: unknown) {
@@ -315,12 +328,17 @@ export class BillRunService {
     });
   }
 
-  private async resolveRoster(scope: BillRunScope, classId?: string): Promise<string[]> {
+  private async resolveRoster(scope: BillRunScope, classId?: string, sectionId?: string): Promise<string[]> {
     if (scope === BillRunScope.CLASS) {
-      const rows = await this.tenantPrisma.query<{ id: string }>(
-        `SELECT id FROM students WHERE class_id = $1::uuid AND deleted_at IS NULL AND status = 'ACTIVE' ORDER BY student_id`,
-        classId,
-      );
+      const rows = sectionId
+        ? await this.tenantPrisma.query<{ id: string }>(
+            `SELECT id FROM students WHERE class_id = $1::uuid AND section_id = $2::uuid AND deleted_at IS NULL AND status = 'ACTIVE' ORDER BY student_id`,
+            classId, sectionId,
+          )
+        : await this.tenantPrisma.query<{ id: string }>(
+            `SELECT id FROM students WHERE class_id = $1::uuid AND deleted_at IS NULL AND status = 'ACTIVE' ORDER BY student_id`,
+            classId,
+          );
       return rows.map((r) => r.id);
     }
     const rows = await this.tenantPrisma.query<{ id: string }>(

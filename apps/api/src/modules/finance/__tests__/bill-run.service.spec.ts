@@ -81,6 +81,49 @@ describe('BillRunService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('rejects sectionId on a WHOLE_SCHOOL run', async () => {
+      await expect(
+        service.generateDraft(
+          { ...baseDto(), scope: BillRunScope.WHOLE_SCHOOL, classId: undefined, sectionId: 'sec-1' },
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('404s when the section is not in the class', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'year-1' }]) // academic year check
+        .mockResolvedValueOnce([{ id: 'class-1' }]) // class check
+        .mockResolvedValueOnce([]); // section-in-class check
+      await expect(
+        service.generateDraft({ ...baseDto(), sectionId: 'sec-other' }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('narrows the roster to the section and stores section_id + a section idempotency key', async () => {
+      (tenantPrisma.query as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'year-1' }]) // academic year check
+        .mockResolvedValueOnce([{ id: 'class-1' }]) // class check
+        .mockResolvedValueOnce([{ id: 'sec-1' }]) // section-in-class check
+        .mockResolvedValueOnce([]) // idempotency check
+        .mockResolvedValueOnce([]) // roster
+        .mockResolvedValueOnce([{ ...mockRunRow, total_students: 0, section_id: 'sec-1' }]) // INSERT
+        .mockResolvedValueOnce([{ ...mockRunRow, total_students: 0, section_id: 'sec-1' }]); // aggregate
+
+      const result = await service.generateDraft({ ...baseDto(), sectionId: 'sec-1' }, 'user-1');
+      expect(result.sectionId).toBe('sec-1');
+
+      const calls = (tenantPrisma.query as jest.Mock).mock.calls;
+      const rosterCall = calls.find((c) => String(c[0]).includes('FROM students') && String(c[0]).includes('section_id'));
+      expect(rosterCall).toBeDefined();
+      expect(rosterCall.slice(1)).toEqual(['class-1', 'sec-1']);
+      const idemCall = calls.find((c) => String(c[0]).includes('idempotency_key = $1'));
+      expect(idemCall[1]).toMatch(/:CLASS:class-1:sec-1$/);
+      const insertCall = calls.find((c) => String(c[0]).includes('INSERT INTO bill_runs'));
+      expect(insertCall[0]).toContain('section_id');
+      expect(insertCall).toContain('sec-1');
+    });
+
     it('404s when the academic year does not exist', async () => {
       (tenantPrisma.query as jest.Mock).mockResolvedValueOnce([]); // academic year check
       await expect(service.generateDraft(baseDto(), 'user-1')).rejects.toThrow(NotFoundException);

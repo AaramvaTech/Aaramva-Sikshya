@@ -9,6 +9,7 @@ export interface BillRunRow {
   bs_month: number;
   scope: string;
   class_id: string | null;
+  section_id?: string | null;
   status: string;
   issue_date: Date | string;
   due_date: Date | string;
@@ -55,6 +56,7 @@ export interface BillRunResponseDto {
   bsMonth: number;
   scope: string;
   classId: string | null;
+  sectionId: string | null;
   status: string;
   issueDate: string;
   dueDate: string;
@@ -123,6 +125,7 @@ export function toBillRunResponse(row: BillRunRow): BillRunResponseDto {
     bsMonth: row.bs_month,
     scope: row.scope,
     classId: row.class_id,
+    sectionId: row.section_id ?? null,
     status: row.status,
     issueDate: toDateOnly(row.issue_date),
     dueDate: toDateOnly(row.due_date),

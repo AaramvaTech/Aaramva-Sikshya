@@ -16,7 +16,7 @@ import { CreateBillRunDialog } from '@/components/finance/create-bill-run-dialog
 import { BulkPrintDialog } from '@/components/finance/bulk-print-dialog';
 import { useBillRuns } from '@/lib/hooks/use-bill-run';
 import { useClasses } from '@/lib/hooks/use-students';
-import { BILL_RUN_STATUS_STYLES } from '@/lib/bill-run-form';
+import { BILL_RUN_STATUS_STYLES, billRunScopeLabel } from '@/lib/bill-run-form';
 import type { BillRunStatus, BillRunSummary } from '@/types/api.types';
 
 const STATUSES: BillRunStatus[] = ['DRAFT', 'POSTING', 'POSTED', 'VOIDED'];
@@ -77,9 +77,7 @@ export default function BillRunsPage() {
       id: 'scope',
       header: 'Scope',
       cell: ({ row }) =>
-        row.original.scope === 'WHOLE_SCHOOL'
-          ? <span className="text-gray-600 dark:text-gray-300">Whole School</span>
-          : <span className="text-gray-600 dark:text-gray-300">{classes?.find((c) => c.id === row.original.classId)?.name ?? 'Class'}</span>,
+        <span className="text-gray-600 dark:text-gray-300">{billRunScopeLabel(row.original, classes)}</span>,
     },
     {
       id: 'status',

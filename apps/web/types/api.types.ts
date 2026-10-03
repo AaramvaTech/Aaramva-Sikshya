@@ -1868,6 +1868,7 @@ export interface BillRunSummary {
   bsMonth: number;
   scope: BillRunScope;
   classId: string | null;
+  sectionId?: string | null;
   status: BillRunStatus;
   issueDate: string;
   dueDate: string;
@@ -1907,6 +1908,7 @@ export interface CreateBillRunData {
   academicYearId: string;
   scope: BillRunScope;
   classId?: string;
+  sectionId?: string;
   bsYear: number;
   bsMonth: number;
   issueDate?: string;

@@ -12,6 +12,18 @@ describe('bill-run.util', () => {
         .toBe('demo:year-1:3:WHOLE_SCHOOL:');
     });
 
+    it('appends a section segment only when a section is given; old keys unchanged', () => {
+      expect(buildBillRunIdempotencyKey('demo', 'year-1', 3, 'CLASS', 'class-1', 'sec-A'))
+        .toBe('demo:year-1:3:CLASS:class-1:sec-A');
+      expect(buildBillRunIdempotencyKey('demo', 'year-1', 3, 'CLASS', 'class-1', null))
+        .toBe('demo:year-1:3:CLASS:class-1');
+    });
+
+    it('produces different keys for different sections of one class', () => {
+      expect(buildBillRunIdempotencyKey('demo', 'y', 3, 'CLASS', 'c', 'A'))
+        .not.toBe(buildBillRunIdempotencyKey('demo', 'y', 3, 'CLASS', 'c', 'B'));
+    });
+
     it('produces different keys for different classes in the same month', () => {
       const a = buildBillRunIdempotencyKey('demo', 'year-1', 3, 'CLASS', 'class-1');
       const b = buildBillRunIdempotencyKey('demo', 'year-1', 3, 'CLASS', 'class-2');

@@ -281,7 +281,7 @@ S3_ACCESS_KEY=aaramva-dev-access
 S3_SECRET_KEY=<the generated secret>
 S3_BUCKET=aaramva-dev
 S3_FORCE_PATH_STYLE=true
-S3_PUBLIC_URL=http://127.0.0.1:9000/aaramva-dev   # optional; this IS the default
+S3_PUBLIC_URL=http://127.0.0.1:9000   # optional; HOST ONLY (no bucket) — the API appends /<S3_BUCKET> itself; leaving it empty uses S3_ENDPOINT
 ```
 
 ### Deployment swap table (env-only — no code changes)
@@ -292,6 +292,8 @@ S3_PUBLIC_URL=http://127.0.0.1:9000/aaramva-dev   # optional; this IS the defaul
 | Cloudflare R2 | `https://<account-id>.r2.cloudflarestorage.com` | `true` | logo public-read via R2 "public bucket"/custom domain → set `S3_PUBLIC_URL` to that domain; R2 does NOT support the wildcard bucket policy |
 | Backblaze B2 | `https://s3.<region>.backblazeb2.com` | `true` | application key = S3 credentials |
 | AWS S3 | `https://s3.<region>.amazonaws.com` | `false` | apply the same wildcard `tenant_*/school-logo/*` GetObject policy |
+
+**`S3_PUBLIC_URL` is the HOST ONLY** (scheme + host [+ port], no bucket, no trailing slash): `StorageService` builds public URLs as `{S3_PUBLIC_URL}/{S3_BUCKET}/{key}`, so a bucket-qualified value produces `…/aaramva-dev/aaramva-dev/…` and broken logos.
 
 Because `tenants.logoUrl` stores the PUBLIC URL, a provider swap must rewrite
 stored logo URLs once (signature/stamp/photos/documents store keys — no-op):

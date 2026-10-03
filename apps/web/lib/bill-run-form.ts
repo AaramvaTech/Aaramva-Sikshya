@@ -12,6 +12,8 @@ export interface BillRunDraftFields {
   academicYearId: string;
   scope: BillRunScope;
   classId: string;
+  /** Optional: narrows a CLASS run to one section. Never required. */
+  sectionId?: string;
   bsYear: number;
   bsMonth: number;
 }
@@ -28,4 +30,17 @@ export function canSubmitBillRunDraft(fields: BillRunDraftFields): boolean {
     !!fields.bsMonth &&
     (fields.scope === 'CLASS' ? !!fields.classId : true)
   );
+}
+
+/** "Whole School", "Grade 9" or "Grade 9 · B" — the label for what a run covers.
+ * Falls back to "Class" while the class list is still loading. */
+export function billRunScopeLabel(
+  run: { scope: BillRunScope; classId: string | null; sectionId?: string | null },
+  classes: { id: string; name: string; sections?: { id: string; name: string }[] }[] | undefined,
+): string {
+  if (run.scope === 'WHOLE_SCHOOL') return 'Whole School';
+  const cls = classes?.find((c) => c.id === run.classId);
+  const name = cls?.name ?? 'Class';
+  const section = run.sectionId ? cls?.sections?.find((s) => s.id === run.sectionId)?.name : undefined;
+  return section ? `${name} · ${section}` : name;
 }
