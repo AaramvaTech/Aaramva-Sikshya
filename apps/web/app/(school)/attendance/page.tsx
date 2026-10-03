@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClasses } from '@/lib/hooks/use-students';
 import { useSchoolAttendanceSummary } from '@/lib/hooks/use-attendance';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 const ALL = 'all';
 
@@ -38,7 +39,7 @@ export default function AttendancePage() {
     refetch: refetchSummary,
   } = useSchoolAttendanceSummary();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = nepalTodayAd();
 
   const selectedClass = classes?.find((c) => c.id === classId);
   const sections = selectedClass?.sections ?? [];

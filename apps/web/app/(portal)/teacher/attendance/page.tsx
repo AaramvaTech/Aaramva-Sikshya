@@ -22,6 +22,7 @@ import { AttendanceGrid, type AttendanceGridRef } from '@/components/attendance/
 import { useSectionAttendance, useBulkMarkAttendance } from '@/lib/hooks/use-attendance';
 import { useCurrentAcademicYear, useStudents, useClasses } from '@/lib/hooks/use-students';
 import { useMySections } from '@/lib/hooks/use-timetable';
+import { nepalTodayAd, addDaysAd } from '@/lib/nepal-date';
 
 /**
  * WEB-P Phase 2 Task 2 — teacher-portal attendance marking screen.
@@ -43,9 +44,7 @@ import { useMySections } from '@/lib/hooks/use-timetable';
  */
 
 function offsetDate(adDate: string, days: number): string {
-  const d = new Date(adDate);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return addDaysAd(adDate, days);
 }
 
 export default function TeacherAttendancePage() {
@@ -53,7 +52,7 @@ export default function TeacherAttendancePage() {
   const searchParams = useSearchParams();
 
   const sectionId = searchParams.get('sectionId') ?? '';
-  const today = new Date().toISOString().split('T')[0];
+  const today = nepalTodayAd();
   const date = searchParams.get('date') ?? today;
 
   const gridRef = useRef<AttendanceGridRef>(null);

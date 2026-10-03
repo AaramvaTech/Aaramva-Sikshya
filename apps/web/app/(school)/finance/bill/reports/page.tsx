@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { exportToCsv } from '@/lib/export';
 import { todayBs } from 'bs-calendar';
 import type { ConcessionRegisterEntry, CashierShift } from '@/types/api.types';
+import { adDateOfTimestamp } from '@/lib/nepal-date';
 
 /**
  * UI-6 §4 — one page, eight tabs. Directly modeled on `app/(school)/reports/
@@ -501,7 +502,7 @@ function ConcessionRegisterTab() {
     { accessorKey: 'capAmount', header: 'Cap', cell: ({ row }) => (row.original.capAmount != null ? `Rs ${row.original.capAmount}` : '—') },
     { accessorKey: 'discountReasonName', header: 'Reason' },
     { accessorKey: 'appliedBy', header: 'Applied by' },
-    { accessorKey: 'appliedAt', header: 'Applied at', cell: ({ row }) => <BsDate date={row.original.appliedAt.slice(0, 10)} /> },
+    { accessorKey: 'appliedAt', header: 'Applied at', cell: ({ row }) => <BsDate date={adDateOfTimestamp(row.original.appliedAt)} /> },
     {
       accessorKey: 'effectiveFrom',
       header: 'Effective range',
@@ -712,7 +713,7 @@ export function CashierTab() {
         ) : myOpenShift ? (
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
-              Opened <BsDate date={myOpenShift.openedAt.slice(0, 10)} /> · opening float Rs {myOpenShift.openingFloat}
+              Opened <BsDate date={adDateOfTimestamp(myOpenShift.openedAt)} /> · opening float Rs {myOpenShift.openingFloat}
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
@@ -777,7 +778,7 @@ export function CashierTab() {
                 >
                   <div className="flex items-center gap-3 text-sm">
                     <span className="font-medium text-black dark:text-white">{s.cashierName}</span>
-                    <span className="text-gray-500"><BsDate date={s.openedAt.slice(0, 10)} /></span>
+                    <span className="text-gray-500"><BsDate date={adDateOfTimestamp(s.openedAt)} /></span>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${s.status === 'OPEN' ? 'bg-success-50 text-success-600' : 'bg-gray-100 text-gray-500 dark:bg-meta-4'}`}>
                       {s.status}
                     </span>

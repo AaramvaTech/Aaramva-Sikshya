@@ -38,6 +38,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 const STEPS = ['Personal & Enrollment', 'Guardian Info', 'Review & Submit'];
 
@@ -79,7 +80,7 @@ export default function NewStudentPage() {
       middleName: '',
       lastName: '',
       dateOfBirth: '',
-      admissionDate: new Date().toISOString().split('T')[0],
+      admissionDate: nepalTodayAd(),
       gender: undefined,
       phone: '',
       email: '',

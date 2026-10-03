@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { useCreateStaff, useEmploymentTypes, useRoleLabels } from '@/lib/hooks/use-hr';
 import { roleLabelLookup } from '@/lib/role-labels';
 import type { CreateStaffData } from '@/types/api.types';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 // Staff-creatable roles (the school owner already exists — not offered here).
 const ROLES: { value: string; label: string }[] = [
@@ -28,7 +29,7 @@ function genTempPassword(): string {
   return 'Ab1' + rand;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => nepalTodayAd();
 
 interface CreatedStaff {
   fullName: string;

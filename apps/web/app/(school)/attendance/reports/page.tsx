@@ -24,6 +24,7 @@ import {
   useSectionAttendanceReport,
   useStudentAttendanceSummary,
 } from '@/lib/hooks/use-attendance';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 type Tab = 'section' | 'student';
 
@@ -40,7 +41,7 @@ export default function AttendanceReportsPage() {
   // ── Section Report state ──────────────────────────────────────────────────
   const [classId, setClassId] = useState('');
   const [sectionId, setSectionId] = useState('');
-  const today = new Date().toISOString().split('T')[0];
+  const today = nepalTodayAd();
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState(today);
   const [generateParams, setGenerateParams] = useState<SectionParams | null>(null);

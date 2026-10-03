@@ -36,6 +36,7 @@ import type {
   LateFeeRule, LateFeeRuleScope, LateFeeRuleType,
   BillFeeStructure,
 } from '@/types/api.types';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 type Tab = 'fee-heads' | 'fee-structures' | 'discount-reasons' | 'correction-reasons' | 'transport-routes' | 'tax-rates' | 'late-fee-rules';
 
@@ -642,7 +643,7 @@ function TaxRatesTab() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = nepalTodayAd();
 
   return (
     <ConfigSection

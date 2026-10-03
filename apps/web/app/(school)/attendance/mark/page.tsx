@@ -17,11 +17,10 @@ import {
 import { AttendanceGrid, type AttendanceGridRef } from '@/components/attendance/attendance-grid';
 import { useSectionAttendance, useBulkMarkAttendance } from '@/lib/hooks/use-attendance';
 import { useCurrentAcademicYear, useStudents, useClasses } from '@/lib/hooks/use-students';
+import { nepalTodayAd, addDaysAd } from '@/lib/nepal-date';
 
 function offsetDate(adDate: string, days: number): string {
-  const d = new Date(adDate);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return addDaysAd(adDate, days);
 }
 
 export default function AttendanceMarkPage() {
@@ -29,8 +28,8 @@ export default function AttendanceMarkPage() {
   const searchParams = useSearchParams();
 
   const sectionId = searchParams.get('sectionId') ?? '';
-  const date = searchParams.get('date') ?? new Date().toISOString().split('T')[0];
-  const today = new Date().toISOString().split('T')[0];
+  const date = searchParams.get('date') ?? nepalTodayAd();
+  const today = nepalTodayAd();
 
   const gridRef = useRef<AttendanceGridRef>(null);
 

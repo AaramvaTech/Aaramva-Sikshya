@@ -1796,6 +1796,12 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   different keys — double billing is still prevented per student at post time (SKIPPED_ALREADY_BILLED). Responses carry `sectionId`. Web: New Bill Run shows a
   Section select (default "All sections of this class") after choosing a class; runs list + review title use `billRunScopeLabel` ("Grade 9 · B"). No other code read
   `bill_runs.class_id`. Not clicked in a browser.
+- [x] NEPAL-TODAY — "today" and timestamp→date in the web are now the NEPAL day, not the UTC day (`fix/nepal-today`; audit: `docs/ui/DATE-AUDIT-2026-10.md`).
+  New `apps/web/lib/nepal-date.ts`: `nepalDateOf`/`nepalTodayAd` (UTC+05:45 arithmetic from the epoch, browser-zone independent),
+  `adDateOfTimestamp` (bare date unchanged, ISO timestamp → its Nepal day), `addDaysAd` (pure calendar math). Replaced the 8 UTC-today
+  sites (attendance mark/page/reports, teacher attendance, bill catalog, payments/new, students/new admission date, onboarding staff-step)
+  and the 3 `timestamp.slice(0,10)` → `<BsDate>` sites on the bill Reports page (fine applied-at, shift opened-at). Before: between 00:00 and
+  05:45 Nepal these showed/used YESTERDAY. `lib/export.ts` filename date left as is (harmless). web tests 704 (+9), tsc clean. Not clicked in a browser.
 
 > Update this checklist as modules are completed.
 

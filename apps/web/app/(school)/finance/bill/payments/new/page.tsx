@@ -30,6 +30,7 @@ import { COUNTER_PAYMENT_METHODS, canSubmitBillPayment, sumManualTargets, buildP
 import { extractApiErrors } from '@/lib/api-errors';
 import { useAuthStore } from '@/store/auth.store';
 import type { BillPayment, BillPaymentAllocationMode, BillPaymentMethod, StudentSummary, ManualAllocationTarget } from '@/types/api.types';
+import { nepalTodayAd } from '@/lib/nepal-date';
 
 /** Mirrors BillPaymentController's own MANUAL_ALLOCATION_ROLES exactly (not
  * route-access.ts's OWNER_PRINCIPAL, which omits PLATFORM_ADMIN) — the point
@@ -43,7 +44,7 @@ const ALLOCATION_MODES: { mode: BillPaymentAllocationMode; label: string }[] = [
 ];
 
 function todayAd() {
-  return new Date().toISOString().split('T')[0];
+  return nepalTodayAd();
 }
 
 export default function RecordPaymentPage() {
