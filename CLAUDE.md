@@ -287,7 +287,7 @@ S3_SECRET_KEY=
 S3_BUCKET=
 S3_REGION=                       ← optional; defaults us-east-1
 S3_FORCE_PATH_STYLE=             ← optional; defaults true (MinIO/R2); false for AWS
-S3_PUBLIC_URL=                   ← optional public base for school logos; defaults {S3_ENDPOINT}/{S3_BUCKET}
+S3_PUBLIC_URL=                   ← optional public HOST ONLY for school logos (no bucket; API appends /{S3_BUCKET}); defaults to S3_ENDPOINT
 APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 ```
 
@@ -1785,6 +1785,9 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   `findAll`/`findOne` LEFT JOIN `bill_invoices` and return `targetInvoiceNumber` (display-only, absent on the bare approve/reject/reverse
   SELECTs, same pattern as `studentName`). Web page renders it (falls back to "Invoice"). No migration. api 1574 tests + both tsc configs, web
   tsc + 691 vitest clean. Not clicked in a browser.
+- [x] DOCS-S3-PUBLIC-URL — docs-only (`docs/s3-public-url-host-only`). `S3_PUBLIC_URL` must be the HOST ONLY (no bucket): `storage.service.ts:98-99`
+  builds `publicBase = {S3_PUBLIC_URL}/{S3_BUCKET}`, so the old documented bucket-qualified value doubled the bucket. Fixed in RUNBOOK (~line 284 + a
+  bold rule under the swap table), `apps/api/.env.example` and the env block above. No code change. Server `.env` must use the host-only value at deploy.
 
 > Update this checklist as modules are completed.
 
