@@ -44,6 +44,7 @@ export interface BillCorrectionRow {
   student_name?: string;
   admission_number?: string;
   reason_name?: string | null;
+  invoice_number?: string | null;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
@@ -83,6 +84,8 @@ export interface BillCorrectionResponseDto {
   studentName?: string;
   admissionNumber?: string;
   reasonName?: string | null;
+  /** Human invoice number of the target invoice (findAll/findOne only). */
+  targetInvoiceNumber?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,5 +135,6 @@ export function toBillCorrectionResponse(row: BillCorrectionRow): BillCorrection
     ...(row.student_name !== undefined ? { studentName: row.student_name } : {}),
     ...(row.admission_number !== undefined ? { admissionNumber: row.admission_number } : {}),
     ...(row.reason_name !== undefined ? { reasonName: row.reason_name } : {}),
+    ...(row.invoice_number !== undefined ? { targetInvoiceNumber: row.invoice_number } : {}),
   };
 }

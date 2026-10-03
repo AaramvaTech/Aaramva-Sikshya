@@ -2075,6 +2075,7 @@ export interface BillCorrection {
   amount: number;
   reasonId: string;
   reasonName?: string | null;
+  targetInvoiceNumber?: string | null;
   refundMethod: RefundMethod | null;
   refundReference: string | null;
   status: BillCorrectionStatus;

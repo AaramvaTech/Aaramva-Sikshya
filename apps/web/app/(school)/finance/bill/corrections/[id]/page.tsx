@@ -110,7 +110,7 @@ export default function CorrectionDetailPage() {
               ) : correction.targetInvoiceId && (
                 <p>
                   <span className="text-gray-500">Invoice: </span>
-                  <span className="font-mono text-xs">…{correction.targetInvoiceId.slice(-8)}</span>
+                  <span className="font-mono text-xs">{correction.targetInvoiceNumber ?? 'Invoice'}</span>
                   {correction.targetInvoiceItemId && <span className="text-xs text-gray-400"> (one line only)</span>}
                 </p>
               )}
