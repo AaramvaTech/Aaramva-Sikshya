@@ -45,6 +45,7 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
   const [academicYearId, setAcademicYearId] = useState('');
   const [scope, setScope] = useState<BillRunScope>('WHOLE_SCHOOL');
   const [classId, setClassId] = useState('');
+  const [sectionId, setSectionId] = useState('');
   const [bsYear, setBsYear] = useState(bsYearNow);
   const [bsMonth, setBsMonth] = useState(todayBs().month);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -63,6 +64,7 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
     setAcademicYearId('');
     setScope('WHOLE_SCHOOL');
     setClassId('');
+    setSectionId('');
     setBsYear(bsYearNow);
     setBsMonth(todayBs().month);
     setShowAdvanced(false);
@@ -79,6 +81,7 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
         academicYearId: effectiveYearId,
         scope,
         classId: scope === 'CLASS' ? classId : undefined,
+        sectionId: scope === 'CLASS' && sectionId ? sectionId : undefined,
         bsYear,
         bsMonth,
         issueDate: issueDate || undefined,
@@ -166,7 +169,7 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
           {scope === 'CLASS' && (
             <div className="space-y-1.5">
               <Label>Class *</Label>
-              <Select value={classId} onValueChange={(v) => setClassId(v ?? '')}>
+              <Select value={classId} onValueChange={(v) => { setClassId(v ?? ''); setSectionId(''); }}>
                 <SelectTrigger>
                   <span className={classId ? '' : 'text-muted-foreground'}>
                     {classId ? (classes?.find((c) => c.id === classId)?.name ?? 'Loading…') : 'Select class'}
@@ -176,6 +179,23 @@ export function CreateBillRunDialog({ open, onOpenChange }: Props) {
                   {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {scope === 'CLASS' && classId && (
+            <div className="space-y-1.5">
+              <Label>Section</Label>
+              <select
+                aria-label="Section"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                value={sectionId}
+                onChange={(e) => setSectionId(e.target.value)}
+              >
+                <option value="">All sections of this class</option>
+                {(classes?.find((c) => c.id === classId)?.sections ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
           )}
 

@@ -25,6 +25,9 @@ export class CreateBillRunDto {
 
   @IsOptional() @IsUUID() classId?: string;
 
+  /** Optional narrowing of a CLASS run to one section of that class (checked in the service). */
+  @IsOptional() @IsUUID() sectionId?: string;
+
   @Type(() => Number) @IsInt() @Min(2000) @Max(2100) bsYear: number;
 
   @Type(() => Number) @IsInt() @Min(1) @Max(12) bsMonth: number;

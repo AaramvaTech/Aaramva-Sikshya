@@ -1788,6 +1788,14 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
 - [x] DOCS-S3-PUBLIC-URL — docs-only (`docs/s3-public-url-host-only`). `S3_PUBLIC_URL` must be the HOST ONLY (no bucket): `storage.service.ts:98-99`
   builds `publicBase = {S3_PUBLIC_URL}/{S3_BUCKET}`, so the old documented bucket-qualified value doubled the bucket. Fixed in RUNBOOK (~line 284 + a
   bold rule under the swap table), `apps/api/.env.example` and the env block above. No code change. Server `.env` must use the host-only value at deploy.
+- [x] BILL-RUN-SECTION-SCOPE — a CLASS bill run can be narrowed to one section (`feat/bill-run-section-scope`). Tenant migration **0041_bill_run_section_scope**
+  (`bill_runs.section_id UUID NULL REFERENCES sections(id)`; NULL = whole class, scope CHECK unchanged, additive, no backfill — canary demo then `migrate:tenants`).
+  `CreateBillRunDto.sectionId` (optional; only with scope CLASS else 400; must belong to the class else 404). Roster = active students of that class AND section.
+  **Idempotency key** gains a `:<sectionId>` segment ONLY when a section is set, so every existing key is byte-identical (class-wide + whole-school collisions unchanged);
+  section A and section B of one class/month can each have a run. **Known overlap (by design, not blocked):** a class-wide run and a section run for the same month are
+  different keys — double billing is still prevented per student at post time (SKIPPED_ALREADY_BILLED). Responses carry `sectionId`. Web: New Bill Run shows a
+  Section select (default "All sections of this class") after choosing a class; runs list + review title use `billRunScopeLabel` ("Grade 9 · B"). No other code read
+  `bill_runs.class_id`. Not clicked in a browser.
 
 > Update this checklist as modules are completed.
 

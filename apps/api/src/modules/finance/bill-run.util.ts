@@ -22,8 +22,12 @@ export function buildBillRunIdempotencyKey(
   bsMonth: number,
   scope: string,
   classId?: string | null,
+  sectionId?: string | null,
 ): string {
-  return `${tenantSlug}:${academicYearId}:${bsMonth}:${scope}:${classId ?? ''}`;
+  // The section segment is appended ONLY when set, so every pre-existing key (class-wide and
+  // whole-school runs) is byte-identical and still collides exactly as before.
+  const base = `${tenantSlug}:${academicYearId}:${bsMonth}:${scope}:${classId ?? ''}`;
+  return sectionId ? `${base}:${sectionId}` : base;
 }
 
 /**

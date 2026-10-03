@@ -22,7 +22,7 @@ import { BulkPrintDialog } from '@/components/finance/bulk-print-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useBillRun, useExcludeBillRunLines, usePostBillRun, useVoidBillRun } from '@/lib/hooks/use-bill-run';
 import { useClasses } from '@/lib/hooks/use-students';
-import { BILL_RUN_STATUS_STYLES } from '@/lib/bill-run-form';
+import { BILL_RUN_STATUS_STYLES, billRunScopeLabel } from '@/lib/bill-run-form';
 import { extractApiErrors } from '@/lib/api-errors';
 import type { BillRunLine, BillRunLineOutcome } from '@/types/api.types';
 
@@ -207,7 +207,7 @@ export default function BillRunReviewPage() {
       </Link>
 
       <PageHeader
-        title={`${BS_MONTH_NAMES_EN[run.bsMonth - 1]} ${run.bsYear} — ${run.scope === 'WHOLE_SCHOOL' ? 'Whole School' : classes?.find((c) => c.id === run.classId)?.name ?? 'Class'}`}
+        title={`${BS_MONTH_NAMES_EN[run.bsMonth - 1]} ${run.bsYear} — ${billRunScopeLabel(run, classes)}`}
         action={
           <div className="flex items-center gap-3">
             {/* BILL-8-UI Phase 2 (addendum A7) — POSTED only. A DRAFT run has
