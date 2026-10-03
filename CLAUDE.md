@@ -1781,6 +1781,10 @@ APP_DOMAIN=aaramvashikshya.com   ← used for subdomain resolution
   payments still have no `shift_id`. api 1573 (+3), web 690 (+11), both api CI typechecks + web tsc clean. Live (read-only SQL, the
   service's exact query, motherland-school, 2026-09-30): RCPT-2083-000011/12/13 = Rs 2,130 + 2,130 + 1,130 = **Rs 5,390**, RCPT-14
   (16:58:51, inside the 16:58–17:02 shift) excluded. UI not clicked in a browser — unit/jsdom tests only.
+- [x] CORRECTIONS-INVOICE-REF — corrections detail page shows the target invoice number instead of a raw id tail (`fix/corrections-detail-invoice-ref`).
+  `findAll`/`findOne` LEFT JOIN `bill_invoices` and return `targetInvoiceNumber` (display-only, absent on the bare approve/reject/reverse
+  SELECTs, same pattern as `studentName`). Web page renders it (falls back to "Invoice"). No migration. api 1574 tests + both tsc configs, web
+  tsc + 691 vitest clean. Not clicked in a browser.
 
 > Update this checklist as modules are completed.
 

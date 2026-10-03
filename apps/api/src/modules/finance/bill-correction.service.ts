@@ -412,10 +412,11 @@ export class BillCorrectionService {
     // checks below, which stay a bare SELECT *.
     const rows = await this.tenantPrisma.query<BillCorrectionRow & { total_count: string }>(
       `SELECT bc.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number,
-              cr.name AS reason_name, COUNT(*) OVER() AS total_count
+              cr.name AS reason_name, bi.invoice_number, COUNT(*) OVER() AS total_count
        FROM bill_corrections bc
        LEFT JOIN students s ON s.id = bc.student_id
        LEFT JOIN correction_reasons cr ON cr.id = bc.reason_id
+       LEFT JOIN bill_invoices bi ON bi.id = bc.target_invoice_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY bc.created_at DESC
        LIMIT $${idx++} OFFSET $${idx}`,
@@ -431,10 +432,11 @@ export class BillCorrectionService {
   ): Promise<BillCorrectionResponseDto & { ledgerEntries: LedgerEntryResponseDto[] }> {
     const rows = await this.tenantPrisma.query<BillCorrectionRow>(
       `SELECT bc.*, s.first_name || ' ' || s.last_name AS student_name, s.student_id AS admission_number,
-              cr.name AS reason_name
+              cr.name AS reason_name, bi.invoice_number
        FROM bill_corrections bc
        LEFT JOIN students s ON s.id = bc.student_id
        LEFT JOIN correction_reasons cr ON cr.id = bc.reason_id
+       LEFT JOIN bill_invoices bi ON bi.id = bc.target_invoice_id
        WHERE bc.id = $1::uuid AND bc.deleted_at IS NULL`, id,
     );
     const correction = rows[0];
